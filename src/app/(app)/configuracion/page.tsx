@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2 } from 'lucide-react';
 
 // Special values for "no selection" in Select components
 const NO_AREA_VALUE = "__NO_AREA__";
@@ -1202,19 +1202,6 @@ export default function ConfiguracionPage() {
       ),
     },
     {
-      value: 'actividades',
-      label: 'Actividades',
-      icon: <ListChecks className="h-5 w-5 mr-2" />,
-      fullDescription: 'La gestión detallada (crear, editar, eliminar, activar/inactivar) de actividades se realiza en el módulo principal de Actividades.',
-      content: (
-         <PlaceholderContent 
-            title="Gestión de Actividades Centralizada" 
-            description="Todas las operaciones para administrar actividades se encuentran ahora en el módulo de 'Actividades' accesible desde el menú lateral." 
-            icon={<ListChecks className="h-12 w-12 text-muted-foreground" />} 
-        />
-      ),
-    },
-    {
       value: 'fuentesDestinos',
       label: 'Fuentes/Destinos',
       icon: <Share2 className="h-5 w-5 mr-2" />,
@@ -1315,7 +1302,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 mb-4">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
