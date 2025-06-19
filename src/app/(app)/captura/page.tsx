@@ -1,10 +1,11 @@
 
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { format } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,8 +42,9 @@ import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
 import { useProcesos } from "@/contexts/ProcesosContext";
+import type { CapturedProcess } from '../datos-capturados/page';
 
-// Mocked data for available systems - in a real app, this would come from a service or context
+
 const availableSystems = [
   { id: "1", nombre: "SAP S/4HANA" },
   { id: "2", nombre: "Salesforce CRM" },
@@ -75,18 +77,18 @@ const capturaFormSchema = z.object({
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
-export interface CapturedProcess extends CapturaFormData {
-  id: string;
-  capturedAt: string;
-}
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 export default function CapturaPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { procesos, isLoadingProcesos } = useProcesos();
   const { fuentesDestinos, isLoadingFuentesDestinos } = useFuentesDestinos();
+
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
@@ -106,24 +108,70 @@ export default function CapturaPage() {
     },
   });
 
-  function onSubmit(values: CapturaFormData) {
-    const newProcess: CapturedProcess = {
-      ...values,
-      id: Date.now().toString(),
-      capturedAt: new Date().toISOString(),
-    };
+  useEffect(() => {
+    const editIdFromQuery = searchParams.get('editId');
+    if (editIdFromQuery) {
+      setEditingId(editIdFromQuery);
+      try {
+        const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+        const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
+        const processToEdit = existingData.find(p => p.id === editIdFromQuery);
+        if (processToEdit) {
+          form.reset(processToEdit);
+        } else {
+          toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
+          router.push('/datos-capturados');
+        }
+      } catch (error) {
+        console.error("Error loading process for editing:", error);
+        toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
+        router.push('/datos-capturados');
+      }
+    } else {
+      setEditingId(null);
+      form.reset(); // Reset to default values if not editing
+    }
+  }, [searchParams, form, router]);
 
+
+  function onSubmit(values: CapturaFormData) {
     try {
       const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
-      existingData.push(newProcess);
-      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
-      
-      toast({
-        title: "Proceso Registrado",
-        description: "La información del proceso ha sido guardada exitosamente en almacenamiento local.",
-      });
-      form.reset(); 
+      let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
+
+      if (editingId) {
+        // Update existing process
+        const processToUpdate = existingData.find(p => p.id === editingId);
+        if (processToUpdate) {
+            const updatedProcess: CapturedProcess = {
+                ...processToUpdate, // Retain original ID and capturedAt
+                ...values, // Apply new form values
+            };
+            existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
+            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
+            toast({
+                title: "Proceso Actualizado",
+                description: "La información del proceso ha sido actualizada exitosamente.",
+            });
+            router.push('/datos-capturados'); // Navigate back after edit
+        } else {
+             toast({ title: "Error", description: "No se encontró el proceso para actualizar.", variant: "destructive" });
+        }
+      } else {
+        // Add new process
+        const newProcess: CapturedProcess = {
+          ...values,
+          id: Date.now().toString(),
+          capturedAt: new Date().toISOString(),
+        };
+        existingData.push(newProcess);
+        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
+        toast({
+          title: "Proceso Registrado",
+          description: "La información del proceso ha sido guardada exitosamente.",
+        });
+        form.reset(); 
+      }
     } catch (error) {
       console.error("Error saving to localStorage:", error);
       toast({
@@ -196,11 +244,16 @@ export default function CapturaPage() {
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-center gap-2">
           <ClipboardEdit className="h-6 w-6 text-primary" />
-          <CardTitle className="text-2xl font-headline">Módulo de Captura</CardTitle>
+          <CardTitle className="text-2xl font-headline">
+            {editingId ? "Editar Proceso Capturado" : "Módulo de Captura"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground mb-6">
-            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos y sus flujos de información asociados.
+            {editingId 
+              ? "Modifique los detalles del proceso seleccionado."
+              : "Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos y sus flujos de información asociados."
+            }
           </p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -498,10 +551,15 @@ export default function CapturaPage() {
               />
 
 
-              <div className="flex justify-end">
+              <div className="flex justify-end space-x-2">
+                {editingId && (
+                   <Button type="button" variant="outline" onClick={() => router.push('/datos-capturados')}>
+                    Cancelar
+                  </Button>
+                )}
                 <Button type="submit" size="lg">
                   <Save className="mr-2 h-5 w-5" />
-                  Guardar Proceso
+                  {editingId ? "Guardar Cambios" : "Guardar Proceso"}
                 </Button>
               </div>
             </form>
@@ -511,3 +569,4 @@ export default function CapturaPage() {
     </div>
   );
 }
+

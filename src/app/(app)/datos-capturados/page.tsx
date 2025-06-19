@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,7 +16,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import {
@@ -29,9 +29,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2 } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export interface CapturedProcess extends CapturaFormData {
   id: string;
@@ -41,7 +42,7 @@ export interface CapturedProcess extends CapturaFormData {
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList)) {
+  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList && !isTextarea) || (isTextarea && typeof value === 'string' && value.trim() === '')) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -73,12 +74,16 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
 
 
 export default function DatosCapturadosPage() {
+  const router = useRouter();
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
+  const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
+  const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
+
 
   useEffect(() => {
     setIsLoading(true);
@@ -126,6 +131,31 @@ export default function DatosCapturadosPage() {
     }
     setIsConfirmClearOpen(false);
   };
+
+  const promptDeleteProcess = (proc: CapturedProcess) => {
+    setProcessToDelete(proc);
+    setIsConfirmDeleteProcessOpen(true);
+  };
+
+  const executeDeleteProcess = () => {
+    if (!processToDelete) return;
+    try {
+      const updatedData = allCapturedData.filter(p => p.id !== processToDelete.id);
+      setAllCapturedData(updatedData);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+      toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido eliminado.` });
+    } catch (error) {
+      console.error("Error deleting process from localStorage:", error);
+      toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive"});
+    }
+    setProcessToDelete(null);
+    setIsConfirmDeleteProcessOpen(false);
+  };
+
+  const handleEditProcess = (proc: CapturedProcess) => {
+    router.push(`/captura?editId=${proc.id}`);
+  };
+
 
   if (isLoading) {
     return (
@@ -205,7 +235,7 @@ export default function DatosCapturadosPage() {
                     <TableHead>Puesto</TableHead>
                     <TableHead>Sistemas</TableHead>
                     <TableHead>Fecha de Captura</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                    <TableHead className="text-right w-[160px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -228,9 +258,15 @@ export default function DatosCapturadosPage() {
                       <TableCell>
                         {format(new Date(proc.capturedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)} title="Ver detalles">
                           <Eye className="h-4 w-4" />
+                        </Button>
+                         <Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)} title="Editar proceso">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive hover:text-destructive" title="Eliminar proceso">
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -283,21 +319,27 @@ export default function DatosCapturadosPage() {
           </DialogClose>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                Confirmar Eliminación de Proceso
+              </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de que desea eliminar el proceso "{processToDelete?.proceso}"? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
-}
-
-// Helper function for cn (classnames) - assuming it's in a utils file
-// If not, you'll need to import it from your actual utils path
-function cn(...inputs: Array<string | undefined | null | Record<string, boolean>>): string {
-  return inputs
-    .reduce((acc: string[], val) => {
-      if (typeof val === 'string') {
-        return acc.concat(val.split(' '));
-      } else if (typeof val === 'object' && val !== null) {
-        return acc.concat(Object.keys(val).filter(key => val[key]));
-      }
-      return acc;
-    }, [])
-    .join(' ');
 }
