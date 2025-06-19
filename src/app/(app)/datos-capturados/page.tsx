@@ -172,13 +172,20 @@ export default function DatosCapturadosPage() {
     router.push(`/captura?editId=${proc.id}`);
   };
 
-  const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
     if (cellData === undefined || cellData === null) {
       return '';
     }
+    if (Array.isArray(cellData)) {
+      // Join array elements with a semicolon or other suitable delimiter
+      // and then escape the resulting string.
+      const joinedString = cellData.join('; ');
+      if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
+        return `"${joinedString.replace(/"/g, '""')}"`;
+      }
+      return joinedString;
+    }
     const stringValue = String(cellData);
-    // If the string contains a comma, double quote, or newline, wrap it in double quotes
-    // and escape any existing double quotes by doubling them
     if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
       return `"${stringValue.replace(/"/g, '""')}"`;
     }
@@ -209,18 +216,18 @@ export default function DatosCapturadosPage() {
         escapeCsvCell(proc.descripcion),
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.frecuencia),
-        escapeCsvCell(proc.sistemas?.join('; ') || ''),
+        escapeCsvCell(proc.sistemas), // Array handled by escapeCsvCell
         escapeCsvCell(proc.actividades),
         escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.formatosRecibe?.join('; ') || ''),
+        escapeCsvCell(proc.formatosRecibe), // Array handled by escapeCsvCell
         escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.formatosEntrega?.join('; ') || ''),
+        escapeCsvCell(proc.formatosEntrega), // Array handled by escapeCsvCell
         escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss'))
       ].join(','))
     ];
 
     const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
     const link = document.createElement('a');
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
@@ -281,8 +288,9 @@ export default function DatosCapturadosPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las Áreas</SelectItem>
-                  {isLoadingAreas ? <SelectItem value="loading" disabled>Cargando...</SelectItem> 
+                  {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem> 
                    : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
+                   {!isLoadingAreas && areas.length === 0 && <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -294,8 +302,9 @@ export default function DatosCapturadosPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los Puestos</SelectItem>
-                   {isLoadingPuestos ? <SelectItem value="loading" disabled>Cargando...</SelectItem> 
+                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                   {!isLoadingPuestos && puestos.length === 0 && <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
