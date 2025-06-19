@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogClose,
   DialogFooter,
+  DialogTrigger, // Added DialogTrigger
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -185,6 +186,7 @@ export default function DatosCapturadosPage() {
     try {
       const updatedData = allCapturedData.map(p => {
         if (p.id === processId) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
           return restoredProc;
         }
@@ -192,7 +194,7 @@ export default function DatosCapturadosPage() {
       });
       setAllCapturedData(updatedData);
       localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
-      const restoredProcess = updatedData.find(p => p.id === processId);
+      const restoredProcess = updatedData.find(p => p.id === processId); // Find the non-deleted version
       toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado.` });
     } catch (error) {
       console.error("Error restoring process:", error);
@@ -210,7 +212,7 @@ export default function DatosCapturadosPage() {
       return '';
     }
     if (Array.isArray(cellData)) {
-      const joinedString = cellData.join('; ');
+      const joinedString = cellData.join('; '); 
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
         return `"${joinedString.replace(/"/g, '""')}"`;
       }
