@@ -73,6 +73,11 @@ interface Puesto {
   nivelOrganizacional: NivelOrganizacional;
 }
 
+interface Sistema {
+  id: string;
+  nombre: string;
+}
+
 // Zod schemas
 const areaFormSchema = z.object({
   id: z.string().optional(),
@@ -83,13 +88,19 @@ type AreaFormData = z.infer<typeof areaFormSchema>;
 const puestoFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
-  areaId: z.string().optional(),
-  jefeInmediato: z.string().optional(), 
+  areaId: z.string().optional().or(z.literal(NO_AREA_VALUE).transform(() => undefined)),
+  jefeInmediato: z.string().optional().or(z.literal(NO_JEFE_VALUE).transform(() => undefined)),
   nivelOrganizacional: z.enum(nivelesOrganizacionales, {
     errorMap: () => ({ message: "Debe seleccionar un nivel organizacional válido." }),
   }),
 });
 type PuestoFormData = z.infer<typeof puestoFormSchema>;
+
+const sistemaFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, 'El nombre del sistema es requerido.'),
+});
+type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 
 
 interface ConfigSectionProps {
@@ -117,6 +128,11 @@ export default function ConfiguracionPage() {
   const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
 
+  const [sistemas, setSistemas] = useState<Sistema[]>([]);
+  const [isSistemaDialogOpen, setIsSistemaDialogOpen] = useState(false);
+  const [editingSistema, setEditingSistema] = useState<Sistema | null>(null);
+
+
   const areaForm = useForm<AreaFormData>({
     resolver: zodResolver(areaFormSchema),
     defaultValues: {
@@ -134,6 +150,13 @@ export default function ConfiguracionPage() {
     },
   });
 
+  const sistemaForm = useForm<SistemaFormData>({
+    resolver: zodResolver(sistemaFormSchema),
+    defaultValues: {
+      nombre: '',
+    },
+  });
+
   useEffect(() => {
     if (editingArea) {
       areaForm.reset({ id: editingArea.id, nombre: editingArea.nombre });
@@ -147,19 +170,28 @@ export default function ConfiguracionPage() {
       puestoForm.reset({
         id: editingPuesto.id,
         nombre: editingPuesto.nombre,
-        areaId: editingPuesto.areaId || undefined,
-        jefeInmediato: editingPuesto.jefeInmediato || undefined,
+        areaId: editingPuesto.areaId || NO_AREA_VALUE,
+        jefeInmediato: editingPuesto.jefeInmediato || NO_JEFE_VALUE,
         nivelOrganizacional: editingPuesto.nivelOrganizacional,
       });
     } else {
       puestoForm.reset({
         nombre: '',
-        areaId: undefined,
-        jefeInmediato: undefined,
+        areaId: NO_AREA_VALUE,
+        jefeInmediato: NO_JEFE_VALUE,
         nivelOrganizacional: undefined,
       });
     }
   }, [editingPuesto, puestoForm]);
+
+  useEffect(() => {
+    if (editingSistema) {
+      sistemaForm.reset({ id: editingSistema.id, nombre: editingSistema.nombre });
+    } else {
+      sistemaForm.reset({ nombre: '' });
+    }
+  }, [editingSistema, sistemaForm]);
+
 
   function handleAreaSubmit(data: AreaFormData) {
     if (editingArea) {
@@ -232,6 +264,30 @@ export default function ConfiguracionPage() {
     }
     setPuestos(puestos.filter((puesto) => puesto.id !== puestoId));
     toast({ title: 'Puesto Eliminado', description: 'El puesto ha sido eliminado exitosamente.', variant: 'destructive' });
+  }
+
+  function handleSistemaSubmit(data: SistemaFormData) {
+    if (editingSistema) {
+      setSistemas(sistemas.map((sistema) => (sistema.id === editingSistema.id ? { ...sistema, nombre: data.nombre } : sistema)));
+      toast({ title: 'Sistema Actualizado', description: 'El sistema ha sido actualizado exitosamente.' });
+    } else {
+      setSistemas([...sistemas, { id: Date.now().toString(), nombre: data.nombre }]);
+      toast({ title: 'Sistema Agregado', description: 'El sistema ha sido agregado exitosamente.' });
+    }
+    setEditingSistema(null);
+    setIsSistemaDialogOpen(false);
+    sistemaForm.reset();
+  }
+
+  function handleEditSistema(sistema: Sistema) {
+    setEditingSistema(sistema);
+    setIsSistemaDialogOpen(true);
+  }
+
+  function handleDeleteSistema(sistemaId: string) {
+    // Future: Add validation if system is in use (e.g., in Costos de Sistemas)
+    setSistemas(sistemas.filter((sistema) => sistema.id !== sistemaId));
+    toast({ title: 'Sistema Eliminado', description: 'El sistema ha sido eliminado exitosamente.', variant: 'destructive' });
   }
   
   const configSections: Array<{
@@ -340,11 +396,11 @@ export default function ConfiguracionPage() {
               setIsPuestoDialogOpen(isOpen);
               if (!isOpen) {
                 setEditingPuesto(null);
-                puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: undefined, nivelOrganizacional: undefined});
+                puestoForm.reset({nombre: '', areaId: NO_AREA_VALUE, jefeInmediato: NO_JEFE_VALUE, nivelOrganizacional: undefined});
               }
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: undefined, nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }}>
+                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: NO_AREA_VALUE, jefeInmediato: NO_JEFE_VALUE, nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto
                 </Button>
               </DialogTrigger>
@@ -377,9 +433,8 @@ export default function ConfiguracionPage() {
                         <FormItem>
                           <FormLabel>Área a la que pertenece (Opcional)</FormLabel>
                           <Select
-                            onValueChange={(value) => field.onChange(value === NO_AREA_VALUE ? undefined : value)}
+                            onValueChange={field.onChange}
                             value={field.value || NO_AREA_VALUE}
-                            defaultValue={field.value || NO_AREA_VALUE}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -410,9 +465,8 @@ export default function ConfiguracionPage() {
                         <FormItem>
                           <FormLabel>Jefe Inmediato (Opcional)</FormLabel>
                           <Select
-                            onValueChange={(value) => field.onChange(value === NO_JEFE_VALUE ? undefined : value)}
+                            onValueChange={field.onChange}
                             value={field.value || NO_JEFE_VALUE}
-                            defaultValue={field.value || NO_JEFE_VALUE}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -519,7 +573,86 @@ export default function ConfiguracionPage() {
       label: 'Sistemas',
       icon: <Laptop className="h-5 w-5 mr-2" />,
       fullDescription: 'Mantener el inventario de los sistemas y herramientas tecnológicas utilizadas en la empresa. Campos: Nombre del sistema.',
-      content: <PlaceholderContent title="Gestión de Sistemas" description="Próximamente: registro y administración de sistemas." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />,
+      content: (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Gestión de Sistemas</h3>
+            <Dialog open={isSistemaDialogOpen} onOpenChange={(isOpen) => {
+              setIsSistemaDialogOpen(isOpen);
+              if (!isOpen) {
+                setEditingSistema(null);
+                sistemaForm.reset({nombre: ''});
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingSistema(null); sistemaForm.reset({nombre: ''}); setIsSistemaDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Sistema
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>{editingSistema ? 'Editar Sistema' : 'Agregar Nuevo Sistema'}</DialogTitle>
+                  <DialogDescription>
+                    {editingSistema ? 'Modifica los detalles del sistema.' : 'Completa la información para agregar un nuevo sistema.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...sistemaForm}>
+                  <form onSubmit={sistemaForm.handleSubmit(handleSistemaSubmit)} className="space-y-4 py-4">
+                    <FormField
+                      control={sistemaForm.control}
+                      name="nombre"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre del Sistema</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: SAP, Salesforce, ERP Interno" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <DialogClose asChild>
+                         <Button type="button" variant="outline" onClick={() => {setIsSistemaDialogOpen(false); setEditingSistema(null);}}>Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit">{editingSistema ? 'Guardar Cambios' : 'Agregar Sistema'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {sistemas.length === 0 ? (
+             <PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas para gestionar tu inventario tecnológico." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre del Sistema</TableHead>
+                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sistemas.map((sistema) => (
+                    <TableRow key={sistema.id}>
+                      <TableCell>{sistema.nombre}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditSistema(sistema)} className="mr-2">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteSistema(sistema.id)} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      ),
     },
     {
       value: 'actividades',
