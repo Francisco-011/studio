@@ -66,9 +66,10 @@ const capturaFormSchema = z.object({
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
   actividades: z.string().min(1, "Las actividades son requeridas."),
-  informacionRecibe: z.array(z.string()).optional().default([]),
-  informacionEntrega: z.array(z.string()).optional().default([]),
-  formatoInformacion: z.array(z.string()).optional().default([]),
+  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
+  formatosRecibe: z.array(z.string()).optional().default([]),
+  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
+  formatosEntrega: z.array(z.string()).optional().default([]),
 });
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
@@ -96,9 +97,10 @@ export default function CapturaPage() {
       frecuencia: undefined,
       sistemas: [],
       actividades: "",
-      informacionRecibe: [],
-      informacionEntrega: [],
-      formatoInformacion: [],
+      informacionRecibe: "",
+      formatosRecibe: [],
+      informacionEntrega: "",
+      formatosEntrega: [],
     },
   });
 
@@ -399,53 +401,79 @@ export default function CapturaPage() {
               
               <div className="space-y-2">
                  <h3 className="text-lg font-medium">Flujo de Información Asociado</h3>
-                 <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información usando las listas configuradas.</p>
+                 <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información.</p>
               </div>
 
               <FormField
                 control={form.control}
                 name="informacionRecibe"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Información que Recibe (Entradas)</FormLabel>
-                    {renderMultiSelectDropdown(field, "Fuentes de Información", "Seleccionar entradas...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describa la información o documentos que el proceso recibe como entrada (Ej: Solicitud de compra del cliente, Factura de proveedor, Reporte de ventas anterior)."
+                        className="min-h-[80px]"
+                        {...field}
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Seleccione los tipos de información o documentos que el proceso recibe.
+                      Detalle qué información es necesaria para iniciar o ejecutar el proceso.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
+              <FormField
+                control={form.control}
+                name="formatosRecibe"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Formatos de Información Utilizados (Entradas)</FormLabel>
+                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos de entrada...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormDescription>
+                      Seleccione los formatos en los que se recibe la información (Ej: PDF, Email, Sistema X).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
               <FormField
                 control={form.control}
                 name="informacionEntrega"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Información que Entrega (Salidas)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Destinos de Información", "Seleccionar salidas...", fuentesDestinos, isLoadingFuentesDestinos)}
+                     <FormControl>
+                      <Textarea
+                        placeholder="Describa la información o documentos que el proceso genera o entrega como resultado (Ej: Propuesta comercial enviada, Pedido procesado, Reporte financiero mensual)."
+                        className="min-h-[80px]"
+                        {...field}
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Seleccione los tipos de información o documentos que el proceso genera o entrega.
+                      Detalle cuál es el producto o resultado informativo del proceso.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="formatosEntrega"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Formatos de Información Utilizados (Salidas)</FormLabel>
+                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos de salida...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormDescription>
+                      Seleccione los formatos en los que se entrega la información (Ej: Documento Word, Correo electrónico, Actualización en CRM).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="formatoInformacion"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Formatos de Información Utilizados</FormLabel>
-                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos...", fuentesDestinos, isLoadingFuentesDestinos)}
-                    <FormDescription>
-                      Seleccione los formatos en los que se maneja la información (Ej: PDF, Excel, Email).
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="flex justify-end">
                 <Button type="submit" size="lg">

@@ -40,8 +40,8 @@ export interface CapturedProcess extends CapturaFormData {
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
-const DetailSection = ({ title, value, isList = false }: { title: string, value?: string | string[] | number, isList?: boolean }) => {
-  if (value === undefined || (isList && Array.isArray(value) && value.length === 0)) {
+const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
+  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList)) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -66,7 +66,7 @@ const DetailSection = ({ title, value, isList = false }: { title: string, value?
   return (
     <div>
       <h4 className="font-semibold text-sm">{title}:</h4>
-      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{typeof value === 'number' ? value.toString() : value}</p>
+      <p className={cn("text-sm text-muted-foreground", isTextarea && "whitespace-pre-wrap")}>{typeof value === 'number' ? value.toString() : value}</p>
     </div>
   );
 };
@@ -267,14 +267,15 @@ export default function DatosCapturadosPage() {
             <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
               <DetailSection title="Área" value={selectedProcess.area} />
               <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
-              <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} />
+              <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} isTextarea />
               <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
               <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
               <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
-              <DetailSection title="Actividades Granulares" value={selectedProcess.actividades} />
-              <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isList />
-              <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isList />
-              <DetailSection title="Formatos de Información Utilizados" value={selectedProcess.formatoInformacion} isList />
+              <DetailSection title="Actividades Granulares" value={selectedProcess.actividades} isTextarea />
+              <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
+              <DetailSection title="Formatos de Información Utilizados (Entradas)" value={selectedProcess.formatosRecibe} isList />
+              <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />
+              <DetailSection title="Formatos de Información Utilizados (Salidas)" value={selectedProcess.formatosEntrega} isList />
             </div>
           )}
           <DialogClose asChild>
@@ -284,4 +285,19 @@ export default function DatosCapturadosPage() {
       </Dialog>
     </div>
   );
+}
+
+// Helper function for cn (classnames) - assuming it's in a utils file
+// If not, you'll need to import it from your actual utils path
+function cn(...inputs: Array<string | undefined | null | Record<string, boolean>>): string {
+  return inputs
+    .reduce((acc: string[], val) => {
+      if (typeof val === 'string') {
+        return acc.concat(val.split(' '));
+      } else if (typeof val === 'object' && val !== null) {
+        return acc.concat(Object.keys(val).filter(key => val[key]));
+      }
+      return acc;
+    }, [])
+    .join(' ');
 }
