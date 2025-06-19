@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,10 +35,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2 } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, Filter } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useAreas } from '@/contexts/AreasContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+
 
 export interface CapturedProcess extends CapturaFormData {
   id: string;
@@ -74,8 +84,13 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
 
 export default function DatosCapturadosPage() {
   const router = useRouter();
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, isLoadingPuestos } = usePuestos();
+
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
+  const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -102,16 +117,30 @@ export default function DatosCapturadosPage() {
   }, []);
 
   const filteredData = useMemo(() => {
-    if (!searchTerm) return allCapturedData;
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    return allCapturedData.filter(
-      (proc) =>
-        proc.proceso.toLowerCase().includes(lowerSearchTerm) ||
-        proc.area.toLowerCase().includes(lowerSearchTerm) ||
-        proc.puesto.toLowerCase().includes(lowerSearchTerm) ||
-        proc.descripcion.toLowerCase().includes(lowerSearchTerm)
-    );
-  }, [allCapturedData, searchTerm]);
+    let dataToFilter = allCapturedData;
+
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      dataToFilter = dataToFilter.filter(
+        (proc) =>
+          proc.proceso.toLowerCase().includes(lowerSearchTerm) ||
+          proc.area.toLowerCase().includes(lowerSearchTerm) ||
+          proc.puesto.toLowerCase().includes(lowerSearchTerm) ||
+          proc.descripcion.toLowerCase().includes(lowerSearchTerm) ||
+          (proc.actividades && proc.actividades.toLowerCase().includes(lowerSearchTerm))
+      );
+    }
+
+    if (selectedAreaFilter !== 'all') {
+      dataToFilter = dataToFilter.filter(proc => proc.area === selectedAreaFilter);
+    }
+
+    if (selectedPuestoFilter !== 'all') {
+      dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
+    }
+
+    return dataToFilter;
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter]);
 
   const handleViewDetails = (proc: CapturedProcess) => {
     setSelectedProcess(proc);
@@ -142,6 +171,71 @@ export default function DatosCapturadosPage() {
     router.push(`/captura?editId=${proc.id}`);
   };
 
+  const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+    if (cellData === undefined || cellData === null) {
+      return '';
+    }
+    const stringValue = String(cellData);
+    // If the string contains a comma, double quote, or newline, wrap it in double quotes
+    // and escape any existing double quotes by doubling them
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const handleExport = () => {
+    if (filteredData.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay datos que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Proceso", "Area", "Puesto", "Descripción", 
+      "Tiempo Estimado (min)", "Frecuencia", "Sistemas", "Actividades",
+      "Información Recibe", "Formatos Recibe", 
+      "Información Entrega", "Formatos Entrega", 
+      "Fecha Captura"
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...filteredData.map(proc => [
+        escapeCsvCell(proc.id),
+        escapeCsvCell(proc.proceso),
+        escapeCsvCell(proc.area),
+        escapeCsvCell(proc.puesto),
+        escapeCsvCell(proc.descripcion),
+        escapeCsvCell(proc.tiempoEstimado),
+        escapeCsvCell(proc.frecuencia),
+        escapeCsvCell(proc.sistemas?.join('; ') || ''),
+        escapeCsvCell(proc.actividades),
+        escapeCsvCell(proc.informacionRecibe),
+        escapeCsvCell(proc.formatosRecibe?.join('; ') || ''),
+        escapeCsvCell(proc.informacionEntrega),
+        escapeCsvCell(proc.formatosEntrega?.join('; ') || ''),
+        escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss'))
+      ].join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `datos_capturados_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -163,26 +257,51 @@ export default function DatosCapturadosPage() {
             <CardTitle className="text-2xl font-headline">Datos Capturados</CardTitle>
           </div>
           <CardDescription>
-            Visualiza, busca y gestiona todos los procesos y flujos de información registrados en el sistema.
+            Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full sm:flex-1">
+          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div className="relative sm:col-span-2 lg:col-span-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Buscar por proceso, área, puesto..."
+                placeholder="Buscar palabra clave..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10"
               />
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button variant="outline" className="w-full sm:w-auto" disabled>
-                <FileText className="mr-2 h-4 w-4" /> Exportar (Próx.)
-              </Button>
+            <div className="w-full">
+              <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Área</Label>
+              <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
+                <SelectTrigger id="area-filter">
+                  <SelectValue placeholder={isLoadingAreas ? "Cargando áreas..." : "Todas las Áreas"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las Áreas</SelectItem>
+                  {isLoadingAreas ? <SelectItem value="loading" disabled>Cargando...</SelectItem> 
+                   : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="w-full">
+              <Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Puesto</Label>
+              <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}>
+                <SelectTrigger id="puesto-filter">
+                  <SelectValue placeholder={isLoadingPuestos ? "Cargando puestos..." : "Todos los Puestos"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los Puestos</SelectItem>
+                   {isLoadingPuestos ? <SelectItem value="loading" disabled>Cargando...</SelectItem> 
+                   : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button onClick={handleExport} variant="outline" className="w-full">
+              <FileText className="mr-2 h-4 w-4" /> Exportar CSV
+            </Button>
           </div>
 
           {filteredData.length > 0 ? (
@@ -243,7 +362,7 @@ export default function DatosCapturadosPage() {
               <p className="text-sm text-muted-foreground text-center">
                 {allCapturedData.length === 0 
                   ? 'Comience registrando procesos en el módulo de "Captura".'
-                  : 'Intente ajustar su término de búsqueda o revise los datos capturados.'
+                  : 'Intente ajustar su término de búsqueda o filtros, o revise los datos capturados.'
                 }
               </p>
             </div>
@@ -303,3 +422,4 @@ export default function DatosCapturadosPage() {
     </div>
   );
 }
+
