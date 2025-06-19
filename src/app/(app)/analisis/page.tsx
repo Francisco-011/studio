@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { ActivitySquare, Search, Filter, CheckSquare, XSquare, CopyCheck } from "lucide-react";
+import { ActivitySquare, Search, Filter, CheckSquare, XSquare, CopyCheck, Sparkles } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -35,10 +35,9 @@ interface Area {
 interface Actividad {
   id: string;
   nombre: string;
-  activa: boolean; // Added for status filter
+  activa: boolean;
 }
 
-// Mock data - in a real app, this would come from state management or API calls
 const initialMockAreas: Area[] = [
   { id: 'area1', nombre: 'Ventas Global' },
   { id: 'area2', nombre: 'Marketing Digital' },
@@ -67,7 +66,7 @@ export default function AnalisisPage() {
   const [actividades] = useState<Actividad[]>(initialMockActividades);
   const [matrixData, setMatrixData] = useState<Record<string, Record<string, boolean>>>({});
 
-  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>(areas.map(a => a.id)); // Default to all areas selected
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>(areas.map(a => a.id));
   const [searchTermActividad, setSearchTermActividad] = useState('');
   const [statusFilterActividad, setStatusFilterActividad] = useState<'all' | 'active' | 'inactive'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'duplicated'>('all');
@@ -86,26 +85,35 @@ export default function AnalisisPage() {
     toast({ title: "Matriz Actualizada", description: "Los cambios en la matriz han sido guardados localmente." });
   };
 
+  const handleAutoFill = () => {
+    const newMatrixData = { ...matrixData };
+    displayedActividades.forEach(actividad => {
+      displayedAreas.forEach(area => {
+        if (!newMatrixData[actividad.id]) {
+          newMatrixData[actividad.id] = {};
+        }
+        // Simulate AI decision with 30% chance of being true
+        newMatrixData[actividad.id][area.id] = Math.random() < 0.3;
+      });
+    });
+    setMatrixData(newMatrixData);
+    toast({ title: "Llenado Automático Simulado", description: "La matriz ha sido actualizada con sugerencias (simulación)." });
+  };
+
   const displayedAreas = useMemo(() => {
-    if (selectedAreaIds.length === 0) return areas; // Show all if none are explicitly selected (or handle as "show none")
+    if (selectedAreaIds.length === 0) return areas;
     return areas.filter(area => selectedAreaIds.includes(area.id));
   }, [areas, selectedAreaIds]);
 
   const displayedActividades = useMemo(() => {
     return actividades.filter(actividad => {
-      // Filter by search term
       if (searchTermActividad && !actividad.nombre.toLowerCase().includes(searchTermActividad.toLowerCase())) {
         return false;
       }
-
-      // Filter by activity status
       if (statusFilterActividad !== 'all') {
         if (statusFilterActividad === 'active' && !actividad.activa) return false;
         if (statusFilterActividad === 'inactive' && actividad.activa) return false;
       }
-
-      // Filter by assignment
-      const assignmentsForActivity = Object.values(matrixData[actividad.id] || {}).filter(Boolean).length;
       const assignmentsInDisplayedAreas = displayedAreas.reduce((count, area) => {
         if (matrixData[actividad.id]?.[area.id]) {
           return count + 1;
@@ -120,7 +128,6 @@ export default function AnalisisPage() {
         return count;
       }, 0);
 
-
       if (assignmentFilter !== 'all') {
         switch (assignmentFilter) {
           case 'assigned':
@@ -130,7 +137,7 @@ export default function AnalisisPage() {
             if (assignmentsInDisplayedAreas > 0) return false;
             break;
           case 'duplicated':
-            if (totalAssignmentsGlobal <= 1) return false; // Duplicated if assigned to >1 area globally
+            if (totalAssignmentsGlobal <= 1) return false;
             break;
         }
       }
@@ -157,10 +164,10 @@ export default function AnalisisPage() {
         <CardContent>
           <CardDescription className="mb-6">
             Visualiza las relaciones entre actividades y áreas. Marque casillas para indicar dónde se realiza una actividad.
-            Las duplicidades (actividades en múltiples áreas) se resaltan. Use los filtros para refinar la vista.
+            Las duplicidades (actividades en múltiples áreas) se resaltan. Use los filtros para refinar la vista o el botón de "Llenar Automático" para una simulación de IA.
           </CardDescription>
 
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal">
@@ -223,6 +230,11 @@ export default function AnalisisPage() {
                 <SelectItem value="duplicated"><CopyCheck className="mr-2 h-4 w-4 inline-block" /> Duplicadas</SelectItem>
               </SelectContent>
             </Select>
+            
+            <Button onClick={handleAutoFill} variant="outline" className="w-full">
+              <Sparkles className="mr-2 h-4 w-4 text-primary" />
+              Llenar Automático
+            </Button>
           </div>
 
           {displayedAreas.length === 0 || displayedActividades.length === 0 ? (
@@ -303,3 +315,5 @@ export default function AnalisisPage() {
     </div>
   );
 }
+
+    
