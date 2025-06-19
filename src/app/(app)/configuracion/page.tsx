@@ -5,6 +5,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { useAreas, type Area } from '@/contexts/AreasContext';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -58,11 +59,8 @@ import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSig
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
 
-// Type definitions
-interface Area {
-  id: string;
-  nombre: string;
-}
+// Type definitions are now mostly from context or local
+// Area is imported from AreasContext
 
 const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Apoyo"] as const;
 type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -244,7 +242,7 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
 
 
 export default function ConfiguracionPage() {
-  const [areas, setAreas] = useState<Area[]>([]);
+  const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
 
@@ -390,11 +388,11 @@ export default function ConfiguracionPage() {
 
 
   function handleAreaSubmit(data: AreaFormData) {
-    if (editingArea) {
-      setAreas(areas.map((area) => (area.id === editingArea.id ? { ...area, nombre: data.nombre } : area)));
+    if (editingArea && editingArea.id) {
+      updateContextArea(editingArea.id, data.nombre);
       toast({ title: 'Área Actualizada', description: 'El área ha sido actualizada exitosamente.' });
     } else {
-      setAreas([...areas, { id: Date.now().toString(), nombre: data.nombre }]);
+      addArea(data.nombre);
       toast({ title: 'Área Agregada', description: 'El área ha sido agregada exitosamente.' });
     }
     setEditingArea(null);
@@ -417,7 +415,7 @@ export default function ConfiguracionPage() {
       });
       return;
     }
-    setAreas(areas.filter((area) => area.id !== areaId));
+    deleteContextArea(areaId);
     toast({ title: 'Área Eliminada', description: 'El área ha sido eliminada exitosamente.', variant: 'destructive' });
   }
 
@@ -624,7 +622,9 @@ export default function ConfiguracionPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {areas.length === 0 ? (
+          {isLoadingAreas ? (
+            <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Building className="h-12 w-12 text-muted-foreground animate-pulse" />} />
+          ) : areas.length === 0 ? (
              <PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />
           ) : (
             <Card>
@@ -716,7 +716,9 @@ export default function ConfiguracionPage() {
                             </FormControl>
                             <SelectContent>
                                <SelectItem value={NO_AREA_VALUE}>Sin Área Asignada</SelectItem>
-                              {areas.length === 0 ? (
+                              {isLoadingAreas ? (
+                                <SelectItem value="loading-areas" disabled>Cargando áreas...</SelectItem>
+                              ) : areas.length === 0 ? (
                                 <SelectItem value="no-areas-disabled" disabled>No hay áreas disponibles</SelectItem>
                               ) : (
                                 areas.map((area) => (
