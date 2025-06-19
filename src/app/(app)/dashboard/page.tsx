@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign } from "lucide-react";
+import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, Link } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -32,7 +32,7 @@ export default function DashboardPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-headline font-bold mb-8 text-primary">Dashboard Ejecutivo</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle>
@@ -71,6 +71,26 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">47</div>
             <p className="text-xs text-muted-foreground">+8 este trimestre</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Actividades Activas</CardTitle>
+            <ListChecks className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">78</div>
+            <p className="text-xs text-muted-foreground">+12 esta semana</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Actividades en Uso</CardTitle>
+            <Link className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">65</div>
+            <p className="text-xs text-muted-foreground">Vinculadas a 40 procesos</p>
           </CardContent>
         </Card>
       </div>
