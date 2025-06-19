@@ -73,7 +73,7 @@ const initialMockActividades: Actividad[] = [
   { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 2 },
   { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 8 },
   { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 3 },
-  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 1 },
+  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 0 },
 ];
 
 export default function ActividadesPage() {
@@ -81,6 +81,7 @@ export default function ActividadesPage() {
   const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | 'inUse' | 'notInUse'>('all');
   
   const [isActividadDialogOpen, setIsActividadDialogOpen] = useState(false);
   const [editingActividad, setEditingActividad] = useState<Actividad | null>(null);
@@ -172,7 +173,11 @@ export default function ActividadesPage() {
       statusFilter === 'all' ||
       (statusFilter === 'active' && actividad.activa) ||
       (statusFilter === 'inactive' && !actividad.activa);
-    return matchesSearchTerm && matchesStatus;
+    const matchesUsage =
+      usageFilter === 'all' ||
+      (usageFilter === 'inUse' && actividad.procesosAsociadosCount > 0) ||
+      (usageFilter === 'notInUse' && actividad.procesosAsociadosCount === 0);
+    return matchesSearchTerm && matchesStatus && matchesUsage;
   });
 
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -202,12 +207,12 @@ export default function ActividadesPage() {
                 className="w-full pl-10"
               />
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-2">
               <Select
                 value={statusFilter}
                 onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}
               >
-                <SelectTrigger className="w-full md:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Filtrar por estado" />
                 </SelectTrigger>
                 <SelectContent>
@@ -216,9 +221,22 @@ export default function ActividadesPage() {
                   <SelectItem value="inactive">Inactivas</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                value={usageFilter}
+                onValueChange={(value: 'all' | 'inUse' | 'notInUse') => setUsageFilter(value)}
+              >
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filtrar por uso" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos (Uso)</SelectItem>
+                  <SelectItem value="inUse">En Uso</SelectItem>
+                  <SelectItem value="notInUse">Sin Uso</SelectItem>
+                </SelectContent>
+              </Select>
               <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" disabled={recoverableActividades.length === 0}>
+                  <Button variant="outline" disabled={recoverableActividades.length === 0} className="w-full sm:w-auto">
                     <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableActividades.length})
                   </Button>
                 </DialogTrigger>
@@ -272,7 +290,7 @@ export default function ActividadesPage() {
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true }); setIsActividadDialogOpen(true); }}>
+                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true }); setIsActividadDialogOpen(true); }} className="w-full sm:w-auto">
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
                   </Button>
                 </DialogTrigger>
@@ -352,7 +370,10 @@ export default function ActividadesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {actividad.procesosAsociadosCount > 0 ? `${actividad.procesosAsociadosCount} procesos` : 'N/A'}
+                        {actividad.procesosAsociadosCount > 0 ? 
+                         (<Badge variant="outline">{`${actividad.procesosAsociadosCount} procesos`}</Badge>) 
+                         : (<Badge variant="secondary">Sin Uso</Badge>)
+                        }
                       </TableCell>
                        <TableCell className="text-right space-x-1">
                         <Switch
@@ -378,7 +399,7 @@ export default function ActividadesPage() {
               <ListChecks className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold text-foreground">No se encontraron actividades</p>
               <p className="text-sm text-muted-foreground text-center">
-                {searchTerm || statusFilter !== 'all' ? 'Ajuste los filtros o ' : ''}
+                {searchTerm || statusFilter !== 'all' || usageFilter !== 'all' ? 'Ajuste los filtros o ' : ''}
                 Comience agregando una nueva actividad.
               </p>
             </div>
