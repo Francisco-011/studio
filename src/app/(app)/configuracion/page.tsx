@@ -1,13 +1,14 @@
 
 'use client';
 
-import * as React from 'react'; // Added this line
+import * as React from 'react'; 
 import { useState, useEffect, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
+import { useFuentesDestinos, type FuenteDestino } from '@/contexts/FuentesDestinosContext';
 
 
 import { Button } from '@/components/ui/button';
@@ -58,11 +59,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
 import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2 } from 'lucide-react';
 
-// Special values for "no selection" in Select components
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
 
-// Puesto interface and NivelOrganizacional are now imported from PuestosContext
 
 interface Sistema {
   id: string;
@@ -92,11 +91,6 @@ interface SistemaCosto {
   frecuencia: FrecuenciaPago;
   moneda: TipoMoneda;
   descripcion?: string;
-}
-
-interface FuenteDestino {
-  id: string;
-  nombre: string;
 }
 
 // Zod schemas
@@ -235,6 +229,8 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
   const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
+  const { fuentesDestinos, addFuenteDestino, updateFuenteDestino: updateContextFuenteDestino, deleteFuenteDestino: deleteContextFuenteDestino, isLoadingFuentesDestinos } = useFuentesDestinos();
+
 
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
@@ -252,7 +248,6 @@ export default function ConfiguracionPage() {
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
 
-  const [fuentesDestinos, setFuentesDestinos] = useState<FuenteDestino[]>([]);
   const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
   const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
 
@@ -530,11 +525,11 @@ export default function ConfiguracionPage() {
   }
 
   function handleFuenteDestinoSubmit(data: FuenteDestinoFormData) {
-    if (editingFuenteDestino) {
-      setFuentesDestinos(fuentesDestinos.map((fd) => (fd.id === editingFuenteDestino.id ? { ...fd, nombre: data.nombre } : fd)));
+    if (editingFuenteDestino && editingFuenteDestino.id) {
+      updateContextFuenteDestino(editingFuenteDestino.id, data.nombre);
       toast({ title: 'Fuente/Destino Actualizado', description: 'El elemento ha sido actualizado exitosamente.' });
     } else {
-      setFuentesDestinos([...fuentesDestinos, { id: Date.now().toString(), nombre: data.nombre }]);
+      addFuenteDestino(data.nombre);
       toast({ title: 'Fuente/Destino Agregado', description: 'El elemento ha sido agregado exitosamente.' });
     }
     setEditingFuenteDestino(null);
@@ -548,7 +543,7 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteFuenteDestino(fdId: string) {
-    setFuentesDestinos(fuentesDestinos.filter((fd) => fd.id !== fdId));
+    deleteContextFuenteDestino(fdId);
     toast({ title: 'Fuente/Destino Eliminado', description: 'El elemento ha sido eliminado exitosamente.', variant: 'destructive' });
   }
   
@@ -1256,7 +1251,9 @@ export default function ConfiguracionPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {fuentesDestinos.length === 0 ? (
+          {isLoadingFuentesDestinos ? (
+            <PlaceholderContent title="Cargando elementos..." description="Por favor espere." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} isLoading />
+          ) : fuentesDestinos.length === 0 ? (
             <PlaceholderContent title="No hay elementos registrados" description="Comienza agregando fuentes, destinos o formatos de información." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} />
           ) : (
             <Card>
@@ -1316,7 +1313,7 @@ export default function ConfiguracionPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                       {section.icon}
+                       {React.cloneElement(section.icon as React.ReactElement, { className: (section.icon as React.ReactElement).props.className?.replace('mr-2', '') })}
                        <span className="ml-2">{section.label}</span>
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">{section.fullDescription}</p>

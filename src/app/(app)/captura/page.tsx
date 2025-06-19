@@ -39,6 +39,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
+import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
 
 // Mocked data for available systems - in a real app, this would come from a service or context
 const availableSystems = [
@@ -65,7 +66,9 @@ const capturaFormSchema = z.object({
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
   actividades: z.string().min(1, "Las actividades son requeridas."),
-  flujoInformacion: z.string().min(1, "El flujo de información es requerido."),
+  informacionRecibe: z.array(z.string()).optional().default([]),
+  informacionEntrega: z.array(z.string()).optional().default([]),
+  formatoInformacion: z.array(z.string()).optional().default([]),
 });
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
@@ -80,6 +83,7 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 export default function CapturaPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { fuentesDestinos, isLoadingFuentesDestinos } = useFuentesDestinos();
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
@@ -92,7 +96,9 @@ export default function CapturaPage() {
       frecuencia: undefined,
       sistemas: [],
       actividades: "",
-      flujoInformacion: "",
+      informacionRecibe: [],
+      informacionEntrega: [],
+      formatoInformacion: [],
     },
   });
 
@@ -123,6 +129,63 @@ export default function CapturaPage() {
       });
     }
   }
+
+  const renderMultiSelectDropdown = (
+    field: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    label: string,
+    placeholder: string,
+    options: { id: string; nombre: string }[],
+    isLoading: boolean
+  ) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <FormControl>
+          <Button variant="outline" className="w-full justify-start text-left font-normal h-auto min-h-10">
+            {field.value && field.value.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {field.value.map((itemName: string) => (
+                  <Badge key={itemName} variant="secondary" className="font-normal">
+                    {itemName}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </Button>
+        </FormControl>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isLoading ? (
+           <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
+        ) : options.length === 0 ? (
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+            No hay elementos configurados.
+          </div>
+        ) : (
+          options.map((option) => (
+            <DropdownMenuCheckboxItem
+              key={option.id}
+              checked={field.value?.includes(option.nombre)}
+              onCheckedChange={(checked) => {
+                const currentSelected = field.value || [];
+                if (checked) {
+                  field.onChange([...currentSelected, option.nombre]);
+                } else {
+                  field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
+                }
+              }}
+            >
+              {option.nombre}
+            </DropdownMenuCheckboxItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
 
   return (
     <div className="container mx-auto py-8">
@@ -304,50 +367,7 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <FormControl>
-                          <Button variant="outline" className="w-full justify-start text-left font-normal h-auto min-h-10">
-                            {field.value && field.value.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {field.value.map((systemName) => (
-                                  <Badge key={systemName} variant="secondary" className="font-normal">
-                                    {systemName}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">Seleccionar sistemas...</span>
-                            )}
-                          </Button>
-                        </FormControl>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-                        <DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {availableSystems.map((system) => (
-                          <DropdownMenuCheckboxItem
-                            key={system.id}
-                            checked={field.value?.includes(system.nombre)}
-                            onCheckedChange={(checked) => {
-                              const currentSelected = field.value || [];
-                              if (checked) {
-                                field.onChange([...currentSelected, system.nombre]);
-                              } else {
-                                field.onChange(currentSelected.filter((s) => s !== system.nombre));
-                              }
-                            }}
-                          >
-                            {system.nombre}
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                        {availableSystems.length === 0 && (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            No hay sistemas configurados.
-                          </div>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
                     <FormDescription>
                       Seleccione los sistemas o software involucrados en la ejecución del proceso.
                     </FormDescription>
@@ -355,7 +375,6 @@ export default function CapturaPage() {
                   </FormItem>
                 )}
               />
-
 
               <FormField
                 control={form.control}
@@ -377,22 +396,51 @@ export default function CapturaPage() {
                   </FormItem>
                 )}
               />
+              
+              <div className="space-y-2">
+                 <h3 className="text-lg font-medium">Flujo de Información Asociado</h3>
+                 <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información usando las listas configuradas.</p>
+              </div>
 
               <FormField
                 control={form.control}
-                name="flujoInformacion"
+                name="informacionRecibe"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Flujo de Información Asociado</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describa qué información se maneja (entradas/salidas), de dónde proviene y hacia dónde va. Incluya formatos si es relevante."
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Información que Recibe (Entradas)</FormLabel>
+                    {renderMultiSelectDropdown(field, "Fuentes de Información", "Seleccionar entradas...", fuentesDestinos, isLoadingFuentesDestinos)}
                     <FormDescription>
-                      Detalle las entradas, salidas y transformaciones clave de información.
+                      Seleccione los tipos de información o documentos que el proceso recibe.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="informacionEntrega"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Información que Entrega (Salidas)</FormLabel>
+                     {renderMultiSelectDropdown(field, "Destinos de Información", "Seleccionar salidas...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormDescription>
+                      Seleccione los tipos de información o documentos que el proceso genera o entrega.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="formatoInformacion"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Formatos de Información Utilizados</FormLabel>
+                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormDescription>
+                      Seleccione los formatos en los que se maneja la información (Ej: PDF, Excel, Email).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -412,4 +460,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-

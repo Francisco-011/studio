@@ -40,6 +40,38 @@ export interface CapturedProcess extends CapturaFormData {
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
+const DetailSection = ({ title, value, isList = false }: { title: string, value?: string | string[] | number, isList?: boolean }) => {
+  if (value === undefined || (isList && Array.isArray(value) && value.length === 0)) {
+    return (
+      <div>
+        <h4 className="font-semibold text-sm">{title}:</h4>
+        <p className="text-sm text-muted-foreground">No especificado.</p>
+      </div>
+    );
+  }
+
+  if (isList && Array.isArray(value)) {
+    return (
+      <div>
+        <h4 className="font-semibold text-sm">{title}:</h4>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {value.map((item, idx) => (
+            <Badge key={idx} variant="secondary">{item}</Badge>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      <h4 className="font-semibold text-sm">{title}:</h4>
+      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{typeof value === 'number' ? value.toString() : value}</p>
+    </div>
+  );
+};
+
+
 export default function DatosCapturadosPage() {
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -233,48 +265,16 @@ export default function DatosCapturadosPage() {
           </DialogHeader>
           {selectedProcess && (
             <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-              <div>
-                <h4 className="font-semibold text-sm">Área:</h4>
-                <p className="text-sm text-muted-foreground">{selectedProcess.area}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Puesto Principal:</h4>
-                <p className="text-sm text-muted-foreground">{selectedProcess.puesto}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Descripción Detallada:</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedProcess.descripcion}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Tiempo Estimado:</h4>
-                <p className="text-sm text-muted-foreground">
-                  {selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : 'No especificado'}
-                </p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Frecuencia:</h4>
-                <p className="text-sm text-muted-foreground">{selectedProcess.frecuencia || 'No especificada'}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Sistemas Utilizados:</h4>
-                {selectedProcess.sistemas && selectedProcess.sistemas.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedProcess.sistemas.map((sys, idx) => (
-                      <Badge key={idx} variant="secondary">{sys}</Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Ninguno especificado.</p>
-                )}
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Actividades Granulares:</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedProcess.actividades}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Flujo de Información:</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedProcess.flujoInformacion}</p>
-              </div>
+              <DetailSection title="Área" value={selectedProcess.area} />
+              <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
+              <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} />
+              <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
+              <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
+              <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
+              <DetailSection title="Actividades Granulares" value={selectedProcess.actividades} />
+              <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isList />
+              <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isList />
+              <DetailSection title="Formatos de Información Utilizados" value={selectedProcess.formatoInformacion} isList />
             </div>
           )}
           <DialogClose asChild>
@@ -285,4 +285,3 @@ export default function DatosCapturadosPage() {
     </div>
   );
 }
-
