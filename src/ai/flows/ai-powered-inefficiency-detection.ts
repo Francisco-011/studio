@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -14,19 +15,19 @@ import {z} from 'genkit';
 const AnalyzeProcessesInputSchema = z.object({
   processDescriptions: z
     .string()
-    .describe('A list of process descriptions to analyze.'),
-  systemUsage: z.string().describe('A description of system usage across the organization.'),
+    .describe('Una lista de descripciones de procesos para analizar.'),
+  systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
 });
 export type AnalyzeProcessesInput = z.infer<typeof AnalyzeProcessesInputSchema>;
 
 const AnalyzeProcessesOutputSchema = z.object({
   duplicateProcesses: z
     .string()
-    .describe('A list of potential duplicate processes identified by the AI.'),
+    .describe('Una lista de posibles procesos duplicados identificados por la IA.'),
   redundantSystems: z
     .string()
-    .describe('A list of potential redundant systems identified by the AI.'),
-  summary: z.string().describe('A summary of the analysis.'),
+    .describe('Una lista de posibles sistemas redundantes identificados por la IA.'),
+  summary: z.string().describe('Un resumen del análisis.'),
 });
 export type AnalyzeProcessesOutput = z.infer<typeof AnalyzeProcessesOutputSchema>;
 
@@ -38,25 +39,26 @@ const analyzeProcessesPrompt = ai.definePrompt({
   name: 'analyzeProcessesPrompt',
   input: {schema: AnalyzeProcessesInputSchema},
   output: {schema: AnalyzeProcessesOutputSchema},
-  prompt: `You are an AI-powered business analyst tasked with identifying inefficiencies in business processes.
+  prompt: `Eres un analista de negocios impulsado por IA encargado de identificar ineficiencias en los procesos empresariales.
 
-You are given a list of process descriptions and a description of system usage across the organization.
-Your goal is to identify potential duplicate processes and redundant systems.
+Se te proporciona una lista de descripciones de procesos y una descripción del uso de sistemas en toda la organización.
+Tu objetivo es identificar posibles procesos duplicados y sistemas redundantes.
 
-Process Descriptions:
+Descripciones de Procesos:
 {{processDescriptions}}
 
-System Usage:
+Uso de Sistemas:
 {{systemUsage}}
 
-Analyze the process descriptions and system usage, and identify any potential duplicate processes or redundant systems. Provide a summary of your analysis.
+Analiza las descripciones de los procesos y el uso de los sistemas, e identifica cualquier posible proceso duplicado o sistema redundante. Proporciona un resumen de tu análisis.
+TODA TU RESPUESTA Y EL ANÁLISIS DEBEN ESTAR EN ESPAÑOL.
 
-Duplicate Processes:
+Procesos Duplicados:
 
-Redundant Systems:
+Sistemas Redundantes:
 
-Summary:
-`, // Fixed: Added missing backticks to the prompt string.
+Resumen:
+`,
 });
 
 const analyzeProcessesFlow = ai.defineFlow(
