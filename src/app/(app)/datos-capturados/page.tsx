@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -35,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, Filter } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2 } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';

@@ -26,3 +26,7 @@ Label.displayName = LabelPrimitive.Root.displayName
 
 export { Label }
 
+// This export was added manually and not by shadcn/ui,
+// so that the Label component can be used as a standalone HTML label, for example,
+// to label a select component.
+export default Label;
