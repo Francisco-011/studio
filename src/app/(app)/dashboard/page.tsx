@@ -12,10 +12,10 @@ import {
 
 // Dummy data for dashboard system costs - replace with dynamic data later
 const exampleSystemCosts = [
-  { id: '1', name: 'ERP Principal', annualUsage: 2400, annualLicenses: 15000, currency: 'USD' },
-  { id: '2', name: 'CRM Ventas', annualUsage: 600, annualLicenses: 5000, currency: 'USD' },
-  { id: '3', name: 'Software Contable', annualUsage: 0, annualLicenses: 1200, currency: 'MXN' },
-  { id: '4', name: 'Herramienta BI', annualUsage: 1000, annualLicenses: 0, currency: 'USD' },
+  { id: '1', name: 'ERP Principal', annualUsage: 2400, annualNumLicenses: 10, annualCostPerLicense: 1500, currency: 'USD' },
+  { id: '2', name: 'CRM Ventas', annualUsage: 600, annualNumLicenses: 5, annualCostPerLicense: 1000, currency: 'USD' },
+  { id: '3', name: 'Software Contable', annualUsage: 0, annualNumLicenses: 2, annualCostPerLicense: 600, currency: 'MXN' },
+  { id: '4', name: 'Herramienta BI', annualUsage: 1000, annualNumLicenses: 0, annualCostPerLicense: 0, currency: 'USD' },
 ];
 
 function formatDashboardCurrency(amount: number, currency: string) {
@@ -96,21 +96,25 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[40%]">Sistema</TableHead>
+                  <TableHead className="w-[30%]">Sistema</TableHead>
                   <TableHead className="text-right">Uso Anual</TableHead>
                   <TableHead className="text-right">Licencias Anual</TableHead>
                   <TableHead className="text-right">Total Anual</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {exampleSystemCosts.map((cost) => (
-                  <TableRow key={cost.id}>
-                    <TableCell className="font-medium">{cost.name}</TableCell>
-                    <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsage, cost.currency)}</TableCell>
-                    <TableCell className="text-right">{formatDashboardCurrency(cost.annualLicenses, cost.currency)}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatDashboardCurrency(cost.annualUsage + cost.annualLicenses, cost.currency)}</TableCell>
-                  </TableRow>
-                ))}
+                {exampleSystemCosts.map((cost) => {
+                  const totalLicenseCost = (cost.annualNumLicenses || 0) * (cost.annualCostPerLicense || 0);
+                  const totalAnnualCost = (cost.annualUsage || 0) + totalLicenseCost;
+                  return (
+                    <TableRow key={cost.id}>
+                      <TableCell className="font-medium">{cost.name}</TableCell>
+                      <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsage || 0, cost.currency)}</TableCell>
+                      <TableCell className="text-right">{formatDashboardCurrency(totalLicenseCost, cost.currency)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatDashboardCurrency(totalAnnualCost, cost.currency)}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             <div className="mt-6">
@@ -126,3 +130,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
