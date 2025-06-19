@@ -110,28 +110,45 @@ export default function CapturaPage() {
 
   useEffect(() => {
     const editIdFromQuery = searchParams.get('editId');
+  
     if (editIdFromQuery) {
-      setEditingId(editIdFromQuery);
-      try {
-        const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-        const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
-        const processToEdit = existingData.find(p => p.id === editIdFromQuery);
-        if (processToEdit) {
-          form.reset(processToEdit);
-        } else {
-          toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
+      // Set editingId for UI changes (title, button text)
+      // This ensures the UI updates even if data loading is deferred
+      if (editingId !== editIdFromQuery) {
+        setEditingId(editIdFromQuery);
+      }
+  
+      // Only proceed to load and reset form if all context data is loaded
+      if (!isLoadingAreas && !isLoadingPuestos && !isLoadingProcesos) {
+        try {
+          const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+          const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
+          const processToEdit = existingData.find(p => p.id === editIdFromQuery);
+          
+          if (processToEdit) {
+            form.reset(processToEdit);
+          } else {
+            toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
+            if (editingId !== null) setEditingId(null); // Clear editingId state
+            router.push('/datos-capturados');
+          }
+        } catch (error) {
+          console.error("Error loading process for editing:", error);
+          toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
+          if (editingId !== null) setEditingId(null); // Clear editingId state
           router.push('/datos-capturados');
         }
-      } catch (error) {
-        console.error("Error loading process for editing:", error);
-        toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
-        router.push('/datos-capturados');
       }
+      // If still loading context data, form.reset() is deferred. The effect will re-run when isLoading flags change.
     } else {
-      setEditingId(null);
-      form.reset(); // Reset to default values if not editing
+      // Not in edit mode (new capture)
+      if (editingId !== null) { // If we were previously in edit mode, clear editingId state
+          setEditingId(null);
+      }
+      // Reset form to its initial default values defined in useForm
+      form.reset(); 
     }
-  }, [searchParams, form, router]);
+  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, isLoadingProcesos, editingId]);
 
 
   function onSubmit(values: CapturaFormData) {
@@ -140,12 +157,11 @@ export default function CapturaPage() {
       let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
 
       if (editingId) {
-        // Update existing process
         const processToUpdate = existingData.find(p => p.id === editingId);
         if (processToUpdate) {
             const updatedProcess: CapturedProcess = {
-                ...processToUpdate, // Retain original ID and capturedAt
-                ...values, // Apply new form values
+                ...processToUpdate, 
+                ...values, 
             };
             existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
             localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
@@ -153,12 +169,11 @@ export default function CapturaPage() {
                 title: "Proceso Actualizado",
                 description: "La información del proceso ha sido actualizada exitosamente.",
             });
-            router.push('/datos-capturados'); // Navigate back after edit
+            router.push('/datos-capturados'); 
         } else {
              toast({ title: "Error", description: "No se encontró el proceso para actualizar.", variant: "destructive" });
         }
       } else {
-        // Add new process
         const newProcess: CapturedProcess = {
           ...values,
           id: Date.now().toString(),
@@ -416,7 +431,7 @@ export default function CapturaPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Frecuencia</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccione la frecuencia" />
