@@ -27,7 +27,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2 } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
@@ -80,7 +79,6 @@ export default function DatosCapturadosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
 
@@ -120,18 +118,6 @@ export default function DatosCapturadosPage() {
     setIsDetailDialogOpen(true);
   };
   
-  const handleClearData = () => {
-    try {
-      localStorage.removeItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      setAllCapturedData([]);
-      toast({ title: "Datos Eliminados", description: "Todos los datos capturados han sido eliminados." });
-    } catch (error) {
-      console.error("Error clearing localStorage:", error);
-      toast({ title: "Error", description: "No se pudieron eliminar los datos.", variant: "destructive"});
-    }
-    setIsConfirmClearOpen(false);
-  };
-
   const promptDeleteProcess = (proc: CapturedProcess) => {
     setProcessToDelete(proc);
     setIsConfirmDeleteProcessOpen(true);
@@ -196,32 +182,6 @@ export default function DatosCapturadosPage() {
               <Button variant="outline" className="w-full sm:w-auto" disabled>
                 <FileText className="mr-2 h-4 w-4" /> Exportar (Próx.)
               </Button>
-              <AlertDialog open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="w-full sm:w-auto" disabled={allCapturedData.length === 0}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Limpiar Datos
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                       <div className="flex items-center">
-                         <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                         Confirmar Limpieza Total
-                       </div>
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      ¿Está seguro de que desea eliminar TODOS los datos capturados? Esta acción es irreversible y borrará toda la información de procesos guardada.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearData} className={buttonVariants({ variant: "destructive" })}>
-                      Sí, Eliminar Todo
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </div>
           </div>
 
