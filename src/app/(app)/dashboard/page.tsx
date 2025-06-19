@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, Link } from "lucide-react";
+import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -85,12 +85,12 @@ export default function DashboardPage() {
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividades en Uso</CardTitle>
-            <Link className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Actividades Activas Sin Uso</CardTitle>
+            <PackageX className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">65</div>
-            <p className="text-xs text-muted-foreground">Vinculadas a 40 procesos</p>
+            <div className="text-2xl font-bold">13</div>
+            <p className="text-xs text-muted-foreground">Oportunidad de depuración</p>
           </CardContent>
         </Card>
       </div>
@@ -150,4 +150,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
