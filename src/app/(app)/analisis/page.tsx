@@ -3,6 +3,7 @@
 
 import { useState, type ReactNode, useMemo, useEffect } from 'react';
 import { useAreas, type Area } from '@/contexts/AreasContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext'; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,36 +25,15 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { ActivitySquare, Search, Filter, CheckSquare, XSquare, CopyCheck, Sparkles, Building } from "lucide-react";
+import { ActivitySquare, Search, Filter, CheckSquare, XSquare, CopyCheck, Sparkles, Building, ListChecks as ListChecksIcon } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
-// Area interface is now imported from AreasContext
-
-interface Actividad {
-  id: string;
-  nombre: string;
-  activa: boolean;
-}
-
-// Removed initialMockAreas, will use areas from context
-
-const initialMockActividades: Actividad[] = [
-  { id: 'act1', nombre: 'Prospección de Clientes Nuevos', activa: true },
-  { id: 'act2', nombre: 'Elaboración de Propuestas Comerciales', activa: true },
-  { id: 'act3', nombre: 'Seguimiento de Leads Calificados', activa: false },
-  { id: 'act4', nombre: 'Cierre de Ventas y Contratos', activa: true },
-  { id: 'act5', nombre: 'Facturación y Cobranza de Servicios', activa: true },
-  { id: 'act6', nombre: 'Soporte Post-Venta y Fidelización', activa: false },
-  { id: 'act7', nombre: 'Desarrollo de Campañas Publicitarias', activa: true },
-  { id: 'act8', nombre: 'Gestión de Inventarios y Logística', activa: true },
-  { id: 'act9', nombre: 'Onboarding de Nuevos Empleados', activa: true },
-  { id: 'act10', nombre: 'Revisión de Cumplimiento Normativo', activa: false },
-];
 
 export default function AnalisisPage() {
-  const { areas: contextAreas, isLoading: isLoadingAreas } = useAreas(); // Get areas from context
-  const [actividades] = useState<Actividad[]>(initialMockActividades);
+  const { areas: contextAreas, isLoading: isLoadingAreas } = useAreas(); 
+  const { actividades: contextActividades, isLoadingActividades } = useActividades(); 
+  
   const [matrixData, setMatrixData] = useState<Record<string, Record<string, boolean>>>({});
 
   const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([]);
@@ -61,7 +41,6 @@ export default function AnalisisPage() {
   const [statusFilterActividad, setStatusFilterActividad] = useState<'all' | 'active' | 'inactive'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'duplicated'>('all');
 
-  // Initialize selectedAreaIds when contextAreas load
   useEffect(() => {
     if (!isLoadingAreas && contextAreas.length > 0 && selectedAreaIds.length === 0) {
       setSelectedAreaIds(contextAreas.map(a => a.id));
@@ -90,7 +69,6 @@ export default function AnalisisPage() {
         if (!newMatrixData[actividad.id]) {
           newMatrixData[actividad.id] = {};
         }
-        // Simulate AI decision with 30% chance of being true
         newMatrixData[actividad.id][area.id] = Math.random() < 0.3;
       });
     });
@@ -105,7 +83,8 @@ export default function AnalisisPage() {
   }, [contextAreas, selectedAreaIds, isLoadingAreas]);
 
   const displayedActividades = useMemo(() => {
-    return actividades.filter(actividad => {
+    if (isLoadingActividades) return [];
+    return contextActividades.filter(actividad => {
       if (searchTermActividad && !actividad.nombre.toLowerCase().includes(searchTermActividad.toLowerCase())) {
         return false;
       }
@@ -121,7 +100,6 @@ export default function AnalisisPage() {
         return count;
       }, 0);
       
-      // For 'duplicated' filter, check against all contextAreas, not just displayedAreas
       const totalAssignmentsGlobal = contextAreas.reduce((count, area) => {
          if (matrixData[actividad.id]?.[area.id]) {
           return count + 1;
@@ -144,7 +122,7 @@ export default function AnalisisPage() {
       }
       return true;
     });
-  }, [actividades, searchTermActividad, statusFilterActividad, assignmentFilter, matrixData, displayedAreas, contextAreas]);
+  }, [contextActividades, isLoadingActividades, searchTermActividad, statusFilterActividad, assignmentFilter, matrixData, displayedAreas, contextAreas]);
 
   const toggleAreaSelection = (areaId: string) => {
     setSelectedAreaIds(prev =>
@@ -166,7 +144,7 @@ export default function AnalisisPage() {
           <CardDescription className="mb-6">
             Visualiza las relaciones entre actividades y áreas. Marque casillas para indicar dónde se realiza una actividad.
             Las duplicidades (actividades en múltiples áreas) se resaltan. Use los filtros para refinar la vista o el botón de "Llenar Automático" para una simulación de IA.
-            Las áreas se cargan desde el módulo de Configuración.
+            Las áreas se cargan desde el módulo de Configuración y las actividades desde Gestión de Actividades.
           </CardDescription>
 
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -210,10 +188,11 @@ export default function AnalisisPage() {
                 value={searchTermActividad}
                 onChange={(e) => setSearchTermActividad(e.target.value)}
                 className="w-full pl-10"
+                disabled={isLoadingActividades}
               />
             </div>
 
-            <Select value={statusFilterActividad} onValueChange={(v: 'all'|'active'|'inactive') => setStatusFilterActividad(v)}>
+            <Select value={statusFilterActividad} onValueChange={(v: 'all'|'active'|'inactive') => setStatusFilterActividad(v)} disabled={isLoadingActividades}>
               <SelectTrigger>
                 <SelectValue placeholder="Estado Actividad" />
               </SelectTrigger>
@@ -224,7 +203,7 @@ export default function AnalisisPage() {
               </SelectContent>
             </Select>
 
-            <Select value={assignmentFilter} onValueChange={(v: 'all'|'assigned'|'unassigned'|'duplicated') => setAssignmentFilter(v)}>
+            <Select value={assignmentFilter} onValueChange={(v: 'all'|'assigned'|'unassigned'|'duplicated') => setAssignmentFilter(v)} disabled={isLoadingActividades || isLoadingAreas}>
               <SelectTrigger>
                 <SelectValue placeholder="Asignación" />
               </SelectTrigger>
@@ -236,31 +215,32 @@ export default function AnalisisPage() {
               </SelectContent>
             </Select>
             
-            <Button onClick={handleAutoFill} variant="outline" className="w-full">
+            <Button onClick={handleAutoFill} variant="outline" className="w-full" disabled={isLoadingActividades || isLoadingAreas}>
               <Sparkles className="mr-2 h-4 w-4 text-primary" />
               Llenar Automático
             </Button>
           </div>
-          {isLoadingAreas ? (
+          {isLoadingAreas || isLoadingActividades ? (
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
-              <Building className="h-16 w-16 text-muted-foreground animate-pulse mb-4" />
-              <p className="text-lg font-semibold text-foreground">Cargando Áreas...</p>
+               {isLoadingAreas && <Building className="h-16 w-16 text-muted-foreground animate-pulse mb-4" />}
+               {isLoadingActividades && !isLoadingAreas && <ListChecksIcon className="h-16 w-16 text-muted-foreground animate-pulse mb-4" />}
+              <p className="text-lg font-semibold text-foreground">Cargando Datos...</p>
               <p className="text-sm text-muted-foreground text-center">
-                Esperando datos del módulo de configuración.
+                Esperando datos de configuración y actividades.
               </p>
             </div>
           ) : displayedAreas.length === 0 || displayedActividades.length === 0 ? (
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
               <ActivitySquare className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold text-foreground">
-                { (contextAreas.length === 0 || actividades.length === 0) && !(selectedAreaIds.length === 0 && contextAreas.length > 0)
+                { (contextAreas.length === 0 || contextActividades.length === 0) && !(selectedAreaIds.length === 0 && contextAreas.length > 0)
                     ? "Datos Insuficientes para la Matriz"
                     : "No hay resultados con los filtros aplicados"
                 }
               </p>
               <p className="text-sm text-muted-foreground text-center">
-                 { (contextAreas.length === 0 || actividades.length === 0) && !(selectedAreaIds.length === 0 && contextAreas.length > 0)
-                    ? "Asegúrese de tener áreas (en Configuración) y actividades configuradas."
+                 { (contextAreas.length === 0 || contextActividades.length === 0) && !(selectedAreaIds.length === 0 && contextAreas.length > 0)
+                    ? "Asegúrese de tener áreas (en Configuración) y actividades (en Gestión de Actividades) configuradas."
                     : "Ajuste los filtros para ver resultados o verifique la configuración de áreas y actividades."
                 }
               </p>
@@ -281,7 +261,7 @@ export default function AnalisisPage() {
                 </TableHeader>
                 <TableBody>
                   {displayedActividades.map(actividad => {
-                    const areasPerformingActivityGlobally = contextAreas.filter( // Check against all contextAreas
+                    const areasPerformingActivityGlobally = contextAreas.filter( 
                       area => matrixData[actividad.id]?.[area.id]
                     );
                     const isGloballyDuplicated = areasPerformingActivityGlobally.length > 1;

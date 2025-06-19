@@ -1,0 +1,141 @@
+
+'use client';
+
+import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+export interface Actividad {
+  id: string;
+  nombre: string;
+  activa: boolean;
+  procesosAsociadosCount: number;
+  procesosAsociadosIds?: string[];
+  updatedAt?: number;
+  deletedAt?: number;
+}
+
+interface ActividadesContextType {
+  actividades: Actividad[];
+  deletedActividades: Actividad[];
+  addActividad: (data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => void;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => void;
+  softDeleteActividad: (id: string) => void;
+  restoreActividad: (id: string) => void;
+  toggleActividadStatus: (id: string) => void;
+  isLoadingActividades: boolean;
+}
+
+const ActividadesContext = createContext<ActividadesContextType | undefined>(undefined);
+
+const LOCAL_STORAGE_ACTIVIDADES_KEY = 'proceza-actividades';
+const LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY = 'proceza-deleted-actividades';
+
+export function ActividadesProvider({ children }: { children: ReactNode }) {
+  const [actividades, setActividades] = useState<Actividad[]>([]);
+  const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
+  const [isLoadingActividades, setIsLoadingActividades] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedActividades = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
+        if (savedActividades) {
+          setActividades(JSON.parse(savedActividades));
+        }
+        const savedDeletedActividades = localStorage.getItem(LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY);
+        if (savedDeletedActividades) {
+          setDeletedActividades(JSON.parse(savedDeletedActividades));
+        }
+      } catch (error) {
+        console.error("Failed to load actividades from localStorage", error);
+        setActividades([]);
+        setDeletedActividades([]);
+      } finally {
+        setIsLoadingActividades(false);
+      }
+    } else {
+      setIsLoadingActividades(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoadingActividades) {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_ACTIVIDADES_KEY, JSON.stringify(actividades));
+        localStorage.setItem(LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY, JSON.stringify(deletedActividades));
+      } catch (error) {
+        console.error("Failed to save actividades to localStorage", error);
+      }
+    }
+  }, [actividades, deletedActividades, isLoadingActividades]);
+
+  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => {
+    const newActividad: Actividad = {
+      ...data,
+      id: Date.now().toString(),
+      procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
+      updatedAt: Date.now(),
+    };
+    setActividades((prev) => [...prev, newActividad]);
+  }, []);
+
+  const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => {
+    setActividades((prev) =>
+      prev.map((act) =>
+        act.id === id ? { ...act, ...data, procesosAsociadosCount: data.procesosAsociadosIds?.length ?? act.procesosAsociadosCount, updatedAt: Date.now() } : act
+      )
+    );
+  }, []);
+
+  const softDeleteActividad = useCallback((id: string) => {
+    const activityToMove = actividades.find(act => act.id === id);
+    if (activityToMove) {
+      const currentTime = Date.now();
+      setDeletedActividades(prev => [...prev, { ...activityToMove, deletedAt: currentTime, updatedAt: currentTime }]);
+      setActividades(prev => prev.filter(act => act.id !== id));
+    }
+  }, [actividades]);
+
+  const restoreActividad = useCallback((id: string) => {
+    const activityToRestore = deletedActividades.find(act => act.id === id);
+    if (activityToRestore) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { deletedAt, ...restoredActivityBase } = activityToRestore;
+      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() };
+      setActividades(prev => [...prev, restoredActivity]);
+      setDeletedActividades(prev => prev.filter(act => act.id !== id));
+    }
+  }, [deletedActividades]);
+
+  const toggleActividadStatus = useCallback((id: string) => {
+    setActividades((prev) =>
+      prev.map((act) =>
+        act.id === id ? { ...act, activa: !act.activa, updatedAt: Date.now() } : act
+      )
+    );
+  }, []);
+
+
+  return (
+    <ActividadesContext.Provider value={{ 
+      actividades, 
+      deletedActividades, 
+      addActividad, 
+      updateActividad, 
+      softDeleteActividad, 
+      restoreActividad, 
+      toggleActividadStatus, 
+      isLoadingActividades 
+    }}>
+      {children}
+    </ActividadesContext.Provider>
+  );
+}
+
+export function useActividades(): ActividadesContextType {
+  const context = useContext(ActividadesContext);
+  if (context === undefined) {
+    throw new Error('useActividades must be used within an ActividadesProvider');
+  }
+  return context;
+}

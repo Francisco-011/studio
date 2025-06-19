@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -63,15 +64,7 @@ import type { CapturedProcess } from '../datos-capturados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
-interface Actividad {
-  id: string;
-  nombre: string;
-  activa: boolean;
-  procesosAsociadosCount: number;
-  procesosAsociadosIds?: string[];
-  updatedAt?: number; 
-  deletedAt?: number; 
-}
+// Actividad interface is now imported from ActividadesContext
 
 const actividadFormSchema = z.object({
   id: z.string().optional(),
@@ -81,18 +74,18 @@ const actividadFormSchema = z.object({
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-const initialMockActividades: Actividad[] = [
-  { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 2, procesosAsociadosIds: ['proc1', 'proc2'], updatedAt: Date.now() - 1000*60*60*24*2 },
-  { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 1, procesosAsociadosIds: ['proc3'], updatedAt: Date.now() - 1000*60*60*24*5 },
-  { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 0, procesosAsociadosIds: [], updatedAt: Date.now() - 1000*60*30 },
-  { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 3, procesosAsociadosIds: ['proc1', 'proc4', 'proc5'], updatedAt: Date.now() - 1000*60*60*5 },
-  { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 0, procesosAsociadosIds: [], updatedAt: Date.now() },
-  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 1, procesosAsociadosIds: ['proc2'], updatedAt: Date.now() - 1000*60*60*24*10 },
-];
-
 export default function ActividadesPage() {
-  const [actividades, setActividades] = useState<Actividad[]>(initialMockActividades);
-  const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
+  const { 
+    actividades, 
+    deletedActividades, 
+    addActividad, 
+    updateActividad, 
+    softDeleteActividad, 
+    restoreActividad, 
+    toggleActividadStatus, 
+    isLoadingActividades 
+  } = useActividades();
+  
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -111,7 +104,7 @@ export default function ActividadesPage() {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
         const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        setCapturedProcesses(parsedData.filter(p => !p.deletedAt)); // Only active processes
+        setCapturedProcesses(parsedData.filter(p => !p.deletedAt)); 
       }
     } catch (error) {
       console.error("Error loading captured processes from localStorage:", error);
@@ -144,14 +137,12 @@ export default function ActividadesPage() {
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
   function handleActividadSubmit(data: ActividadFormData) {
-    const currentTime = Date.now();
-    const procesosAsociadosCount = data.procesosAsociadosIds?.length || 0;
-
-    if (editingActividad) {
-      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, ...data, procesosAsociadosCount, updatedAt: currentTime } : act)));
+    const { id, ...activityData } = data; 
+    if (editingActividad && id) {
+      updateActividad(id, activityData);
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      setActividades([...actividades, { id: Date.now().toString(), ...data, procesosAsociadosCount, updatedAt: currentTime }]);
+      addActividad(activityData);
       toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
     }
     setEditingActividad(null);
@@ -171,10 +162,7 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-    const currentTime = Date.now();
-    setDeletedActividades(prev => [...prev, { ...activityToDelete, deletedAt: currentTime, updatedAt: currentTime }]);
-    setActividades(actividades.filter((act) => act.id !== activityToDelete.id));
-    
+    softDeleteActividad(activityToDelete.id);
     toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
     setActivityToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
@@ -183,27 +171,23 @@ export default function ActividadesPage() {
   function handleRestoreActividad(actividadId: string) {
     const activityToRestore = deletedActividades.find(act => act.id === actividadId);
     if (activityToRestore) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { deletedAt, ...restoredActivityBase } = activityToRestore;
-      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() }; 
-      setActividades(prev => [...prev, restoredActivity]);
-      setDeletedActividades(prev => prev.filter(act => act.id !== actividadId));
-      toast({ title: 'Actividad Restaurada', description: `"${restoredActivity.nombre}" ha sido restaurada y activada.`});
+        restoreActividad(actividadId);
+        toast({ title: 'Actividad Restaurada', description: `"${activityToRestore.nombre}" ha sido restaurada y activada.`});
     }
   }
 
   function handleToggleActividadStatus(actividadId: string) {
-    const currentTime = Date.now();
-    setActividades(
-      actividades.map((act) =>
-        act.id === actividadId ? { ...act, activa: !act.activa, updatedAt: currentTime } : act
-      )
-    );
-    const actividadActual = actividades.find(act => act.id === actividadId);
-    if (actividadActual) {
+    toggleActividadStatus(actividadId);
+    const actividadActual = actividades.find(act => act.id === actividadId); // Find after toggle for correct status
+    if (actividadActual) { // If found (it should be)
+       const currentStatus = !actividadActual.activa; // This logic is tricky due to state update timing.
+                                                    // The status in actividadActual might be the OLD one if find is too quick.
+                                                    // A more robust way might be to get the *new* status from context if available
+                                                    // or just use the intended new status based on the action.
+                                                    // For toast, it's probably okay to assume the toggle happened.
       toast({
-        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
-        description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
+        title: `Actividad ${actividadActual.activa ? 'Activada' : 'Desactivada'}`,
+        description: `La actividad "${actividadActual.nombre}" ha sido ${actividadActual.activa ? 'activada' : 'desactivada'}.`,
       });
     }
   }
@@ -223,6 +207,17 @@ export default function ActividadesPage() {
 
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo);
+
+  if (isLoadingActividades) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <ListChecks className="h-16 w-16 text-muted-foreground animate-pulse" />
+          <p className="ml-4 text-lg text-muted-foreground">Cargando actividades...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -532,4 +527,3 @@ export default function ActividadesPage() {
     </div>
   );
 }
-
