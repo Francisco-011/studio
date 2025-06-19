@@ -63,8 +63,8 @@ type NivelOrganizacional = typeof nivelesOrganizacionales[number];
 interface Puesto {
   id: string;
   nombre: string;
-  areaId?: string; // Made optional
-  jefeInmediato?: string;
+  areaId?: string;
+  jefeInmediato?: string; // Stores the ID of another Puesto
   nivelOrganizacional: NivelOrganizacional;
 }
 
@@ -78,8 +78,8 @@ type AreaFormData = z.infer<typeof areaFormSchema>;
 const puestoFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
-  areaId: z.string().optional(), // Made optional
-  jefeInmediato: z.string().optional(),
+  areaId: z.string().optional(),
+  jefeInmediato: z.string().optional(), // Will store the ID of the selected Puesto
   nivelOrganizacional: z.enum(nivelesOrganizacionales, {
     errorMap: () => ({ message: "Debe seleccionar un nivel organizacional válido." }),
   }),
@@ -123,8 +123,8 @@ export default function ConfiguracionPage() {
     resolver: zodResolver(puestoFormSchema),
     defaultValues: {
       nombre: '',
-      areaId: undefined, // Changed from ''
-      jefeInmediato: '',
+      areaId: undefined,
+      jefeInmediato: undefined,
       nivelOrganizacional: undefined,
     },
   });
@@ -142,15 +142,15 @@ export default function ConfiguracionPage() {
       puestoForm.reset({
         id: editingPuesto.id,
         nombre: editingPuesto.nombre,
-        areaId: editingPuesto.areaId || undefined, // Ensure undefined if not present
-        jefeInmediato: editingPuesto.jefeInmediato || '',
+        areaId: editingPuesto.areaId || undefined,
+        jefeInmediato: editingPuesto.jefeInmediato || undefined,
         nivelOrganizacional: editingPuesto.nivelOrganizacional,
       });
     } else {
       puestoForm.reset({
         nombre: '',
-        areaId: undefined, // Changed from ''
-        jefeInmediato: '',
+        areaId: undefined,
+        jefeInmediato: undefined,
         nivelOrganizacional: undefined,
       });
     }
@@ -192,7 +192,7 @@ export default function ConfiguracionPage() {
     const puestoData: Puesto = {
       id: editingPuesto ? editingPuesto.id : Date.now().toString(),
       nombre: data.nombre,
-      areaId: data.areaId || undefined, // Ensure areaId is undefined if empty string or not provided
+      areaId: data.areaId || undefined,
       jefeInmediato: data.jefeInmediato || undefined,
       nivelOrganizacional: data.nivelOrganizacional,
     };
@@ -216,6 +216,16 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeletePuesto(puestoId: string) {
+    // Check if this puesto is a "jefeInmediato" for any other puesto
+    const isJefeInmediato = puestos.some(p => p.jefeInmediato === puestoId);
+    if (isJefeInmediato) {
+      toast({
+        title: 'Error al eliminar',
+        description: 'El puesto no puede ser eliminado porque es Jefe Inmediato de otro puesto.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setPuestos(puestos.filter((puesto) => puesto.id !== puestoId));
     toast({ title: 'Puesto Eliminado', description: 'El puesto ha sido eliminado exitosamente.', variant: 'destructive' });
   }
@@ -326,11 +336,11 @@ export default function ConfiguracionPage() {
               setIsPuestoDialogOpen(isOpen);
               if (!isOpen) {
                 setEditingPuesto(null);
-                puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: '', nivelOrganizacional: undefined});
+                puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: undefined, nivelOrganizacional: undefined});
               }
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: '', nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }}>
+                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: undefined, nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto
                 </Button>
               </DialogTrigger>
@@ -369,6 +379,7 @@ export default function ConfiguracionPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
+                               <SelectItem value="">Sin Área Asignada</SelectItem>
                               {areas.length === 0 ? (
                                 <SelectItem value="no-areas" disabled>No hay áreas disponibles</SelectItem>
                               ) : (
@@ -390,9 +401,26 @@ export default function ConfiguracionPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Jefe Inmediato (Opcional)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Nombre del jefe inmediato" {...field} />
-                          </FormControl>
+                          <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un jefe inmediato" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="">Sin Jefe Inmediato</SelectItem>
+                              {puestos
+                                .filter(p => !editingPuesto || p.id !== editingPuesto.id) // Exclude current puesto from list
+                                .map((puesto) => (
+                                  <SelectItem key={puesto.id} value={puesto.id}>
+                                    {puesto.nombre}
+                                  </SelectItem>
+                                ))}
+                                {puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).length === 0 && (
+                                     <SelectItem value="no-puestos" disabled>No hay otros puestos disponibles</SelectItem>
+                                )}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -449,12 +477,13 @@ export default function ConfiguracionPage() {
                 <TableBody>
                   {puestos.map((puesto) => {
                     const areaPuesto = puesto.areaId ? areas.find(a => a.id === puesto.areaId) : null;
+                    const jefeInmediato = puesto.jefeInmediato ? puestos.find(p => p.id === puesto.jefeInmediato) : null;
                     return (
                       <TableRow key={puesto.id}>
                         <TableCell>{puesto.nombre}</TableCell>
                         <TableCell>{areaPuesto ? areaPuesto.nombre : 'Sin Área'}</TableCell>
                         <TableCell>{puesto.nivelOrganizacional}</TableCell>
-                        <TableCell>{puesto.jefeInmediato || '-'}</TableCell>
+                        <TableCell>{jefeInmediato ? jefeInmediato.nombre : '-'}</TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2">
                             <Edit2 className="h-4 w-4" />
