@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
+import { useProcesos } from "@/contexts/ProcesosContext";
 
 // Mocked data for available systems - in a real app, this would come from a service or context
 const availableSystems = [
@@ -84,6 +85,7 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 export default function CapturaPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { procesos, isLoadingProcesos } = useProcesos();
   const { fuentesDestinos, isLoadingFuentesDestinos } = useFuentesDestinos();
 
   const form = useForm<CapturaFormData>({
@@ -285,11 +287,32 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nombre del Proceso</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Elaboración de Nómina, Recepción de Mercancía" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={isLoadingProcesos}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isLoadingProcesos ? "Cargando procesos..." : "Seleccione un proceso"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {isLoadingProcesos ? (
+                          <SelectItem value="loading" disabled>Cargando procesos...</SelectItem>
+                        ) : procesos.length === 0 ? (
+                          <SelectItem value="no-procesos" disabled>No hay procesos configurados</SelectItem>
+                        ) : (
+                          procesos.map((proc) => (
+                            <SelectItem key={proc.id} value={proc.nombre}>
+                              {proc.nombre}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormDescription>
-                      Identificador o nombre claro del proceso.
+                      Seleccione el proceso principal de la lista configurada.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
