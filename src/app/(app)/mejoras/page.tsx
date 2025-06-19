@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,6 +11,87 @@ import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-pow
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
+const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
+
+// Interfaces for data from localStorage (mirroring ConfiguracionPage)
+interface Sistema {
+  id: string;
+  nombre: string;
+}
+const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
+type TipoMoneda = typeof tiposDeMonedaOptions[number];
+
+interface SistemaCosto {
+  id: string;
+  sistemaId: string;
+  tipoCosto: ("Por Uso del Sistema" | "Por Licencias")[];
+  montoUso?: number;
+  numeroLicencias?: number;
+  costoPorLicencia?: number;
+  formaPago: "Transferencia" | "Efectivo" | "Tarjeta" | "Otros";
+  frecuencia: "Mensual" | "Anual" | "Otro";
+  moneda: TipoMoneda;
+  descripcion?: string;
+}
+
+// Helper function to format currency (simplified for this context)
+function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda = "USD"): string {
+  if (amount === undefined || isNaN(amount)) return "N/A";
+  try {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  } catch (e) {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+// Helper function to calculate annual cost (simplified for this context)
+function calculateSystemAnnualCost(
+  systemId: string,
+  allCosts: SistemaCosto[],
+  allSistemas: Sistema[]
+): { cost: number; currency: TipoMoneda | null, details: string[] } {
+  const system = allSistemas.find(s => s.id === systemId);
+  if (!system) return { cost: 0, currency: null, details: ["Sistema no encontrado"] };
+
+  const costsForSystem = allCosts.filter(cost => cost.sistemaId === systemId);
+  if (costsForSystem.length === 0) return { cost: 0, currency: 'USD', details: ["Sin costos registrados"] };
+  
+  let totalAnnualCost = 0;
+  const displayCurrency = costsForSystem[0].moneda; // Use first cost's currency as primary display
+  const costDetails: string[] = [];
+
+  costsForSystem.forEach(cost => {
+    const costFromUsage = cost.montoUso || 0;
+    const costFromLicenses = (cost.costoPorLicencia || 0) * (cost.numeroLicencias || 0);
+    const baseAmount = costFromUsage + costFromLicenses;
+    let periodicCost = 0;
+
+    if (cost.frecuencia === "Mensual") {
+      periodicCost = baseAmount * 12;
+    } else if (cost.frecuencia === "Anual") {
+      periodicCost = baseAmount;
+    } else { // "Otro" - assume it's an annual equivalent or a one-time for simplicity in summary
+      periodicCost = baseAmount; 
+    }
+    
+    // For simplicity, we're not doing currency conversion here if costs are mixed.
+    // The AI will get all details. This summary is for the text sent to AI.
+    if (cost.moneda === displayCurrency) {
+        totalAnnualCost += periodicCost;
+    }
+
+    costDetails.push(
+      `Tipo: ${cost.tipoCosto.join('/')}, ` +
+      (cost.montoUso ? `Uso: ${formatMejorasCurrency(cost.montoUso, cost.moneda)} ` : '') +
+      (cost.numeroLicencias ? `Lic: ${cost.numeroLicencias}x${formatMejorasCurrency(cost.costoPorLicencia, cost.moneda)} ` : '') +
+      `(${cost.frecuencia})`
+    );
+  });
+
+  return { cost: totalAnnualCost, currency: displayCurrency, details: costDetails };
+}
+
 
 export default function MejorasPage() {
   const [analysisResult, setAnalysisResult] = useState<AnalyzeProcessesOutput | null>(null);
@@ -23,8 +104,9 @@ export default function MejorasPage() {
     setAnalysisResult(null);
 
     try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      const allCapturedProcesses: CapturedProcess[] = storedData ? JSON.parse(storedData) : [];
+      // Load captured processes
+      const storedProcessesData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      const allCapturedProcesses: CapturedProcess[] = storedProcessesData ? JSON.parse(storedProcessesData) : [];
       const activeProcesses = allCapturedProcesses.filter(p => !p.deletedAt);
 
       if (activeProcesses.length === 0) {
@@ -49,25 +131,50 @@ export default function MejorasPage() {
         )
         .join('\n\n---\n\n');
 
-      const allSystemsUsed = new Set<string>();
+      const allSystemsUsedInProcesses = new Set<string>();
       activeProcesses.forEach(p => {
         if (p.sistemas) {
-          p.sistemas.forEach(sys => allSystemsUsed.add(sys));
+          p.sistemas.forEach(sys => allSystemsUsedInProcesses.add(sys));
         }
       });
       const systemUsageText = `Sistemas informáticos utilizados en los procesos documentados: ${
-        allSystemsUsed.size > 0 ? Array.from(allSystemsUsed).join(', ') : 'No se especificaron sistemas en los procesos.'
+        allSystemsUsedInProcesses.size > 0 ? Array.from(allSystemsUsedInProcesses).join(', ') : 'No se especificaron sistemas en los procesos.'
       }`;
+
+      // Load sistemas and costosSistemas from localStorage
+      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+      const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
+      
+      const storedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
+      const costosSistemas: SistemaCosto[] = storedCostosSistemas ? JSON.parse(storedCostosSistemas) : [];
+
+      let systemCostInformationText = "";
+      if (sistemas.length > 0) {
+        systemCostInformationText = "Detalles de Costos de Sistemas:\n";
+        sistemas.forEach(sistema => {
+          const { cost, currency, details } = calculateSystemAnnualCost(sistema.id, costosSistemas, sistemas);
+          systemCostInformationText += `Sistema: ${sistema.nombre}\n`;
+          if (currency) {
+             systemCostInformationText += `  Costo Anual Estimado: ${formatMejorasCurrency(cost, currency)}\n`;
+          } else {
+             systemCostInformationText += `  Costo Anual Estimado: N/A (datos de costo incompletos o mixtos)\n`;
+          }
+          systemCostInformationText += `  Costos Registrados:\n    - ${details.join('\n    - ')}\n\n`;
+        });
+      } else {
+        systemCostInformationText = "No se encontró información de costos de sistemas configurada.";
+      }
 
       const result = await analyzeProcesses({
         processDescriptions: processDescriptionsText,
         systemUsage: systemUsageText,
+        systemCostInformation: systemCostInformationText,
       });
 
       setAnalysisResult(result);
       toast({
         title: "Análisis Completado",
-        description: "Se han identificado posibles mejoras y redundancias.",
+        description: "Se han identificado posibles mejoras y redundancias, considerando la información de costos.",
       });
 
     } catch (err) {
@@ -93,7 +200,7 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados, detectando automáticamente ineficiencias, duplicidades y oportunidades de mejora.
+            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos, para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora.
           </CardDescription>
 
           <div className="mb-6">
@@ -141,7 +248,7 @@ export default function MejorasPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Sistemas Redundantes Potenciales</CardTitle>
+                  <CardTitle>Sistemas Redundantes Potenciales (considerando costos)</CardTitle>
                 </CardHeader>
                 <CardContent>
                  {analysisResult.redundantSystems && analysisResult.redundantSystems.trim() !== "" ? (

@@ -17,6 +17,7 @@ const AnalyzeProcessesInputSchema = z.object({
     .string()
     .describe('Una lista de descripciones de procesos para analizar.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
+  systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
 });
 export type AnalyzeProcessesInput = z.infer<typeof AnalyzeProcessesInputSchema>;
 
@@ -26,8 +27,8 @@ const AnalyzeProcessesOutputSchema = z.object({
     .describe('Una lista de posibles procesos duplicados identificados por la IA.'),
   redundantSystems: z
     .string()
-    .describe('Una lista de posibles sistemas redundantes identificados por la IA.'),
-  summary: z.string().describe('Un resumen del análisis.'),
+    .describe('Una lista de posibles sistemas redundantes identificados por la IA, considerando su costo si se proporciona.'),
+  summary: z.string().describe('Un resumen del análisis, incluyendo consideraciones de costos si la información fue proporcionada.'),
 });
 export type AnalyzeProcessesOutput = z.infer<typeof AnalyzeProcessesOutputSchema>;
 
@@ -41,23 +42,30 @@ const analyzeProcessesPrompt = ai.definePrompt({
   output: {schema: AnalyzeProcessesOutputSchema},
   prompt: `Eres un analista de negocios impulsado por IA encargado de identificar ineficiencias en los procesos empresariales.
 
-Se te proporciona una lista de descripciones de procesos y una descripción del uso de sistemas en toda la organización.
-Tu objetivo es identificar posibles procesos duplicados y sistemas redundantes.
+Se te proporciona una lista de descripciones de procesos, una descripción del uso de sistemas en toda la organización, y opcionalmente, información sobre los costos de estos sistemas.
+Tu objetivo es identificar posibles procesos duplicados y sistemas redundantes, prestando especial atención a las implicaciones de costos.
 
 Descripciones de Procesos:
-{{processDescriptions}}
+{{{processDescriptions}}}
 
 Uso de Sistemas:
-{{systemUsage}}
+{{{systemUsage}}}
 
-Analiza las descripciones de los procesos y el uso de los sistemas, e identifica cualquier posible proceso duplicado o sistema redundante. Proporciona un resumen de tu análisis.
+{{#if systemCostInformation}}
+Información de Costos de Sistemas:
+{{{systemCostInformation}}}
+{{/if}}
+
+Analiza las descripciones de los procesos, el uso de los sistemas, y la información de costos (si está disponible). Identifica cualquier posible proceso duplicado o sistema redundante. 
+Si se proporcionaron datos de costos, considera activamente estos costos en tu análisis para identificar sistemas que son particularmente caros y podrían ser redundantes o subutilizados.
+En tu resumen, destaca las oportunidades de optimización que podrían llevar a ahorros de costos.
 TODA TU RESPUESTA Y EL ANÁLISIS DEBEN ESTAR EN ESPAÑOL.
 
 Procesos Duplicados:
 
-Sistemas Redundantes:
+Sistemas Redundantes (considerando costo si aplica):
 
-Resumen:
+Resumen (incluyendo optimizaciones de costos si aplica):
 `,
 });
 

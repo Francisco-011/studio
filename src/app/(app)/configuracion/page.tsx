@@ -233,6 +233,8 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
   return formatCurrency(totalAnnualCost, displayCurrency);
 }
 
+const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
+const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
@@ -262,6 +264,58 @@ export default function ConfiguracionPage() {
 
   const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
   const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
+
+  // Load sistemas from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+        if (savedSistemas) {
+          setSistemas(JSON.parse(savedSistemas));
+        }
+      } catch (error) {
+        console.error("Failed to load sistemas from localStorage", error);
+        setSistemas([]);
+      }
+    }
+  }, []);
+
+  // Save sistemas to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_SISTEMAS_KEY, JSON.stringify(sistemas));
+      } catch (error) {
+        console.error("Failed to save sistemas to localStorage", error);
+      }
+    }
+  }, [sistemas]);
+
+  // Load costosSistemas from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
+        if (savedCostosSistemas) {
+          setCostosSistemas(JSON.parse(savedCostosSistemas));
+        }
+      } catch (error) {
+        console.error("Failed to load costosSistemas from localStorage", error);
+        setCostosSistemas([]);
+      }
+    }
+  }, []);
+
+  // Save costosSistemas to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY, JSON.stringify(costosSistemas));
+      } catch (error) {
+        console.error("Failed to save costosSistemas to localStorage", error);
+      }
+    }
+  }, [costosSistemas]);
 
 
   const areaForm = useForm<AreaFormData>({
