@@ -51,6 +51,11 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
 
+// Special values for "no selection" in Select components
+const NO_AREA_VALUE = "__NO_AREA__";
+const NO_JEFE_VALUE = "__NO_JEFE__";
+
+
 // Type definitions
 interface Area {
   id: string;
@@ -79,7 +84,7 @@ const puestoFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
   areaId: z.string().optional(),
-  jefeInmediato: z.string().optional(), // Will store the ID of the selected Puesto
+  jefeInmediato: z.string().optional(), 
   nivelOrganizacional: z.enum(nivelesOrganizacionales, {
     errorMap: () => ({ message: "Debe seleccionar un nivel organizacional válido." }),
   }),
@@ -192,8 +197,8 @@ export default function ConfiguracionPage() {
     const puestoData: Puesto = {
       id: editingPuesto ? editingPuesto.id : Date.now().toString(),
       nombre: data.nombre,
-      areaId: data.areaId || undefined,
-      jefeInmediato: data.jefeInmediato || undefined,
+      areaId: data.areaId === NO_AREA_VALUE ? undefined : data.areaId,
+      jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato,
       nivelOrganizacional: data.nivelOrganizacional,
     };
     
@@ -216,7 +221,6 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeletePuesto(puestoId: string) {
-    // Check if this puesto is a "jefeInmediato" for any other puesto
     const isJefeInmediato = puestos.some(p => p.jefeInmediato === puestoId);
     if (isJefeInmediato) {
       toast({
@@ -372,16 +376,20 @@ export default function ConfiguracionPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Área a la que pertenece (Opcional)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
+                          <Select
+                            onValueChange={(value) => field.onChange(value === NO_AREA_VALUE ? undefined : value)}
+                            value={field.value || NO_AREA_VALUE}
+                            defaultValue={field.value || NO_AREA_VALUE}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un área" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                               <SelectItem value="">Sin Área Asignada</SelectItem>
+                               <SelectItem value={NO_AREA_VALUE}>Sin Área Asignada</SelectItem>
                               {areas.length === 0 ? (
-                                <SelectItem value="no-areas" disabled>No hay áreas disponibles</SelectItem>
+                                <SelectItem value="no-areas-disabled" disabled>No hay áreas disponibles</SelectItem>
                               ) : (
                                 areas.map((area) => (
                                   <SelectItem key={area.id} value={area.id}>
@@ -401,23 +409,27 @@ export default function ConfiguracionPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Jefe Inmediato (Opcional)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
+                          <Select
+                            onValueChange={(value) => field.onChange(value === NO_JEFE_VALUE ? undefined : value)}
+                            value={field.value || NO_JEFE_VALUE}
+                            defaultValue={field.value || NO_JEFE_VALUE}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un jefe inmediato" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="">Sin Jefe Inmediato</SelectItem>
+                              <SelectItem value={NO_JEFE_VALUE}>Sin Jefe Inmediato</SelectItem>
                               {puestos
-                                .filter(p => !editingPuesto || p.id !== editingPuesto.id) // Exclude current puesto from list
+                                .filter(p => !editingPuesto || p.id !== editingPuesto.id) 
                                 .map((puesto) => (
                                   <SelectItem key={puesto.id} value={puesto.id}>
                                     {puesto.nombre}
                                   </SelectItem>
                                 ))}
                                 {puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).length === 0 && (
-                                     <SelectItem value="no-puestos" disabled>No hay otros puestos disponibles</SelectItem>
+                                     <SelectItem value="no-puestos-disabled" disabled>No hay otros puestos disponibles</SelectItem>
                                 )}
                             </SelectContent>
                           </Select>
