@@ -113,6 +113,11 @@ interface SistemaCosto {
   descripcion?: string;
 }
 
+interface FuenteDestino {
+  id: string;
+  nombre: string;
+}
+
 // Zod schemas
 const areaFormSchema = z.object({
   id: z.string().optional(),
@@ -195,6 +200,12 @@ const sistemaCostoFormSchema = z.object({
 });
 type SistemaCostoFormData = z.infer<typeof sistemaCostoFormSchema>;
 
+const fuenteDestinoFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, 'El nombre es requerido.'),
+});
+type FuenteDestinoFormData = z.infer<typeof fuenteDestinoFormSchema>;
+
 
 interface ConfigSectionProps {
   title: string;
@@ -227,7 +238,7 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
   const costsForSystem = allCosts.filter(cost => cost.sistemaId === systemId);
   if (costsForSystem.length === 0) return formatCurrency(0, 'USD'); 
 
-  const displayCurrency = costsForSystem[0].moneda; // Assume consistent currency for simplicity
+  const displayCurrency = costsForSystem[0].moneda; 
   let totalAnnualCost = 0;
 
   costsForSystem.forEach(cost => {
@@ -269,6 +280,10 @@ export default function ConfiguracionPage() {
   const [editingCostoSistema, setEditingCostoSistema] = useState<SistemaCosto | null>(null);
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
+
+  const [fuentesDestinos, setFuentesDestinos] = useState<FuenteDestino[]>([]);
+  const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
+  const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
 
 
   const areaForm = useForm<AreaFormData>({
@@ -315,6 +330,13 @@ export default function ConfiguracionPage() {
       frecuencia: undefined,
       moneda: 'USD',
       descripcion: '',
+    },
+  });
+
+  const fuenteDestinoForm = useForm<FuenteDestinoFormData>({
+    resolver: zodResolver(fuenteDestinoFormSchema),
+    defaultValues: {
+      nombre: '',
     },
   });
 
@@ -391,6 +413,14 @@ export default function ConfiguracionPage() {
         }
     }
   }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
+
+  useEffect(() => {
+    if (editingFuenteDestino) {
+      fuenteDestinoForm.reset({ id: editingFuenteDestino.id, nombre: editingFuenteDestino.nombre });
+    } else {
+      fuenteDestinoForm.reset({ nombre: '' });
+    }
+  }, [editingFuenteDestino, fuenteDestinoForm]);
 
 
   function handleAreaSubmit(data: AreaFormData) {
@@ -580,6 +610,29 @@ export default function ConfiguracionPage() {
     if (!selectedSystemForCosts) return;
     setEditingCostoSistema(null); 
     setIsCostoSistemaDialogOpen(true);
+  }
+
+  function handleFuenteDestinoSubmit(data: FuenteDestinoFormData) {
+    if (editingFuenteDestino) {
+      setFuentesDestinos(fuentesDestinos.map((fd) => (fd.id === editingFuenteDestino.id ? { ...fd, nombre: data.nombre } : fd)));
+      toast({ title: 'Fuente/Destino Actualizado', description: 'El elemento ha sido actualizado exitosamente.' });
+    } else {
+      setFuentesDestinos([...fuentesDestinos, { id: Date.now().toString(), nombre: data.nombre }]);
+      toast({ title: 'Fuente/Destino Agregado', description: 'El elemento ha sido agregado exitosamente.' });
+    }
+    setEditingFuenteDestino(null);
+    setIsFuenteDestinoDialogOpen(false);
+    fuenteDestinoForm.reset();
+  }
+
+  function handleEditFuenteDestino(fd: FuenteDestino) {
+    setEditingFuenteDestino(fd);
+    setIsFuenteDestinoDialogOpen(true);
+  }
+
+  function handleDeleteFuenteDestino(fdId: string) {
+    setFuentesDestinos(fuentesDestinos.filter((fd) => fd.id !== fdId));
+    toast({ title: 'Fuente/Destino Eliminado', description: 'El elemento ha sido eliminado exitosamente.', variant: 'destructive' });
   }
   
   const configSections: Array<{
@@ -1343,7 +1396,86 @@ export default function ConfiguracionPage() {
       label: 'Fuentes/Destinos',
       icon: <Share2 className="h-5 w-5 mr-2" />,
       fullDescription: 'Administrar listas para "Información que Recibe" y "Entrega" en Captura. Campos: Nombre de la fuente/destino/formato.',
-      content: <PlaceholderContent title="Gestión de Fuentes y Destinos" description="Próximamente: administración de fuentes, destinos y formatos de información." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} />,
+      content: (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Gestión de Fuentes/Destinos de Información</h3>
+             <Dialog open={isFuenteDestinoDialogOpen} onOpenChange={(isOpen) => {
+                setIsFuenteDestinoDialogOpen(isOpen);
+                if (!isOpen) {
+                    setEditingFuenteDestino(null);
+                    fuenteDestinoForm.reset({ nombre: '' });
+                }
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingFuenteDestino(null); fuenteDestinoForm.reset({ nombre: '' }); setIsFuenteDestinoDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Elemento
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>{editingFuenteDestino ? 'Editar Elemento' : 'Agregar Nuevo Elemento'}</DialogTitle>
+                  <DialogDescription>
+                    {editingFuenteDestino ? 'Modifica el nombre del elemento.' : 'Completa la información para agregar un nuevo elemento a la lista.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...fuenteDestinoForm}>
+                  <form onSubmit={fuenteDestinoForm.handleSubmit(handleFuenteDestinoSubmit)} className="space-y-4 py-4">
+                    <FormField
+                      control={fuenteDestinoForm.control}
+                      name="nombre"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre del Elemento</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Factura Cliente, Reporte Interno, API Externa" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline" onClick={() => { setIsFuenteDestinoDialogOpen(false); setEditingFuenteDestino(null); }}>Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit">{editingFuenteDestino ? 'Guardar Cambios' : 'Agregar Elemento'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {fuentesDestinos.length === 0 ? (
+            <PlaceholderContent title="No hay elementos registrados" description="Comienza agregando fuentes, destinos o formatos de información." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} />
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre del Elemento</TableHead>
+                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fuentesDestinos.map((fd) => (
+                    <TableRow key={fd.id}>
+                      <TableCell>{fd.nombre}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditFuenteDestino(fd)} className="mr-2">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteFuenteDestino(fd.id)} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      ),
     },
   ];
 
