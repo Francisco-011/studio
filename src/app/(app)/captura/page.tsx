@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
+import { usePuestos } from "@/contexts/PuestosContext";
 
 // Mocked data for available systems - in a real app, this would come from a service or context
 const availableSystems = [
@@ -70,6 +71,8 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 export default function CapturaPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, isLoadingPuestos } = usePuestos();
+
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
     defaultValues: {
@@ -168,9 +171,30 @@ export default function CapturaPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Puesto / Rol Principal</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ej: Analista Contable, Jefe de Almacén" {...field} />
-                      </FormControl>
+                       <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isLoadingPuestos}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingPuestos ? "Cargando puestos..." : "Seleccione un puesto"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingPuestos ? (
+                            <SelectItem value="loading" disabled>Cargando puestos...</SelectItem>
+                          ) : puestos.length === 0 ? (
+                            <SelectItem value="no-puestos" disabled>No hay puestos configurados</SelectItem>
+                          ) : (
+                            puestos.map((puesto) => (
+                              <SelectItem key={puesto.id} value={puesto.nombre}>
+                                {puesto.nombre}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
                       <FormDescription>
                         El puesto o rol responsable principal del proceso.
                       </FormDescription>

@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
+import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
+
 
 import { Button } from '@/components/ui/button';
 import {
@@ -59,19 +61,7 @@ import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSig
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
 
-// Type definitions are now mostly from context or local
-// Area is imported from AreasContext
-
-const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Apoyo"] as const;
-type NivelOrganizacional = typeof nivelesOrganizacionales[number];
-
-interface Puesto {
-  id: string;
-  nombre: string;
-  areaId?: string;
-  jefeInmediato?: string; 
-  nivelOrganizacional: NivelOrganizacional;
-}
+// Puesto interface and NivelOrganizacional are now imported from PuestosContext
 
 interface Sistema {
   id: string;
@@ -197,9 +187,9 @@ interface ConfigSectionProps {
   content?: ReactNode;
 }
 
-const PlaceholderContent = ({ title, description, icon }: { title: string, description: string, icon: ReactNode }) => (
+const PlaceholderContent = ({ title, description, icon, isLoading }: { title: string, description: string, icon: ReactNode, isLoading?: boolean }) => (
   <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
-    {icon}
+    {React.cloneElement(icon as React.ReactElement, isLoading ? { className: `${(icon as React.ReactElement).props.className} animate-pulse` } : {})}
     <p className="text-lg font-semibold text-foreground mt-4">{title}</p>
     <p className="text-sm text-muted-foreground text-center">{description}</p>
   </div>
@@ -243,10 +233,11 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
+
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
 
-  const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
 
@@ -420,19 +411,18 @@ export default function ConfiguracionPage() {
   }
 
   function handlePuestoSubmit(data: PuestoFormData) {
-    const puestoData: Puesto = {
-      id: editingPuesto ? editingPuesto.id : Date.now().toString(),
+    const puestoDataToSave: PuestoCreationData = {
       nombre: data.nombre,
       areaId: data.areaId === NO_AREA_VALUE ? undefined : data.areaId,
       jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato,
       nivelOrganizacional: data.nivelOrganizacional,
     };
     
-    if (editingPuesto) {
-      setPuestos(puestos.map((p) => (p.id === editingPuesto.id ? puestoData : p)));
+    if (editingPuesto && editingPuesto.id) {
+      updateContextPuesto(editingPuesto.id, puestoDataToSave);
       toast({ title: 'Puesto Actualizado', description: 'El puesto ha sido actualizado exitosamente.' });
     } else {
-      setPuestos([...puestos, puestoData]);
+      addPuesto(puestoDataToSave);
       toast({ title: 'Puesto Agregado', description: 'El puesto ha sido agregado exitosamente.' });
     }
     setEditingPuesto(null);
@@ -455,7 +445,7 @@ export default function ConfiguracionPage() {
       });
       return;
     }
-    setPuestos(puestos.filter((puesto) => puesto.id !== puestoId));
+    deleteContextPuesto(puestoId);
     toast({ title: 'Puesto Eliminado', description: 'El puesto ha sido eliminado exitosamente.', variant: 'destructive' });
   }
 
@@ -623,7 +613,7 @@ export default function ConfiguracionPage() {
             </Dialog>
           </div>
           {isLoadingAreas ? (
-            <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Building className="h-12 w-12 text-muted-foreground animate-pulse" />} />
+            <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Building className="h-12 w-12 text-muted-foreground" />} isLoading />
           ) : areas.length === 0 ? (
              <PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />
           ) : (
@@ -708,10 +698,11 @@ export default function ConfiguracionPage() {
                           <Select
                             onValueChange={field.onChange}
                             value={field.value || NO_AREA_VALUE}
+                            disabled={isLoadingAreas}
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un área" />
+                                <SelectValue placeholder={isLoadingAreas ? "Cargando áreas..." : "Seleccione un área"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -742,24 +733,29 @@ export default function ConfiguracionPage() {
                           <Select
                             onValueChange={field.onChange}
                             value={field.value || NO_JEFE_VALUE}
+                            disabled={isLoadingPuestos || puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).length === 0}
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un jefe inmediato" />
+                                <SelectValue placeholder={isLoadingPuestos ? "Cargando puestos..." : "Seleccione un jefe inmediato"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               <SelectItem value={NO_JEFE_VALUE}>Sin Jefe Inmediato</SelectItem>
-                              {puestos
-                                .filter(p => !editingPuesto || p.id !== editingPuesto.id) 
-                                .map((puesto) => (
-                                  <SelectItem key={puesto.id} value={puesto.id}>
-                                    {puesto.nombre}
-                                  </SelectItem>
-                                ))}
-                                {puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).length === 0 && (
-                                     <SelectItem value="no-puestos-disabled" disabled>No hay otros puestos disponibles</SelectItem>
-                                )}
+                              {isLoadingPuestos ? (
+                                <SelectItem value="loading-puestos" disabled>Cargando puestos...</SelectItem>
+                              ) : (
+                                puestos
+                                  .filter(p => !editingPuesto || p.id !== editingPuesto.id) 
+                                  .map((puesto) => (
+                                    <SelectItem key={puesto.id} value={puesto.id}>
+                                      {puesto.nombre}
+                                    </SelectItem>
+                                  ))
+                              )}
+                              {!isLoadingPuestos && puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).length === 0 && (
+                                   <SelectItem value="no-puestos-disabled" disabled>No hay otros puestos disponibles</SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -801,7 +797,9 @@ export default function ConfiguracionPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {puestos.length === 0 ? (
+          {isLoadingPuestos ? (
+            <PlaceholderContent title="Cargando puestos..." description="Por favor espere." icon={<Users className="h-12 w-12 text-muted-foreground" />} isLoading />
+          ) : puestos.length === 0 ? (
              <PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
           ) : (
             <Card>
