@@ -50,13 +50,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock } from "lucide-react";
 
 interface Actividad {
   id: string;
   nombre: string;
   activa: boolean;
   procesosAsociadosCount: number;
+  updatedAt?: number; // Timestamp in milliseconds
   deletedAt?: number; // Timestamp in milliseconds
 }
 
@@ -68,12 +69,12 @@ const actividadFormSchema = z.object({
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
 const initialMockActividades: Actividad[] = [
-  { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 5 },
-  { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 12 },
-  { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 2 },
-  { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 8 },
-  { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 3 },
-  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 0 },
+  { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 5, updatedAt: Date.now() - 1000*60*60*24*2 },
+  { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 12, updatedAt: Date.now() - 1000*60*60*24*5 },
+  { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 2, updatedAt: Date.now() - 1000*60*30 },
+  { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 8, updatedAt: Date.now() - 1000*60*60*5 },
+  { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 3, updatedAt: Date.now() },
+  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 0, updatedAt: Date.now() - 1000*60*60*24*10 },
 ];
 
 export default function ActividadesPage() {
@@ -109,11 +110,12 @@ export default function ActividadesPage() {
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
   function handleActividadSubmit(data: ActividadFormData) {
+    const currentTime = Date.now();
     if (editingActividad) {
-      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, nombre: data.nombre, activa: data.activa } : act)));
+      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, nombre: data.nombre, activa: data.activa, updatedAt: currentTime } : act)));
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      setActividades([...actividades, { id: Date.now().toString(), nombre: data.nombre, activa: data.activa, procesosAsociadosCount: 0 }]);
+      setActividades([...actividades, { id: Date.now().toString(), nombre: data.nombre, activa: data.activa, procesosAsociadosCount: 0, updatedAt: currentTime }]);
       toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
     }
     setEditingActividad(null);
@@ -133,8 +135,8 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-
-    setDeletedActividades(prev => [...prev, { ...activityToDelete, deletedAt: Date.now() }]);
+    const currentTime = Date.now();
+    setDeletedActividades(prev => [...prev, { ...activityToDelete, deletedAt: currentTime, updatedAt: currentTime }]);
     setActividades(actividades.filter((act) => act.id !== activityToDelete.id));
     
     toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
@@ -143,22 +145,24 @@ export default function ActividadesPage() {
   }
   
   function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
+    const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
     if (activityToRestore) {
-      const { deletedAt, ...restoredActivity } = activityToRestore;
+      const { deletedAt, ...restoredActivityBase } = activityToRestore;
+      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() }; // Ensure it's active and update timestamp
       setActividades(prev => [...prev, restoredActivity]);
       setDeletedActividades(prev => prev.filter(act => act.id !== actividadId));
-      toast({ title: 'Actividad Restaurada', description: `"${restoredActivity.nombre}" ha sido restaurada.`});
+      toast({ title: 'Actividad Restaurada', description: `"${restoredActivity.nombre}" ha sido restaurada y activada.`});
     }
   }
 
   function handleToggleActividadStatus(actividadId: string) {
+    const currentTime = Date.now();
     setActividades(
       actividades.map((act) =>
-        act.id === actividadId ? { ...act, activa: !act.activa } : act
+        act.id ===ividadId ? { ...act, activa: !act.activa, updatedAt: currentTime } : act
       )
     );
-    const actividadActual = actividades.find(act => act.id === actividadId);
+    const actividadActual = actividades.find(act => act.id ===ividadId);
     if (actividadActual) {
       toast({
         title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
@@ -212,11 +216,11 @@ export default function ActividadesPage() {
                 value={statusFilter}
                 onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}
               >
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="Filtrar por estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="all">Todos (Estado)</SelectItem>
                   <SelectItem value="active">Activas</SelectItem>
                   <SelectItem value="inactive">Inactivas</SelectItem>
                 </SelectContent>
@@ -225,7 +229,7 @@ export default function ActividadesPage() {
                 value={usageFilter}
                 onValueChange={(value: 'all' | 'inUse' | 'notInUse') => setUsageFilter(value)}
               >
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="Filtrar por uso" />
                 </SelectTrigger>
                 <SelectContent>
@@ -244,7 +248,7 @@ export default function ActividadesPage() {
                   <DialogHeader>
                     <DialogTitle>Recuperar Actividades Eliminadas</DialogTitle>
                     <DialogDescription>
-                      Actividades eliminadas en los últimos 30 días.
+                      Actividades eliminadas en los últimos 30 días que pueden ser restauradas.
                     </DialogDescription>
                   </DialogHeader>
                   {recoverableActividades.length > 0 ? (
@@ -355,6 +359,7 @@ export default function ActividadesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre de la Actividad</TableHead>
+                    <TableHead className="w-[180px] text-center">Última Modificación</TableHead>
                     <TableHead className="w-[120px] text-center">Estado</TableHead>
                     <TableHead className="w-[180px] text-center">Procesos Asociados</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
@@ -364,6 +369,9 @@ export default function ActividadesPage() {
                   {filteredActividades.map((actividad) => (
                     <TableRow key={actividad.id}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">
+                        {actividad.updatedAt ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : <CalendarClock className="h-4 w-4 inline-block" />}
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
@@ -417,7 +425,7 @@ export default function ActividadesPage() {
                 </div>
             </AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la lista de recuperación por 30 días.
+              ¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la lista de recuperación por 30 días. Podrá restaurarla desde el botón "Recuperar".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -429,3 +437,6 @@ export default function ActividadesPage() {
     </div>
   );
 }
+
+
+    
