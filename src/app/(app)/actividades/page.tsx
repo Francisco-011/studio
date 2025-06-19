@@ -145,7 +145,7 @@ export default function ActividadesPage() {
   }
   
   function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
+    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
     if (activityToRestore) {
       const { deletedAt, ...restoredActivityBase } = activityToRestore;
       const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() }; // Ensure it's active and update timestamp
@@ -159,10 +159,10 @@ export default function ActividadesPage() {
     const currentTime = Date.now();
     setActividades(
       actividades.map((act) =>
-        act.id ===ividadId ? { ...act, activa: !act.activa, updatedAt: currentTime } : act
+        act.id === actividadId ? { ...act, activa: !act.activa, updatedAt: currentTime } : act
       )
     );
-    const actividadActual = actividades.find(act => act.id ===ividadId);
+    const actividadActual = actividades.find(act => act.id === actividadId);
     if (actividadActual) {
       toast({
         title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
@@ -437,6 +437,3 @@ export default function ActividadesPage() {
     </div>
   );
 }
-
-
-    
