@@ -50,11 +50,19 @@ const availableSystems = [
   { id: "6", nombre: "Google Workspace" },
 ];
 
+const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
+
+
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(1, "El nombre del proceso es requerido."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  tiempoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
+  ),
+  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
   actividades: z.string().min(1, "Las actividades son requeridas."),
   flujoInformacion: z.string().min(1, "El flujo de información es requerido."),
@@ -80,6 +88,8 @@ export default function CapturaPage() {
       puesto: "",
       proceso: "",
       descripcion: "",
+      tiempoEstimado: undefined,
+      frecuencia: undefined,
       sistemas: [],
       actividades: "",
       flujoInformacion: "",
@@ -241,6 +251,52 @@ export default function CapturaPage() {
                   </FormItem>
                 )}
               />
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="tiempoEstimado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tiempo Estimado (minutos)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" />
+                      </FormControl>
+                      <FormDescription>
+                        Tiempo aproximado en minutos para completar el proceso.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="frecuencia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frecuencia</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccione la frecuencia" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {frecuenciaOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Con qué periodicidad se realiza este proceso.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}

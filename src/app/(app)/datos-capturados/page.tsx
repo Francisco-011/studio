@@ -30,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX } from "lucide-react";
-import type { CapturaFormData } from '../captura/page'; // Ensure this path is correct
+import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 
 export interface CapturedProcess extends CapturaFormData {
@@ -244,6 +244,16 @@ export default function DatosCapturadosPage() {
               <div>
                 <h4 className="font-semibold text-sm">Descripción Detallada:</h4>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedProcess.descripcion}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm">Tiempo Estimado:</h4>
+                <p className="text-sm text-muted-foreground">
+                  {selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm">Frecuencia:</h4>
+                <p className="text-sm text-muted-foreground">{selectedProcess.frecuencia || 'No especificada'}</p>
               </div>
               <div>
                 <h4 className="font-semibold text-sm">Sistemas Utilizados:</h4>
