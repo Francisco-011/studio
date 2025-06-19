@@ -20,13 +20,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardEdit, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+
+// Mocked data for available systems - in a real app, this would come from a service or context
+const availableSystems = [
+  { id: "1", nombre: "SAP S/4HANA" },
+  { id: "2", nombre: "Salesforce CRM" },
+  { id: "3", nombre: "ERP Interno 'Phoenix'" },
+  { id: "4", nombre: "Sistema de Tickets Jira" },
+  { id: "5", nombre: "Microsoft Excel" },
+  { id: "6", nombre: "Google Workspace" },
+];
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(1, "El nombre del proceso es requerido."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
-  sistemas: z.string().optional(),
+  sistemas: z.array(z.string()).optional().default([]),
   actividades: z.string().min(1, "Las actividades son requeridas."),
   flujoInformacion: z.string().min(1, "El flujo de información es requerido."),
 });
@@ -41,7 +60,7 @@ export default function CapturaPage() {
       puesto: "",
       proceso: "",
       descripcion: "",
-      sistemas: "",
+      sistemas: [],
       actividades: "",
       flujoInformacion: "",
     },
@@ -147,18 +166,60 @@ export default function CapturaPage() {
                 control={form.control}
                 name="sistemas"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: SAP, CRM Interno, Excel (separados por coma)" {...field} />
-                    </FormControl>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline" className="w-full justify-start text-left font-normal h-auto min-h-10">
+                            {field.value && field.value.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {field.value.map((systemName) => (
+                                  <Badge key={systemName} variant="secondary" className="font-normal">
+                                    {systemName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">Seleccionar sistemas...</span>
+                            )}
+                          </Button>
+                        </FormControl>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+                        <DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {availableSystems.map((system) => (
+                          <DropdownMenuCheckboxItem
+                            key={system.id}
+                            checked={field.value?.includes(system.nombre)}
+                            onCheckedChange={(checked) => {
+                              const currentSelected = field.value || [];
+                              if (checked) {
+                                field.onChange([...currentSelected, system.nombre]);
+                              } else {
+                                field.onChange(currentSelected.filter((s) => s !== system.nombre));
+                              }
+                            }}
+                          >
+                            {system.nombre}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                        {availableSystems.length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            No hay sistemas configurados.
+                          </div>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <FormDescription>
-                      Liste los sistemas o software involucrados en la ejecución del proceso.
+                      Seleccione los sistemas o software involucrados en la ejecución del proceso.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
 
               <FormField
                 control={form.control}
@@ -215,3 +276,4 @@ export default function CapturaPage() {
     </div>
   );
 }
+
