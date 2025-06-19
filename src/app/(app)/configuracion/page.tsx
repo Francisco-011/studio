@@ -24,6 +24,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +49,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { toast } from '@/hooks/use-toast';
 import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
 
@@ -78,6 +81,12 @@ interface Sistema {
   nombre: string;
 }
 
+interface Actividad {
+  id: string;
+  nombre: string;
+  activa: boolean;
+}
+
 // Zod schemas
 const areaFormSchema = z.object({
   id: z.string().optional(),
@@ -101,6 +110,13 @@ const sistemaFormSchema = z.object({
   nombre: z.string().min(1, 'El nombre del sistema es requerido.'),
 });
 type SistemaFormData = z.infer<typeof sistemaFormSchema>;
+
+const actividadFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
+  activa: z.boolean().default(true),
+});
+type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
 
 interface ConfigSectionProps {
@@ -132,6 +148,10 @@ export default function ConfiguracionPage() {
   const [isSistemaDialogOpen, setIsSistemaDialogOpen] = useState(false);
   const [editingSistema, setEditingSistema] = useState<Sistema | null>(null);
 
+  const [actividades, setActividades] = useState<Actividad[]>([]);
+  const [isActividadDialogOpen, setIsActividadDialogOpen] = useState(false);
+  const [editingActividad, setEditingActividad] = useState<Actividad | null>(null);
+
 
   const areaForm = useForm<AreaFormData>({
     resolver: zodResolver(areaFormSchema),
@@ -154,6 +174,14 @@ export default function ConfiguracionPage() {
     resolver: zodResolver(sistemaFormSchema),
     defaultValues: {
       nombre: '',
+    },
+  });
+
+  const actividadForm = useForm<ActividadFormData>({
+    resolver: zodResolver(actividadFormSchema),
+    defaultValues: {
+      nombre: '',
+      activa: true,
     },
   });
 
@@ -191,6 +219,14 @@ export default function ConfiguracionPage() {
       sistemaForm.reset({ nombre: '' });
     }
   }, [editingSistema, sistemaForm]);
+
+  useEffect(() => {
+    if (editingActividad) {
+      actividadForm.reset({ id: editingActividad.id, nombre: editingActividad.nombre, activa: editingActividad.activa });
+    } else {
+      actividadForm.reset({ nombre: '', activa: true });
+    }
+  }, [editingActividad, actividadForm]);
 
 
   function handleAreaSubmit(data: AreaFormData) {
@@ -285,9 +321,47 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteSistema(sistemaId: string) {
-    // Future: Add validation if system is in use (e.g., in Costos de Sistemas)
     setSistemas(sistemas.filter((sistema) => sistema.id !== sistemaId));
     toast({ title: 'Sistema Eliminado', description: 'El sistema ha sido eliminado exitosamente.', variant: 'destructive' });
+  }
+
+  function handleActividadSubmit(data: ActividadFormData) {
+    if (editingActividad) {
+      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, nombre: data.nombre, activa: data.activa } : act)));
+      toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
+    } else {
+      setActividades([...actividades, { id: Date.now().toString(), nombre: data.nombre, activa: data.activa }]);
+      toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
+    }
+    setEditingActividad(null);
+    setIsActividadDialogOpen(false);
+    actividadForm.reset();
+  }
+
+  function handleEditActividad(actividad: Actividad) {
+    setEditingActividad(actividad);
+    setIsActividadDialogOpen(true);
+  }
+
+  function handleDeleteActividad(actividadId: string) {
+    // Future: Implement validation if activity is in use
+    setActividades(actividades.filter((act) => act.id !== actividadId));
+    toast({ title: 'Actividad Eliminada', description: 'La actividad ha sido eliminada exitosamente.', variant: 'destructive' });
+  }
+
+  function handleToggleActividadStatus(actividadId: string) {
+    setActividades(
+      actividades.map((act) =>
+        act.id === actividadId ? { ...act, activa: !act.activa } : act
+      )
+    );
+    const actividadActual = actividades.find(act => act.id === actividadId);
+    if (actividadActual) {
+      toast({
+        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
+        description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
+      });
+    }
   }
   
   const configSections: Array<{
@@ -658,8 +732,119 @@ export default function ConfiguracionPage() {
       value: 'actividades',
       label: 'Actividades',
       icon: <ListChecks className="h-5 w-5 mr-2" />,
-      fullDescription: 'Administrar la lista maestra de actividades granulares. Campos: Nombre de la actividad. Acciones: Agregar, Editar, Activar/Inactivar, Eliminar.',
-      content: <PlaceholderContent title="Gestión de Actividades" description="Próximamente: administración de actividades maestras." icon={<ListChecks className="h-12 w-12 text-muted-foreground" />} />,
+      fullDescription: 'Administrar la lista maestra de actividades granulares. Campos: Nombre de la actividad, Estado (Activa/Inactiva). Acciones: Agregar, Editar, Activar/Inactivar, Eliminar.',
+      content: (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Gestión de Actividades</h3>
+            <Dialog open={isActividadDialogOpen} onOpenChange={(isOpen) => {
+              setIsActividadDialogOpen(isOpen);
+              if (!isOpen) {
+                setEditingActividad(null);
+                actividadForm.reset({ nombre: '', activa: true });
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true }); setIsActividadDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>{editingActividad ? 'Editar Actividad' : 'Agregar Nueva Actividad'}</DialogTitle>
+                  <DialogDescription>
+                    {editingActividad ? 'Modifica los detalles de la actividad.' : 'Completa la información para agregar una nueva actividad.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...actividadForm}>
+                  <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4">
+                    <FormField
+                      control={actividadForm.control}
+                      name="nombre"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre de la Actividad</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={actividadForm.control}
+                      name="activa"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5">
+                            <FormLabel>Estado Activo</FormLabel>
+                            <FormDescription>
+                              Indica si la actividad está disponible para ser usada en procesos.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline" onClick={() => { setIsActividadDialogOpen(false); setEditingActividad(null); }}>Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar Actividad'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {actividades.length === 0 ? (
+            <PlaceholderContent title="No hay actividades registradas" description="Comienza agregando actividades para usarlas en tus procesos." icon={<ListChecks className="h-12 w-12 text-muted-foreground" />} />
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre de la Actividad</TableHead>
+                    <TableHead className="w-[150px]">Estado</TableHead>
+                    <TableHead className="text-right w-[180px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {actividades.map((actividad) => (
+                    <TableRow key={actividad.id}>
+                      <TableCell>{actividad.nombre}</TableCell>
+                      <TableCell>
+                        <Badge variant={actividad.activa ? 'default' : 'secondary'}>
+                          {actividad.activa ? 'Activa' : 'Inactiva'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Switch
+                          checked={actividad.activa}
+                          onCheckedChange={() => handleToggleActividadStatus(actividad.id)}
+                          aria-label={actividad.activa ? 'Desactivar actividad' : 'Activar actividad'}
+                          className="mr-2"
+                        />
+                        <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteActividad(actividad.id)} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      ),
     },
     {
       value: 'costos',
@@ -720,4 +905,3 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-
