@@ -28,7 +28,9 @@ import { toast } from '@/hooks/use-toast';
 import { ActivitySquare, Search, Filter, CheckSquare, XSquare, CopyCheck, Sparkles, Building, ListChecks as ListChecksIcon } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 export default function AnalisisPage() {
   const { areas: contextAreas, isLoading: isLoadingAreas } = useAreas(); 
@@ -63,17 +65,72 @@ export default function AnalisisPage() {
   };
 
   const handleAutoFill = () => {
-    const newMatrixData = { ...matrixData };
-    displayedActividades.forEach(actividad => {
-      displayedAreas.forEach(area => {
-        if (!newMatrixData[actividad.id]) {
-          newMatrixData[actividad.id] = {};
-        }
-        newMatrixData[actividad.id][area.id] = Math.random() < 0.3;
+    try {
+      const storedCapturedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      const allCapturedProcessesData: CapturedProcess[] = storedCapturedData ? JSON.parse(storedCapturedData) : [];
+      const activeCapturedProcesses = allCapturedProcessesData.filter(p => !p.deletedAt);
+
+      if (activeCapturedProcesses.length === 0) {
+        toast({ 
+          title: "Datos Insuficientes", 
+          description: "No hay procesos capturados activos para analizar las asociaciones. Registre algunos en 'Procesos y Flujos Registrados'.", 
+          variant: "default" 
+        });
+        return;
+      }
+       if (contextActividades.length === 0) {
+        toast({ 
+          title: "Datos Insuficientes", 
+          description: "No hay actividades definidas para analizar. Agregue algunas en 'Gestión de Actividades'.", 
+          variant: "default" 
+        });
+        return;
+      }
+       if (contextAreas.length === 0) {
+        toast({ 
+          title: "Datos Insuficientes", 
+          description: "No hay áreas definidas para analizar. Agregue algunas en 'Configuración'.", 
+          variant: "default" 
+        });
+        return;
+      }
+
+
+      const newMatrixData: Record<string, Record<string, boolean>> = {};
+
+      // Initialize matrix for all activities and all areas to false
+      contextActividades.forEach(actividad => {
+        newMatrixData[actividad.id] = {};
+        contextAreas.forEach(area => {
+          newMatrixData[actividad.id][area.id] = false; 
+        });
       });
-    });
-    setMatrixData(newMatrixData);
-    toast({ title: "Llenado Automático Simulado", description: "La matriz ha sido actualizada con sugerencias (simulación)." });
+
+      // Populate based on associations
+      contextActividades.forEach(actividad => {
+        if (actividad.procesosAsociadosIds && actividad.procesosAsociadosIds.length > 0) {
+          actividad.procesosAsociadosIds.forEach(procesoId => {
+            const capturedProcess = activeCapturedProcesses.find(p => p.id === procesoId);
+            
+            if (capturedProcess) {
+              const areaNameOfProcess = capturedProcess.area; // This is the area name as string
+              const areaObject = contextAreas.find(a => a.nombre === areaNameOfProcess); // Find Area object by name
+              
+              if (areaObject && newMatrixData[actividad.id]) { 
+                newMatrixData[actividad.id][areaObject.id] = true;
+              }
+            }
+          });
+        }
+      });
+
+      setMatrixData(newMatrixData);
+      toast({ title: "Llenado Inteligente Aplicado", description: "La matriz ha sido actualizada basada en las asociaciones de actividades a procesos y áreas." });
+
+    } catch (error) {
+      console.error("Error during intelligent auto-fill:", error);
+      toast({ title: "Error en Llenado Automático", description: "No se pudo completar el llenado inteligente. Revise la consola.", variant: "destructive" });
+    }
   };
 
   const displayedAreas = useMemo(() => {
@@ -217,7 +274,7 @@ export default function AnalisisPage() {
             
             <Button onClick={handleAutoFill} variant="outline" className="w-full" disabled={isLoadingActividades || isLoadingAreas}>
               <Sparkles className="mr-2 h-4 w-4 text-primary" />
-              Llenar Automático
+              Llenar Inteligente
             </Button>
           </div>
           {isLoadingAreas || isLoadingActividades ? (
