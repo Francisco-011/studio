@@ -54,12 +54,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2, Briefcase } from 'lucide-react';
 
 // Special values for "no selection" in Select components
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
-const NO_SISTEMA_VALUE = "__NO_SISTEMA__";
 
 // Type definitions
 interface Area {
@@ -191,7 +190,7 @@ const sistemaCostoFormSchema = z.object({
        ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Debe ingresar al menos un monto para los tipos de costo seleccionados.",
-        path: ["montoUso"], // General error, but points to first monto field
+        path: ["montoUso"], 
       });
   }
 });
@@ -218,9 +217,35 @@ function formatCurrency(amount: number | undefined, currency: TipoMoneda = "USD"
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
   } catch (e) {
-    // Fallback for unknown currency or other errors
     return `${amount.toFixed(2)} ${currency}`;
   }
+}
+
+function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSistemas: Sistema[]): string {
+  const system = allSistemas.find(s => s.id === systemId);
+  if (!system) return "N/A";
+
+  const costsForSystem = allCosts.filter(cost => cost.sistemaId === systemId);
+  if (costsForSystem.length === 0) return formatCurrency(0, 'USD'); 
+
+  // Assume all costs for a system use the first cost's currency for simplicity in display.
+  // A robust solution would group by currency or convert.
+  const displayCurrency = costsForSystem[0].moneda;
+  let totalAnnualCost = 0;
+
+  costsForSystem.forEach(cost => {
+    if (cost.moneda === displayCurrency) { // Only sum costs of the same currency for this simple example
+      const baseAmount = (cost.montoUso || 0) + (cost.montoLicencias || 0);
+      if (cost.frecuencia === "Mensual") {
+        totalAnnualCost += baseAmount * 12;
+      } else if (cost.frecuencia === "Anual") {
+        totalAnnualCost += baseAmount;
+      }
+      // "Otro" frequency is ignored in this simplified calculation
+    }
+  });
+  // If there were costs but none matched the displayCurrency (e.g. mixed currencies), show 0 for displayCurrency or handle more complexly
+  return formatCurrency(totalAnnualCost, displayCurrency);
 }
 
 
@@ -244,6 +269,8 @@ export default function ConfiguracionPage() {
   const [costosSistemas, setCostosSistemas] = useState<SistemaCosto[]>([]);
   const [isCostoSistemaDialogOpen, setIsCostoSistemaDialogOpen] = useState(false);
   const [editingCostoSistema, setEditingCostoSistema] = useState<SistemaCosto | null>(null);
+  const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
+  const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
 
 
   const areaForm = useForm<AreaFormData>({
@@ -336,31 +363,33 @@ export default function ConfiguracionPage() {
   }, [editingActividad, actividadForm]);
 
   useEffect(() => {
-    if (editingCostoSistema) {
-      costoSistemaForm.reset({
-        id: editingCostoSistema.id,
-        sistemaId: editingCostoSistema.sistemaId,
-        tipoCosto: editingCostoSistema.tipoCosto,
-        montoUso: editingCostoSistema.montoUso,
-        montoLicencias: editingCostoSistema.montoLicencias,
-        formaPago: editingCostoSistema.formaPago,
-        frecuencia: editingCostoSistema.frecuencia,
-        moneda: editingCostoSistema.moneda,
-        descripcion: editingCostoSistema.descripcion,
-      });
-    } else {
-      costoSistemaForm.reset({
-        sistemaId: sistemas.length > 0 ? sistemas[0].id : NO_SISTEMA_VALUE, // Default to first system or no selection
-        tipoCosto: [],
-        montoUso: undefined,
-        montoLicencias: undefined,
-        formaPago: undefined,
-        frecuencia: undefined,
-        moneda: 'USD',
-        descripcion: '',
-      });
+    if (isCostoSistemaDialogOpen) {
+        if (editingCostoSistema) {
+            costoSistemaForm.reset({
+                id: editingCostoSistema.id,
+                sistemaId: editingCostoSistema.sistemaId,
+                tipoCosto: editingCostoSistema.tipoCosto,
+                montoUso: editingCostoSistema.montoUso,
+                montoLicencias: editingCostoSistema.montoLicencias,
+                formaPago: editingCostoSistema.formaPago,
+                frecuencia: editingCostoSistema.frecuencia,
+                moneda: editingCostoSistema.moneda,
+                descripcion: editingCostoSistema.descripcion,
+            });
+        } else if (selectedSystemForCosts) {
+            costoSistemaForm.reset({
+                sistemaId: selectedSystemForCosts.id,
+                tipoCosto: [],
+                montoUso: undefined,
+                montoLicencias: undefined,
+                formaPago: undefined,
+                frecuencia: undefined,
+                moneda: 'USD',
+                descripcion: '',
+            });
+        }
     }
-  }, [editingCostoSistema, costoSistemaForm, sistemas]);
+  }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
 
 
   function handleAreaSubmit(data: AreaFormData) {
@@ -404,7 +433,6 @@ export default function ConfiguracionPage() {
       nivelOrganizacional: data.nivelOrganizacional,
     };
     
-
     if (editingPuesto) {
       setPuestos(puestos.map((p) => (p.id === editingPuesto.id ? puestoData : p)));
       toast({ title: 'Puesto Actualizado', description: 'El puesto ha sido actualizado exitosamente.' });
@@ -455,17 +483,9 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteSistema(sistemaId: string) {
-     const isSistemaInUse = costosSistemas.some(costo => costo.sistemaId === sistemaId);
-    if (isSistemaInUse) {
-      toast({
-        title: 'Error al eliminar',
-        description: 'El sistema no puede ser eliminado porque tiene costos asociados.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    setCostosSistemas(prevCostos => prevCostos.filter(costo => costo.sistemaId !== sistemaId));
     setSistemas(sistemas.filter((sistema) => sistema.id !== sistemaId));
-    toast({ title: 'Sistema Eliminado', description: 'El sistema ha sido eliminado exitosamente.', variant: 'destructive' });
+    toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' });
   }
 
   function handleActividadSubmit(data: ActividadFormData) {
@@ -509,7 +529,7 @@ export default function ConfiguracionPage() {
   function handleCostoSistemaSubmit(data: SistemaCostoFormData) {
     const costoData: SistemaCosto = {
       id: editingCostoSistema ? editingCostoSistema.id : Date.now().toString(),
-      sistemaId: data.sistemaId,
+      sistemaId: data.sistemaId, // This will be pre-filled from selectedSystemForCosts or editingCostoSistema
       tipoCosto: data.tipoCosto,
       montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined,
       montoLicencias: data.tipoCosto.includes("Por Licencias") ? data.montoLicencias : undefined,
@@ -533,12 +553,24 @@ export default function ConfiguracionPage() {
 
   function handleEditCostoSistema(costo: SistemaCosto) {
     setEditingCostoSistema(costo);
-    setIsCostoSistemaDialogOpen(true);
+    setIsCostoSistemaDialogOpen(true); // This will trigger useEffect to populate form
   }
 
   function handleDeleteCostoSistema(costoId: string) {
     setCostosSistemas(costosSistemas.filter((c) => c.id !== costoId));
     toast({ title: 'Costo de Sistema Eliminado', description: 'El costo ha sido eliminado exitosamente.', variant: 'destructive' });
+  }
+
+  function openManageCostsDialog(sistema: Sistema) {
+    setSelectedSystemForCosts(sistema);
+    setIsManageCostsDialogOpen(true);
+  }
+
+  function openAddCostoDialogForSelectedSystem() {
+    if (!selectedSystemForCosts) return;
+    setEditingCostoSistema(null); // Ensure we are in "add" mode
+    // useEffect for isCostoSistemaDialogOpen will handle form reset with selectedSystemForCosts.id
+    setIsCostoSistemaDialogOpen(true);
   }
   
   const configSections: Array<{
@@ -821,13 +853,13 @@ export default function ConfiguracionPage() {
     },
     {
       value: 'sistemas',
-      label: 'Sistemas',
+      label: 'Sistemas y Costos',
       icon: <Laptop className="h-5 w-5 mr-2" />,
-      fullDescription: 'Mantener el inventario de los sistemas y herramientas tecnológicas utilizadas en la empresa. Campos: Nombre del sistema.',
+      fullDescription: 'Mantener el inventario de sistemas tecnológicos y sus costos asociados. Campos: Nombre del sistema. Acciones: Agregar, Editar, Eliminar Sistema; Gestionar Costos.',
       content: (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Gestión de Sistemas</h3>
+            <h3 className="text-xl font-semibold">Gestión de Sistemas y Costos</h3>
             <Dialog open={isSistemaDialogOpen} onOpenChange={(isOpen) => {
               setIsSistemaDialogOpen(isOpen);
               if (!isOpen) {
@@ -874,22 +906,27 @@ export default function ConfiguracionPage() {
             </Dialog>
           </div>
           {sistemas.length === 0 ? (
-             <PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas para gestionar tu inventario tecnológico." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
+             <PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas para gestionar tu inventario tecnológico y sus costos." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
           ) : (
             <Card>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre del Sistema</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                    <TableHead>Total Costo Anual Estimado</TableHead>
+                    <TableHead className="text-right w-[220px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sistemas.map((sistema) => (
                     <TableRow key={sistema.id}>
                       <TableCell>{sistema.nombre}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditSistema(sistema)} className="mr-2">
+                      <TableCell>{getSystemAnnualCost(sistema.id, costosSistemas, sistemas)}</TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="outline" size="sm" onClick={() => openManageCostsDialog(sistema)}>
+                          <DollarSign className="mr-2 h-4 w-4" /> Gestionar Costos
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditSistema(sistema)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteSistema(sistema.id)} className="text-destructive hover:text-destructive">
@@ -902,6 +939,268 @@ export default function ConfiguracionPage() {
               </Table>
             </Card>
           )}
+
+          {/* Manage Costs Dialog */}
+          <Dialog open={isManageCostsDialogOpen} onOpenChange={(isOpen) => {
+            setIsManageCostsDialogOpen(isOpen);
+            if (!isOpen) setSelectedSystemForCosts(null);
+          }}>
+            <DialogContent className="sm:max-w-[700px]">
+              <DialogHeader>
+                <DialogTitle>Gestionar Costos para {selectedSystemForCosts?.nombre}</DialogTitle>
+                <DialogDescription>
+                  Agregue, edite o elimine los costos asociados a este sistema.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <div className="flex justify-end mb-4">
+                  <Button onClick={openAddCostoDialogForSelectedSystem}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo
+                  </Button>
+                </div>
+                {costosSistemas.filter(c => c.sistemaId === selectedSystemForCosts?.id).length === 0 ? (
+                   <PlaceholderContent title="No hay costos registrados" description={`Aún no se han registrado costos para ${selectedSystemForCosts?.nombre}.`} icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
+                ) : (
+                  <Card>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tipos de Costo</TableHead>
+                          <TableHead>Monto Uso</TableHead>
+                          <TableHead>Monto Licencias</TableHead>
+                          <TableHead>Total</TableHead>
+                          <TableHead>Frecuencia</TableHead>
+                          <TableHead>Forma de Pago</TableHead>
+                          <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costosSistemas
+                          .filter(c => c.sistemaId === selectedSystemForCosts?.id)
+                          .map((costo) => {
+                            const costoTotal = (costo.montoUso || 0) + (costo.montoLicencias || 0);
+                            return (
+                              <TableRow key={costo.id}>
+                                <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
+                                <TableCell>{formatCurrency(costo.montoUso, costo.moneda)}</TableCell>
+                                <TableCell>{formatCurrency(costo.montoLicencias, costo.moneda)}</TableCell>
+                                <TableCell>{formatCurrency(costoTotal, costo.moneda)}</TableCell>
+                                <TableCell>{costo.frecuencia}</TableCell>
+                                <TableCell>{costo.formaPago}</TableCell>
+                                <TableCell className="text-right">
+                                  <Button variant="ghost" size="icon" onClick={() => handleEditCostoSistema(costo)} className="mr-2">
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDeleteCostoSistema(costo.id)} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </Card>
+                )}
+              </div>
+               <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cerrar</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add/Edit CostoSistema Dialog (now always contextual) */}
+          <Dialog open={isCostoSistemaDialogOpen} onOpenChange={(isOpen) => {
+            setIsCostoSistemaDialogOpen(isOpen);
+            if (!isOpen) {
+              setEditingCostoSistema(null); 
+              costoSistemaForm.reset();
+            }
+          }}>
+            <DialogContent className="sm:max-w-[580px]">
+              <DialogHeader>
+                <DialogTitle>{editingCostoSistema ? 'Editar Costo de Sistema' : `Agregar Costo para ${selectedSystemForCosts?.nombre}`}</DialogTitle>
+                <DialogDescription>
+                  {editingCostoSistema ? 'Modifica los detalles del costo.' : 'Completa la información para agregar un nuevo costo.'}
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...costoSistemaForm}>
+                <form onSubmit={costoSistemaForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+                  <FormField
+                    control={costoSistemaForm.control}
+                    name="sistemaId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sistema</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled // Always disabled as context is set
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sistema (auto-seleccionado)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {sistemas.map((s) => ( // Still need to populate for display, though disabled
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={costoSistemaForm.control}
+                    name="tipoCosto"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Tipo de Costo</FormLabel>
+                        <FormDescription>Seleccione uno o ambos tipos de costo.</FormDescription>
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                        {tiposDeCostoOptions.map((tipo) => (
+                          <FormField
+                            key={tipo}
+                            control={costoSistemaForm.control}
+                            name="tipoCosto"
+                            render={({ field }) => {
+                              return (
+                                <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 shadow-sm">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(tipo)}
+                                      onCheckedChange={(checked) => {
+                                        const newValue = checked
+                                          ? [...(field.value || []), tipo]
+                                          : (field.value || []).filter(
+                                              (value) => value !== tipo
+                                            );
+                                        field.onChange(newValue);
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal text-sm leading-none">
+                                    {tipo}
+                                  </FormLabel>
+                                </FormItem>
+                              );
+                            }}
+                          />
+                        ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {costoSistemaForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && (
+                    <FormField
+                      control={costoSistemaForm.control}
+                      name="montoUso"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monto por Uso del Sistema</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="Ej: 150.00" {...field} step="0.01" value={field.value ?? ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {costoSistemaForm.watch('tipoCosto')?.includes('Por Licencias') && (
+                     <FormField
+                      control={costoSistemaForm.control}
+                      name="montoLicencias"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monto por Licencias</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="Ej: 500.00" {...field} step="0.01" value={field.value ?? ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField
+                      control={costoSistemaForm.control}
+                      name="formaPago"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Forma de Pago</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {formasDePagoOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={costoSistemaForm.control}
+                      name="frecuencia"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Frecuencia</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {frecuenciasDePagoOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={costoSistemaForm.control}
+                      name="moneda"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Moneda</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {tiposDeMonedaOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={costoSistemaForm.control}
+                    name="descripcion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descripción (Opcional)</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Detalles adicionales del costo..." {...field} value={field.value ?? ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline" onClick={() => {setIsCostoSistemaDialogOpen(false); setEditingCostoSistema(null);}}>Cancelar</Button>
+                    </DialogClose>
+                    <Button type="submit">{editingCostoSistema ? 'Guardar Cambios' : 'Agregar Costo'}</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </div>
       ),
     },
@@ -1024,291 +1323,6 @@ export default function ConfiguracionPage() {
       ),
     },
     {
-      value: 'costos',
-      label: 'Costos Sistemas',
-      icon: <DollarSign className="h-5 w-5 mr-2" />,
-      fullDescription: 'Detallar los costos asociados a cada sistema. Campos: Sistema, Tipo de Costo, Forma de Pago, Frecuencia, Moneda, Descripción.',
-      content: (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Registro de Costos de Sistemas</h3>
-            <Dialog open={isCostoSistemaDialogOpen} onOpenChange={(isOpen) => {
-              setIsCostoSistemaDialogOpen(isOpen);
-              if (!isOpen) {
-                setEditingCostoSistema(null);
-                costoSistemaForm.reset({
-                  sistemaId: sistemas.length > 0 ? sistemas[0].id : NO_SISTEMA_VALUE,
-                  tipoCosto: [],
-                  montoUso: undefined,
-                  montoLicencias: undefined,
-                  formaPago: undefined,
-                  frecuencia: undefined,
-                  moneda: 'USD',
-                  descripcion: '',
-                });
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button 
-                  onClick={() => { 
-                    setEditingCostoSistema(null); 
-                    costoSistemaForm.reset({
-                      sistemaId: sistemas.length > 0 ? sistemas[0].id : NO_SISTEMA_VALUE,
-                      tipoCosto: [],
-                      montoUso: undefined,
-                      montoLicencias: undefined,
-                      formaPago: undefined,
-                      frecuencia: undefined,
-                      moneda: 'USD',
-                      descripcion: '',
-                    });
-                    setIsCostoSistemaDialogOpen(true); 
-                  }}
-                  disabled={sistemas.length === 0}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[580px]">
-                <DialogHeader>
-                  <DialogTitle>{editingCostoSistema ? 'Editar Costo de Sistema' : 'Agregar Nuevo Costo de Sistema'}</DialogTitle>
-                  <DialogDescription>
-                    {editingCostoSistema ? 'Modifica los detalles del costo.' : 'Completa la información para agregar un nuevo costo.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...costoSistemaForm}>
-                  <form onSubmit={costoSistemaForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                    <FormField
-                      control={costoSistemaForm.control}
-                      name="sistemaId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Sistema</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value === NO_SISTEMA_VALUE ? "" : field.value}
-                            defaultValue={sistemas.length > 0 ? sistemas[0].id : ""}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un sistema" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {sistemas.length === 0 ? (
-                                <SelectItem value="no-sistemas-disabled" disabled>No hay sistemas disponibles</SelectItem>
-                              ) : (
-                                sistemas.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {s.nombre}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={costoSistemaForm.control}
-                      name="tipoCosto"
-                      render={() => (
-                        <FormItem>
-                          <FormLabel>Tipo de Costo</FormLabel>
-                          <FormDescription>Seleccione uno o ambos tipos de costo.</FormDescription>
-                          <div className="grid grid-cols-2 gap-4 pt-2">
-                          {tiposDeCostoOptions.map((tipo) => (
-                            <FormField
-                              key={tipo}
-                              control={costoSistemaForm.control}
-                              name="tipoCosto"
-                              render={({ field }) => {
-                                return (
-                                  <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 shadow-sm">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(tipo)}
-                                        onCheckedChange={(checked) => {
-                                          const newValue = checked
-                                            ? [...(field.value || []), tipo]
-                                            : (field.value || []).filter(
-                                                (value) => value !== tipo
-                                              );
-                                          field.onChange(newValue);
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="font-normal text-sm leading-none">
-                                      {tipo}
-                                    </FormLabel>
-                                  </FormItem>
-                                );
-                              }}
-                            />
-                          ))}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {costoSistemaForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && (
-                      <FormField
-                        control={costoSistemaForm.control}
-                        name="montoUso"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Monto por Uso del Sistema</FormLabel>
-                            <FormControl>
-                              <Input type="number" placeholder="Ej: 150.00" {...field} step="0.01" value={field.value ?? ''} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-
-                    {costoSistemaForm.watch('tipoCosto')?.includes('Por Licencias') && (
-                       <FormField
-                        control={costoSistemaForm.control}
-                        name="montoLicencias"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Monto por Licencias</FormLabel>
-                            <FormControl>
-                              <Input type="number" placeholder="Ej: 500.00" {...field} step="0.01" value={field.value ?? ''} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={costoSistemaForm.control}
-                        name="formaPago"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Forma de Pago</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {formasDePagoOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={costoSistemaForm.control}
-                        name="frecuencia"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Frecuencia</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {frecuenciasDePagoOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={costoSistemaForm.control}
-                        name="moneda"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Moneda</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {tiposDeMonedaOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormField
-                      control={costoSistemaForm.control}
-                      name="descripcion"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Descripción (Opcional)</FormLabel>
-                          <FormControl>
-                            <Textarea placeholder="Detalles adicionales del costo..." {...field} value={field.value ?? ''} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline" onClick={() => {setIsCostoSistemaDialogOpen(false); setEditingCostoSistema(null);}}>Cancelar</Button>
-                      </DialogClose>
-                      <Button type="submit">{editingCostoSistema ? 'Guardar Cambios' : 'Agregar Costo'}</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {sistemas.length === 0 && (
-             <PlaceholderContent title="No hay sistemas registrados" description="Agregue sistemas primero para poder registrar sus costos." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
-          )}
-          {sistemas.length > 0 && costosSistemas.length === 0 ? (
-            <PlaceholderContent title="No hay costos de sistemas registrados" description="Comienza agregando costos para los sistemas definidos." icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
-          ) : null}
-          {sistemas.length > 0 && costosSistemas.length > 0 && (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Sistema</TableHead>
-                    <TableHead>Tipos de Costo</TableHead>
-                    <TableHead>Costo Total</TableHead>
-                    <TableHead>Frecuencia</TableHead>
-                    <TableHead>Forma de Pago</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {costosSistemas.map((costo) => {
-                    const sistema = sistemas.find(s => s.id === costo.sistemaId);
-                    const costoTotal = (costo.montoUso || 0) + (costo.montoLicencias || 0);
-                    return (
-                      <TableRow key={costo.id}>
-                        <TableCell>{sistema ? sistema.nombre : 'Sistema no encontrado'}</TableCell>
-                        <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
-                        <TableCell>{formatCurrency(costoTotal, costo.moneda)}</TableCell>
-                        <TableCell>{costo.frecuencia}</TableCell>
-                        <TableCell>{costo.formaPago}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleEditCostoSistema(costo)} className="mr-2">
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteCostoSistema(costo.id)} className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </div>
-      ),
-    },
-    {
       value: 'fuentesDestinos',
       label: 'Fuentes/Destinos',
       icon: <Share2 className="h-5 w-5 mr-2" />,
@@ -1330,7 +1344,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center">
                   {section.icon}
@@ -1361,3 +1375,4 @@ export default function ConfiguracionPage() {
   );
 }
 
+    
