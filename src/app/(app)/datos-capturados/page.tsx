@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -36,7 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2 } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   capturedAt: string;
+  deletedAt?: string; // ISO string
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -97,6 +99,7 @@ export default function DatosCapturadosPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
+  const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function DatosCapturadosPage() {
   }, []);
 
   const filteredData = useMemo(() => {
-    let dataToFilter = allCapturedData;
+    let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt); // Only show active processes
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -143,6 +146,12 @@ export default function DatosCapturadosPage() {
     return dataToFilter;
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter]);
 
+  const recoverableProcesses = useMemo(() => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo);
+  }, [allCapturedData]);
+
   const handleViewDetails = (proc: CapturedProcess) => {
     setSelectedProcess(proc);
     setIsDetailDialogOpen(true);
@@ -156,17 +165,41 @@ export default function DatosCapturadosPage() {
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
     try {
-      const updatedData = allCapturedData.filter(p => p.id !== processToDelete.id);
+      const updatedData = allCapturedData.map(p => 
+        p.id === processToDelete.id 
+          ? { ...p, deletedAt: new Date().toISOString() } 
+          : p
+      );
       setAllCapturedData(updatedData);
       localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
-      toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido eliminado.` });
+      toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido movido a la papelera de recuperación.`, variant: 'destructive' });
     } catch (error) {
-      console.error("Error deleting process from localStorage:", error);
+      console.error("Error soft deleting process from localStorage:", error);
       toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive"});
     }
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
   };
+  
+  const handleRestoreProcess = (processId: string) => {
+    try {
+      const updatedData = allCapturedData.map(p => {
+        if (p.id === processId) {
+          const { deletedAt, ...restoredProc } = p;
+          return restoredProc;
+        }
+        return p;
+      });
+      setAllCapturedData(updatedData);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+      const restoredProcess = updatedData.find(p => p.id === processId);
+      toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado.` });
+    } catch (error) {
+      console.error("Error restoring process:", error);
+      toast({ title: "Error al Restaurar", description: "No se pudo restaurar el proceso.", variant: "destructive"});
+    }
+  };
+
 
   const handleEditProcess = (proc: CapturedProcess) => {
     router.push(`/captura?editId=${proc.id}`);
@@ -177,8 +210,6 @@ export default function DatosCapturadosPage() {
       return '';
     }
     if (Array.isArray(cellData)) {
-      // Join array elements with a semicolon or other suitable delimiter
-      // and then escape the resulting string.
       const joinedString = cellData.join('; ');
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
         return `"${joinedString.replace(/"/g, '""')}"`;
@@ -216,18 +247,18 @@ export default function DatosCapturadosPage() {
         escapeCsvCell(proc.descripcion),
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.frecuencia),
-        escapeCsvCell(proc.sistemas), // Array handled by escapeCsvCell
+        escapeCsvCell(proc.sistemas), 
         escapeCsvCell(proc.actividades),
         escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.formatosRecibe), // Array handled by escapeCsvCell
+        escapeCsvCell(proc.formatosRecibe), 
         escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.formatosEntrega), // Array handled by escapeCsvCell
+        escapeCsvCell(proc.formatosEntrega), 
         escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss'))
       ].join(','))
     ];
 
     const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' }); 
     const link = document.createElement('a');
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
@@ -269,7 +300,7 @@ export default function DatosCapturadosPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="relative sm:col-span-2 lg:col-span-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
@@ -289,8 +320,8 @@ export default function DatosCapturadosPage() {
                 <SelectContent>
                   <SelectItem value="all">Todas las Áreas</SelectItem>
                   {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem> 
+                   : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
                    : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
-                   {!isLoadingAreas && areas.length === 0 && <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -303,8 +334,8 @@ export default function DatosCapturadosPage() {
                 <SelectContent>
                   <SelectItem value="all">Todos los Puestos</SelectItem>
                    {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
+                   : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
-                   {!isLoadingPuestos && puestos.length === 0 && <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -312,6 +343,54 @@ export default function DatosCapturadosPage() {
             <Button onClick={handleExport} variant="outline" className="w-full">
               <FileText className="mr-2 h-4 w-4" /> Exportar CSV
             </Button>
+            <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full" disabled={recoverableProcesses.length === 0}>
+                  <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableProcesses.length})
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Recuperar Procesos Eliminados</DialogTitle>
+                  <DialogDescription>
+                    Procesos eliminados en los últimos 30 días que pueden ser restaurados.
+                  </DialogDescription>
+                </DialogHeader>
+                {recoverableProcesses.length > 0 ? (
+                  <div className="max-h-[60vh] overflow-y-auto py-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre del Proceso</TableHead>
+                          <TableHead>Eliminado el</TableHead>
+                          <TableHead className="text-right">Acción</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recoverableProcesses.map(proc => (
+                          <TableRow key={proc.id}>
+                            <TableCell>{proc.proceso}</TableCell>
+                            <TableCell>{proc.deletedAt ? format(new Date(proc.deletedAt), 'dd/MM/yyyy HH:mm', { locale: es }) : 'N/A'}</TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" onClick={() => handleRestoreProcess(proc.id)}>
+                                <RotateCcw className="mr-2 h-3 w-3" /> Restaurar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="py-4 text-muted-foreground">No hay procesos para recuperar.</p>
+                )}
+                 <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Cerrar</Button>
+                    </DialogClose>
+                  </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {filteredData.length > 0 ? (
@@ -367,12 +446,12 @@ export default function DatosCapturadosPage() {
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
               <FileX className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold text-foreground">
-                {allCapturedData.length === 0 ? "No hay datos capturados" : "No se encontraron resultados"}
+                {allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados activos" : "No se encontraron resultados"}
               </p>
               <p className="text-sm text-muted-foreground text-center">
-                {allCapturedData.length === 0 
-                  ? 'Comience registrando procesos en el módulo de "Captura".'
-                  : 'Intente ajustar su término de búsqueda o filtros, o revise los datos capturados.'
+                {allCapturedData.filter(p => !p.deletedAt).length === 0 
+                  ? 'Comience registrando procesos en el módulo de "Captura" o revise la papelera de recuperación.'
+                  : 'Intente ajustar su término de búsqueda o filtros.'
                 }
               </p>
             </div>
@@ -419,7 +498,7 @@ export default function DatosCapturadosPage() {
               </div>
             </AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar el proceso "{processToDelete?.proceso}"? Esta acción no se puede deshacer.
+              ¿Está seguro de que desea eliminar el proceso "{processToDelete?.proceso}"? Esta acción lo moverá a la lista de recuperación por 30 días. Podrá restaurarlo desde el botón "Recuperar".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
