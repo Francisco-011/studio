@@ -27,6 +27,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; // Ensure this path is correct
@@ -274,3 +275,4 @@ export default function DatosCapturadosPage() {
     </div>
   );
 }
+
