@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ClipboardEdit, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -30,6 +37,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { useAreas } from "@/contexts/AreasContext";
 
 // Mocked data for available systems - in a real app, this would come from a service or context
 const availableSystems = [
@@ -61,6 +69,7 @@ export interface CapturedProcess extends CapturaFormData {
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 export default function CapturaPage() {
+  const { areas, isLoading: isLoadingAreas } = useAreas();
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
     defaultValues: {
@@ -122,9 +131,30 @@ export default function CapturaPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Área / Departamento</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ej: Finanzas, Operaciones" {...field} />
-                      </FormControl>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isLoadingAreas}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingAreas ? "Cargando áreas..." : "Seleccione un área"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingAreas ? (
+                            <SelectItem value="loading" disabled>Cargando áreas...</SelectItem>
+                          ) : areas.length === 0 ? (
+                            <SelectItem value="no-areas" disabled>No hay áreas configuradas</SelectItem>
+                          ) : (
+                            areas.map((area) => (
+                              <SelectItem key={area.id} value={area.nombre}>
+                                {area.nombre}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
                       <FormDescription>
                         El área o departamento al que pertenece el proceso.
                       </FormDescription>
@@ -302,3 +332,4 @@ export default function CapturaPage() {
     </div>
   );
 }
+
