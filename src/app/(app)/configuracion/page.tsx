@@ -63,7 +63,7 @@ type NivelOrganizacional = typeof nivelesOrganizacionales[number];
 interface Puesto {
   id: string;
   nombre: string;
-  areaId: string;
+  areaId?: string; // Made optional
   jefeInmediato?: string;
   nivelOrganizacional: NivelOrganizacional;
 }
@@ -78,7 +78,7 @@ type AreaFormData = z.infer<typeof areaFormSchema>;
 const puestoFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
-  areaId: z.string().min(1, 'El área es requerida.'),
+  areaId: z.string().optional(), // Made optional
   jefeInmediato: z.string().optional(),
   nivelOrganizacional: z.enum(nivelesOrganizacionales, {
     errorMap: () => ({ message: "Debe seleccionar un nivel organizacional válido." }),
@@ -123,7 +123,7 @@ export default function ConfiguracionPage() {
     resolver: zodResolver(puestoFormSchema),
     defaultValues: {
       nombre: '',
-      areaId: '',
+      areaId: undefined, // Changed from ''
       jefeInmediato: '',
       nivelOrganizacional: undefined,
     },
@@ -142,14 +142,14 @@ export default function ConfiguracionPage() {
       puestoForm.reset({
         id: editingPuesto.id,
         nombre: editingPuesto.nombre,
-        areaId: editingPuesto.areaId,
+        areaId: editingPuesto.areaId || undefined, // Ensure undefined if not present
         jefeInmediato: editingPuesto.jefeInmediato || '',
         nivelOrganizacional: editingPuesto.nivelOrganizacional,
       });
     } else {
       puestoForm.reset({
         nombre: '',
-        areaId: '',
+        areaId: undefined, // Changed from ''
         jefeInmediato: '',
         nivelOrganizacional: undefined,
       });
@@ -175,7 +175,6 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteArea(areaId: string) {
-    // Check if area is used in any puesto
     const isAreaInUse = puestos.some(puesto => puesto.areaId === areaId);
     if (isAreaInUse) {
       toast({
@@ -190,10 +189,14 @@ export default function ConfiguracionPage() {
   }
 
   function handlePuestoSubmit(data: PuestoFormData) {
-    const puestoData = {
-      ...data,
+    const puestoData: Puesto = {
       id: editingPuesto ? editingPuesto.id : Date.now().toString(),
+      nombre: data.nombre,
+      areaId: data.areaId || undefined, // Ensure areaId is undefined if empty string or not provided
+      jefeInmediato: data.jefeInmediato || undefined,
+      nivelOrganizacional: data.nivelOrganizacional,
     };
+    
 
     if (editingPuesto) {
       setPuestos(puestos.map((p) => (p.id === editingPuesto.id ? puestoData : p)));
@@ -323,15 +326,15 @@ export default function ConfiguracionPage() {
               setIsPuestoDialogOpen(isOpen);
               if (!isOpen) {
                 setEditingPuesto(null);
-                puestoForm.reset({nombre: '', areaId: '', jefeInmediato: '', nivelOrganizacional: undefined});
+                puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: '', nivelOrganizacional: undefined});
               }
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: '', jefeInmediato: '', nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }} disabled={areas.length === 0}>
+                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: undefined, jefeInmediato: '', nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[525px]"> {/* Increased width for more fields */}
+              <DialogContent className="sm:max-w-[525px]">
                 <DialogHeader>
                   <DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Nuevo Puesto'}</DialogTitle>
                   <DialogDescription>
@@ -358,19 +361,23 @@ export default function ConfiguracionPage() {
                       name="areaId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Área a la que pertenece</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                          <FormLabel>Área a la que pertenece (Opcional)</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un área" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {areas.map((area) => (
-                                <SelectItem key={area.id} value={area.id}>
-                                  {area.nombre}
-                                </SelectItem>
-                              ))}
+                              {areas.length === 0 ? (
+                                <SelectItem value="no-areas" disabled>No hay áreas disponibles</SelectItem>
+                              ) : (
+                                areas.map((area) => (
+                                  <SelectItem key={area.id} value={area.id}>
+                                    {area.nombre}
+                                  </SelectItem>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -425,13 +432,9 @@ export default function ConfiguracionPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {areas.length === 0 && (
-             <PlaceholderContent title="Primero agregue áreas" description="Para agregar puestos, primero necesita registrar las áreas organizacionales." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
-          )}
-          {areas.length > 0 && puestos.length === 0 && (
+          {puestos.length === 0 ? (
              <PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
-          )}
-          {puestos.length > 0 && (
+          ) : (
             <Card>
               <Table>
                 <TableHeader>
@@ -445,11 +448,11 @@ export default function ConfiguracionPage() {
                 </TableHeader>
                 <TableBody>
                   {puestos.map((puesto) => {
-                    const areaPuesto = areas.find(a => a.id === puesto.areaId);
+                    const areaPuesto = puesto.areaId ? areas.find(a => a.id === puesto.areaId) : null;
                     return (
                       <TableRow key={puesto.id}>
                         <TableCell>{puesto.nombre}</TableCell>
-                        <TableCell>{areaPuesto ? areaPuesto.nombre : 'N/A'}</TableCell>
+                        <TableCell>{areaPuesto ? areaPuesto.nombre : 'Sin Área'}</TableCell>
                         <TableCell>{puesto.nivelOrganizacional}</TableCell>
                         <TableCell>{puesto.jefeInmediato || '-'}</TableCell>
                         <TableCell className="text-right">
@@ -543,3 +546,4 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
+
