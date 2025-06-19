@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   { href: '/usuarios', label: 'Usuarios', icon: Users },
   { href: '/actividades', label: 'Actividades', icon: ListChecks },
   { href: '/analisis', label: 'Análisis', icon: ActivitySquare },
-  { href: '/datos-capturados', label: 'Datos Capturados', icon: Database },
+  { href: '/procesos-y-flujos-registrados', label: 'Procesos y Flujos Registrados', icon: Database },
   { href: '/mejoras', label: 'Mejoras', icon: TrendingUp },
   { href: '/acciones', label: 'Acciones', icon: Target },
   { href: '/auditoria', label: 'Auditoría', icon: History },
@@ -68,3 +68,5 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
+
+    

@@ -42,7 +42,7 @@ import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
 import { useProcesos } from "@/contexts/ProcesosContext";
-import type { CapturedProcess } from '../datos-capturados/page';
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
 const availableSystems = [
@@ -125,13 +125,13 @@ export default function CapturaPage() {
           } else {
             toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
             if (editingId !== null) setEditingId(null); 
-            router.push('/datos-capturados');
+            router.push('/procesos-y-flujos-registrados');
           }
         } catch (error) {
           console.error("Error loading process for editing:", error);
           toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
           if (editingId !== null) setEditingId(null); 
-          router.push('/datos-capturados');
+          router.push('/procesos-y-flujos-registrados');
         }
       }
     } else {
@@ -161,7 +161,7 @@ export default function CapturaPage() {
                 title: "Proceso Actualizado",
                 description: "La información del proceso ha sido actualizada exitosamente.",
             });
-            router.push('/datos-capturados'); 
+            router.push('/procesos-y-flujos-registrados'); 
         } else {
              toast({ title: "Error", description: "No se encontró el proceso para actualizar.", variant: "destructive" });
         }
@@ -539,7 +539,7 @@ export default function CapturaPage() {
 
               <div className="flex justify-end space-x-2">
                 {editingId && (
-                   <Button type="button" variant="outline" onClick={() => router.push('/datos-capturados')}>
+                   <Button type="button" variant="outline" onClick={() => router.push('/procesos-y-flujos-registrados')}>
                     Cancelar
                   </Button>
                 )}
@@ -556,3 +556,5 @@ export default function CapturaPage() {
   );
 }
 
+
+    

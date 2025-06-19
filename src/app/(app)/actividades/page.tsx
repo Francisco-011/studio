@@ -60,7 +60,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
 import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown } from "lucide-react";
-import type { CapturedProcess } from '../datos-capturados/page';
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -527,3 +527,5 @@ export default function ActividadesPage() {
     </div>
   );
 }
+
+    
