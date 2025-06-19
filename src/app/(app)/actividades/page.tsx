@@ -48,38 +48,53 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown } from "lucide-react";
+import type { CapturedProcess } from '../datos-capturados/page';
+
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 interface Actividad {
   id: string;
   nombre: string;
   activa: boolean;
   procesosAsociadosCount: number;
-  updatedAt?: number; // Timestamp in milliseconds
-  deletedAt?: number; // Timestamp in milliseconds
+  procesosAsociadosIds?: string[];
+  updatedAt?: number; 
+  deletedAt?: number; 
 }
 
 const actividadFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   activa: z.boolean().default(true),
+  procesosAsociadosIds: z.array(z.string()).optional().default([]),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
 const initialMockActividades: Actividad[] = [
-  { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 5, updatedAt: Date.now() - 1000*60*60*24*2 },
-  { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 12, updatedAt: Date.now() - 1000*60*60*24*5 },
-  { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 2, updatedAt: Date.now() - 1000*60*30 },
-  { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 8, updatedAt: Date.now() - 1000*60*60*5 },
-  { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 3, updatedAt: Date.now() },
-  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 0, updatedAt: Date.now() - 1000*60*60*24*10 },
+  { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 2, procesosAsociadosIds: ['proc1', 'proc2'], updatedAt: Date.now() - 1000*60*60*24*2 },
+  { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 1, procesosAsociadosIds: ['proc3'], updatedAt: Date.now() - 1000*60*60*24*5 },
+  { id: '3', nombre: 'Aprobación de Descuentos Especiales', activa: false, procesosAsociadosCount: 0, procesosAsociadosIds: [], updatedAt: Date.now() - 1000*60*30 },
+  { id: '4', nombre: 'Seguimiento Post-Venta', activa: true, procesosAsociadosCount: 3, procesosAsociadosIds: ['proc1', 'proc4', 'proc5'], updatedAt: Date.now() - 1000*60*60*5 },
+  { id: '5', nombre: 'Capacitación de Nuevo Personal', activa: true, procesosAsociadosCount: 0, procesosAsociadosIds: [], updatedAt: Date.now() },
+  { id: '6', nombre: 'Generación de Reporte de Cumplimiento', activa: false, procesosAsociadosCount: 1, procesosAsociadosIds: ['proc2'], updatedAt: Date.now() - 1000*60*60*24*10 },
 ];
 
 export default function ActividadesPage() {
   const [actividades, setActividades] = useState<Actividad[]>(initialMockActividades);
   const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
+  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [usageFilter, setUsageFilter] = useState<'all' | 'inUse' | 'notInUse'>('all');
@@ -91,31 +106,52 @@ export default function ActividadesPage() {
   const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
 
+  useEffect(() => {
+    try {
+      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedData) {
+        const parsedData: CapturedProcess[] = JSON.parse(storedData);
+        setCapturedProcesses(parsedData.filter(p => !p.deletedAt)); // Only active processes
+      }
+    } catch (error) {
+      console.error("Error loading captured processes from localStorage:", error);
+      toast({ title: "Error al cargar procesos", description: "No se pudieron cargar los procesos para asociar.", variant: "destructive" });
+    }
+  }, []);
+
   const actividadForm = useForm<ActividadFormData>({
     resolver: zodResolver(actividadFormSchema),
     defaultValues: {
       nombre: '',
       activa: true,
+      procesosAsociadosIds: [],
     },
   });
 
   useEffect(() => {
     if (isActividadDialogOpen) {
       if (editingActividad) {
-        actividadForm.reset({ id: editingActividad.id, nombre: editingActividad.nombre, activa: editingActividad.activa });
+        actividadForm.reset({ 
+          id: editingActividad.id, 
+          nombre: editingActividad.nombre, 
+          activa: editingActividad.activa,
+          procesosAsociadosIds: editingActividad.procesosAsociadosIds || [] 
+        });
       } else {
-        actividadForm.reset({ nombre: '', activa: true });
+        actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] });
       }
     }
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
   function handleActividadSubmit(data: ActividadFormData) {
     const currentTime = Date.now();
+    const procesosAsociadosCount = data.procesosAsociadosIds?.length || 0;
+
     if (editingActividad) {
-      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, nombre: data.nombre, activa: data.activa, updatedAt: currentTime } : act)));
+      setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, ...data, procesosAsociadosCount, updatedAt: currentTime } : act)));
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      setActividades([...actividades, { id: Date.now().toString(), nombre: data.nombre, activa: data.activa, procesosAsociadosCount: 0, updatedAt: currentTime }]);
+      setActividades([...actividades, { id: Date.now().toString(), ...data, procesosAsociadosCount, updatedAt: currentTime }]);
       toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
     }
     setEditingActividad(null);
@@ -147,8 +183,9 @@ export default function ActividadesPage() {
   function handleRestoreActividad(actividadId: string) {
     const activityToRestore = deletedActividades.find(act => act.id === actividadId);
     if (activityToRestore) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { deletedAt, ...restoredActivityBase } = activityToRestore;
-      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() }; // Ensure it's active and update timestamp
+      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() }; 
       setActividades(prev => [...prev, restoredActivity]);
       setDeletedActividades(prev => prev.filter(act => act.id !== actividadId));
       toast({ title: 'Actividad Restaurada', description: `"${restoredActivity.nombre}" ha sido restaurada y activada.`});
@@ -196,7 +233,7 @@ export default function ActividadesPage() {
             <CardTitle className="text-2xl font-headline">Gestión de Actividades</CardTitle>
           </div>
           <CardDescription className="text-muted-foreground">
-            Visualización, creación, edición y gestión de estados de todas las actividades granulares.
+            Visualización, creación, edición y gestión de estados de todas las actividades granulares. Asocie actividades a procesos capturados.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -290,15 +327,15 @@ export default function ActividadesPage() {
                 setIsActividadDialogOpen(isOpen);
                 if (!isOpen) {
                   setEditingActividad(null);
-                  actividadForm.reset({ nombre: '', activa: true });
+                  actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] });
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true }); setIsActividadDialogOpen(true); }} className="w-full sm:w-auto">
+                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] }); setIsActividadDialogOpen(true); }} className="w-full sm:w-auto">
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>{editingActividad ? 'Editar Actividad' : 'Agregar Nueva Actividad'}</DialogTitle>
                     <DialogDescription>
@@ -316,6 +353,59 @@ export default function ActividadesPage() {
                             <FormControl>
                               <Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={actividadForm.control}
+                        name="procesosAsociadosIds"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Procesos Asociados</FormLabel>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between font-normal">
+                                  <span className="truncate">
+                                    {field.value && field.value.length > 0
+                                      ? field.value.length === 1
+                                        ? capturedProcesses.find(p => p.id === field.value?.[0])?.proceso || `${field.value.length} proceso seleccionado`
+                                        : `${field.value.length} procesos seleccionados`
+                                      : "Seleccionar procesos..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+                                <DropdownMenuLabel>Procesos Capturados Disponibles</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {capturedProcesses.length === 0 ? (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    No hay procesos capturados.
+                                  </div>
+                                ) : (
+                                  capturedProcesses.map((proceso) => (
+                                    <DropdownMenuCheckboxItem
+                                      key={proceso.id}
+                                      checked={field.value?.includes(proceso.id)}
+                                      onCheckedChange={(checked) => {
+                                        const currentSelected = field.value || [];
+                                        if (checked) {
+                                          field.onChange([...currentSelected, proceso.id]);
+                                        } else {
+                                          field.onChange(currentSelected.filter((id) => id !== proceso.id));
+                                        }
+                                      }}
+                                    >
+                                      {proceso.proceso}
+                                    </DropdownMenuCheckboxItem>
+                                  ))
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                             <FormDescription>
+                              Vincule esta actividad a uno o más procesos capturados.
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -379,7 +469,12 @@ export default function ActividadesPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         {actividad.procesosAsociadosCount > 0 ? 
-                         (<Badge variant="outline">{`${actividad.procesosAsociadosCount} procesos`}</Badge>) 
+                         (<Badge variant="outline" className="cursor-pointer hover:bg-muted" title={
+                            actividad.procesosAsociadosIds?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso).filter(Boolean).join(', ') || 'N/A'
+                         }>
+                            <Link2 className="h-3 w-3 mr-1 inline-block"/>
+                            {`${actividad.procesosAsociadosCount} procesos`}
+                          </Badge>) 
                          : (<Badge variant="secondary">Sin Uso</Badge>)
                         }
                       </TableCell>
@@ -437,3 +532,4 @@ export default function ActividadesPage() {
     </div>
   );
 }
+
