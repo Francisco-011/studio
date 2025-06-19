@@ -4,6 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { format } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -50,7 +51,14 @@ const capturaFormSchema = z.object({
   flujoInformacion: z.string().min(1, "El flujo de información es requerido."),
 });
 
-type CapturaFormData = z.infer<typeof capturaFormSchema>;
+export type CapturaFormData = z.infer<typeof capturaFormSchema>;
+
+export interface CapturedProcess extends CapturaFormData {
+  id: string;
+  capturedAt: string;
+}
+
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 export default function CapturaPage() {
   const form = useForm<CapturaFormData>({
@@ -67,13 +75,31 @@ export default function CapturaPage() {
   });
 
   function onSubmit(values: CapturaFormData) {
-    // In a real application, you would send this data to a server/database
-    console.log("Form data submitted:", values);
-    toast({
-      title: "Proceso Registrado",
-      description: "La información del proceso ha sido guardada exitosamente.",
-    });
-    form.reset(); // Reset form fields after successful submission
+    const newProcess: CapturedProcess = {
+      ...values,
+      id: Date.now().toString(),
+      capturedAt: new Date().toISOString(),
+    };
+
+    try {
+      const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
+      existingData.push(newProcess);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
+      
+      toast({
+        title: "Proceso Registrado",
+        description: "La información del proceso ha sido guardada exitosamente en almacenamiento local.",
+      });
+      form.reset(); 
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+      toast({
+        title: "Error al Guardar",
+        description: "No se pudo guardar el proceso. Revise la consola para más detalles.",
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -276,4 +302,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-
