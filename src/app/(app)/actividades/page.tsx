@@ -5,6 +5,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +18,16 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -39,13 +50,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2 } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 
 interface Actividad {
   id: string;
   nombre: string;
   activa: boolean;
-  procesosAsociadosCount: number; // Kept for future use, but not directly managed here for now
+  procesosAsociadosCount: number;
+  deletedAt?: number; // Timestamp in milliseconds
 }
 
 const actividadFormSchema = z.object({
@@ -55,7 +67,6 @@ const actividadFormSchema = z.object({
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-// Mock data - in a real application, this would come from a service or global state
 const initialMockActividades: Actividad[] = [
   { id: '1', nombre: 'Revisión de Documentación Legal', activa: true, procesosAsociadosCount: 5 },
   { id: '2', nombre: 'Elaboración de Propuesta Comercial', activa: true, procesosAsociadosCount: 12 },
@@ -67,11 +78,16 @@ const initialMockActividades: Actividad[] = [
 
 export default function ActividadesPage() {
   const [actividades, setActividades] = useState<Actividad[]>(initialMockActividades);
+  const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   
   const [isActividadDialogOpen, setIsActividadDialogOpen] = useState(false);
   const [editingActividad, setEditingActividad] = useState<Actividad | null>(null);
+
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+  const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
+  const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
 
   const actividadForm = useForm<ActividadFormData>({
     resolver: zodResolver(actividadFormSchema),
@@ -96,7 +112,6 @@ export default function ActividadesPage() {
       setActividades(actividades.map((act) => (act.id === editingActividad.id ? { ...act, nombre: data.nombre, activa: data.activa } : act)));
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      // For 'procesosAsociadosCount', we'll default to 0 for new activities on this page
       setActividades([...actividades, { id: Date.now().toString(), nombre: data.nombre, activa: data.activa, procesosAsociadosCount: 0 }]);
       toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
     }
@@ -110,10 +125,30 @@ export default function ActividadesPage() {
     setIsActividadDialogOpen(true);
   }
 
-  function handleDeleteActividad(actividadId: string) {
-    // Add validation here if activity is in use by processes, once that data is available
-    setActividades(actividades.filter((act) => act.id !== actividadId));
-    toast({ title: 'Actividad Eliminada', description: 'La actividad ha sido eliminada exitosamente.', variant: 'destructive' });
+  function promptDeleteActividad(actividad: Actividad) {
+    setActivityToDelete(actividad);
+    setIsConfirmDeleteDialogOpen(true);
+  }
+
+  function executeDeleteActividad() {
+    if (!activityToDelete) return;
+
+    setDeletedActividades(prev => [...prev, { ...activityToDelete, deletedAt: Date.now() }]);
+    setActividades(actividades.filter((act) => act.id !== activityToDelete.id));
+    
+    toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
+    setActivityToDelete(null);
+    setIsConfirmDeleteDialogOpen(false);
+  }
+  
+  function handleRestoreActividad(actividadId: string) {
+    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
+    if (activityToRestore) {
+      const { deletedAt, ...restoredActivity } = activityToRestore;
+      setActividades(prev => [...prev, restoredActivity]);
+      setDeletedActividades(prev => prev.filter(act => act.id !== actividadId));
+      toast({ title: 'Actividad Restaurada', description: `"${restoredActivity.nombre}" ha sido restaurada.`});
+    }
   }
 
   function handleToggleActividadStatus(actividadId: string) {
@@ -139,6 +174,9 @@ export default function ActividadesPage() {
       (statusFilter === 'inactive' && !actividad.activa);
     return matchesSearchTerm && matchesStatus;
   });
+
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo);
 
   return (
     <div className="container mx-auto py-8">
@@ -178,6 +216,54 @@ export default function ActividadesPage() {
                   <SelectItem value="inactive">Inactivas</SelectItem>
                 </SelectContent>
               </Select>
+              <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" disabled={recoverableActividades.length === 0}>
+                    <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableActividades.length})
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Recuperar Actividades Eliminadas</DialogTitle>
+                    <DialogDescription>
+                      Actividades eliminadas en los últimos 30 días.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {recoverableActividades.length > 0 ? (
+                    <div className="max-h-[60vh] overflow-y-auto py-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Eliminada el</TableHead>
+                            <TableHead className="text-right">Acción</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recoverableActividades.map(act => (
+                            <TableRow key={act.id}>
+                              <TableCell>{act.nombre}</TableCell>
+                              <TableCell>{act.deletedAt ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
+                              <TableCell className="text-right">
+                                <Button size="sm" onClick={() => handleRestoreActividad(act.id)}>
+                                  <RotateCcw className="mr-2 h-3 w-3" /> Restaurar
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <p className="py-4 text-muted-foreground">No hay actividades para recuperar.</p>
+                  )}
+                   <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">Cerrar</Button>
+                      </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Dialog open={isActividadDialogOpen} onOpenChange={(isOpen) => {
                 setIsActividadDialogOpen(isOpen);
                 if (!isOpen) {
@@ -278,7 +364,7 @@ export default function ActividadesPage() {
                         <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteActividad(actividad.id)} className="text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -299,6 +385,28 @@ export default function ActividadesPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+                <div className="flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                    Confirmar Eliminación
+                </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la lista de recuperación por 30 días.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setActivityToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDeleteActividad} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
