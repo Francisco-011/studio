@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogClose,
   DialogFooter,
-  DialogTrigger, // Added DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -49,7 +49,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   capturedAt: string;
-  deletedAt?: string; // ISO string
+  deletedAt?: string; 
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -122,7 +122,7 @@ export default function DatosCapturadosPage() {
   }, []);
 
   const filteredData = useMemo(() => {
-    let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt); // Only show active processes
+    let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt); 
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -131,8 +131,7 @@ export default function DatosCapturadosPage() {
           proc.proceso.toLowerCase().includes(lowerSearchTerm) ||
           proc.area.toLowerCase().includes(lowerSearchTerm) ||
           proc.puesto.toLowerCase().includes(lowerSearchTerm) ||
-          proc.descripcion.toLowerCase().includes(lowerSearchTerm) ||
-          (proc.actividades && proc.actividades.toLowerCase().includes(lowerSearchTerm))
+          proc.descripcion.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
@@ -194,7 +193,7 @@ export default function DatosCapturadosPage() {
       });
       setAllCapturedData(updatedData);
       localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
-      const restoredProcess = updatedData.find(p => p.id === processId); // Find the non-deleted version
+      const restoredProcess = updatedData.find(p => p.id === processId); 
       toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado.` });
     } catch (error) {
       console.error("Error restoring process:", error);
@@ -233,7 +232,7 @@ export default function DatosCapturadosPage() {
 
     const headers = [
       "ID", "Proceso", "Area", "Puesto", "Descripción", 
-      "Tiempo Estimado (min)", "Frecuencia", "Sistemas", "Actividades",
+      "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
       "Información Recibe", "Formatos Recibe", 
       "Información Entrega", "Formatos Entrega", 
       "Fecha Captura"
@@ -250,7 +249,6 @@ export default function DatosCapturadosPage() {
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.frecuencia),
         escapeCsvCell(proc.sistemas), 
-        escapeCsvCell(proc.actividades),
         escapeCsvCell(proc.informacionRecibe),
         escapeCsvCell(proc.formatosRecibe), 
         escapeCsvCell(proc.informacionEntrega),
@@ -477,7 +475,6 @@ export default function DatosCapturadosPage() {
               <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
               <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
               <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
-              <DetailSection title="Actividades Granulares" value={selectedProcess.actividades} isTextarea />
               <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
               <DetailSection title="Formatos de Información Utilizados (Entradas)" value={selectedProcess.formatosRecibe} isList />
               <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />

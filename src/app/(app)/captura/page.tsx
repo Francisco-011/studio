@@ -68,7 +68,6 @@ const capturaFormSchema = z.object({
   ),
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
-  actividades: z.string().min(1, "Las actividades son requeridas."),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
   formatosRecibe: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
@@ -100,7 +99,6 @@ export default function CapturaPage() {
       tiempoEstimado: undefined,
       frecuencia: undefined,
       sistemas: [],
-      actividades: "",
       informacionRecibe: "",
       formatosRecibe: [],
       informacionEntrega: "",
@@ -112,13 +110,10 @@ export default function CapturaPage() {
     const editIdFromQuery = searchParams.get('editId');
   
     if (editIdFromQuery) {
-      // Set editingId for UI changes (title, button text)
-      // This ensures the UI updates even if data loading is deferred
       if (editingId !== editIdFromQuery) {
         setEditingId(editIdFromQuery);
       }
   
-      // Only proceed to load and reset form if all context data is loaded
       if (!isLoadingAreas && !isLoadingPuestos && !isLoadingProcesos) {
         try {
           const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
@@ -129,23 +124,20 @@ export default function CapturaPage() {
             form.reset(processToEdit);
           } else {
             toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
-            if (editingId !== null) setEditingId(null); // Clear editingId state
+            if (editingId !== null) setEditingId(null); 
             router.push('/datos-capturados');
           }
         } catch (error) {
           console.error("Error loading process for editing:", error);
           toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
-          if (editingId !== null) setEditingId(null); // Clear editingId state
+          if (editingId !== null) setEditingId(null); 
           router.push('/datos-capturados');
         }
       }
-      // If still loading context data, form.reset() is deferred. The effect will re-run when isLoading flags change.
     } else {
-      // Not in edit mode (new capture)
-      if (editingId !== null) { // If we were previously in edit mode, clear editingId state
+      if (editingId !== null) { 
           setEditingId(null);
       }
-      // Reset form to its initial default values defined in useForm
       form.reset(); 
     }
   }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, isLoadingProcesos, editingId]);
@@ -463,27 +455,6 @@ export default function CapturaPage() {
                      {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
                     <FormDescription>
                       Seleccione los sistemas o software involucrados en la ejecución del proceso.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="actividades"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Actividades Granulares</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Liste las tareas o actividades específicas que componen el proceso. Puede usar una línea por actividad."
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Desglose el proceso en sus actividades componentes principales.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
