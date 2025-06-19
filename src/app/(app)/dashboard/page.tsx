@@ -1,5 +1,31 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory } from "lucide-react";
+import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+// Dummy data for dashboard system costs - replace with dynamic data later
+const exampleSystemCosts = [
+  { id: '1', name: 'ERP Principal', annualUsage: 2400, annualLicenses: 15000, currency: 'USD' },
+  { id: '2', name: 'CRM Ventas', annualUsage: 600, annualLicenses: 5000, currency: 'USD' },
+  { id: '3', name: 'Software Contable', annualUsage: 0, annualLicenses: 1200, currency: 'MXN' },
+  { id: '4', name: 'Herramienta BI', annualUsage: 1000, annualLicenses: 0, currency: 'USD' },
+];
+
+function formatDashboardCurrency(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+  } catch (e) {
+    return `${amount.toFixed(0)} ${currency}`;
+  }
+}
+
 
 export default function DashboardPage() {
   return (
@@ -56,41 +82,43 @@ export default function DashboardPage() {
             <CardDescription>Seguimiento mensual de métricas clave.</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
-             {/* Placeholder for chart */}
             <BarChart3 className="w-24 h-24 text-muted-foreground" />
             <p className="text-muted-foreground ml-4">Gráfico de evolución de procesos (Próximamente)</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center gap-2">
+             <DollarSign className="h-5 w-5 text-primary" />
             <CardTitle>Costos de Sistemas</CardTitle>
-            <CardDescription>Resumen de costos e impacto.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm">
-                  <p>Costo Total Mensual:</p>
-                  <p className="font-semibold">$8,250 USD</p>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <p>Total Licencias:</p>
-                  <p>320</p>
-                </div>
+            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias. (Datos de ejemplo)</CardDescription>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%]">Sistema</TableHead>
+                  <TableHead className="text-right">Uso Anual</TableHead>
+                  <TableHead className="text-right">Licencias Anual</TableHead>
+                  <TableHead className="text-right">Total Anual</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exampleSystemCosts.map((cost) => (
+                  <TableRow key={cost.id}>
+                    <TableCell className="font-medium">{cost.name}</TableCell>
+                    <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsage, cost.currency)}</TableCell>
+                    <TableCell className="text-right">{formatDashboardCurrency(cost.annualLicenses, cost.currency)}</TableCell>
+                    <TableCell className="text-right font-semibold">{formatDashboardCurrency(cost.annualUsage + cost.annualLicenses, cost.currency)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="mt-6">
+              <div className="flex justify-between text-sm">
+                <p>Ahorro Acumulado:</p>
+                <p className="font-semibold text-green-600">$3,500 USD</p>
               </div>
-              <div>
-                <div className="flex justify-between text-sm">
-                  <p>Costo por Usuario:</p>
-                  <p className="font-semibold">$25.78 USD</p>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm">
-                  <p>Ahorro Acumulado:</p>
-                  <p className="font-semibold text-green-600">$3,500 USD</p>
-                </div>
-                <p className="text-xs text-muted-foreground">Por acciones completadas</p>
-              </div>
+              <p className="text-xs text-muted-foreground">Por acciones de optimización completadas.</p>
             </div>
           </CardContent>
         </Card>

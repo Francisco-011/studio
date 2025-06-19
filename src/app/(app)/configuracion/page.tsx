@@ -54,7 +54,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2, Briefcase } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
 
 // Special values for "no selection" in Select components
 const NO_AREA_VALUE = "__NO_AREA__";
@@ -217,6 +217,7 @@ function formatCurrency(amount: number | undefined, currency: TipoMoneda = "USD"
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
   } catch (e) {
+    // Fallback for unsupported currencies or environments
     return `${amount.toFixed(2)} ${currency}`;
   }
 }
@@ -376,9 +377,9 @@ export default function ConfiguracionPage() {
                 moneda: editingCostoSistema.moneda,
                 descripcion: editingCostoSistema.descripcion,
             });
-        } else if (selectedSystemForCosts) {
+        } else if (selectedSystemForCosts) { // When adding a new cost
             costoSistemaForm.reset({
-                sistemaId: selectedSystemForCosts.id,
+                sistemaId: selectedSystemForCosts.id, // Pre-fill systemId
                 tipoCosto: [],
                 montoUso: undefined,
                 montoLicencias: undefined,
@@ -464,17 +465,21 @@ export default function ConfiguracionPage() {
     toast({ title: 'Puesto Eliminado', description: 'El puesto ha sido eliminado exitosamente.', variant: 'destructive' });
   }
 
-  function handleSistemaSubmit(data: SistemaFormData) {
+ function handleSistemaSubmit(data: SistemaFormData) {
     if (editingSistema) {
       setSistemas(sistemas.map((sistema) => (sistema.id === editingSistema.id ? { ...sistema, nombre: data.nombre } : sistema)));
       toast({ title: 'Sistema Actualizado', description: 'El sistema ha sido actualizado exitosamente.' });
+      setEditingSistema(null);
+      setIsSistemaDialogOpen(false);
+      sistemaForm.reset();
     } else {
-      setSistemas([...sistemas, { id: Date.now().toString(), nombre: data.nombre }]);
+      const newSistema: Sistema = { id: Date.now().toString(), nombre: data.nombre };
+      setSistemas([...sistemas, newSistema]);
       toast({ title: 'Sistema Agregado', description: 'El sistema ha sido agregado exitosamente.' });
+      setIsSistemaDialogOpen(false); // Close the add system dialog
+      sistemaForm.reset();
+      openManageCostsDialog(newSistema); // Automatically open manage costs for the new system
     }
-    setEditingSistema(null);
-    setIsSistemaDialogOpen(false);
-    sistemaForm.reset();
   }
 
   function handleEditSistema(sistema: Sistema) {
@@ -483,6 +488,7 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteSistema(sistemaId: string) {
+    // Also delete associated costs
     setCostosSistemas(prevCostos => prevCostos.filter(costo => costo.sistemaId !== sistemaId));
     setSistemas(sistemas.filter((sistema) => sistema.id !== sistemaId));
     toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' });
@@ -507,6 +513,7 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteActividad(actividadId: string) {
+    // Future: Add validation to check if activity is in use
     setActividades(actividades.filter((act) => act.id !== actividadId));
     toast({ title: 'Actividad Eliminada', description: 'La actividad ha sido eliminada exitosamente.', variant: 'destructive' });
   }
@@ -547,12 +554,17 @@ export default function ConfiguracionPage() {
       toast({ title: 'Costo de Sistema Agregado', description: 'El costo ha sido agregado exitosamente.' });
     }
     setEditingCostoSistema(null);
-    setIsCostoSistemaDialogOpen(false);
+    setIsCostoSistemaDialogOpen(false); // Close the add/edit cost dialog
     costoSistemaForm.reset();
   }
 
   function handleEditCostoSistema(costo: SistemaCosto) {
     setEditingCostoSistema(costo);
+    // Ensure selectedSystemForCosts is set if not already (e.g. if opening edit from a list not tied to current selected system)
+    const systemForCost = sistemas.find(s => s.id === costo.sistemaId);
+    if (systemForCost) {
+        setSelectedSystemForCosts(systemForCost);
+    }
     setIsCostoSistemaDialogOpen(true); // This will trigger useEffect to populate form
   }
 
@@ -566,10 +578,11 @@ export default function ConfiguracionPage() {
     setIsManageCostsDialogOpen(true);
   }
 
+  // This function is called from within the ManageCostsDialog to open the AddCostoDialog
   function openAddCostoDialogForSelectedSystem() {
     if (!selectedSystemForCosts) return;
     setEditingCostoSistema(null); // Ensure we are in "add" mode
-    // useEffect for isCostoSistemaDialogOpen will handle form reset with selectedSystemForCosts.id
+    // The useEffect for isCostoSistemaDialogOpen will handle form reset using selectedSystemForCosts.id
     setIsCostoSistemaDialogOpen(true);
   }
   
@@ -943,9 +956,9 @@ export default function ConfiguracionPage() {
           {/* Manage Costs Dialog */}
           <Dialog open={isManageCostsDialogOpen} onOpenChange={(isOpen) => {
             setIsManageCostsDialogOpen(isOpen);
-            if (!isOpen) setSelectedSystemForCosts(null);
+            if (!isOpen) setSelectedSystemForCosts(null); // Clear selected system when dialog closes
           }}>
-            <DialogContent className="sm:max-w-[700px]">
+            <DialogContent className="sm:max-w-[850px] md:max-w-[calc(100vw-4rem)] lg:max-w-4xl"> {/* Wider dialog */}
               <DialogHeader>
                 <DialogTitle>Gestionar Costos para {selectedSystemForCosts?.nombre}</DialogTitle>
                 <DialogDescription>
@@ -959,18 +972,19 @@ export default function ConfiguracionPage() {
                   </Button>
                 </div>
                 {costosSistemas.filter(c => c.sistemaId === selectedSystemForCosts?.id).length === 0 ? (
-                   <PlaceholderContent title="No hay costos registrados" description={`Aún no se han registrado costos para ${selectedSystemForCosts?.nombre}.`} icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
+                   <PlaceholderContent title="No hay costos registrados" description={`Aún no se han registrado costos para ${selectedSystemForCosts?.nombre}. Comience agregando uno.`} icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
                 ) : (
                   <Card>
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Tipos de Costo</TableHead>
-                          <TableHead>Monto Uso</TableHead>
-                          <TableHead>Monto Licencias</TableHead>
-                          <TableHead>Total</TableHead>
+                          <TableHead className="w-[20%]">Tipos de Costo</TableHead>
+                          <TableHead className="text-right">Monto Uso</TableHead>
+                          <TableHead className="text-right">Monto Licencias</TableHead>
+                          <TableHead className="text-right">Total Periódico</TableHead>
                           <TableHead>Frecuencia</TableHead>
                           <TableHead>Forma de Pago</TableHead>
+                          <TableHead>Descripción</TableHead>
                           <TableHead className="text-right w-[120px]">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -978,15 +992,16 @@ export default function ConfiguracionPage() {
                         {costosSistemas
                           .filter(c => c.sistemaId === selectedSystemForCosts?.id)
                           .map((costo) => {
-                            const costoTotal = (costo.montoUso || 0) + (costo.montoLicencias || 0);
+                            const costoTotalPeriodico = (costo.montoUso || 0) + (costo.montoLicencias || 0);
                             return (
                               <TableRow key={costo.id}>
                                 <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
-                                <TableCell>{formatCurrency(costo.montoUso, costo.moneda)}</TableCell>
-                                <TableCell>{formatCurrency(costo.montoLicencias, costo.moneda)}</TableCell>
-                                <TableCell>{formatCurrency(costoTotal, costo.moneda)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(costo.montoUso, costo.moneda)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(costo.montoLicencias, costo.moneda)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(costoTotalPeriodico, costo.moneda)}</TableCell>
                                 <TableCell>{costo.frecuencia}</TableCell>
                                 <TableCell>{costo.formaPago}</TableCell>
+                                <TableCell className="truncate max-w-[150px]">{costo.descripcion || '-'}</TableCell>
                                 <TableCell className="text-right">
                                   <Button variant="ghost" size="icon" onClick={() => handleEditCostoSistema(costo)} className="mr-2">
                                     <Edit2 className="h-4 w-4" />
@@ -1016,12 +1031,12 @@ export default function ConfiguracionPage() {
             setIsCostoSistemaDialogOpen(isOpen);
             if (!isOpen) {
               setEditingCostoSistema(null); 
-              costoSistemaForm.reset();
+              costoSistemaForm.reset(); // Reset form fully when dialog is closed
             }
           }}>
             <DialogContent className="sm:max-w-[580px]">
               <DialogHeader>
-                <DialogTitle>{editingCostoSistema ? 'Editar Costo de Sistema' : `Agregar Costo para ${selectedSystemForCosts?.nombre}`}</DialogTitle>
+                <DialogTitle>{editingCostoSistema ? `Editar Costo para ${sistemas.find(s => s.id === editingCostoSistema?.sistemaId)?.nombre}` : `Agregar Costo para ${selectedSystemForCosts?.nombre}`}</DialogTitle>
                 <DialogDescription>
                   {editingCostoSistema ? 'Modifica los detalles del costo.' : 'Completa la información para agregar un nuevo costo.'}
                 </DialogDescription>
@@ -1032,12 +1047,12 @@ export default function ConfiguracionPage() {
                     control={costoSistemaForm.control}
                     name="sistemaId"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="hidden"> {/* Hidden as it's contextually set */}
                         <FormLabel>Sistema</FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
-                          disabled // Always disabled as context is set
+                          disabled 
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -1045,7 +1060,7 @@ export default function ConfiguracionPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {sistemas.map((s) => ( // Still need to populate for display, though disabled
+                            {sistemas.map((s) => ( 
                               <SelectItem key={s.id} value={s.id}>
                                 {s.nombre}
                               </SelectItem>
@@ -1344,9 +1359,9 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 mb-4"> {/* Adjusted grid-cols for responsiveness */}
               {configSections.map(section => (
-                <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center">
+                <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
                   {section.label}
                 </TabsTrigger>
@@ -1374,5 +1389,4 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-
     
