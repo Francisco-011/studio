@@ -41,8 +41,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2, PackageSearch } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, ListChecks, DollarSign, Share2 } from 'lucide-react';
 
 // Type definitions
 interface Area {
@@ -50,12 +57,35 @@ interface Area {
   nombre: string;
 }
 
+const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Apoyo"] as const;
+type NivelOrganizacional = typeof nivelesOrganizacionales[number];
+
+interface Puesto {
+  id: string;
+  nombre: string;
+  areaId: string;
+  jefeInmediato?: string;
+  nivelOrganizacional: NivelOrganizacional;
+}
+
 // Zod schemas
 const areaFormSchema = z.object({
-  id: z.string().optional(), // Hidden field for editing
+  id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del área es requerido.'),
 });
 type AreaFormData = z.infer<typeof areaFormSchema>;
+
+const puestoFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
+  areaId: z.string().min(1, 'El área es requerida.'),
+  jefeInmediato: z.string().optional(),
+  nivelOrganizacional: z.enum(nivelesOrganizacionales, {
+    errorMap: () => ({ message: "Debe seleccionar un nivel organizacional válido." }),
+  }),
+});
+type PuestoFormData = z.infer<typeof puestoFormSchema>;
+
 
 interface ConfigSectionProps {
   title: string;
@@ -78,10 +108,24 @@ export default function ConfiguracionPage() {
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
 
+  const [puestos, setPuestos] = useState<Puesto[]>([]);
+  const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
+  const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
+
   const areaForm = useForm<AreaFormData>({
     resolver: zodResolver(areaFormSchema),
     defaultValues: {
       nombre: '',
+    },
+  });
+
+  const puestoForm = useForm<PuestoFormData>({
+    resolver: zodResolver(puestoFormSchema),
+    defaultValues: {
+      nombre: '',
+      areaId: '',
+      jefeInmediato: '',
+      nivelOrganizacional: undefined,
     },
   });
 
@@ -92,6 +136,25 @@ export default function ConfiguracionPage() {
       areaForm.reset({ nombre: '' });
     }
   }, [editingArea, areaForm]);
+
+  useEffect(() => {
+    if (editingPuesto) {
+      puestoForm.reset({
+        id: editingPuesto.id,
+        nombre: editingPuesto.nombre,
+        areaId: editingPuesto.areaId,
+        jefeInmediato: editingPuesto.jefeInmediato || '',
+        nivelOrganizacional: editingPuesto.nivelOrganizacional,
+      });
+    } else {
+      puestoForm.reset({
+        nombre: '',
+        areaId: '',
+        jefeInmediato: '',
+        nivelOrganizacional: undefined,
+      });
+    }
+  }, [editingPuesto, puestoForm]);
 
   function handleAreaSubmit(data: AreaFormData) {
     if (editingArea) {
@@ -112,8 +175,46 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteArea(areaId: string) {
+    // Check if area is used in any puesto
+    const isAreaInUse = puestos.some(puesto => puesto.areaId === areaId);
+    if (isAreaInUse) {
+      toast({
+        title: 'Error al eliminar',
+        description: 'El área no puede ser eliminada porque está asignada a uno o más puestos.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setAreas(areas.filter((area) => area.id !== areaId));
     toast({ title: 'Área Eliminada', description: 'El área ha sido eliminada exitosamente.', variant: 'destructive' });
+  }
+
+  function handlePuestoSubmit(data: PuestoFormData) {
+    const puestoData = {
+      ...data,
+      id: editingPuesto ? editingPuesto.id : Date.now().toString(),
+    };
+
+    if (editingPuesto) {
+      setPuestos(puestos.map((p) => (p.id === editingPuesto.id ? puestoData : p)));
+      toast({ title: 'Puesto Actualizado', description: 'El puesto ha sido actualizado exitosamente.' });
+    } else {
+      setPuestos([...puestos, puestoData]);
+      toast({ title: 'Puesto Agregado', description: 'El puesto ha sido agregado exitosamente.' });
+    }
+    setEditingPuesto(null);
+    setIsPuestoDialogOpen(false);
+    puestoForm.reset();
+  }
+
+  function handleEditPuesto(puesto: Puesto) {
+    setEditingPuesto(puesto);
+    setIsPuestoDialogOpen(true);
+  }
+
+  function handleDeletePuesto(puestoId: string) {
+    setPuestos(puestos.filter((puesto) => puesto.id !== puestoId));
+    toast({ title: 'Puesto Eliminado', description: 'El puesto ha sido eliminado exitosamente.', variant: 'destructive' });
   }
   
   const configSections: Array<{
@@ -134,7 +235,10 @@ export default function ConfiguracionPage() {
             <h3 className="text-xl font-semibold">Gestión de Áreas</h3>
             <Dialog open={isAreaDialogOpen} onOpenChange={(isOpen) => {
               setIsAreaDialogOpen(isOpen);
-              if (!isOpen) setEditingArea(null);
+              if (!isOpen) {
+                setEditingArea(null);
+                areaForm.reset({nombre: ''});
+              }
             }}>
               <DialogTrigger asChild>
                 <Button onClick={() => { setEditingArea(null); areaForm.reset({nombre: ''}); setIsAreaDialogOpen(true); }}>
@@ -211,7 +315,160 @@ export default function ConfiguracionPage() {
       label: 'Puestos',
       icon: <Users className="h-5 w-5 mr-2" />,
       fullDescription: 'Administrar los diferentes roles o puestos de trabajo dentro de la organización. Campos: Nombre del puesto, Área, Jefe Inmediato, Nivel Organizacional.',
-      content: <PlaceholderContent title="Gestión de Puestos" description="Próximamente: creación, edición y asignación de puestos." icon={<Users className="h-12 w-12 text-muted-foreground" />} />,
+      content: (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Gestión de Puestos</h3>
+            <Dialog open={isPuestoDialogOpen} onOpenChange={(isOpen) => {
+              setIsPuestoDialogOpen(isOpen);
+              if (!isOpen) {
+                setEditingPuesto(null);
+                puestoForm.reset({nombre: '', areaId: '', jefeInmediato: '', nivelOrganizacional: undefined});
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingPuesto(null); puestoForm.reset({nombre: '', areaId: '', jefeInmediato: '', nivelOrganizacional: undefined}); setIsPuestoDialogOpen(true); }} disabled={areas.length === 0}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[525px]"> {/* Increased width for more fields */}
+                <DialogHeader>
+                  <DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Nuevo Puesto'}</DialogTitle>
+                  <DialogDescription>
+                    {editingPuesto ? 'Modifica los detalles del puesto.' : 'Completa la información para agregar un nuevo puesto.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...puestoForm}>
+                  <form onSubmit={puestoForm.handleSubmit(handlePuestoSubmit)} className="space-y-4 py-4">
+                    <FormField
+                      control={puestoForm.control}
+                      name="nombre"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre del Puesto</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Analista Financiero, Gerente de Logística" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={puestoForm.control}
+                      name="areaId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Área a la que pertenece</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un área" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {areas.map((area) => (
+                                <SelectItem key={area.id} value={area.id}>
+                                  {area.nombre}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={puestoForm.control}
+                      name="jefeInmediato"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Jefe Inmediato (Opcional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nombre del jefe inmediato" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={puestoForm.control}
+                      name="nivelOrganizacional"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nivel Organizacional</FormLabel>
+                           <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un nivel" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {nivelesOrganizacionales.map((nivel) => (
+                                <SelectItem key={nivel} value={nivel}>
+                                  {nivel}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                       <DialogClose asChild>
+                        <Button type="button" variant="outline" onClick={() => { setIsPuestoDialogOpen(false); setEditingPuesto(null); }}>Cancelar</Button>
+                       </DialogClose>
+                      <Button type="submit">{editingPuesto ? 'Guardar Cambios' : 'Agregar Puesto'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {areas.length === 0 && (
+             <PlaceholderContent title="Primero agregue áreas" description="Para agregar puestos, primero necesita registrar las áreas organizacionales." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
+          )}
+          {areas.length > 0 && puestos.length === 0 && (
+             <PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
+          )}
+          {puestos.length > 0 && (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre del Puesto</TableHead>
+                    <TableHead>Área</TableHead>
+                    <TableHead>Nivel Organizacional</TableHead>
+                    <TableHead>Jefe Inmediato</TableHead>
+                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {puestos.map((puesto) => {
+                    const areaPuesto = areas.find(a => a.id === puesto.areaId);
+                    return (
+                      <TableRow key={puesto.id}>
+                        <TableCell>{puesto.nombre}</TableCell>
+                        <TableCell>{areaPuesto ? areaPuesto.nombre : 'N/A'}</TableCell>
+                        <TableCell>{puesto.nivelOrganizacional}</TableCell>
+                        <TableCell>{puesto.jefeInmediato || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2">
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeletePuesto(puesto.id)} className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      ),
     },
     {
       value: 'sistemas',
@@ -286,4 +543,3 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-
