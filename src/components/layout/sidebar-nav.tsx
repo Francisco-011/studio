@@ -49,22 +49,20 @@ export function SidebarNav() {
     <SidebarMenu>
       {navItems.map((item) => (
         <SidebarMenuItem key={item.href}>
-          <Link href={item.href}>
-            <SidebarMenuButton
-              asChild
-              isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
-              className={cn(
-                'w-full justify-start',
-                (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))) ? 'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90' : ''
-              )}
-              tooltip={{ children: item.label, side: "right", align: "center" }}
-            >
-              <>
-                <item.icon className="h-5 w-5" />
-                <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-              </>
-            </SidebarMenuButton>
-          </Link>
+          <SidebarMenuButton
+            asChild
+            isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
+            className={cn(
+              'w-full justify-start',
+              (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))) ? 'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90' : ''
+            )}
+            tooltip={{ children: item.label, side: "right", align: "center" }}
+          >
+            <Link href={item.href}>
+              <item.icon className="h-5 w-5" />
+              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+            </Link>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       ))}
     </SidebarMenu>
