@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -51,6 +51,9 @@ export default function PanelJerarquicoPage() {
   const [filterByActivityId, setFilterByActivityId] = useState<string | null>(null);
   const [filteredByActivityName, setFilteredByActivityName] = useState<string | null>(null);
 
+  const [repeatedActivitiesCount, setRepeatedActivitiesCount] = useState(0);
+  const [repeatedProcessesInMultipleContextsCount, setRepeatedProcessesInMultipleContextsCount] = useState(0);
+
 
   useEffect(() => {
     try {
@@ -70,6 +73,30 @@ export default function PanelJerarquicoPage() {
 
   useEffect(() => {
     if (isLoadingAllData) return;
+
+    // Calculate repeated activities
+    const rptActivities = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
+    setRepeatedActivitiesCount(rptActivities);
+
+    // Calculate repeated processes in multiple contexts
+    const activeCapturedProcesses = capturedProcesses.filter(p => !p.deletedAt);
+    const processContexts = new Map<string, Set<string>>();
+
+    activeCapturedProcesses.forEach(proc => {
+        if (!processContexts.has(proc.proceso)) {
+            processContexts.set(proc.proceso, new Set());
+        }
+        processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
+    });
+
+    let rptProcessesCount = 0;
+    processContexts.forEach(contexts => {
+        if (contexts.size > 1) {
+            rptProcessesCount++;
+        }
+    });
+    setRepeatedProcessesInMultipleContextsCount(rptProcessesCount);
+
 
     const buildTree = (): TreeNode[] => {
       const finalTreeNodes: TreeNode[] = [];
@@ -184,7 +211,13 @@ export default function PanelJerarquicoPage() {
             let finalProcessNodesForPuesto: TreeNode[];
             if (targetActivityForFiltering) {
                 finalProcessNodesForPuesto = processTreeNodes.filter(ptn => ptn.activities && ptn.activities.length > 0);
-            } else {
+            } else if (treeActivitySearchTerm) {
+                finalProcessNodesForPuesto = processTreeNodes.filter(ptn => 
+                    (ptn.activities && ptn.activities.length > 0) || 
+                    ptn.name.toLowerCase().includes(treeActivitySearchTerm.toLowerCase())
+                );
+            }
+            else {
                 finalProcessNodesForPuesto = processTreeNodes;
             }
             
@@ -405,13 +438,39 @@ export default function PanelJerarquicoPage() {
             <FolderTree className="h-6 w-6 text-primary" />
             <CardTitle className="text-2xl font-headline">Panel Jerárquico de Procesos y Actividades</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="mb-4">
             Arrastre actividades desde el panel derecho (Pool) hacia los procesos en el árbol izquierdo para asignarlas.
             También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
             Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad.
           </CardDescription>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
+                    <CopyCheck className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{repeatedActivitiesCount}</div>
+                    <p className="text-xs text-muted-foreground">
+                        Asignadas a más de un proceso.
+                    </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle>
+                    <Layers className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{repeatedProcessesInMultipleContextsCount}</div>
+                    <p className="text-xs text-muted-foreground">
+                        Mismo nombre de proceso en &gt;1 Área/Puesto.
+                    </p>
+                    </CardContent>
+                </Card>
+            </div>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(60vh+120px)]">
+        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
           <Card>
             <CardHeader className="space-y-3">
               <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
