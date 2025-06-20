@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -25,6 +27,8 @@ interface TreeNode {
   activities?: Actividad[]; // For proceso nodes
 }
 
+type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
+
 export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
@@ -37,6 +41,10 @@ export default function PanelJerarquicoPage() {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [draggedActivity, setDraggedActivity] = useState<{ activityId: string; sourceProcessId?: string } | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const [activitySearchTerm, setActivitySearchTerm] = useState('');
+  const [assignmentCountFilter, setAssignmentCountFilter] = useState<AssignmentCountFilterType>('all');
+
 
   useEffect(() => {
     try {
@@ -58,7 +66,6 @@ export default function PanelJerarquicoPage() {
     const buildTree = (): TreeNode[] => {
       const areaMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> = {};
 
-      // Initialize areas
       areas.forEach(area => {
         areaMap[area.nombre] = { 
           id: `area-${area.id}`, 
@@ -74,7 +81,6 @@ export default function PanelJerarquicoPage() {
         id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', children: [], puestosMap: {}
       };
 
-
       capturedProcesses.forEach(proc => {
         const targetAreaName = proc.area || 'Procesos Sin Área Específica';
         let currentAreaNode = areaMap[targetAreaName];
@@ -82,14 +88,9 @@ export default function PanelJerarquicoPage() {
              if (!areaMap[targetAreaName]) areaMap[targetAreaName] = unassignedAreaNode;
              currentAreaNode = areaMap[targetAreaName];
         } else if (!currentAreaNode) {
-            // If process area doesn't match a configured area, group it under a generic "Otras Áreas" node
-            // or handle as per requirements - for now, let's assume it would be pre-filtered or handled.
-            // This case should ideally not happen if data is clean or pre-processed.
-            // For safety, let's add to unassigned if no match
             if (!areaMap['Procesos Sin Área Específica']) areaMap['Procesos Sin Área Específica'] = unassignedAreaNode;
             currentAreaNode = areaMap['Procesos Sin Área Específica'];
         }
-
 
         const targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
         let currentPuestoNode = currentAreaNode.puestosMap[targetPuestoName];
@@ -140,7 +141,7 @@ export default function PanelJerarquicoPage() {
   const handleDragStart = (e: DragEvent<HTMLDivElement>, activityId: string, sourceProcessId?: string) => {
     setDraggedActivity({ activityId, sourceProcessId });
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", activityId); // Necessary for Firefox
+    e.dataTransfer.setData("text/plain", activityId); 
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -168,12 +169,10 @@ export default function PanelJerarquicoPage() {
 
     let newProcesosAsociadosIds = [...(activity.procesosAsociadosIds || [])];
 
-    // Unassign from source if it's a different process
     if (sourceProcessId && sourceProcessId !== targetProcessId) {
       newProcesosAsociadosIds = newProcesosAsociadosIds.filter(id => id !== sourceProcessId);
     }
 
-    // Assign to target if not already there
     if (!newProcesosAsociadosIds.includes(targetProcessId)) {
       newProcesosAsociadosIds.push(targetProcessId);
     }
@@ -185,7 +184,7 @@ export default function PanelJerarquicoPage() {
   };
 
   const handleDropOnPool = () => {
-    if (!draggedActivity || !draggedActivity.sourceProcessId) return; // Only unassign if dragged from a process
+    if (!draggedActivity || !draggedActivity.sourceProcessId) return; 
     const { activityId, sourceProcessId } = draggedActivity;
     const activity = actividades.find(a => a.id === activityId);
     if (!activity) return;
@@ -243,9 +242,28 @@ export default function PanelJerarquicoPage() {
     ));
   };
 
+  const unassignedCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 0).length, [actividades]);
+  const assignedOnceCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 1).length, [actividades]);
+  const assignedMultipleCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) > 1).length, [actividades]);
+
   const availableActivities = useMemo(() => {
-    return actividades.filter(a => a.activa).sort((a,b) => a.nombre.localeCompare(b.nombre));
-  }, [actividades]);
+    return actividades
+      .filter(a => {
+        if (!a.activa) return false;
+
+        if (activitySearchTerm && !a.nombre.toLowerCase().includes(activitySearchTerm.toLowerCase())) {
+          return false;
+        }
+
+        const count = a.procesosAsociadosCount || 0;
+        if (assignmentCountFilter === 'unassigned' && count !== 0) return false;
+        if (assignmentCountFilter === 'assigned_once' && count !== 1) return false;
+        if (assignmentCountFilter === 'assigned_multiple' && count <= 1) return false;
+        
+        return true;
+      })
+      .sort((a,b) => a.nombre.localeCompare(b.nombre));
+  }, [actividades, activitySearchTerm, assignmentCountFilter]);
 
   const isLoading = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
 
@@ -268,7 +286,6 @@ export default function PanelJerarquicoPage() {
     );
   }
 
-
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
@@ -289,7 +306,7 @@ export default function PanelJerarquicoPage() {
               <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[45vh] p-1 border rounded-md">
+              <ScrollArea className="h-[calc(45vh+74px)] p-1 border rounded-md"> {/* Adjusted height to match activity pool scroll area */}
                 {treeData.length > 0 ? renderTree(treeData) : <p className="text-muted-foreground p-4">No hay procesos para mostrar. Verifique la configuración de áreas, puestos y los procesos capturados.</p>}
               </ScrollArea>
             </CardContent>
@@ -297,7 +314,7 @@ export default function PanelJerarquicoPage() {
           
           <Card 
             id="activity-pool"
-            className={cn(dropTargetId === 'activity-pool' && "bg-destructive/20 border-destructive")}
+            className={cn("flex flex-col", dropTargetId === 'activity-pool' && "bg-destructive/20 border-destructive")}
             onDragOver={handleDragOver}
             onDrop={handleDropOnPool}
             onDragEnter={(e) => handleDragEnter(e, 'activity-pool')}
@@ -305,10 +322,36 @@ export default function PanelJerarquicoPage() {
           >
             <CardHeader>
               <CardTitle className="text-lg">Pool de Actividades</CardTitle>
-               <CardDescription className="text-xs">Actividades disponibles para asignar.</CardDescription>
+               <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque para refinar.</CardDescription>
+               <div className="mt-4 space-y-3">
+                <div className="relative">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar actividad por nombre..."
+                    value={activitySearchTerm}
+                    onChange={(e) => setActivitySearchTerm(e.target.value)}
+                    className="w-full pl-9"
+                  />
+                </div>
+                <div>
+                  <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
+                    <SelectTrigger className="w-full">
+                      <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Filtrar por asignación" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas ({actividades.filter(a => a.activa).length})</SelectItem>
+                      <SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem>
+                      <SelectItem value="assigned_once">Asignadas a 1 proc. ({assignedOnceCount})</SelectItem>
+                      <SelectItem value="assigned_multiple">Asignadas a 2+ proc. ({assignedMultipleCount})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[45vh] p-1 border rounded-md">
+            <CardContent className="flex-grow flex flex-col">
+              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md"> {/* Adjusted height based on filters */}
                 {availableActivities.length > 0 ? (
                   <div className="space-y-2">
                     {availableActivities.map(act => (
@@ -325,10 +368,17 @@ export default function PanelJerarquicoPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
                     <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
-                    <p className="text-muted-foreground">No hay actividades disponibles.</p>
-                    <p className="text-xs text-muted-foreground">Agréguelas en 'Gestión de Actividades'.</p>
+                    <p className="text-muted-foreground">
+                      {activitySearchTerm || assignmentCountFilter !== 'all' 
+                        ? "No hay actividades que coincidan con los filtros."
+                        : "No hay actividades disponibles."
+                      }
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {!(activitySearchTerm || assignmentCountFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
+                    </p>
                   </div>
                 )}
               </ScrollArea>
