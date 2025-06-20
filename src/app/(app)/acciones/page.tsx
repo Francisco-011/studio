@@ -499,8 +499,8 @@ export default function AccionesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedAcciones.map((accion) => (
-                    <TableRow key={accion.id}>
+                  {paginatedAcciones.map((accion, index) => (
+                    <TableRow key={`${accion.id}-${index}`}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
