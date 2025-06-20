@@ -59,7 +59,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -156,12 +156,32 @@ export default function ActividadesPage() {
   }
 
   function promptDeleteActividad(actividad: Actividad) {
+    if (actividad.procesosAsociadosCount > 0) {
+      toast({
+        title: 'Eliminación Bloqueada',
+        description: `La actividad "${actividad.nombre}" está asociada a ${actividad.procesosAsociadosCount} proceso(s) y no puede ser eliminada. Desvincúlela primero.`,
+        variant: 'destructive',
+        duration: 5000,
+      });
+      return;
+    }
     setActivityToDelete(actividad);
     setIsConfirmDeleteDialogOpen(true);
   }
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
+    // Double-check, although UI should prevent this state if count > 0
+    if (activityToDelete.procesosAsociadosCount > 0) {
+        toast({
+            title: 'Error en Eliminación',
+            description: `La actividad "${activityToDelete.nombre}" sigue asociada a procesos.`,
+            variant: 'destructive',
+        });
+        setIsConfirmDeleteDialogOpen(false);
+        setActivityToDelete(null);
+        return;
+    }
     softDeleteActividad(activityToDelete.id);
     toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
     setActivityToDelete(null);
@@ -178,13 +198,8 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividadId: string) {
     toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id === actividadId); // Find after toggle for correct status
-    if (actividadActual) { // If found (it should be)
-       const currentStatus = !actividadActual.activa; // This logic is tricky due to state update timing.
-                                                    // The status in actividadActual might be the OLD one if find is too quick.
-                                                    // A more robust way might be to get the *new* status from context if available
-                                                    // or just use the intended new status based on the action.
-                                                    // For toast, it's probably okay to assume the toggle happened.
+    const actividadActual = actividades.find(act => act.id === actividadId); 
+    if (actividadActual) { 
       toast({
         title: `Actividad ${actividadActual.activa ? 'Activada' : 'Desactivada'}`,
         description: `La actividad "${actividadActual.nombre}" ha sido ${actividadActual.activa ? 'activada' : 'desactivada'}.`,
@@ -483,8 +498,10 @@ export default function ActividadesPage() {
                         <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive" 
+                          title={actividad.procesosAsociadosCount > 0 ? `No se puede eliminar: actividad asociada a ${actividad.procesosAsociadosCount} proceso(s)` : "Eliminar actividad"}
+                        >
+                          {actividad.procesosAsociadosCount > 0 ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
                       </TableCell>
                     </TableRow>
