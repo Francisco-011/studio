@@ -635,22 +635,22 @@ export default function ProcesosYFlujosRegistradosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[150px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('proceso')}>
+                    <TableHead className="min-w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}>
                       <div className="flex items-center">Proceso {getSortIcon('proceso')}</div>
                     </TableHead>
-                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('area')}>
+                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}>
                       <div className="flex items-center">Área {getSortIcon('area')}</div>
                     </TableHead>
-                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('puesto')}>
+                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}>
                       <div className="flex items-center">Puesto {getSortIcon('puesto')}</div>
                     </TableHead>
-                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('activo')}>
+                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}>
                       <div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div>
                     </TableHead>
-                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado (minutos)">
+                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado (minutos)">
                         <div className="flex items-center justify-center"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo {getSortIcon('tiempoEstimado')}</div>
                     </TableHead>
-                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('frecuencia')} title="Frecuencia">
+                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('frecuencia')} title="Frecuencia">
                         <div className="flex items-center justify-center"><Repeat className="inline-block h-4 w-4 mr-1" />Frec. {getSortIcon('frecuencia')}</div>
                     </TableHead>
                     <TableHead className="w-[120px]" title="Sistemas Utilizados"><div className="flex items-center"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</div></TableHead>
@@ -658,13 +658,13 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Recibe"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Recibe</div></TableHead>
                     <TableHead className="w-[120px]" title="Procesos de Salida"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1" />Sal. Procesos</div></TableHead>
                     <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Entrega"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Entrega</div></TableHead>
-                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('numActividades')} title="Número de Actividades">
+                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')} title="Número de Actividades">
                         <div className="flex items-center justify-center"><ListTree className="inline-block h-4 w-4 mr-1" />Activ. {getSortIcon('numActividades')}</div>
                     </TableHead>
-                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('capturedAt')} title="Fecha de Captura">
+                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('capturedAt')} title="Fecha de Captura">
                         <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />F. Captura {getSortIcon('capturedAt')}</div>
                     </TableHead>
-                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('updatedAt')} title="Última Modificación">
+                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')} title="Última Modificación">
                         <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif. {getSortIcon('updatedAt')}</div>
                     </TableHead>
                     <TableHead className="text-right w-[120px]">Acciones</TableHead>
