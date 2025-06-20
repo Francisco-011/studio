@@ -30,6 +30,7 @@ interface TreeNode {
 
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
+type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
 
 export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
@@ -54,6 +55,8 @@ export default function PanelJerarquicoPage() {
   const [treeActivitySearchTerm, setTreeActivitySearchTerm] = useState('');
   const [filterByActivityId, setFilterByActivityId] = useState<string | null>(null);
   const [filteredByActivityName, setFilteredByActivityName] = useState<string | null>(null);
+  const [treeProcessStatusFilter, setTreeProcessStatusFilter] = useState<ProcessStatusFilterType>('active');
+
 
   const [repeatedActivitiesCount, setRepeatedActivitiesCount] = useState(0);
   const [repeatedProcessesInMultipleContextsCount, setRepeatedProcessesInMultipleContextsCount] = useState(0);
@@ -64,7 +67,6 @@ export default function PanelJerarquicoPage() {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
         const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        // Ensure 'activo' field exists, defaulting to true if missing
         const dataWithStatus = parsedData.map(proc => ({
           ...proc,
           activo: proc.activo === undefined ? true : proc.activo,
@@ -84,15 +86,13 @@ export default function PanelJerarquicoPage() {
   useEffect(() => {
     if (isLoadingAllData) return;
 
-    // Calculate repeated activities
     const rptActivities = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
     setRepeatedActivitiesCount(rptActivities);
 
-    // Calculate repeated processes in multiple contexts
-    const activeTreeProcesses = capturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
+    const activeTreeProcessesForMetrics = capturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
     const processContexts = new Map<string, Set<string>>();
 
-    activeTreeProcesses.forEach(proc => {
+    activeTreeProcessesForMetrics.forEach(proc => {
         if (!processContexts.has(proc.proceso)) {
             processContexts.set(proc.proceso, new Set());
         }
@@ -134,8 +134,15 @@ export default function PanelJerarquicoPage() {
       
       const targetActivityForFiltering = filterByActivityId ? actividades.find(act => act.id === filterByActivityId) : null;
 
-      // Filter processes by active status before building the tree
-      const processesForTree = capturedProcesses.filter(proc => proc.activo !== false);
+      const processesForTree = capturedProcesses.filter(proc => {
+        if (treeProcessStatusFilter === 'active') {
+            return proc.activo !== false;
+        }
+        if (treeProcessStatusFilter === 'inactive') {
+            return proc.activo === false;
+        }
+        return true; // 'all'
+      });
 
 
       processesForTree.forEach(proc => {
@@ -220,7 +227,6 @@ export default function PanelJerarquicoPage() {
                   activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                   if (treeActivitySearchTerm) { 
                     const searchTermLower = treeActivitySearchTerm.toLowerCase();
-                    const matchingActivities = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
                     if (proc.proceso.toLowerCase().includes(searchTermLower)) {
                          activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                     } else {
@@ -267,7 +273,7 @@ export default function PanelJerarquicoPage() {
   }, [
     areas, puestos, capturedProcesses, actividades, 
     isLoadingAllData, 
-    selectedAreaFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId
+    selectedAreaFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId, treeProcessStatusFilter
   ]);
 
   const toggleNode = (nodeId: string) => {
@@ -281,7 +287,6 @@ export default function PanelJerarquicoPage() {
         toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar.", variant: "default" });
         return;
     }
-    // Check if target process is active
     if (sourceProcessId) {
         const process = capturedProcesses.find(p => p.id === sourceProcessId);
         if (process && process.activo === false) {
@@ -297,11 +302,10 @@ export default function PanelJerarquicoPage() {
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>, targetProcessId?: string) => {
     e.preventDefault();
-    // Optionally, check if target process is active before allowing drop
     if (targetProcessId) {
         const process = capturedProcesses.find(p => p.id === targetProcessId);
         if (process && process.activo === false) {
-            e.dataTransfer.dropEffect = "none"; // Indicate no drop allowed
+            e.dataTransfer.dropEffect = "none"; 
             return;
         }
     }
@@ -313,7 +317,7 @@ export default function PanelJerarquicoPage() {
     if (targetType === 'proceso' && targetId) {
         const process = capturedProcesses.find(p => p.id === targetId.replace('proceso-', ''));
          if (process && process.activo === false) {
-            setDropTargetId(null); // Don't highlight inactive processes as drop targets
+            setDropTargetId(null); 
             return;
         }
     }
@@ -368,10 +372,6 @@ export default function PanelJerarquicoPage() {
     const activity = actividades.find(a => a.id === activityId);
     if (!activity) return;
     
-    // Check if source process is inactive; if so, disallow unassigning.
-    // This might be counter-intuitive, consider if unassigning from inactive should be allowed.
-    // For now, we allow it.
-
     const newProcesosAsociadosIds = (activity.procesosAsociadosIds || []).filter(id => id !== sourceProcessId);
     
     updateActividad(activityId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
@@ -390,6 +390,7 @@ export default function PanelJerarquicoPage() {
         setSelectedAreaFilter('all');
         setSelectedPuestoFilter('all');
         setTreeActivitySearchTerm('');
+        setTreeProcessStatusFilter('active'); // Default to active processes when filtering by activity
     }
   };
    useEffect(() => {
@@ -442,7 +443,7 @@ export default function PanelJerarquicoPage() {
         {expandedNodes[node.id] && (
           <>
             {node.children && renderTree(node.children)}
-            {node.activities && (node.type !== 'proceso' || node.activo !== false) && ( // Don't show activities for inactive processes in tree
+            {node.activities && (node.type !== 'proceso' || node.activo !== false) && ( 
               <div className="ml-8 mt-1 space-y-1">
                 {node.activities.map(act => (
                   <div 
@@ -574,7 +575,7 @@ export default function PanelJerarquicoPage() {
           <Card>
             <CardHeader className="space-y-3">
               <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto o actividad/proceso. Los procesos inactivos se muestran atenuados.</CardDescription>
+              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto, estado del proceso o actividad/proceso. Los procesos inactivos se muestran atenuados.</CardDescription>
               {filteredByActivityName && (
                 <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
                   <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
@@ -614,6 +615,19 @@ export default function PanelJerarquicoPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="sm:col-span-2">
+                  <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)} disabled={!!filterByActivityId}>
+                    <SelectTrigger className="w-full">
+                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Filtrar por estado del proceso" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Procesos Activos</SelectItem>
+                        <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Procesos Inactivos</SelectItem>
+                        <SelectItem value="all">Todos los Estados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="relative pt-2">
                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -628,7 +642,7 @@ export default function PanelJerarquicoPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[calc(40vh)] p-1 border rounded-md">
+              <ScrollArea className="h-[calc(40vh-30px)] p-1 border rounded-md">
                 {treeData.length > 0 ? renderTree(treeData) : 
                   <div className="flex flex-col items-center justify-center h-full text-center p-4">
                     <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
@@ -636,7 +650,7 @@ export default function PanelJerarquicoPage() {
                       No hay procesos para mostrar.
                     </p>
                      <p className="text-xs text-muted-foreground">
-                      Verifique filtros o la configuración de áreas, puestos y procesos capturados (y que estén activos).
+                      Verifique filtros o la configuración de áreas, puestos y procesos capturados.
                     </p>
                   </div>
                 }
