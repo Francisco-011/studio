@@ -61,12 +61,12 @@ interface CalculatedSystemCost {
 }
 
 function calculateAllSystemAnnualCosts(
-  systemsToCalculate: Sistema[], // Changed parameter name
+  systemsToCalculate: Sistema[], 
   allCostos: SistemaCosto[]
 ): CalculatedSystemCost[] {
   if (!systemsToCalculate || !allCostos) return [];
 
-  return systemsToCalculate.map(system => { // Iterate over systemsToCalculate
+  return systemsToCalculate.map(system => { 
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
     let totalAnnualLicenseCost = 0;
@@ -189,27 +189,48 @@ export default function DashboardPage() {
   }, []);
   
   useEffect(() => {
-    if (!isLoadingSistemasCostos && sistemas && costosSistemas && !isLoadingAreas && !isLoadingPuestos) {
-        const selectedAreaId = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea)?.id : null;
-        const selectedPuestoId = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto)?.id : null;
+    if (!isLoadingSistemasCostos && !isLoadingAreas && !isLoadingPuestos && sistemas && costosSistemas && areas && puestos) {
+        const selectedAreaObject = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea) : null;
+        const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
         
-        const filteredSystems = sistemas.filter(system => {
-            if (system.scope === "Empresa") return true;
-            if (selectedAreaId && system.scope === "Área" && system.scopeId === selectedAreaId) return true;
-            if (selectedPuestoId && system.scope === "Puesto" && system.scopeId === selectedPuestoId) return true;
-            // If only an area is selected, and the system is scoped to a Puesto, check if that Puesto belongs to the selected Area
-            if (selectedAreaId && !selectedPuestoId && system.scope === "Puesto" && system.scopeId) {
-                const puestoOfSystem = puestos.find(p => p.id === system.scopeId);
-                if (puestoOfSystem && puestoOfSystem.areaId === selectedAreaId) return true;
-            }
-            // If no specific area/puesto filter, include all systems (this condition handles the 'all' case implicitly by the above specific checks)
-            if (selectedArea === 'all' && selectedPuesto === 'all') return true; 
+        const selectedAreaId = selectedAreaObject?.id;
+        const selectedPuestoId = selectedPuestoObject?.id;
+
+        let systemsToDisplay: Sistema[];
+
+        if (selectedPuestoId) {
+            // Rule 1: Specific Puesto selected
+            systemsToDisplay = sistemas.filter(system => 
+                system.scope === "Puesto" && system.scopeId === selectedPuestoId
+            );
+        } else if (selectedAreaId) {
+            // Rule 2: Specific Area selected, Puesto is "all"
+            const puestosInSelectedAreaIds = puestos
+                .filter(p => p.areaId === selectedAreaId)
+                .map(p => p.id);
             
-            return false;
-        });
-        setCalculatedSystemCosts(calculateAllSystemAnnualCosts(filteredSystems, costosSistemas));
+            systemsToDisplay = sistemas.filter(system =>
+                (system.scope === "Área" && system.scopeId === selectedAreaId) ||
+                (system.scope === "Puesto" && system.scopeId && puestosInSelectedAreaIds.includes(system.scopeId))
+            );
+        } else {
+            // Rule 3: Area is "all" AND Puesto is "all"
+            systemsToDisplay = [...sistemas]; // Show all systems
+        }
+        
+        setCalculatedSystemCosts(calculateAllSystemAnnualCosts(systemsToDisplay, costosSistemas));
     }
-  }, [sistemas, costosSistemas, isLoadingSistemasCostos, selectedArea, selectedPuesto, areas, puestos, isLoadingAreas, isLoadingPuestos]);
+  }, [
+    sistemas, 
+    costosSistemas, 
+    isLoadingSistemasCostos, 
+    selectedArea, 
+    selectedPuesto, 
+    areas, 
+    puestos, 
+    isLoadingAreas, 
+    isLoadingPuestos
+  ]);
 
   useEffect(() => {
     if (selectedEntityType === 'area' && !isLoadingAreas) {
@@ -749,7 +770,7 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Resumen de costos anuales estimados. (Refleja filtros de Área/Puesto).</CardDescription>
+            <CardDescription className="mb-4">Costos anuales estimados. Si filtra por Puesto, muestra costos de ese Puesto. Si filtra por Área, muestra costos de esa Área y sus Puestos. Sin filtros, muestra todos.</CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
