@@ -23,8 +23,8 @@ interface TreeNode {
   name: string;
   type: 'area' | 'puesto' | 'proceso';
   children?: TreeNode[];
-  originalId?: string; // For procesos, to link back to CapturedProcess
-  activities?: Actividad[]; // For proceso nodes
+  originalId?: string; 
+  activities?: Actividad[]; 
 }
 
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
@@ -45,6 +45,9 @@ export default function PanelJerarquicoPage() {
   const [activitySearchTerm, setActivitySearchTerm] = useState('');
   const [assignmentCountFilter, setAssignmentCountFilter] = useState<AssignmentCountFilterType>('all');
 
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
+  const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
+
 
   useEffect(() => {
     try {
@@ -64,75 +67,104 @@ export default function PanelJerarquicoPage() {
     if (isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades) return;
 
     const buildTree = (): TreeNode[] => {
-      const areaMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> = {};
+      const finalTreeNodes: TreeNode[] = [];
+      const areaNodesMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> = {};
 
-      areas.forEach(area => {
-        areaMap[area.nombre] = { 
-          id: `area-${area.id}`, 
-          name: area.nombre, 
-          type: 'area', 
-          originalId: area.id, 
+      let areasToConsider = areas;
+      if (selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned') {
+        areasToConsider = areas.filter(a => a.id === selectedAreaFilter);
+      }
+
+      areasToConsider.forEach(area => {
+        areaNodesMap[area.id] = {
+          id: `area-${area.id}`,
+          name: area.nombre,
+          type: 'area',
+          originalId: area.id,
           children: [],
           puestosMap: {}
         };
       });
       
       const unassignedAreaNode: TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> } = {
-        id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', children: [], puestosMap: {}
+        id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
       };
+      if (selectedAreaFilter === 'all' || selectedAreaFilter === 'area-unassigned') {
+          areaNodesMap['area-unassigned'] = unassignedAreaNode;
+      }
 
       capturedProcesses.forEach(proc => {
-        const targetAreaName = proc.area || 'Procesos Sin Área Específica';
-        let currentAreaNode = areaMap[targetAreaName];
-        if (!currentAreaNode && targetAreaName === 'Procesos Sin Área Específica') {
-             if (!areaMap[targetAreaName]) areaMap[targetAreaName] = unassignedAreaNode;
-             currentAreaNode = areaMap[targetAreaName];
-        } else if (!currentAreaNode) {
-            if (!areaMap['Procesos Sin Área Específica']) areaMap['Procesos Sin Área Específica'] = unassignedAreaNode;
-            currentAreaNode = areaMap['Procesos Sin Área Específica'];
+        const procAreaObject = areas.find(a => a.nombre === proc.area);
+        const targetAreaId = procAreaObject ? procAreaObject.id : 'area-unassigned';
+
+        if (selectedAreaFilter !== 'all' && selectedAreaFilter !== targetAreaId) {
+            return;
+        }
+        
+        let currentAreaNode = areaNodesMap[targetAreaId];
+        if (!currentAreaNode) { 
+            return;
         }
 
+        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ( (p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject) ));
+        
+        if (selectedPuestoFilter !== 'all' && (!procPuestoObject || procPuestoObject.id !== selectedPuestoFilter)) {
+            // If a puesto filter is active, and this process's puesto doesn't match, skip it.
+            // Also consider processes that don't have a puesto if the filter is not for a specific puesto.
+            // If 'selectedPuestoFilter' is for a specific puesto, then procPuestoObject must exist and match.
+            if(selectedPuestoFilter !== 'puesto-unassigned' || procPuestoObject) return;
+        } else if (selectedPuestoFilter === 'puesto-unassigned' && procPuestoObject) {
+            // If "Sin Puesto" is selected, skip processes that *do* have an assigned puesto.
+            return;
+        }
+
+
+        const targetPuestoIdKey = procPuestoObject?.id || `puesto-unassigned-in-${targetAreaId}`;
         const targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
-        let currentPuestoNode = currentAreaNode.puestosMap[targetPuestoName];
+
+        let currentPuestoNode = currentAreaNode.puestosMap[targetPuestoIdKey];
         if (!currentPuestoNode) {
-          const puestoOriginal = puestos.find(p => p.nombre === targetPuestoName && p.areaId === currentAreaNode.originalId);
           currentPuestoNode = {
-            id: `puesto-${currentAreaNode.id}-${puestoOriginal?.id || targetPuestoName.replace(/\s+/g, '-')}`,
+            id: `puesto-${currentAreaNode.id}-${procPuestoObject?.id || targetPuestoName.replace(/\s+/g, '-')}`,
             name: targetPuestoName,
             type: 'puesto',
-            originalId: puestoOriginal?.id,
+            originalId: procPuestoObject?.id,
             children: [],
             processList: []
           };
-          currentAreaNode.puestosMap[targetPuestoName] = currentPuestoNode;
-          currentAreaNode.children!.push(currentPuestoNode);
+          currentAreaNode.puestosMap[targetPuestoIdKey] = currentPuestoNode;
         }
         currentPuestoNode.processList.push(proc);
       });
-      
-      Object.values(areaMap).forEach(areaNode => {
+
+      Object.values(areaNodesMap).forEach(areaNode => {
+        const puestoChildren: TreeNode[] = [];
         Object.values(areaNode.puestosMap).forEach(puestoNode => {
-          puestoNode.children = puestoNode.processList.map(proc => {
-            const assignedActs = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
-            return {
-              id: `proceso-${proc.id}`,
-              name: proc.proceso,
-              type: 'proceso',
-              originalId: proc.id,
-              activities: assignedActs,
-            };
-          }).sort((a,b) => a.name.localeCompare(b.name));
-           puestoNode.children?.sort((a,b) => a.name.localeCompare(b.name));
+          if (puestoNode.processList.length > 0) {
+            puestoNode.children = puestoNode.processList.map(proc => {
+              const assignedActs = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+              return {
+                id: `proceso-${proc.id}`,
+                name: proc.proceso,
+                type: 'proceso',
+                originalId: proc.id,
+                activities: assignedActs,
+              };
+            }).sort((a,b) => a.name.localeCompare(b.name));
+            puestoChildren.push(puestoNode);
+          }
         });
-        areaNode.children?.sort((a,b) => a.name.localeCompare(b.name));
+        areaNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
+        if (areaNode.children.length > 0) {
+            finalTreeNodes.push(areaNode);
+        }
       });
       
-      const finalTree = Object.values(areaMap).filter(areaNode => areaNode.children && areaNode.children.length > 0);
-      return finalTree.sort((a,b) => a.name.localeCompare(b.name));
+      return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
     };
 
     setTreeData(buildTree());
-  }, [areas, puestos, capturedProcesses, actividades, isLoadingAreas, isLoadingPuestos, isLoadingProcesses, isLoadingActividades]);
+  }, [areas, puestos, capturedProcesses, actividades, isLoadingAreas, isLoadingPuestos, isLoadingProcesses, isLoadingActividades, selectedAreaFilter, selectedPuestoFilter]);
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
@@ -215,7 +247,7 @@ export default function PanelJerarquicoPage() {
           <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
             {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
           </Button>
-          <span className={cn("text-sm", node.type === 'proceso' && "font-semibold")}>{node.name}</span>
+          <span className={cn("text-sm", node.type === 'proceso' && "font-semibold", node.type === 'area' && "font-bold", node.type === 'puesto' && "font-medium")}>{node.name}</span>
         </div>
         {expandedNodes[node.id] && (
           <>
@@ -265,9 +297,9 @@ export default function PanelJerarquicoPage() {
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [actividades, activitySearchTerm, assignmentCountFilter]);
 
-  const isLoading = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
+  const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
 
-  if (isLoading) {
+  if (isLoadingAllData) {
     return (
         <div className="container mx-auto py-8">
          <Card className="shadow-lg">
@@ -299,15 +331,57 @@ export default function PanelJerarquicoPage() {
             También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[60vh]">
+        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(60vh+120px)]"> {/* Increased min-height */}
           <Card>
-            <CardHeader>
+            <CardHeader className="space-y-3">
               <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas.</CardDescription>
+              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área o puesto.</CardDescription>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
+                    <SelectTrigger className="w-full">
+                      <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Filtrar por Área" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las Áreas</SelectItem>
+                      <SelectItem value="area-unassigned">Procesos Sin Área Específica</SelectItem>
+                      {areas.map(area => (
+                        <SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}>
+                    <SelectTrigger className="w-full">
+                       <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Filtrar por Puesto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los Puestos</SelectItem>
+                      <SelectItem value="puesto-unassigned">Procesos Sin Puesto Específico</SelectItem>
+                      {puestos.map(puesto => (
+                        <SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[calc(45vh+74px)] p-1 border rounded-md"> {/* Adjusted height to match activity pool scroll area */}
-                {treeData.length > 0 ? renderTree(treeData) : <p className="text-muted-foreground p-4">No hay procesos para mostrar. Verifique la configuración de áreas, puestos y los procesos capturados.</p>}
+              <ScrollArea className="h-[calc(45vh+20px)] p-1 border rounded-md"> {/* Adjusted height to make space for filters */}
+                {treeData.length > 0 ? renderTree(treeData) : 
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
+                    <p className="text-muted-foreground">
+                      No hay procesos para mostrar.
+                    </p>
+                     <p className="text-xs text-muted-foreground">
+                      Verifique filtros o la configuración de áreas, puestos y procesos capturados.
+                    </p>
+                  </div>
+                }
               </ScrollArea>
             </CardContent>
           </Card>
@@ -351,7 +425,7 @@ export default function PanelJerarquicoPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col">
-              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md"> {/* Adjusted height based on filters */}
+              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md"> {/* Original height for activity pool scroll area */}
                 {availableActivities.length > 0 ? (
                   <div className="space-y-2">
                     {availableActivities.map(act => (
