@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -39,7 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -51,7 +50,7 @@ import type { Actividad } from '@/contexts/ActividadesContext';
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   capturedAt: string;
-  updatedAt?: number; 
+  updatedAt?: number;
   deletedAt?: string;
   activo?: boolean;
   // activityOrder is already in CapturaFormData schema if optional
@@ -59,6 +58,8 @@ export interface CapturedProcess extends CapturaFormData {
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
+
+type ActivityCountFilterType = 'all' | 'none' | 'some';
 
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
@@ -109,6 +110,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -216,9 +218,18 @@ export default function ProcesosYFlujosRegistradosPage() {
       );
     }
 
+    if (activityCountFilter !== 'all') {
+      dataToFilter = dataToFilter.filter(proc => {
+        const numActivities = proc.activityOrder?.length || 0;
+        if (activityCountFilter === 'none') return numActivities === 0;
+        if (activityCountFilter === 'some') return numActivities > 0;
+        return true;
+      });
+    }
+
 
     return dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter]);
 
   const recoverableProcesses = useMemo(() => {
     const thirtyDaysAgo = new Date();
@@ -392,6 +403,15 @@ export default function ProcesosYFlujosRegistradosPage() {
       </span>
     );
   };
+  
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedAreaFilter('all');
+    setSelectedPuestoFilter('all');
+    setProcessStatusFilter('all');
+    setActivityCountFilter('all');
+  };
+
 
   if (isLoading) {
     return (
@@ -417,65 +437,87 @@ export default function ProcesosYFlujosRegistradosPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-            <div className="relative sm:col-span-2 lg:col-span-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar palabra clave..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10"
-              />
+          <div className="mb-4 p-4 border rounded-lg bg-muted/30">
+            <div className="flex items-center gap-2 mb-3">
+                <Filter className="h-5 w-5 text-primary"/>
+                <h4 className="text-md font-semibold">Filtros de Búsqueda</h4>
             </div>
-            <div className="w-full">
-              <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Área</Label>
-              <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
-                <SelectTrigger id="area-filter">
-                  <SelectValue placeholder={isLoadingAreas ? "Cargando áreas..." : "Todas las Áreas"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las Áreas</SelectItem>
-                  {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem>
-                   : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
-                   : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
+                <div className="relative lg:col-span-1 md:col-span-full sm:col-span-full"> {/* Search full width on smaller, then shrinks */}
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar palabra clave..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10"
+                />
+                </div>
+                <div className="w-full">
+                <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label>
+                <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
+                    <SelectTrigger id="area-filter">
+                    <SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="all">Todas las Áreas</SelectItem>
+                    {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem>
+                    : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
+                    : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="w-full">
+                <Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label>
+                <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}>
+                    <SelectTrigger id="puesto-filter">
+                    <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="all">Todos los Puestos</SelectItem>
+                    {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
+                    : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
+                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="w-full">
+                <Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado Proceso</Label>
+                <Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}>
+                    <SelectTrigger id="status-filter">
+                    <SelectValue placeholder="Todos"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="all">Todos los Estados</SelectItem>
+                    <SelectItem value="active"><CheckSquare className="mr-2 h-4 w-4 inline-block text-green-500" /> Activos</SelectItem>
+                    <SelectItem value="inactive"><XSquare className="mr-2 h-4 w-4 inline-block text-red-500" /> Inactivos</SelectItem>
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="w-full">
+                <Label htmlFor="activity-count-filter" className="text-xs font-medium text-muted-foreground ml-1">Num. Actividades</Label>
+                <Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}>
+                    <SelectTrigger id="activity-count-filter">
+                    <SelectValue placeholder="Todas"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="all">Todas (Num. Activ.)</SelectItem>
+                    <SelectItem value="none">Sin Actividades</SelectItem>
+                    <SelectItem value="some">Con Actividades</SelectItem>
+                    </SelectContent>
+                </Select>
+                </div>
             </div>
-            <div className="w-full">
-              <Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Puesto</Label>
-              <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}>
-                <SelectTrigger id="puesto-filter">
-                  <SelectValue placeholder={isLoadingPuestos ? "Cargando puestos..." : "Todos los Puestos"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Puestos</SelectItem>
-                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
-                   : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
-                   : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-             <div className="w-full">
-              <Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Estado</Label>
-              <Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}>
-                <SelectTrigger id="status-filter">
-                  <SelectValue placeholder="Todos los Estados"/>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Estados</SelectItem>
-                  <SelectItem value="active"><CheckSquare className="mr-2 h-4 w-4 inline-block text-green-500" /> Activos</SelectItem>
-                  <SelectItem value="inactive"><XSquare className="mr-2 h-4 w-4 inline-block text-red-500" /> Inactivos</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Todos los Filtros</Button>
+          </div>
 
-            <Button onClick={handleExport} variant="outline" className="w-full">
-              <FileText className="mr-2 h-4 w-4" /> Exportar CSV
+           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
+            <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
+              <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredData.length})
             </Button>
             <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full" disabled={recoverableProcesses.length === 0}>
+                <Button variant="outline" className="w-full sm:w-auto" disabled={recoverableProcesses.length === 0}>
                   <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableProcesses.length})
                 </Button>
               </DialogTrigger>
@@ -522,6 +564,7 @@ export default function ProcesosYFlujosRegistradosPage() {
               </DialogContent>
             </Dialog>
           </div>
+
 
           {filteredData.length > 0 ? (
             <div className="rounded-md border">
@@ -698,4 +741,3 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
-
