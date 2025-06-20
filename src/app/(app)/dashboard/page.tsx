@@ -76,7 +76,7 @@ function calculateAllSystemAnnualCosts(
     if (costsForSystem.length > 0) {
       systemCurrency = costsForSystem[0].moneda;
       costsForSystem.forEach(cost => {
-        if (cost.moneda === systemCurrency) { 
+        if (cost.moneda === systemCurrency) {
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
@@ -85,7 +85,7 @@ function calculateAllSystemAnnualCosts(
           let periodicLicense = 0;
           if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
             periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
-            systemTotalLicenses += cost.numeroLicencias; 
+            systemTotalLicenses += cost.numeroLicencias;
           }
 
           if (cost.frecuencia === "Mensual") {
@@ -130,6 +130,20 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  // Replace all double quotes with two double quotes
+  const escapedString = stringValue.replace(/"/g, '""');
+  // If the string contains a comma, newline, or double quote, enclose it in double quotes
+  if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+    return `"${escapedString}"`;
+  }
+  return escapedString;
+};
+
 
 export default function DashboardPage() {
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
@@ -152,7 +166,6 @@ export default function DashboardPage() {
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
 
 
-  // State for AI Entity Summarization
   const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
   const [selectedEntityName, setSelectedEntityName] = useState<string>('');
   const [generatedSummary, setGeneratedSummary] = useState<string>('');
@@ -166,7 +179,7 @@ export default function DashboardPage() {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setAllCapturedProcesses(parsedProcesses); // Keep all for now, filter later
+        setAllCapturedProcesses(parsedProcesses);
       }
     } catch (error) {
       console.error("Error loading process data from localStorage:", error);
@@ -216,24 +229,34 @@ export default function DashboardPage() {
   }, [processesFilteredByAreaPuesto, dashboardDateRange]);
 
   const filteredAcciones = useMemo(() => {
-    // Acciones are not filtered by Area/Puesto for now
     if (!dashboardDateRange.from || !dashboardDateRange.to) return globalAcciones;
     
     const rangeStart = dashboardDateRange.from;
     const rangeEnd = dashboardDateRange.to;
 
-    return globalAcciones.filter(accion => {
+    let actionsToFilter = globalAcciones;
+    // Future: If actions get linked to areas/puestos, filter here
+    // For now, only date filter applies broadly to actions
+
+    return actionsToFilter.filter(accion => {
+        // For "Completada", check fechaFinalizacion within range
         if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: rangeStart, end: rangeEnd });
         }
-        if ((accion.estado === 'En Progreso' || accion.estado === 'En Revisión') && accion.fechaCreacion) {
+        // For other active states (En Progreso, En Revisión, Pendiente), check fechaCreacion within range
+        if ( (accion.estado === 'En Progreso' || accion.estado === 'En Revisión' || accion.estado === 'Pendiente') && accion.fechaCreacion ) {
+             const creacionDate = parseISO(accion.fechaCreacion);
+             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
+        }
+        // If "Cancelada" or other states without specific date logic, include if fechaCreacion is in range.
+        if (accion.fechaCreacion) {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
         return false; 
     });
-  }, [globalAcciones, dashboardDateRange]);
+  }, [globalAcciones, dashboardDateRange, selectedArea, selectedPuesto]); // selectedArea/Puesto for future
 
   const filteredActividades = useMemo(() => {
     const relevantProcessIds = new Set(filteredCapturedProcesses.map(p => p.id));
@@ -265,11 +288,8 @@ export default function DashboardPage() {
         end: dashboardDateRange.to,
       });
 
-      // Use processes already filtered by area/puesto for chart calculations
       const baseProcessesForChart = processesFilteredByAreaPuesto;
-      // Actions are globally filtered by date for the chart
-      const baseActionsForChart = globalAcciones;
-
+      const baseActionsForChart = globalAcciones; 
 
       monthsInInterval.forEach(monthStart => {
         const monthEnd = endOfMonth(monthStart);
@@ -384,7 +404,7 @@ export default function DashboardPage() {
       let relevantProcesses: CapturedProcess[];
       if (selectedEntityType === 'area') {
         relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
-      } else { // puesto
+      } else { 
         relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
       }
 
@@ -422,12 +442,79 @@ export default function DashboardPage() {
     }
   };
   
-  const handleExportPdf = () => {
-    toast({
-      title: "Función en Desarrollo",
-      description: "La exportación a PDF ejecutivo es una característica planificada y se implementará en futuras actualizaciones.",
-      duration: 5000,
+  const handleExportCsv = () => {
+    const csvRows: string[][] = [];
+
+    // Section 1: Dashboard Metrics
+    csvRows.push(["Métricas del Dashboard (según filtros aplicados)"]);
+    csvRows.push(["Métrica", "Valor"]);
+    const metrics = [
+      { name: "Procesos Activos Mapeados", value: dashboardMetrics.procesosMapeadosCount },
+      { name: "Procesos con Variaciones", value: dashboardMetrics.procesosConVariacionesCount },
+      { name: "Actividades Activas", value: dashboardMetrics.actividadesActivasCount },
+      { name: "Actividades Duplicadas", value: dashboardMetrics.actividadesDuplicadasCount },
+      { name: "Acciones Completadas", value: dashboardMetrics.accionesCompletadasCount },
+      { name: "Acciones en Revisión", value: dashboardMetrics.accionesEnRevisionCount },
+      { name: "Acciones en Progreso", value: dashboardMetrics.accionesEnProgresoCount },
+      { name: "Procesos Sin Actividades", value: dashboardMetrics.procesosSinActividadesCount },
+    ];
+    metrics.forEach(metric => csvRows.push([escapeCsvCell(metric.name), escapeCsvCell(metric.value)]));
+    csvRows.push([]); // Empty row separator
+
+    // Section 2: Costos de Sistemas
+    csvRows.push(["Costos de Sistemas (no afectado por filtros de fecha/área/puesto)"]);
+    csvRows.push(["Sistema", "Uso Anual", "Lic. Anual", "Total Lic.", "Total Anual"]);
+    calculatedSystemCosts.forEach(cost => {
+      csvRows.push([
+        escapeCsvCell(cost.name),
+        escapeCsvCell(formatDashboardCurrency(cost.annualUsageCost, cost.currency)),
+        escapeCsvCell(formatDashboardCurrency(cost.annualLicenseCost, cost.currency)),
+        escapeCsvCell(cost.totalLicenses > 0 ? cost.totalLicenses : '-'),
+        escapeCsvCell(formatDashboardCurrency(cost.totalAnnualCost, cost.currency)),
+      ]);
     });
+    csvRows.push([]);
+
+    // Section 3: Evolución de Optimización de Procesos
+    csvRows.push(["Evolución de Optimización de Procesos (según filtros aplicados)"]);
+    csvRows.push(["Mes", "Procesos Mapeados", "Acciones Completadas"]);
+    evolutionChartData.forEach(data => {
+      csvRows.push([
+        escapeCsvCell(data.month),
+        escapeCsvCell(data.procesosMapeados),
+        escapeCsvCell(data.accionesCompletadas),
+      ]);
+    });
+    csvRows.push([]);
+
+    // Section 4: Resumen de Entidad por IA (if available)
+    if (generatedSummary && selectedEntityType !== 'none' && selectedEntityName) {
+      csvRows.push(["Resumen de Entidad por IA"]);
+      csvRows.push(["Tipo de Entidad", "Nombre de Entidad"]);
+      csvRows.push([escapeCsvCell(selectedEntityType), escapeCsvCell(selectedEntityName)]);
+      csvRows.push([]);
+      csvRows.push(["Resumen Generado:"]);
+      // For multi-line summary, it's best to put it in one cell, already handled by escapeCsvCell
+      csvRows.push([escapeCsvCell(generatedSummary)]);
+    }
+
+    const csvString = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `dashboard_resumen_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación CSV Iniciada", description: "El archivo CSV del resumen del dashboard se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa de archivos.", variant: "destructive" });
+    }
   };
 
 
@@ -491,8 +578,8 @@ export default function DashboardPage() {
                         </SelectContent>
                     </Select>
                 </div>
-                <Button onClick={handleExportPdf} variant="outline" size="sm" className="w-full self-end">
-                    <Download className="mr-2 h-4 w-4" /> Exportar PDF (Conceptual)
+                <Button onClick={handleExportCsv} variant="outline" size="sm" className="w-full self-end">
+                    <Download className="mr-2 h-4 w-4" /> Exportar Resumen CSV
                 </Button>
             </div>
         </div>
@@ -683,7 +770,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* AI Entity Summarization Card */}
       <Card className="shadow-lg mt-8">
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -702,7 +788,7 @@ export default function DashboardPage() {
                 value={selectedEntityType}
                 onValueChange={(value: 'area' | 'puesto' | 'none') => {
                   setSelectedEntityType(value);
-                  setSelectedEntityName(''); // Reset name on type change
+                  setSelectedEntityName(''); 
                   setGeneratedSummary('');
                 }}
               >
