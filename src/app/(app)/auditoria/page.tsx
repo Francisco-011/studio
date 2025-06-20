@@ -1,17 +1,23 @@
 
 'use client';
 
-import { useState } from 'react';
-import { format } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { format, parseISO, isSameDay, startOfDay, endOfDay, isAfter, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { History, Loader2, AlertTriangle, Sparkles, ListOrdered } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input"; // Although not used directly, Input might be a dependency for Select or Popover
+import { Label } from "@/components/ui/label";
+import { History, Loader2, AlertTriangle, Sparkles, ListOrdered, CalendarIcon, Users, Layers, Filter } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateProcessAudit, type GenerateProcessAuditOutput } from '@/ai/flows/process-audit-generator';
+import { cn } from '@/lib/utils';
 
 interface SimulatedAuditEntry {
   id: string;
@@ -28,6 +34,9 @@ const mockAuditLog: SimulatedAuditEntry[] = [
   { id: '3', timestamp: new Date(Date.now() - 0.5 * 60 * 60 * 1000).toISOString(), user: 'ana.perez@example.com', module: 'Usuarios', action: 'Actualización', details: 'El rol del usuario "carlos.sanchez@example.com" cambió de "Usuario Final" a "Consultor".' },
   { id: '4', timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), user: 'sistema', module: 'Sistema', action: 'Mantenimiento', details: 'Respaldo de base de datos programado completado exitosamente.' },
   { id: '5', timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(), user: 'sofia.martinez@example.com', module: 'Acciones', action: 'Eliminación', details: 'Se eliminó la acción de mejora "Optimizar CRM" (ID: acc_789).' },
+  { id: '6', timestamp: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), user: 'carlos.sanchez@example.com', module: 'Configuración', action: 'Creación', details: 'Se agregó el área "Marketing Digital".' },
+  { id: '7', timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(), user: 'ana.perez@example.com', module: 'Usuarios', action: 'Creación', details: 'Se creó el usuario "pedro.ramirez@example.com" con rol "Usuario Final".' },
+  { id: '8', timestamp: new Date().toISOString(), user: 'luis.fernandez@example.com', module: 'Mejoras', action: 'Análisis', details: 'Se ejecutó el análisis de ineficiencias con IA.' },
 ];
 
 
@@ -36,6 +45,11 @@ export default function AuditoriaPage() {
   const [auditResult, setAuditResult] = useState<GenerateProcessAuditOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // State for simulated log filters
+  const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
+  const [userFilter, setUserFilter] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
 
   const handleGenerateAudit = async () => {
     if (!processChangesInput.trim()) {
@@ -72,6 +86,56 @@ export default function AuditoriaPage() {
     }
   };
 
+  const uniqueUsers = useMemo(() => {
+    const users = new Set(mockAuditLog.map(entry => entry.user));
+    return Array.from(users).sort();
+  }, []);
+
+  const uniqueActionTypes = useMemo(() => {
+    const actions = new Set(mockAuditLog.map(entry => entry.action));
+    return Array.from(actions).sort();
+  }, []);
+
+  const filteredSimulatedLog = useMemo(() => {
+    return mockAuditLog
+      .filter(entry => {
+        if (actionTypeFilter !== 'all' && entry.action !== actionTypeFilter) {
+          return false;
+        }
+        if (userFilter !== 'all' && entry.user !== userFilter) {
+          return false;
+        }
+        const entryDate = parseISO(entry.timestamp);
+        if (dateRange.from && isBefore(entryDate, startOfDay(dateRange.from))) {
+          return false;
+        }
+        if (dateRange.to && isAfter(entryDate, endOfDay(dateRange.to))) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [actionTypeFilter, userFilter, dateRange]);
+
+  const totalCambiosFiltrados = useMemo(() => filteredSimulatedLog.length, [filteredSimulatedLog]);
+
+  const cambiosHoyCount = useMemo(() => {
+    const today = new Date();
+    return filteredSimulatedLog.filter(entry => isSameDay(parseISO(entry.timestamp), today)).length;
+  }, [filteredSimulatedLog]);
+
+  const usuariosUnicosEnLogFiltradoCount = useMemo(() => {
+    const usersInFilteredLog = new Set(filteredSimulatedLog.map(entry => entry.user));
+    return usersInFilteredLog.size;
+  }, [filteredSimulatedLog]);
+  
+  const clearFilters = () => {
+    setActionTypeFilter('all');
+    setUserFilter('all');
+    setDateRange({ from: undefined, to: undefined });
+  };
+
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
@@ -84,7 +148,7 @@ export default function AuditoriaPage() {
             Herramientas y registros para el seguimiento de cambios y actividades en el sistema.
           </CardDescription>
 
-          <Tabs defaultValue="ai-generator" className="w-full">
+          <Tabs defaultValue="simulated-log" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="ai-generator">
                 <Sparkles className="mr-2 h-4 w-4" /> Generador de Auditoría IA
@@ -167,11 +231,101 @@ export default function AuditoriaPage() {
                 <CardHeader>
                   <CardTitle>Registro de Actividad del Sistema (Simulado)</CardTitle>
                   <CardDescription>
-                    Esta es una vista simulada de cómo se vería un registro de auditoría de actividades. Los datos son de ejemplo.
+                    Esta es una vista simulada de un registro de auditoría. Filtre las entradas para un análisis más detallado.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {mockAuditLog.length > 0 ? (
+                  {/* Summary Statistics */}
+                  <div className="grid gap-4 md:grid-cols-3 mb-6">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Cambios (Filtrado)</CardTitle>
+                        <Layers className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{totalCambiosFiltrados}</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Cambios Hoy (Filtrado)</CardTitle>
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{cambiosHoyCount}</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Usuarios Únicos (Filtrado)</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{usuariosUnicosEnLogFiltradoCount}</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+                     <div className="flex items-center gap-2 mb-3">
+                        <Filter className="h-5 w-5 text-primary"/>
+                        <h4 className="text-md font-semibold">Filtros de Auditoría</h4>
+                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                      <div>
+                        <Label htmlFor="actionTypeFilter" className="text-xs">Tipo de Acción</Label>
+                        <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
+                          <SelectTrigger id="actionTypeFilter"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos los Tipos</SelectItem>
+                            {uniqueActionTypes.map(action => <SelectItem key={action} value={action}>{action}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="userFilter" className="text-xs">Usuario</Label>
+                        <Select value={userFilter} onValueChange={setUserFilter}>
+                          <SelectTrigger id="userFilter"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos los Usuarios</SelectItem>
+                            {uniqueUsers.map(user => <SelectItem key={user} value={user}>{user}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="dateFrom" className="text-xs">Fecha Desde</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button id="dateFrom" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange.from && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {dateRange.from ? format(dateRange.from, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar mode="single" selected={dateRange.from} onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))} initialFocus />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <Label htmlFor="dateTo" className="text-xs">Fecha Hasta</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button id="dateTo" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange.to && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {dateRange.to ? format(dateRange.to, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar mode="single" selected={dateRange.to} onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))} initialFocus disabled={(date) => dateRange.from ? date < dateRange.from : false }/>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Filtros</Button>
+                  </div>
+
+                  {filteredSimulatedLog.length > 0 ? (
                     <div className="rounded-md border">
                       <Table>
                         <TableHeader>
@@ -184,7 +338,7 @@ export default function AuditoriaPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {mockAuditLog.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((entry) => (
+                          {filteredSimulatedLog.map((entry) => (
                             <TableRow key={entry.id}>
                               <TableCell className="text-xs text-muted-foreground">
                                 {format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
@@ -210,8 +364,10 @@ export default function AuditoriaPage() {
                   ) : (
                     <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
                         <ListOrdered className="h-16 w-16 text-muted-foreground mb-4" />
-                        <p className="text-lg font-semibold text-foreground">No hay entradas de auditoría simuladas</p>
-                        <p className="text-sm text-muted-foreground text-center">Este es un ejemplo y no hay datos para mostrar actualmente.</p>
+                        <p className="text-lg font-semibold text-foreground">No hay entradas de auditoría</p>
+                        <p className="text-sm text-muted-foreground text-center">
+                            { mockAuditLog.length === 0 ? "Este es un ejemplo y no hay datos para mostrar actualmente." : "Ajuste los filtros para ver resultados."}
+                        </p>
                     </div>
                   )}
                 </CardContent>
@@ -223,3 +379,4 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
