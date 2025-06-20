@@ -25,6 +25,7 @@ interface TreeNode {
   children?: TreeNode[];
   originalId?: string; 
   activities?: Actividad[]; 
+  activo?: boolean; // For processes
 }
 
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
@@ -62,7 +63,13 @@ export default function PanelJerarquicoPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        setCapturedProcesses(JSON.parse(storedData).filter((p: CapturedProcess) => !p.deletedAt));
+        const parsedData: CapturedProcess[] = JSON.parse(storedData);
+        // Ensure 'activo' field exists, defaulting to true if missing
+        const dataWithStatus = parsedData.map(proc => ({
+          ...proc,
+          activo: proc.activo === undefined ? true : proc.activo,
+        }));
+        setCapturedProcesses(dataWithStatus.filter(p => !p.deletedAt));
       }
     } catch (error) {
       console.error("Error loading processes from localStorage:", error);
@@ -82,10 +89,10 @@ export default function PanelJerarquicoPage() {
     setRepeatedActivitiesCount(rptActivities);
 
     // Calculate repeated processes in multiple contexts
-    const activeCapturedProcesses = capturedProcesses.filter(p => !p.deletedAt);
+    const activeTreeProcesses = capturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
     const processContexts = new Map<string, Set<string>>();
 
-    activeCapturedProcesses.forEach(proc => {
+    activeTreeProcesses.forEach(proc => {
         if (!processContexts.has(proc.proceso)) {
             processContexts.set(proc.proceso, new Set());
         }
@@ -127,7 +134,11 @@ export default function PanelJerarquicoPage() {
       
       const targetActivityForFiltering = filterByActivityId ? actividades.find(act => act.id === filterByActivityId) : null;
 
-      capturedProcesses.forEach(proc => {
+      // Filter processes by active status before building the tree
+      const processesForTree = capturedProcesses.filter(proc => proc.activo !== false);
+
+
+      processesForTree.forEach(proc => {
         if (targetActivityForFiltering && !targetActivityForFiltering.procesosAsociadosIds?.includes(proc.id)) {
             return; 
         }
@@ -148,17 +159,15 @@ export default function PanelJerarquicoPage() {
         
         if (!areaNodesMap[targetAreaId]) {
            if (!filterByActivityId && (selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned' && targetAreaId !== selectedAreaFilter)) {
-                return; // Skip if area filter is active and this process doesn't match
+                return; 
             }
              if (filterByActivityId && targetAreaId !== (procAreaObject?.id || 'area-unassigned')) {
-                 return; // Skip if filtering by activity and this process's area is not the one being built
+                 return; 
              }
         }
 
-
-        
         const currentAreaNode = areaNodesMap[targetAreaId];
-        if (!currentAreaNode) return; // Ensure currentAreaNode exists before proceeding
+        if (!currentAreaNode) return; 
 
 
         const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ((p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject)));
@@ -211,31 +220,17 @@ export default function PanelJerarquicoPage() {
                   activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                   if (treeActivitySearchTerm) { 
                     const searchTermLower = treeActivitySearchTerm.toLowerCase();
-                    // Filter activities within the process node if tree search term is active
                     const matchingActivities = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
-                    // If process name also matches, include all its activities, otherwise only matching ones
                     if (proc.proceso.toLowerCase().includes(searchTermLower)) {
-                        // Keep all original activitiesForNode if process name matches, then filter those if necessary or add distinct matching ones.
-                        // This part can be complex if both process and activity names need to match.
-                        // For simplicity now, if process matches, show all its activities; if only activity matches, show only that.
-                        // The logic below already filters processes based on name or activity name.
-                        // So, here we just ensure the activities are correctly populated or filtered based on the context.
-                         activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id) && act.nombre.toLowerCase().includes(searchTermLower));
-                         if (!proc.proceso.toLowerCase().includes(searchTermLower) && activitiesForNode.length === 0) {
-                            // if process name doesnt match and no activities match, this process node shouldn't be here.
-                         } else if (proc.proceso.toLowerCase().includes(searchTermLower)) {
-                             activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id)); // Show all activities for this process
-                         }
-
+                         activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                     } else {
                          activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
                     }
-
                   }
               }
               
               return {
-                id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode,
+                id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode, activo: proc.activo,
               };
             }).sort((a,b) => a.name.localeCompare(b.name));
             
@@ -245,8 +240,8 @@ export default function PanelJerarquicoPage() {
             } else if (treeActivitySearchTerm) {
                 const searchTermLower = treeActivitySearchTerm.toLowerCase();
                 finalProcessNodesForPuesto = processTreeNodes.filter(ptn => 
-                    ptn.name.toLowerCase().includes(searchTermLower) || // Process name matches
-                    (ptn.activities && ptn.activities.some(act => act.nombre.toLowerCase().includes(searchTermLower))) // Or any activity name matches
+                    ptn.name.toLowerCase().includes(searchTermLower) || 
+                    (ptn.activities && ptn.activities.some(act => act.nombre.toLowerCase().includes(searchTermLower))) 
                 );
             }
             else {
@@ -281,23 +276,47 @@ export default function PanelJerarquicoPage() {
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, activityId: string, sourceProcessId?: string) => {
     const activity = actividades.find(a => a.id === activityId);
-    if (!activity || !activity.activa) { // Prevent dragging inactive activities
+    if (!activity || !activity.activa) { 
         e.preventDefault();
         toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar.", variant: "default" });
         return;
+    }
+    // Check if target process is active
+    if (sourceProcessId) {
+        const process = capturedProcesses.find(p => p.id === sourceProcessId);
+        if (process && process.activo === false) {
+            e.preventDefault();
+            toast({ title: "Acción no permitida", description: "No se pueden mover actividades de procesos inactivos.", variant: "default" });
+            return;
+        }
     }
     setDraggedActivity({ activityId, sourceProcessId });
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", activityId); 
   };
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, targetProcessId?: string) => {
     e.preventDefault();
+    // Optionally, check if target process is active before allowing drop
+    if (targetProcessId) {
+        const process = capturedProcesses.find(p => p.id === targetProcessId);
+        if (process && process.activo === false) {
+            e.dataTransfer.dropEffect = "none"; // Indicate no drop allowed
+            return;
+        }
+    }
     e.dataTransfer.dropEffect = "move";
   };
   
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>, targetId: string) => {
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>, targetId: string, targetType?: 'proceso' | 'pool') => {
     e.preventDefault();
+    if (targetType === 'proceso' && targetId) {
+        const process = capturedProcesses.find(p => p.id === targetId.replace('proceso-', ''));
+         if (process && process.activo === false) {
+            setDropTargetId(null); // Don't highlight inactive processes as drop targets
+            return;
+        }
+    }
     setDropTargetId(targetId);
   };
 
@@ -309,10 +328,18 @@ export default function PanelJerarquicoPage() {
   };
 
   const handleDropOnProcess = (targetProcessId: string) => {
+    const process = capturedProcesses.find(p => p.id === targetProcessId);
+    if (process && process.activo === false) {
+        toast({ title: "Acción no permitida", description: "No se pueden asignar actividades a procesos inactivos.", variant: "default" });
+        setDraggedActivity(null);
+        setDropTargetId(null);
+        return;
+    }
+
     if (!draggedActivity) return;
     const { activityId, sourceProcessId } = draggedActivity;
     const activity = actividades.find(a => a.id === activityId);
-    if (!activity || !activity.activa) { // Double check, though dragStart should prevent
+    if (!activity || !activity.activa) { 
         toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
         setDraggedActivity(null);
         setDropTargetId(null);
@@ -340,6 +367,10 @@ export default function PanelJerarquicoPage() {
     const { activityId, sourceProcessId } = draggedActivity;
     const activity = actividades.find(a => a.id === activityId);
     if (!activity) return;
+    
+    // Check if source process is inactive; if so, disallow unassigning.
+    // This might be counter-intuitive, consider if unassigning from inactive should be allowed.
+    // For now, we allow it.
 
     const newProcesosAsociadosIds = (activity.procesosAsociadosIds || []).filter(id => id !== sourceProcessId);
     
@@ -383,37 +414,49 @@ export default function PanelJerarquicoPage() {
           className={cn(
             "flex items-center py-1 px-2 rounded hover:bg-muted/50",
             node.type === 'proceso' && "border-l-2 border-transparent",
-            node.type === 'proceso' && dropTargetId === node.id && "bg-primary/20 border-primary"
+            node.type === 'proceso' && dropTargetId === node.id && node.activo !== false && "bg-primary/20 border-primary",
+            node.type === 'proceso' && node.activo === false && "opacity-60"
           )}
-          onDragOver={node.type === 'proceso' ? handleDragOver : undefined}
-          onDrop={node.type === 'proceso' ? () => handleDropOnProcess(node.originalId!) : undefined}
-          onDragEnter={node.type === 'proceso' ? (e) => handleDragEnter(e, node.id) : undefined}
+          onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, node.originalId) : undefined}
+          onDrop={node.type === 'proceso' && node.activo !== false ? () => handleDropOnProcess(node.originalId!) : undefined}
+          onDragEnter={node.type === 'proceso' && node.activo !== false ? (e) => handleDragEnter(e, node.id, 'proceso') : undefined}
           onDragLeave={node.type === 'proceso' ? handleDragLeave : undefined}
           id={node.id}
+          title={node.type === 'proceso' && node.activo === false ? "Este proceso está inactivo" : node.name}
         >
           <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
             {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
           </Button>
-          <span className={cn("text-sm", node.type === 'proceso' && "font-semibold", node.type === 'area' && "font-bold", node.type === 'puesto' && "font-medium")}>{node.name}</span>
+          <span className={cn(
+              "text-sm", 
+              node.type === 'proceso' && "font-semibold", 
+              node.type === 'area' && "font-bold", 
+              node.type === 'puesto' && "font-medium",
+              node.type === 'proceso' && node.activo === false && "italic text-muted-foreground"
+            )}
+          >
+            {node.name}
+            {node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}
+          </span>
         </div>
         {expandedNodes[node.id] && (
           <>
             {node.children && renderTree(node.children)}
-            {node.activities && (
+            {node.activities && (node.type !== 'proceso' || node.activo !== false) && ( // Don't show activities for inactive processes in tree
               <div className="ml-8 mt-1 space-y-1">
                 {node.activities.map(act => (
                   <div 
                     key={act.id} 
-                    draggable={act.activa} // Only active activities are draggable from the tree
-                    onDragStart={(e) => act.activa ? handleDragStart(e, act.id, node.originalId) : e.preventDefault()}
+                    draggable={act.activa && node.activo !== false}
+                    onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, node.originalId) : e.preventDefault()}
                     className={cn(
                         "flex items-center p-1.5 bg-secondary/30 rounded text-xs",
-                        act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
+                        (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
                         !act.activa && "italic text-muted-foreground"
                     )}
-                    title={!act.activa ? "Esta actividad está inactiva" : act.nombre}
+                    title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
                   >
-                    <GripVertical className={cn("h-3 w-3 mr-1.5", act.activa ? "text-muted-foreground" : "text-transparent")}/>
+                    <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
                     {act.nombre}
                     {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                   </div>
@@ -440,8 +483,7 @@ export default function PanelJerarquicoPage() {
       .filter(a => {
         if (activityStatusFilter === 'active' && !a.activa) return false;
         if (activityStatusFilter === 'inactive' && a.activa) return false;
-        // 'all' shows both
-
+        
         if (activitySearchTerm && !a.nombre.toLowerCase().includes(activitySearchTerm.toLowerCase())) {
           return false;
         }
@@ -461,7 +503,10 @@ export default function PanelJerarquicoPage() {
       return "No asignada a procesos.";
     }
     return activity.procesosAsociadosIds
-      .map(procId => capturedProcesses.find(cp => cp.id === procId)?.proceso || `ID: ${procId} (no encontrado)`)
+      .map(procId => {
+          const proc = capturedProcesses.find(cp => cp.id === procId);
+          return proc ? `${proc.proceso}${proc.activo === false ? ' (Inactivo)' : ''}` : `ID: ${procId} (no encontrado)`;
+      })
       .join(', ');
   };
 
@@ -494,9 +539,9 @@ export default function PanelJerarquicoPage() {
             <CardTitle className="text-2xl font-headline">Panel Jerárquico de Procesos y Actividades</CardTitle>
           </div>
           <CardDescription className="mb-4">
-            Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos en el árbol izquierdo para asignarlas.
+            Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos activos en el árbol izquierdo para asignarlas.
             También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
-            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. Las actividades inactivas se muestran con un estilo diferente y no son arrastrables.
+            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. Las actividades/procesos inactivos se muestran con un estilo diferente y tienen interacciones limitadas.
           </CardDescription>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
@@ -507,7 +552,7 @@ export default function PanelJerarquicoPage() {
                     <CardContent>
                     <div className="text-2xl font-bold">{repeatedProcessesInMultipleContextsCount}</div>
                     <p className="text-xs text-muted-foreground">
-                        Mismo nombre de proceso en &gt;1 Área/Puesto.
+                        Mismo nombre de proceso activo en &gt;1 Área/Puesto.
                     </p>
                     </CardContent>
                 </Card>
@@ -529,7 +574,7 @@ export default function PanelJerarquicoPage() {
           <Card>
             <CardHeader className="space-y-3">
               <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto o actividad/proceso.</CardDescription>
+              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto o actividad/proceso. Los procesos inactivos se muestran atenuados.</CardDescription>
               {filteredByActivityName && (
                 <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
                   <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
@@ -591,7 +636,7 @@ export default function PanelJerarquicoPage() {
                       No hay procesos para mostrar.
                     </p>
                      <p className="text-xs text-muted-foreground">
-                      Verifique filtros o la configuración de áreas, puestos y procesos capturados.
+                      Verifique filtros o la configuración de áreas, puestos y procesos capturados (y que estén activos).
                     </p>
                   </div>
                 }
@@ -602,14 +647,14 @@ export default function PanelJerarquicoPage() {
           <Card 
             id="activity-pool"
             className={cn("flex flex-col", dropTargetId === 'activity-pool' && "bg-destructive/20 border-destructive")}
-            onDragOver={handleDragOver}
+            onDragOver={(e) => handleDragOver(e)}
             onDrop={handleDropOnPool}
-            onDragEnter={(e) => handleDragEnter(e, 'activity-pool')}
+            onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')}
             onDragLeave={handleDragLeave}
           >
             <CardHeader>
               <CardTitle className="text-lg">Pool de Actividades</CardTitle>
-               <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque para refinar.</CardDescription>
+               <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque para refinar. Las actividades inactivas están atenuadas.</CardDescription>
                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="relative">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -634,7 +679,7 @@ export default function PanelJerarquicoPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="sm:col-span-2"> {/* Span full width on small screens if only two filters, or adjust as needed */}
+                <div className="sm:col-span-2"> 
                   <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
                     <SelectTrigger className="w-full">
                       <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -651,13 +696,13 @@ export default function PanelJerarquicoPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col">
-              <ScrollArea className="flex-grow h-[calc(45vh-110px)] p-1 border rounded-md"> {/* Adjusted height */}
+              <ScrollArea className="flex-grow h-[calc(45vh-110px)] p-1 border rounded-md"> 
                 {availableActivities.length > 0 ? (
                   <div className="space-y-2">
                     {availableActivities.map(act => (
                       <div 
                         key={act.id} 
-                        draggable={act.activa} // Only active activities are draggable from pool
+                        draggable={act.activa} 
                         onDragStart={(e) => act.activa ? handleDragStart(e, act.id) : e.preventDefault()}
                         className={cn(
                             "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md",

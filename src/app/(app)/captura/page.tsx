@@ -70,6 +70,7 @@ const capturaFormSchema = z.object({
   formatosRecibe: z.string().optional(),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   formatosEntrega: z.string().optional(),
+  // activo field is managed in 'ProcesosYFlujosRegistradosPage', defaults to true on creation
 });
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
@@ -159,7 +160,9 @@ export default function CapturaPage() {
         if (processToUpdate) {
             const updatedProcess: CapturedProcess = {
                 ...processToUpdate, 
-                ...values, 
+                ...values,
+                // activo status is preserved from what it was, or true if it didn't exist
+                activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
             };
             existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
             localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
@@ -176,6 +179,7 @@ export default function CapturaPage() {
           ...values,
           id: Date.now().toString(),
           capturedAt: new Date().toISOString(),
+          activo: true, // New processes are active by default
         };
         existingData.push(newProcess);
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));

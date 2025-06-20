@@ -26,7 +26,6 @@ import {
   DialogTitle,
   DialogClose,
   DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -38,23 +37,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ShieldAlert } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
+import type { Actividad } from '@/contexts/ActividadesContext';
 
 
 export interface CapturedProcess extends Omit<CapturaFormData, 'formatosRecibe' | 'formatosEntrega'> {
   id: string;
   capturedAt: string;
   deletedAt?: string; 
-  formatosRecibe?: string; // Changed from string[] to string
-  formatosEntrega?: string; // Changed from string[] to string
+  formatosRecibe?: string; 
+  formatosEntrega?: string;
+  activo?: boolean; // New field for active status
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
+
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
   const displayValue = Array.isArray(value) ? value.join(', ') : value;
@@ -68,7 +72,7 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
     );
   }
   
-  if (isList && Array.isArray(value)) { // Keep for 'sistemas' which is still an array
+  if (isList && Array.isArray(value)) { 
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -98,9 +102,11 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
 
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
+  const [allActivities, setAllActivities] = useState<Actividad[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
+  const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -114,18 +120,44 @@ export default function ProcesosYFlujosRegistradosPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        setAllCapturedData(JSON.parse(storedData));
+        const parsedData: CapturedProcess[] = JSON.parse(storedData);
+        // Ensure all processes have an 'activo' field, defaulting to true if missing
+        const dataWithStatus = parsedData.map(proc => ({
+          ...proc,
+          activo: proc.activo === undefined ? true : proc.activo,
+        }));
+        setAllCapturedData(dataWithStatus);
       } else {
         setAllCapturedData([]);
       }
+
+      const storedActivities = localStorage.getItem(ACTIVIDADES_LOCAL_STORAGE_KEY);
+      if (storedActivities) {
+        setAllActivities(JSON.parse(storedActivities));
+      } else {
+        setAllActivities([]);
+      }
+
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
       toast({ title: "Error al cargar datos", description: "No se pudieron cargar los procesos y flujos registrados.", variant: "destructive" });
       setAllCapturedData([]);
+      setAllActivities([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+        try {
+            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allCapturedData));
+        } catch (error) {
+            console.error("Error saving captured data to localStorage:", error);
+            toast({ title: "Error al guardar", description: "No se pudieron guardar los cambios en los procesos.", variant: "destructive" });
+        }
+    }
+  }, [allCapturedData, isLoading]);
 
   const filteredData = useMemo(() => {
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt); 
@@ -149,8 +181,15 @@ export default function ProcesosYFlujosRegistradosPage() {
       dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     }
 
+    if (processStatusFilter !== 'all') {
+      dataToFilter = dataToFilter.filter(proc => 
+        processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false
+      );
+    }
+
+
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter]);
 
   const recoverableProcesses = useMemo(() => {
     const thirtyDaysAgo = new Date();
@@ -177,7 +216,7 @@ export default function ProcesosYFlujosRegistradosPage() {
           : p
       );
       setAllCapturedData(updatedData);
-      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+      // localStorage update is handled by useEffect on allCapturedData
       toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido movido a la papelera de recuperación.`, variant: 'destructive' });
     } catch (error) {
       console.error("Error soft deleting process from localStorage:", error);
@@ -193,18 +232,49 @@ export default function ProcesosYFlujosRegistradosPage() {
         if (p.id === processId) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
-          return restoredProc;
+          return { ...restoredProc, activo: true }; // Also reactivate on restore
         }
         return p;
       });
       setAllCapturedData(updatedData);
-      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
       const restoredProcess = updatedData.find(p => p.id === processId); 
-      toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado.` });
+      toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado y activado.` });
     } catch (error) {
       console.error("Error restoring process:", error);
       toast({ title: "Error al Restaurar", description: "No se pudo restaurar el proceso.", variant: "destructive"});
     }
+  };
+
+  const handleToggleProcessStatus = (processId: string) => {
+    const processToToggle = allCapturedData.find(p => p.id === processId);
+    if (!processToToggle) return;
+
+    const targetStatus = !(processToToggle.activo !== false); // If undefined or true, target is false (inactive)
+
+    if (targetStatus === false) { // Trying to inactivate
+      const linkedActiveActivities = allActivities.filter(act => 
+        act.activa && act.procesosAsociadosIds?.includes(processId)
+      );
+
+      if (linkedActiveActivities.length > 0) {
+        toast({
+          title: "Inactivación Bloqueada",
+          description: `El proceso "${processToToggle.proceso}" no puede inactivarse porque está asociado a ${linkedActiveActivities.length} actividad(es) activa(s). Desactive o desvincule estas actividades primero.`,
+          variant: "destructive",
+          duration: 7000,
+        });
+        return; // Prevent toggle
+      }
+    }
+
+    const updatedData = allCapturedData.map(p =>
+      p.id === processId ? { ...p, activo: targetStatus } : p
+    );
+    setAllCapturedData(updatedData);
+    toast({
+      title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}`,
+      description: `El proceso "${processToToggle.proceso}" ha sido ${targetStatus ? 'activado' : 'inactivado'}.`,
+    });
   };
 
 
@@ -216,7 +286,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (cellData === undefined || cellData === null) {
       return '';
     }
-    // Handle 'sistemas' which is still an array
     if (Array.isArray(cellData)) { 
       const joinedString = cellData.join('; '); 
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
@@ -242,7 +311,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
       "Información Recibe", "Formatos Recibe", 
       "Información Entrega", "Formatos Entrega", 
-      "Fecha Captura"
+      "Fecha Captura", "Estado Activo"
     ];
 
     const csvRows = [
@@ -260,7 +329,8 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.formatosRecibe), 
         escapeCsvCell(proc.informacionEntrega),
         escapeCsvCell(proc.formatosEntrega), 
-        escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss'))
+        escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss')),
+        escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo')
       ].join(','))
     ];
 
@@ -303,11 +373,11 @@ export default function ProcesosYFlujosRegistradosPage() {
             <CardTitle className="text-2xl font-headline">Procesos y Flujos Registrados</CardTitle>
           </div>
           <CardDescription>
-            Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema.
+            Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema. Active o inactive procesos según sea necesario.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
             <div className="relative sm:col-span-2 lg:col-span-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
@@ -343,6 +413,19 @@ export default function ProcesosYFlujosRegistradosPage() {
                    {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
                    : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="w-full">
+              <Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Filtrar por Estado</Label>
+              <Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}>
+                <SelectTrigger id="status-filter">
+                  <SelectValue placeholder="Todos los Estados"/>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los Estados</SelectItem>
+                  <SelectItem value="active"><CheckSquare className="mr-2 h-4 w-4 inline-block text-green-500" /> Activos</SelectItem>
+                  <SelectItem value="inactive"><XSquare className="mr-2 h-4 w-4 inline-block text-red-500" /> Inactivos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -408,32 +491,33 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableHead>Nombre del Proceso</TableHead>
                     <TableHead>Área</TableHead>
                     <TableHead>Puesto</TableHead>
-                    <TableHead>Sistemas</TableHead>
+                    <TableHead className="w-[120px] text-center">Estado</TableHead>
                     <TableHead>Fecha de Captura</TableHead>
-                    <TableHead className="text-right w-[160px]">Acciones</TableHead>
+                    <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.map((proc) => (
-                    <TableRow key={proc.id}>
+                    <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
                       <TableCell className="font-medium">{proc.proceso}</TableCell>
                       <TableCell>{proc.area}</TableCell>
                       <TableCell>{proc.puesto}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {proc.sistemas && proc.sistemas.length > 0 ? (
-                            proc.sistemas.map((sys, idx) => (
-                              <Badge key={idx} variant="secondary">{sys}</Badge>
-                            ))
-                          ) : (
-                            <span className="text-xs text-muted-foreground">N/A</span>
-                          )}
-                        </div>
+                      <TableCell className="text-center">
+                         <Badge variant={proc.activo !== false ? 'default' : 'outline'} 
+                                className={cn(proc.activo === false && "border-destructive text-destructive")}>
+                          {proc.activo !== false ? 'Activo' : 'Inactivo'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {format(new Date(proc.capturedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
+                        <Switch
+                          checked={proc.activo !== false}
+                          onCheckedChange={() => handleToggleProcessStatus(proc.id)}
+                          aria-label={proc.activo !== false ? 'Inactivar proceso' : 'Activar proceso'}
+                          className="mr-2"
+                        />
                         <Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)} title="Ver detalles">
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -472,6 +556,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             <DialogTitle>Detalles del Proceso: {selectedProcess?.proceso}</DialogTitle>
             <DialogDescription>
               Información completa del proceso y flujo registrado el {selectedProcess && format(new Date(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es })}.
+              Estado: {selectedProcess?.activo !== false ? 'Activo' : 'Inactivo'}.
             </DialogDescription>
           </DialogHeader>
           {selectedProcess && (

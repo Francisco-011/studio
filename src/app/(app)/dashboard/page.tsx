@@ -13,9 +13,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
-import { useActividades } from '@/contexts/ActividadesContext'; // Assuming Actividad interface is also exported or can be accessed
+import { useActividades } from '@/contexts/ActividadesContext'; 
 
-// Interfaces for data from localStorage (mirroring ConfiguracionPage)
 const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
 type TipoMoneda = typeof tiposDeMonedaOptions[number];
 
@@ -69,12 +68,12 @@ function calculateAllSystemAnnualCosts(
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
     let totalAnnualLicense = 0;
-    let systemCurrency: TipoMoneda | string = 'USD'; // Default currency
+    let systemCurrency: TipoMoneda | string = 'USD'; 
 
     if (costsForSystem.length > 0) {
-      systemCurrency = costsForSystem[0].moneda; // Assume consistent currency per system for simplicity
+      systemCurrency = costsForSystem[0].moneda; 
       costsForSystem.forEach(cost => {
-        if (cost.moneda === systemCurrency) { // Basic check, real app might need conversion
+        if (cost.moneda === systemCurrency) { 
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
@@ -91,7 +90,7 @@ function calculateAllSystemAnnualCosts(
           } else if (cost.frecuencia === "Anual") {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
-          } else { // "Otro" - treat as one-time/annual for summary
+          } else { 
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
           }
@@ -120,14 +119,13 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsLoadingData(true);
     try {
-      // Load Captured Processes
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setProcesosMapeadosCount(parsedProcesses.filter(p => !p.deletedAt).length);
+        // Count only active and non-deleted processes
+        setProcesosMapeadosCount(parsedProcesses.filter(p => !p.deletedAt && p.activo !== false).length);
       }
 
-      // Load Sistemas and CostosSistemas
       const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
       const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
       
@@ -165,14 +163,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle>
+            <CardTitle className="text-sm font-medium">Procesos Activos Mapeados</CardTitle>
             <Factory className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {renderMetric(procesosMapeadosCount, isLoadingData)}
             </div>
-            {/* <p className="text-xs text-muted-foreground">+5 desde el último mes</p> */}
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -214,7 +211,6 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold">
               {renderMetric(metricasActividades.activas, isLoadingActividades)}
             </div>
-            {/* <p className="text-xs text-muted-foreground">+12 esta semana</p> */}
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -226,7 +222,6 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold">
                {renderMetric(metricasActividades.sinUso, isLoadingActividades)}
             </div>
-            {/* <p className="text-xs text-muted-foreground">Oportunidad de depuración</p> */}
           </CardContent>
         </Card>
       </div>

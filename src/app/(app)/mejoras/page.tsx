@@ -75,8 +75,6 @@ function calculateSystemAnnualCost(
       periodicCost = baseAmount; 
     }
     
-    // For simplicity, we're not doing currency conversion here if costs are mixed.
-    // The AI will get all details. This summary is for the text sent to AI.
     if (cost.moneda === displayCurrency) {
         totalAnnualCost += periodicCost;
     }
@@ -107,19 +105,21 @@ export default function MejorasPage() {
       // Load captured processes
       const storedProcessesData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       const allCapturedProcesses: CapturedProcess[] = storedProcessesData ? JSON.parse(storedProcessesData) : [];
-      const activeProcesses = allCapturedProcesses.filter(p => !p.deletedAt);
+      // Filter for non-deleted and active processes
+      const activeProcessesForAnalysis = allCapturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
 
-      if (activeProcesses.length === 0) {
+
+      if (activeProcessesForAnalysis.length === 0) {
         toast({
-          title: "No hay procesos para analizar",
-          description: "Por favor, registre algunos procesos en el módulo 'Procesos y Flujos Registrados' primero.",
+          title: "No hay procesos activos para analizar",
+          description: "Por favor, asegúrese de tener procesos activos registrados en 'Procesos y Flujos Registrados'.",
           variant: "default",
         });
         setIsLoading(false);
         return;
       }
 
-      const processDescriptionsText = activeProcesses
+      const processDescriptionsText = activeProcessesForAnalysis
         .map(p =>
           `Proceso: ${p.proceso}\n` +
           `Área: ${p.area}\n` +
@@ -132,7 +132,7 @@ export default function MejorasPage() {
         .join('\n\n---\n\n');
 
       const allSystemsUsedInProcesses = new Set<string>();
-      activeProcesses.forEach(p => {
+      activeProcessesForAnalysis.forEach(p => {
         if (p.sistemas) {
           p.sistemas.forEach(sys => allSystemsUsedInProcesses.add(sys));
         }
@@ -141,7 +141,6 @@ export default function MejorasPage() {
         allSystemsUsedInProcesses.size > 0 ? Array.from(allSystemsUsedInProcesses).join(', ') : 'No se especificaron sistemas en los procesos.'
       }`;
 
-      // Load sistemas and costosSistemas from localStorage
       const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
       const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
       
@@ -200,7 +199,7 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos, para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora.
+            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos, para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos.
           </CardDescription>
 
           <div className="mb-6">
