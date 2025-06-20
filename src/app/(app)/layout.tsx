@@ -6,6 +6,7 @@ import { PuestosProvider } from '@/contexts/PuestosContext';
 import { FuentesDestinosProvider } from '@/contexts/FuentesDestinosContext';
 import { ProcesosProvider } from '@/contexts/ProcesosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
+import { AccionesProvider } from '@/contexts/AccionesContext';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -18,7 +19,9 @@ export default function AuthenticatedAppLayout({
         <FuentesDestinosProvider>
           <ProcesosProvider> 
             <ActividadesProvider>
-              <AppLayout>{children}</AppLayout>
+              <AccionesProvider>
+                <AppLayout>{children}</AppLayout>
+              </AccionesProvider>
             </ActividadesProvider>
           </ProcesosProvider>
         </FuentesDestinosProvider>
