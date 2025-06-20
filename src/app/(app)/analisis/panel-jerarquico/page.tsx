@@ -25,7 +25,7 @@ interface TreeNode {
   children?: TreeNode[];
   originalId?: string; 
   activities?: Actividad[]; 
-  activo?: boolean; // For processes
+  activo?: boolean; 
 }
 
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
@@ -42,8 +42,9 @@ export default function PanelJerarquicoPage() {
 
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
-  const [draggedActivity, setDraggedActivity] = useState<{ activityId: string; sourceProcessId?: string } | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [draggedActivity, setDraggedActivity] = useState<{ activityId: string; sourceProcessId?: string; sourceIndexInProcess?: number; } | null>(null);
+  const [dropTargetInfo, setDropTargetInfo] = useState<{ id: string; type: 'proceso' | 'activity-in-tree' | 'pool' } | null>(null);
+
 
   const [activitySearchTerm, setActivitySearchTerm] = useState('');
   const [assignmentCountFilter, setAssignmentCountFilter] = useState<AssignmentCountFilterType>('all');
@@ -63,15 +64,17 @@ export default function PanelJerarquicoPage() {
 
 
   useEffect(() => {
+    setIsLoadingProcesses(true);
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
         const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        const dataWithStatus = parsedData.map(proc => ({
+        const dataWithStatusAndOrder = parsedData.map(proc => ({
           ...proc,
           activo: proc.activo === undefined ? true : proc.activo,
+          activityOrder: proc.activityOrder || [],
         }));
-        setCapturedProcesses(dataWithStatus.filter(p => !p.deletedAt));
+        setCapturedProcesses(dataWithStatusAndOrder.filter(p => !p.deletedAt));
       }
     } catch (error) {
       console.error("Error loading processes from localStorage:", error);
@@ -80,8 +83,44 @@ export default function PanelJerarquicoPage() {
       setIsLoadingProcesses(false);
     }
   }, []);
-
+  
   const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
+
+  useEffect(() => {
+    if (!isLoadingAllData) {
+      const synchronizedProcesses = capturedProcesses.map(proc => {
+        const associatedActivityIds = actividades
+          .filter(act => act.procesosAsociadosIds?.includes(proc.id))
+          .map(act => act.id);
+  
+        let currentActivityOrder = proc.activityOrder || [];
+        const validOrderedIds = currentActivityOrder.filter(id => associatedActivityIds.includes(id));
+        const orderedSet = new Set(validOrderedIds);
+        associatedActivityIds.forEach(id => {
+          if (!orderedSet.has(id)) {
+            validOrderedIds.push(id);
+          }
+        });
+        return { ...proc, activityOrder: validOrderedIds };
+      });
+      // Only update if there's a change to avoid infinite loops if this effect also saves to localStorage
+      if (JSON.stringify(synchronizedProcesses) !== JSON.stringify(capturedProcesses)) {
+        setCapturedProcesses(synchronizedProcesses);
+      }
+    }
+  }, [actividades, capturedProcesses, isLoadingAllData]);
+
+
+  useEffect(() => {
+    if (!isLoadingAllData && capturedProcesses.length > 0) { // Check if capturedProcesses is populated
+        try {
+            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(capturedProcesses));
+        } catch (error) {
+            console.error("Error saving processes to localStorage from Panel Jerarquico:", error);
+        }
+    }
+  }, [capturedProcesses, isLoadingAllData]);
+
 
   useEffect(() => {
     if (isLoadingAllData) return;
@@ -141,12 +180,12 @@ export default function PanelJerarquicoPage() {
         if (treeProcessStatusFilter === 'inactive') {
             return proc.activo === false;
         }
-        return true; // 'all'
+        return true; 
       });
 
 
       processesForTree.forEach(proc => {
-        if (targetActivityForFiltering && !targetActivityForFiltering.procesosAsociadosIds?.includes(proc.id)) {
+        if (targetActivityForFiltering && !(proc.activityOrder?.includes(targetActivityForFiltering.id) || targetActivityForFiltering.procesosAsociadosIds?.includes(proc.id))) {
             return; 
         }
 
@@ -190,9 +229,13 @@ export default function PanelJerarquicoPage() {
         if (!filterByActivityId && treeActivitySearchTerm) {
             const searchTermLower = treeActivitySearchTerm.toLowerCase();
             const processNameMatches = proc.proceso.toLowerCase().includes(searchTermLower);
-            const originalAssignedActsForSearch = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
-            const anyOriginalActivityNameMatches = originalAssignedActsForSearch.some(act => act.nombre.toLowerCase().includes(searchTermLower));
-            if (!processNameMatches && !anyOriginalActivityNameMatches) {
+            
+            const activitiesInOrder = (proc.activityOrder || [])
+                .map(actId => actividades.find(a => a.id === actId))
+                .filter((act): act is Actividad => !!act);
+            const anyActivityNameMatches = activitiesInOrder.some(act => act.nombre.toLowerCase().includes(searchTermLower));
+            
+            if (!processNameMatches && !anyActivityNameMatches) {
                 return; 
             }
         }
@@ -221,16 +264,22 @@ export default function PanelJerarquicoPage() {
           if (puestoNode.processList && puestoNode.processList.length > 0) {
             const processTreeNodes = puestoNode.processList.map(proc => {
               let activitiesForNode: Actividad[];
+              const orderedActivityIds = proc.activityOrder || [];
+
               if (targetActivityForFiltering) {
-                  activitiesForNode = targetActivityForFiltering.procesosAsociadosIds?.includes(proc.id) ? [targetActivityForFiltering] : [];
+                  activitiesForNode = orderedActivityIds.includes(targetActivityForFiltering.id) ? [targetActivityForFiltering] : [];
               } else {
-                  activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+                  activitiesForNode = orderedActivityIds
+                    .map(actId => actividades.find(a => a.id === actId))
+                    .filter((act): act is Actividad => !!act);
+                  
                   if (treeActivitySearchTerm) { 
                     const searchTermLower = treeActivitySearchTerm.toLowerCase();
                     if (proc.proceso.toLowerCase().includes(searchTermLower)) {
-                         activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+                        // Keep all ordered activities if process name matches
                     } else {
-                         activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
+                        // Filter activities if process name doesn't match
+                        activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
                     }
                   }
               }
@@ -280,11 +329,11 @@ export default function PanelJerarquicoPage() {
     setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
   };
 
-  const handleDragStart = (e: DragEvent<HTMLDivElement>, activityId: string, sourceProcessId?: string) => {
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, activityId: string, sourceProcessId?: string, sourceIndexInProcess?: number) => {
     const activity = actividades.find(a => a.id === activityId);
     if (!activity || !activity.activa) { 
         e.preventDefault();
-        toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar.", variant: "default" });
+        toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar o mover.", variant: "default" });
         return;
     }
     if (sourceProcessId) {
@@ -295,76 +344,137 @@ export default function PanelJerarquicoPage() {
             return;
         }
     }
-    setDraggedActivity({ activityId, sourceProcessId });
+    setDraggedActivity({ activityId, sourceProcessId, sourceIndexInProcess });
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", activityId); 
   };
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>, targetProcessId?: string) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, targetType: 'proceso' | 'activity-in-tree' | 'pool', targetId?: string) => {
     e.preventDefault();
-    if (targetProcessId) {
-        const process = capturedProcesses.find(p => p.id === targetProcessId);
+    if (targetType === 'proceso' && targetId) {
+        const process = capturedProcesses.find(p => p.id === targetId);
         if (process && process.activo === false) {
             e.dataTransfer.dropEffect = "none"; 
             return;
         }
     }
+    if (targetType === 'activity-in-tree' && targetId) {
+        // targetId for activity-in-tree might be like "tree-activity-${act.id}-proc-${proc.id}"
+        // We need to extract the processId to check its status.
+        const parts = targetId.split('-proc-');
+        if (parts.length > 1) {
+            const procId = parts[parts.length -1];
+            const process = capturedProcesses.find(p => p.id === procId);
+             if (process && process.activo === false) {
+                e.dataTransfer.dropEffect = "none"; 
+                return;
+            }
+        }
+    }
     e.dataTransfer.dropEffect = "move";
   };
   
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>, targetId: string, targetType?: 'proceso' | 'pool') => {
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>, targetId: string, targetType: 'proceso' | 'activity-in-tree' | 'pool') => {
     e.preventDefault();
-    if (targetType === 'proceso' && targetId) {
+    if (targetType === 'proceso') {
         const process = capturedProcesses.find(p => p.id === targetId.replace('proceso-', ''));
          if (process && process.activo === false) {
-            setDropTargetId(null); 
+            setDropTargetInfo(null); 
             return;
         }
     }
-    setDropTargetId(targetId);
+    if (targetType === 'activity-in-tree') {
+        const parts = targetId.split('-proc-');
+        if (parts.length > 1) {
+            const procId = parts[parts.length -1];
+            const process = capturedProcesses.find(p => p.id === procId);
+             if (process && process.activo === false) {
+                setDropTargetInfo(null); 
+                return;
+            }
+        }
+    }
+    setDropTargetInfo({ id: targetId, type: targetType });
   };
 
   const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if ((e.target as HTMLElement).id === dropTargetId || (e.relatedTarget && !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))) {
-       setDropTargetId(null);
+     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+        setDropTargetInfo(null);
     }
   };
 
-  const handleDropOnProcess = (targetProcessId: string) => {
-    const process = capturedProcesses.find(p => p.id === targetProcessId);
-    if (process && process.activo === false) {
-        toast({ title: "Acción no permitida", description: "No se pueden asignar actividades a procesos inactivos.", variant: "default" });
-        setDraggedActivity(null);
-        setDropTargetId(null);
-        return;
-    }
-
+  const handleDrop = (e: DragEvent<HTMLDivElement>, targetProcessId: string, targetActivityId?: string) => {
+    e.preventDefault();
     if (!draggedActivity) return;
-    const { activityId, sourceProcessId } = draggedActivity;
+
+    const { activityId, sourceProcessId, sourceIndexInProcess } = draggedActivity;
     const activity = actividades.find(a => a.id === activityId);
-    if (!activity || !activity.activa) { 
+    if (!activity || !activity.activa) {
         toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
         setDraggedActivity(null);
-        setDropTargetId(null);
+        setDropTargetInfo(null);
+        return;
+    }
+    
+    const targetProcess = capturedProcesses.find(p => p.id === targetProcessId);
+    if (targetProcess && targetProcess.activo === false) {
+        toast({ title: "Acción no permitida", description: "No se pueden asignar actividades a procesos inactivos.", variant: "default" });
+        setDraggedActivity(null);
+        setDropTargetInfo(null);
         return;
     }
 
     let newProcesosAsociadosIds = [...(activity.procesosAsociadosIds || [])];
+    let finalCapturedProcesses = [...capturedProcesses];
 
-    if (sourceProcessId && sourceProcessId !== targetProcessId) {
-      newProcesosAsociadosIds = newProcesosAsociadosIds.filter(id => id !== sourceProcessId);
+    // Unassign from source process if moving from one process to another OR reordering within the same process
+    if (sourceProcessId) {
+        finalCapturedProcesses = finalCapturedProcesses.map(proc => {
+            if (proc.id === sourceProcessId) {
+                return { ...proc, activityOrder: (proc.activityOrder || []).filter(id => id !== activityId) };
+            }
+            return proc;
+        });
+        if (sourceProcessId !== targetProcessId) { // Only modify context if moving between different processes
+            newProcesosAsociadosIds = newProcesosAsociadosIds.filter(id => id !== sourceProcessId);
+        }
     }
 
+    // Assign to target process and reorder
+    finalCapturedProcesses = finalCapturedProcesses.map(proc => {
+        if (proc.id === targetProcessId) {
+            let newOrder = [...(proc.activityOrder || [])];
+            // Remove if already exists (in case of simple reorder where it might be duplicated temporarily)
+            newOrder = newOrder.filter(id => id !== activityId);
+
+            if (targetActivityId && sourceProcessId === targetProcessId) { // Reordering within the same process
+                const targetIdx = newOrder.indexOf(targetActivityId);
+                if (targetIdx !== -1) {
+                    newOrder.splice(targetIdx, 0, activityId);
+                } else {
+                    newOrder.push(activityId); // Fallback if target activity not found in order (shouldn't happen)
+                }
+            } else { // Assigning new or moving from another process
+                 newOrder.push(activityId); // Add to the end by default
+            }
+            return { ...proc, activityOrder: newOrder };
+        }
+        return proc;
+    });
+
     if (!newProcesosAsociadosIds.includes(targetProcessId)) {
-      newProcesosAsociadosIds.push(targetProcessId);
+        newProcesosAsociadosIds.push(targetProcessId);
     }
     
     updateActividad(activityId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
-    toast({ title: "Actividad Asignada", description: `"${activity.nombre}" asignada al proceso.` });
+    setCapturedProcesses(finalCapturedProcesses); // This will trigger useEffect to save to localStorage
+
+    toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada.` });
     setDraggedActivity(null);
-    setDropTargetId(null);
+    setDropTargetInfo(null);
   };
+
 
   const handleDropOnPool = () => {
     if (!draggedActivity || !draggedActivity.sourceProcessId) return; 
@@ -373,11 +483,19 @@ export default function PanelJerarquicoPage() {
     if (!activity) return;
     
     const newProcesosAsociadosIds = (activity.procesosAsociadosIds || []).filter(id => id !== sourceProcessId);
-    
     updateActividad(activityId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
+
+    // Also remove from activityOrder of the source process
+    setCapturedProcesses(prevProcesses => prevProcesses.map(proc => {
+        if (proc.id === sourceProcessId) {
+            return { ...proc, activityOrder: (proc.activityOrder || []).filter(id => id !== activityId) };
+        }
+        return proc;
+    }));
+
     toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" desasignada del proceso.` });
     setDraggedActivity(null);
-    setDropTargetId(null);
+    setDropTargetInfo(null);
   };
 
   const handleActivityBadgeClick = (activity: Actividad) => {
@@ -390,7 +508,7 @@ export default function PanelJerarquicoPage() {
         setSelectedAreaFilter('all');
         setSelectedPuestoFilter('all');
         setTreeActivitySearchTerm('');
-        setTreeProcessStatusFilter('active'); // Default to active processes when filtering by activity
+        setTreeProcessStatusFilter('active'); 
     }
   };
    useEffect(() => {
@@ -408,18 +526,18 @@ export default function PanelJerarquicoPage() {
   }, [filterByActivityId, treeData]);
 
 
-  const renderTree = (nodes: TreeNode[]): JSX.Element[] => {
+  const renderTree = (nodes: TreeNode[], parentProcessId?: string): JSX.Element[] => {
     return nodes.map(node => (
       <div key={node.id} className="ml-4">
         <div 
           className={cn(
             "flex items-center py-1 px-2 rounded hover:bg-muted/50",
             node.type === 'proceso' && "border-l-2 border-transparent",
-            node.type === 'proceso' && dropTargetId === node.id && node.activo !== false && "bg-primary/20 border-primary",
+            dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && node.activo !== false && "bg-primary/20 border-primary",
             node.type === 'proceso' && node.activo === false && "opacity-60"
           )}
-          onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, node.originalId) : undefined}
-          onDrop={node.type === 'proceso' && node.activo !== false ? () => handleDropOnProcess(node.originalId!) : undefined}
+          onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, 'proceso', node.originalId) : undefined}
+          onDrop={node.type === 'proceso' && node.activo !== false ? (e) => handleDrop(e, node.originalId!) : undefined}
           onDragEnter={node.type === 'proceso' && node.activo !== false ? (e) => handleDragEnter(e, node.id, 'proceso') : undefined}
           onDragLeave={node.type === 'proceso' ? handleDragLeave : undefined}
           id={node.id}
@@ -442,18 +560,26 @@ export default function PanelJerarquicoPage() {
         </div>
         {expandedNodes[node.id] && (
           <>
-            {node.children && renderTree(node.children)}
-            {node.activities && (node.type !== 'proceso' || node.activo !== false) && ( 
+            {node.children && renderTree(node.children, node.type === 'proceso' ? node.originalId : parentProcessId)}
+            {node.activities && node.type === 'proceso' && node.originalId && (node.type !== 'proceso' || node.activo !== false) && ( 
               <div className="ml-8 mt-1 space-y-1">
-                {node.activities.map(act => (
+                {node.activities.map((act, index) => {
+                  const activityInTreeId = `tree-activity-${act.id}-proc-${node.originalId}`;
+                  return (
                   <div 
-                    key={act.id} 
+                    key={activityInTreeId} 
+                    id={activityInTreeId}
                     draggable={act.activa && node.activo !== false}
-                    onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, node.originalId) : e.preventDefault()}
+                    onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, node.originalId, index) : e.preventDefault()}
+                    onDragOver={(e) => handleDragOver(e, 'activity-in-tree', activityInTreeId)}
+                    onDrop={(e) => handleDrop(e, node.originalId!, act.id)} // Drop on activity means reorder within this process, target is this activity.
+                    onDragEnter={(e) => handleDragEnter(e, activityInTreeId, 'activity-in-tree')}
+                    onDragLeave={handleDragLeave}
                     className={cn(
                         "flex items-center p-1.5 bg-secondary/30 rounded text-xs",
                         (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
-                        !act.activa && "italic text-muted-foreground"
+                        !act.activa && "italic text-muted-foreground",
+                        dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === activityInTreeId && "ring-2 ring-primary"
                     )}
                     title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
                   >
@@ -461,7 +587,7 @@ export default function PanelJerarquicoPage() {
                     {act.nombre}
                     {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                   </div>
-                ))}
+                )})}
                  {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
               </div>
             )}
@@ -541,7 +667,7 @@ export default function PanelJerarquicoPage() {
           </div>
           <CardDescription className="mb-4">
             Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos activos en el árbol izquierdo para asignarlas.
-            También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
+            También puede mover actividades entre procesos, reordenarlas dentro de un proceso, o de un proceso de vuelta al pool para desasignarlas.
             Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. Las actividades/procesos inactivos se muestran con un estilo diferente y tienen interacciones limitadas.
           </CardDescription>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -660,8 +786,8 @@ export default function PanelJerarquicoPage() {
           
           <Card 
             id="activity-pool"
-            className={cn("flex flex-col", dropTargetId === 'activity-pool' && "bg-destructive/20 border-destructive")}
-            onDragOver={(e) => handleDragOver(e)}
+            className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")}
+            onDragOver={(e) => handleDragOver(e, 'pool')}
             onDrop={handleDropOnPool}
             onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')}
             onDragLeave={handleDragLeave}

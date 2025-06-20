@@ -70,6 +70,7 @@ const capturaFormSchema = z.object({
   formatosRecibe: z.string().optional(),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   formatosEntrega: z.string().optional(),
+  activityOrder: z.array(z.string()).optional().default([]), // Added for reordering
   // activo field is managed in 'ProcesosYFlujosRegistradosPage', defaults to true on creation
 });
 
@@ -100,6 +101,7 @@ export default function CapturaPage() {
       formatosRecibe: "",
       informacionEntrega: "",
       formatosEntrega: "",
+      activityOrder: [],
     },
   });
 
@@ -118,7 +120,6 @@ export default function CapturaPage() {
           const processToEdit = existingData.find(p => p.id === editIdFromQuery);
           
           if (processToEdit) {
-            // Ensure formatosRecibe and formatosEntrega are strings for the form
             const formDataToReset = {
               ...processToEdit,
               formatosRecibe: Array.isArray(processToEdit.formatosRecibe) 
@@ -127,6 +128,7 @@ export default function CapturaPage() {
               formatosEntrega: Array.isArray(processToEdit.formatosEntrega) 
                 ? processToEdit.formatosEntrega.join(', ') 
                 : processToEdit.formatosEntrega || "",
+              activityOrder: processToEdit.activityOrder || [],
             };
             form.reset(formDataToReset);
           } else {
@@ -161,7 +163,7 @@ export default function CapturaPage() {
             const updatedProcess: CapturedProcess = {
                 ...processToUpdate, 
                 ...values,
-                // activo status is preserved from what it was, or true if it didn't exist
+                activityOrder: values.activityOrder || processToUpdate.activityOrder || [],
                 activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
             };
             existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
@@ -179,7 +181,8 @@ export default function CapturaPage() {
           ...values,
           id: Date.now().toString(),
           capturedAt: new Date().toISOString(),
-          activo: true, // New processes are active by default
+          activo: true, 
+          activityOrder: values.activityOrder || [],
         };
         existingData.push(newProcess);
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));

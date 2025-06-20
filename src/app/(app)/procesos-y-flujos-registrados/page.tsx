@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogClose,
   DialogFooter,
-  DialogTrigger, // Added DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ShieldAlert } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare } from "lucide-react";
 import type { CapturaFormData } from '../captura/page'; 
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -54,7 +54,8 @@ export interface CapturedProcess extends Omit<CapturaFormData, 'formatosRecibe' 
   deletedAt?: string; 
   formatosRecibe?: string; 
   formatosEntrega?: string;
-  activo?: boolean; // New field for active status
+  activo?: boolean;
+  activityOrder?: string[]; // Added for reordering in Panel Jerarquico
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -122,12 +123,12 @@ export default function ProcesosYFlujosRegistradosPage() {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
         const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        // Ensure all processes have an 'activo' field, defaulting to true if missing
-        const dataWithStatus = parsedData.map(proc => ({
+        const dataWithStatusAndOrder = parsedData.map(proc => ({
           ...proc,
           activo: proc.activo === undefined ? true : proc.activo,
+          activityOrder: proc.activityOrder || [], // Ensure activityOrder exists
         }));
-        setAllCapturedData(dataWithStatus);
+        setAllCapturedData(dataWithStatusAndOrder);
       } else {
         setAllCapturedData([]);
       }
@@ -217,7 +218,6 @@ export default function ProcesosYFlujosRegistradosPage() {
           : p
       );
       setAllCapturedData(updatedData);
-      // localStorage update is handled by useEffect on allCapturedData
       toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido movido a la papelera de recuperación.`, variant: 'destructive' });
     } catch (error) {
       console.error("Error soft deleting process from localStorage:", error);
@@ -233,7 +233,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         if (p.id === processId) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
-          return { ...restoredProc, activo: true }; // Also reactivate on restore
+          return { ...restoredProc, activo: true }; 
         }
         return p;
       });
@@ -250,9 +250,9 @@ export default function ProcesosYFlujosRegistradosPage() {
     const processToToggle = allCapturedData.find(p => p.id === processId);
     if (!processToToggle) return;
 
-    const targetStatus = !(processToToggle.activo !== false); // If undefined or true, target is false (inactive)
+    const targetStatus = !(processToToggle.activo !== false); 
 
-    if (targetStatus === false) { // Trying to inactivate
+    if (targetStatus === false) { 
       const linkedActiveActivities = allActivities.filter(act => 
         act.activa && act.procesosAsociadosIds?.includes(processId)
       );
@@ -264,7 +264,7 @@ export default function ProcesosYFlujosRegistradosPage() {
           variant: "destructive",
           duration: 7000,
         });
-        return; // Prevent toggle
+        return; 
       }
     }
 
