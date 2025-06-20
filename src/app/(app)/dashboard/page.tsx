@@ -61,12 +61,12 @@ interface CalculatedSystemCost {
 }
 
 function calculateAllSystemAnnualCosts(
-  allSistemas: Sistema[],
+  systemsToCalculate: Sistema[], // Changed parameter name
   allCostos: SistemaCosto[]
 ): CalculatedSystemCost[] {
-  if (!allSistemas || !allCostos) return [];
+  if (!systemsToCalculate || !allCostos) return [];
 
-  return allSistemas.map(system => {
+  return systemsToCalculate.map(system => { // Iterate over systemsToCalculate
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
     let totalAnnualLicenseCost = 0;
@@ -189,10 +189,27 @@ export default function DashboardPage() {
   }, []);
   
   useEffect(() => {
-    if (!isLoadingSistemasCostos && sistemas && costosSistemas) {
-        setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
+    if (!isLoadingSistemasCostos && sistemas && costosSistemas && !isLoadingAreas && !isLoadingPuestos) {
+        const selectedAreaId = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea)?.id : null;
+        const selectedPuestoId = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto)?.id : null;
+        
+        const filteredSystems = sistemas.filter(system => {
+            if (system.scope === "Empresa") return true;
+            if (selectedAreaId && system.scope === "Área" && system.scopeId === selectedAreaId) return true;
+            if (selectedPuestoId && system.scope === "Puesto" && system.scopeId === selectedPuestoId) return true;
+            // If only an area is selected, and the system is scoped to a Puesto, check if that Puesto belongs to the selected Area
+            if (selectedAreaId && !selectedPuestoId && system.scope === "Puesto" && system.scopeId) {
+                const puestoOfSystem = puestos.find(p => p.id === system.scopeId);
+                if (puestoOfSystem && puestoOfSystem.areaId === selectedAreaId) return true;
+            }
+            // If no specific area/puesto filter, include all systems (this condition handles the 'all' case implicitly by the above specific checks)
+            if (selectedArea === 'all' && selectedPuesto === 'all') return true; 
+            
+            return false;
+        });
+        setCalculatedSystemCosts(calculateAllSystemAnnualCosts(filteredSystems, costosSistemas));
     }
-  }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
+  }, [sistemas, costosSistemas, isLoadingSistemasCostos, selectedArea, selectedPuesto, areas, puestos, isLoadingAreas, isLoadingPuestos]);
 
   useEffect(() => {
     if (selectedEntityType === 'area' && !isLoadingAreas) {
@@ -235,28 +252,25 @@ export default function DashboardPage() {
     const rangeEnd = dashboardDateRange.to;
 
     let actionsToFilter = globalAcciones;
-    // Future: If actions get linked to areas/puestos, filter here
-    // For now, only date filter applies broadly to actions
+    // Note: Actions are not directly filtered by Area/Puesto in this version
+    // as they don't have direct area/puesto associations in their data structure.
 
     return actionsToFilter.filter(accion => {
-        // For "Completada", check fechaFinalizacion within range
         if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: rangeStart, end: rangeEnd });
         }
-        // For other active states (En Progreso, En Revisión, Pendiente), check fechaCreacion within range
         if ( (accion.estado === 'En Progreso' || accion.estado === 'En Revisión' || accion.estado === 'Pendiente') && accion.fechaCreacion ) {
              const creacionDate = parseISO(accion.fechaCreacion);
              return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
-        // If "Cancelada" or other states without specific date logic, include if fechaCreacion is in range.
         if (accion.fechaCreacion) {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
         return false; 
     });
-  }, [globalAcciones, dashboardDateRange, selectedArea, selectedPuesto]); // selectedArea/Puesto for future
+  }, [globalAcciones, dashboardDateRange]); 
 
   const filteredActividades = useMemo(() => {
     const relevantProcessIds = new Set(filteredCapturedProcesses.map(p => p.id));
@@ -288,7 +302,9 @@ export default function DashboardPage() {
         end: dashboardDateRange.to,
       });
 
-      const baseProcessesForChart = processesFilteredByAreaPuesto;
+      // Use processesFilteredByAreaPuesto for chart to reflect Area/Puesto filters
+      const baseProcessesForChart = processesFilteredByAreaPuesto; 
+      // Actions for chart are not directly filtered by Area/Puesto in current design
       const baseActionsForChart = globalAcciones; 
 
       monthsInInterval.forEach(monthStart => {
@@ -462,7 +478,7 @@ export default function DashboardPage() {
     csvRows.push([]); // Empty row separator
 
     // Section 2: Costos de Sistemas
-    csvRows.push(["Costos de Sistemas (no afectado por filtros de fecha/área/puesto)"]);
+    csvRows.push(["Costos de Sistemas (refleja filtros de Área/Puesto)"]);
     csvRows.push(["Sistema", "Uso Anual", "Lic. Anual", "Total Lic.", "Total Anual"]);
     calculatedSystemCosts.forEach(cost => {
       csvRows.push([
@@ -476,7 +492,7 @@ export default function DashboardPage() {
     csvRows.push([]);
 
     // Section 3: Evolución de Optimización de Procesos
-    csvRows.push(["Evolución de Optimización de Procesos (según filtros aplicados)"]);
+    csvRows.push(["Evolución de Optimización de Procesos (refleja filtros de Área/Puesto)"]);
     csvRows.push(["Mes", "Procesos Mapeados", "Acciones Completadas"]);
     evolutionChartData.forEach(data => {
       csvRows.push([
@@ -584,7 +600,7 @@ export default function DashboardPage() {
             </div>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground mb-8">Métricas clave basadas en el rango de fechas y filtros seleccionados (excepto Costos de Sistemas y Análisis de Entidad IA).</p>
+      <p className="text-sm text-muted-foreground mb-8">Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados (excepto Análisis de Entidad IA, que tiene sus propios selectores).</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -690,7 +706,7 @@ export default function DashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <CardTitle>Evolución de Optimización de Procesos</CardTitle>
-                    <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas (general).</CardDescription>
+                    <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas (refleja filtros Área/Puesto).</CardDescription>
                 </div>
             </div>
           </CardHeader>
@@ -733,13 +749,13 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias, y número total de licencias (no afectado por filtro de fecha).</CardDescription>
+            <CardDescription className="mb-4">Resumen de costos anuales estimados. (Refleja filtros de Área/Puesto).</CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
                 </div>
             ) : calculatedSystemCosts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas configurados.</p>
+                <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas que coincidan con los filtros.</p>
             ) : (
                 <div className="max-h-[300px] overflow-y-auto">
                   <Table>
