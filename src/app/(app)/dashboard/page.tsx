@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -25,11 +27,15 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, eachMonthOfInterval, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from "@/hooks/use-toast";
 
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion } from '@/contexts/AccionesContext';
+import { useAreas, type Area as AreaType } from '@/contexts/AreasContext';
+import { usePuestos, type Puesto as PuestoType } from '@/contexts/PuestosContext';
+import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -131,6 +137,8 @@ export default function DashboardPage() {
   const { actividades: allActividades, isLoadingActividades } = useActividades();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: allAcciones, isLoadingAcciones } = useAcciones();
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, isLoadingPuestos } = usePuestos();
 
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
   const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
@@ -140,6 +148,13 @@ export default function DashboardPage() {
     to: endOfMonth(new Date()),
   });
 
+  // State for AI Entity Summarization
+  const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
+  const [selectedEntityName, setSelectedEntityName] = useState<string>('');
+  const [generatedSummary, setGeneratedSummary] = useState<string>('');
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
+  const [entityList, setEntityList] = useState<{id: string, name: string}[]>([]);
+
 
   useEffect(() => {
     setIsLoadingProcessData(true);
@@ -147,7 +162,7 @@ export default function DashboardPage() {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setAllCapturedProcesses(parsedProcesses.filter(p => !p.deletedAt && p.activo !== false));
+        setAllCapturedProcesses(parsedProcesses.filter(p => p.activo !== false)); // Keep active and non-deleted for calculations
       }
     } catch (error) {
       console.error("Error loading process data from localStorage:", error);
@@ -162,9 +177,24 @@ export default function DashboardPage() {
     }
   }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
 
+  useEffect(() => {
+    if (selectedEntityType === 'area' && !isLoadingAreas) {
+      setEntityList(areas.map(a => ({ id: a.id, name: a.nombre })).sort((a,b) => a.name.localeCompare(b.name)));
+      setSelectedEntityName('');
+    } else if (selectedEntityType === 'puesto' && !isLoadingPuestos) {
+      setEntityList(puestos.map(p => ({ id: p.id, name: p.nombre })).sort((a,b) => a.name.localeCompare(b.name)));
+      setSelectedEntityName('');
+    } else {
+      setEntityList([]);
+      setSelectedEntityName('');
+    }
+  }, [selectedEntityType, areas, puestos, isLoadingAreas, isLoadingPuestos]);
+
+
   const filteredCapturedProcesses = useMemo(() => {
-    if (!dashboardDateRange.from || !dashboardDateRange.to) return allCapturedProcesses;
+    if (!dashboardDateRange.from || !dashboardDateRange.to) return allCapturedProcesses.filter(p => !p.deletedAt); // ensure only non-deleted
     return allCapturedProcesses.filter(proc => {
+        if (proc.deletedAt) return false;
         if (!proc.capturedAt) return false;
         const capturedDate = parseISO(proc.capturedAt);
         return isValid(capturedDate) && isWithinInterval(capturedDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
@@ -182,9 +212,10 @@ export default function DashboardPage() {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: rangeStart, end: rangeEnd });
         }
-        if ((accion.estado === 'En Revisión' || accion.estado === 'En Progreso') && accion.fechaCreacion) {
-             const creacionDate = parseISO(accion.fechaCreacion);
-             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
+        // For "En Progreso" or "En Revisión", filter by creation date within the range
+        if ((accion.estado === 'En Progreso' || accion.estado === 'En Revisión') && accion.fechaCreacion) {
+            const creacionDate = parseISO(accion.fechaCreacion);
+            return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
         return false; 
     });
@@ -212,13 +243,14 @@ export default function DashboardPage() {
         const monthEnd = endOfMonth(monthStart);
         const monthLabel = format(monthStart, "MMM yy", { locale: es });
 
-        const procesosEsteMes = allCapturedProcesses.filter(proc => { // Use allCapturedProcesses for chart to show historical overall
+        const procesosEsteMes = allCapturedProcesses.filter(proc => { 
+          if (proc.deletedAt) return false;
           if (!proc.capturedAt) return false;
           const capturedDate = parseISO(proc.capturedAt);
           return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
         }).length;
 
-        const accionesEsteMes = allAcciones.filter(accion => { // Use allAcciones for chart
+        const accionesEsteMes = allAcciones.filter(accion => { 
           if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
@@ -256,9 +288,10 @@ export default function DashboardPage() {
     const activeFilteredActividades = filteredActividades.filter(a => a.activa);
     const actividadesActivasCount = activeFilteredActividades.length;
     
-    // For "sin uso" and "duplicadas", it's more meaningful to check against all processes, not just filtered ones
     const actividadesSinUsoCount = activeFilteredActividades.filter(a => a.procesosAsociadosCount === 0).length;
-    const actividadesDuplicadasCount = activeFilteredActividades.filter(act => (act.procesosAsociadosCount || 0) > 1).length;
+    
+    // For "duplicadas", count active activities (created in range) associated with more than one process (overall, not just in-range processes)
+    const actividadesDuplicadasCount = activeFilteredActividades.filter(act => (allActividades.find(globalAct => globalAct.id === act.id)?.procesosAsociadosCount || 0) > 1).length;
     
     const accionesCompletadasCount = filteredAcciones.filter(acc => acc.estado === 'Completada').length;
     const accionesEnRevisionCount = filteredAcciones.filter(acc => acc.estado === 'En Revisión').length;
@@ -291,10 +324,10 @@ export default function DashboardPage() {
       actividadesDuplicadasCount,
       procesosSinActividadesCount,
     };
-  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
+  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, allActividades, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
 
 
-  const isLoadingAllData = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos;
+  const isLoadingAllData = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
     if (loading) {
@@ -302,6 +335,57 @@ export default function DashboardPage() {
     }
     return <>{icon}{value}</>;
   }
+
+  const handleGenerateSummary = async () => {
+    if (selectedEntityType === 'none' || !selectedEntityName) {
+      toast({ title: "Selección Incompleta", description: "Por favor, seleccione un tipo de entidad y un nombre.", variant: "default" });
+      return;
+    }
+    setIsGeneratingSummary(true);
+    setGeneratedSummary('');
+
+    try {
+      let relevantProcesses: CapturedProcess[];
+      if (selectedEntityType === 'area') {
+        relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
+      } else { // puesto
+        relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
+      }
+
+      if (relevantProcesses.length === 0) {
+        setGeneratedSummary(`No se encontraron procesos capturados para ${selectedEntityType === 'area' ? 'el área' : 'el puesto'} "${selectedEntityName}".`);
+        setIsGeneratingSummary(false);
+        return;
+      }
+
+      const processDataString = relevantProcesses.map(proc => {
+        const activitiesString = (proc.activityOrder || [])
+          .map(actId => allActividades.find(a => a.id === actId)?.nombre)
+          .filter(Boolean)
+          .join(', ');
+        
+        return `Proceso: ${proc.proceso}\n` +
+               `Descripción: ${proc.descripcion}\n` +
+               (activitiesString ? `Actividades Clave: ${activitiesString}\n` : '') +
+               (proc.sistemas && proc.sistemas.length > 0 ? `Sistemas Utilizados: ${proc.sistemas.join(', ')}\n` : '');
+      }).join('\n---\n');
+
+      const result: SummarizeEntityOutput = await summarizeEntity({
+        entityType: selectedEntityType,
+        entityName: selectedEntityName,
+        processData: processDataString,
+      });
+      setGeneratedSummary(result.summary);
+
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      toast({ title: "Error al generar resumen", description: "No se pudo contactar al servicio de IA.", variant: "destructive" });
+      setGeneratedSummary("Error al generar el resumen. Intente nuevamente.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -466,7 +550,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -551,6 +635,86 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Entity Summarization Card */}
+      <Card className="shadow-lg mt-8">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-primary" />
+            <CardTitle className="text-xl font-headline">Análisis de Entidad por IA</CardTitle>
+          </div>
+          <CardDescription>
+            Seleccione un área o puesto para obtener un resumen de sus funciones, actividades y procesos principales.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
+            <div>
+              <label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo de Entidad</label>
+              <Select
+                value={selectedEntityType}
+                onValueChange={(value: 'area' | 'puesto' | 'none') => {
+                  setSelectedEntityType(value);
+                  setSelectedEntityName(''); // Reset name on type change
+                  setGeneratedSummary('');
+                }}
+              >
+                <SelectTrigger id="entityTypeSelect">
+                  <SelectValue placeholder="Seleccione tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" disabled>Seleccione tipo...</SelectItem>
+                  <SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2 text-muted-foreground" />Área</SelectItem>
+                  <SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2 text-muted-foreground" />Puesto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="entityNameSelect" className="text-sm font-medium">Nombre de la Entidad</label>
+              <Select
+                value={selectedEntityName}
+                onValueChange={setSelectedEntityName}
+                disabled={selectedEntityType === 'none' || isLoadingAreas || isLoadingPuestos || entityList.length === 0}
+              >
+                <SelectTrigger id="entityNameSelect">
+                  <SelectValue placeholder={
+                    selectedEntityType === 'none' ? "Primero seleccione tipo" :
+                    (isLoadingAreas || isLoadingPuestos) ? "Cargando..." :
+                    entityList.length === 0 ? "No hay entidades" :
+                    "Seleccione nombre..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {entityList.length > 0 ? entityList.map(entity => (
+                    <SelectItem key={entity.id} value={entity.name}>{entity.name}</SelectItem>
+                  )) : <SelectItem value="no-entities" disabled>No hay entidades disponibles</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || selectedEntityType === 'none' || !selectedEntityName}>
+              {isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
+              Generar Resumen
+            </Button>
+          </div>
+          {isGeneratingSummary && (
+            <div className="flex items-center justify-center p-4">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Generando resumen con IA...</p>
+            </div>
+          )}
+          {generatedSummary && !isGeneratingSummary && (
+            <div>
+              <h4 className="font-semibold mb-2">Resumen Generado:</h4>
+              <Textarea
+                value={generatedSummary}
+                readOnly
+                className="min-h-[150px] bg-muted/50 border-border text-sm"
+                rows={8}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
