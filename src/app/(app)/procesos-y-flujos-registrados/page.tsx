@@ -39,8 +39,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare } from "lucide-react";
-import type { CapturaFormData } from '../captura/page'; 
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree } from "lucide-react";
+import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
@@ -48,10 +48,10 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import type { Actividad } from '@/contexts/ActividadesContext';
 
 
-export interface CapturedProcess extends CapturaFormData { // CapturaFormData will have the new array fields
+export interface CapturedProcess extends CapturaFormData {
   id: string;
   capturedAt: string;
-  deletedAt?: string; 
+  deletedAt?: string;
   activo?: boolean;
   // activityOrder is already in CapturaFormData schema if optional
 }
@@ -61,7 +61,7 @@ const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
 
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-  
+
   if (value === undefined || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea)) {
     return (
       <div>
@@ -70,8 +70,8 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
       </div>
     );
   }
-  
-  if (isList && Array.isArray(value)) { 
+
+  if (isList && Array.isArray(value)) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -121,38 +121,36 @@ export default function ProcesosYFlujosRegistradosPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        const parsedData: any[] = JSON.parse(storedData); // Load as any first
+        const parsedData: any[] = JSON.parse(storedData);
         const migratedData: CapturedProcess[] = parsedData.map(p => {
-          const newP: any = { 
+          const newP: any = {
             ...p,
             activo: p.activo === undefined ? true : p.activo,
             activityOrder: p.activityOrder || [],
           };
-          
-          // Migrate formatosRecibe to procesosEntrada
-          if (!newP.procesosEntrada) { // Only migrate if new field doesn't exist
+
+          if (!newP.procesosEntrada) {
             if (typeof p.formatosRecibe === 'string') {
               newP.procesosEntrada = [p.formatosRecibe];
             } else if (Array.isArray(p.formatosRecibe)) {
               newP.procesosEntrada = p.formatosRecibe;
             } else {
-              newP.procesosEntrada = []; // Default to empty array if old field was absent or wrong type
+              newP.procesosEntrada = [];
             }
           }
-          delete newP.formatosRecibe; // Remove old field regardless
+          delete newP.formatosRecibe;
 
-          // Migrate formatosEntrega to procesosSalida
-          if (!newP.procesosSalida) { // Only migrate if new field doesn't exist
+          if (!newP.procesosSalida) {
             if (typeof p.formatosEntrega === 'string') {
               newP.procesosSalida = [p.formatosEntrega];
             } else if (Array.isArray(p.formatosEntrega)) {
               newP.procesosSalida = p.formatosEntrega;
             } else {
-              newP.procesosSalida = []; // Default to empty array
+              newP.procesosSalida = [];
             }
           }
-          delete newP.formatosEntrega; // Remove old field regardless
-          
+          delete newP.formatosEntrega;
+
           return newP as CapturedProcess;
         });
         setAllCapturedData(migratedData);
@@ -189,7 +187,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   }, [allCapturedData, isLoading]);
 
   const filteredData = useMemo(() => {
-    let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt); 
+    let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -211,26 +209,27 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     if (processStatusFilter !== 'all') {
-      dataToFilter = dataToFilter.filter(proc => 
+      dataToFilter = dataToFilter.filter(proc =>
         processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false
       );
     }
 
 
-    return dataToFilter;
+    return dataToFilter.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter]);
 
   const recoverableProcesses = useMemo(() => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo);
+    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo)
+                          .sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
   }, [allCapturedData]);
 
   const handleViewDetails = (proc: CapturedProcess) => {
     setSelectedProcess(proc);
     setIsDetailDialogOpen(true);
   };
-  
+
   const promptDeleteProcess = (proc: CapturedProcess) => {
     setProcessToDelete(proc);
     setIsConfirmDeleteProcessOpen(true);
@@ -239,9 +238,9 @@ export default function ProcesosYFlujosRegistradosPage() {
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
     try {
-      const updatedData = allCapturedData.map(p => 
-        p.id === processToDelete.id 
-          ? { ...p, deletedAt: new Date().toISOString() } 
+      const updatedData = allCapturedData.map(p =>
+        p.id === processToDelete.id
+          ? { ...p, deletedAt: new Date().toISOString() }
           : p
       );
       setAllCapturedData(updatedData);
@@ -253,19 +252,19 @@ export default function ProcesosYFlujosRegistradosPage() {
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
   };
-  
+
   const handleRestoreProcess = (processId: string) => {
     try {
       const updatedData = allCapturedData.map(p => {
         if (p.id === processId) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
-          return { ...restoredProc, activo: true }; 
+          return { ...restoredProc, activo: true };
         }
         return p;
       });
       setAllCapturedData(updatedData);
-      const restoredProcess = updatedData.find(p => p.id === processId); 
+      const restoredProcess = updatedData.find(p => p.id === processId);
       toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado y activado.` });
     } catch (error) {
       console.error("Error restoring process:", error);
@@ -277,10 +276,10 @@ export default function ProcesosYFlujosRegistradosPage() {
     const processToToggle = allCapturedData.find(p => p.id === processId);
     if (!processToToggle) return;
 
-    const targetStatus = !(processToToggle.activo !== false); 
+    const targetStatus = !(processToToggle.activo !== false);
 
-    if (targetStatus === false) { 
-      const linkedActiveActivities = allActivities.filter(act => 
+    if (targetStatus === false) {
+      const linkedActiveActivities = allActivities.filter(act =>
         act.activa && act.procesosAsociadosIds?.includes(processId)
       );
 
@@ -291,7 +290,7 @@ export default function ProcesosYFlujosRegistradosPage() {
           variant: "destructive",
           duration: 7000,
         });
-        return; 
+        return;
       }
     }
 
@@ -314,8 +313,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (cellData === undefined || cellData === null) {
       return '';
     }
-    if (Array.isArray(cellData)) { 
-      const joinedString = cellData.join('; '); 
+    if (Array.isArray(cellData)) {
+      const joinedString = cellData.join('; ');
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
         return `"${joinedString.replace(/"/g, '""')}"`;
       }
@@ -335,11 +334,11 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     const headers = [
-      "ID", "Proceso", "Area", "Puesto", "Descripción", 
+      "ID", "Proceso", "Area", "Puesto", "Descripción",
       "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
-      "Información Recibe", "Procesos Entradas", 
-      "Información Entrega", "Procesos Salidas", 
-      "Fecha Captura", "Estado Activo"
+      "Información Recibe", "Procesos Entradas",
+      "Información Entrega", "Procesos Salidas",
+      "Fecha Captura", "Estado Activo", "Num. Actividades"
     ];
 
     const csvRows = [
@@ -352,18 +351,19 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.descripcion),
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.frecuencia),
-        escapeCsvCell(proc.sistemas), 
+        escapeCsvCell(proc.sistemas),
         escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.procesosEntrada), 
+        escapeCsvCell(proc.procesosEntrada),
         escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.procesosSalida), 
+        escapeCsvCell(proc.procesosSalida),
         escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss')),
-        escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo')
+        escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
+        escapeCsvCell(proc.activityOrder?.length || 0)
       ].join(','))
     ];
 
     const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' }); 
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
@@ -424,7 +424,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las Áreas</SelectItem>
-                  {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem> 
+                  {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem>
                    : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
                    : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
                 </SelectContent>
@@ -438,7 +438,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los Puestos</SelectItem>
-                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
+                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
                    : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
                 </SelectContent>
@@ -457,7 +457,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <Button onClick={handleExport} variant="outline" className="w-full">
               <FileText className="mr-2 h-4 w-4" /> Exportar CSV
             </Button>
@@ -519,6 +519,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableHead>Nombre del Proceso</TableHead>
                     <TableHead>Área</TableHead>
                     <TableHead>Puesto</TableHead>
+                    <TableHead className="text-center">Actividades</TableHead>
                     <TableHead className="w-[120px] text-center">Estado</TableHead>
                     <TableHead>Fecha de Captura</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
@@ -531,7 +532,13 @@ export default function ProcesosYFlujosRegistradosPage() {
                       <TableCell>{proc.area}</TableCell>
                       <TableCell>{proc.puesto}</TableCell>
                       <TableCell className="text-center">
-                         <Badge variant={proc.activo !== false ? 'default' : 'outline'} 
+                        <Badge variant="outline" className="font-mono">
+                           <ListTree className="h-3 w-3 mr-1.5" />
+                          {proc.activityOrder?.length || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                         <Badge variant={proc.activo !== false ? 'default' : 'outline'}
                                 className={cn(proc.activo === false && "border-destructive text-destructive")}>
                           {proc.activo !== false ? 'Activo' : 'Inactivo'}
                         </Badge>
@@ -568,7 +575,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 {allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay procesos/flujos activos registrados" : "No se encontraron resultados"}
               </p>
               <p className="text-sm text-muted-foreground text-center">
-                {allCapturedData.filter(p => !p.deletedAt).length === 0 
+                {allCapturedData.filter(p => !p.deletedAt).length === 0
                   ? 'Comience registrando procesos y flujos en el módulo de "Captura" o revise la papelera de recuperación.'
                   : 'Intente ajustar su término de búsqueda o filtros.'
                 }
@@ -585,6 +592,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             <DialogDescription>
               Información completa del proceso y flujo registrado el {selectedProcess && format(new Date(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es })}.
               Estado: {selectedProcess?.activo !== false ? 'Activo' : 'Inactivo'}.
+              Actividades Asociadas: {selectedProcess?.activityOrder?.length || 0}.
             </DialogDescription>
           </DialogHeader>
           {selectedProcess && (
@@ -631,4 +639,3 @@ export default function ProcesosYFlujosRegistradosPage() {
   );
 }
 
-    
