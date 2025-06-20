@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX, Loader2 } from "lucide-react";
+import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,8 +13,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
-import { useActividades } from '@/contexts/ActividadesContext'; 
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
+import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -47,12 +48,12 @@ function calculateAllSystemAnnualCosts(
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
     let totalAnnualLicense = 0;
-    let systemCurrency: TipoMoneda | string = 'USD'; 
+    let systemCurrency: TipoMoneda | string = 'USD';
 
     if (costsForSystem.length > 0) {
-      systemCurrency = costsForSystem[0].moneda; 
+      systemCurrency = costsForSystem[0].moneda;
       costsForSystem.forEach(cost => {
-        if (cost.moneda === systemCurrency) { 
+        if (cost.moneda === systemCurrency) {
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
@@ -69,7 +70,7 @@ function calculateAllSystemAnnualCosts(
           } else if (cost.frecuencia === "Anual") {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
-          } else { 
+          } else {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
           }
@@ -89,12 +90,14 @@ function calculateAllSystemAnnualCosts(
 
 
 export default function DashboardPage() {
-  const [procesosMapeadosCount, setProcesosMapeadosCount] = useState(0);
-  const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
+  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingProcessData, setIsLoadingProcessData] = useState(true);
-
+  
   const { actividades, isLoadingActividades } = useActividades();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { acciones, isLoadingAcciones } = useAcciones();
+
+  const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
 
   useEffect(() => {
     setIsLoadingProcessData(true);
@@ -102,7 +105,7 @@ export default function DashboardPage() {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setProcesosMapeadosCount(parsedProcesses.filter(p => !p.deletedAt && p.activo !== false).length);
+        setCapturedProcesses(parsedProcesses);
       }
     } catch (error) {
       console.error("Error loading process data from localStorage:", error);
@@ -115,16 +118,56 @@ export default function DashboardPage() {
     if (!isLoadingSistemasCostos) {
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
     }
-  }, [sistemas, costosSistemas, isLoadingSistemasCostos])
+  }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
 
-  const metricasActividades = useMemo(() => {
-    if (isLoadingActividades) return { activas: 0, sinUso: 0 };
-    const activas = actividades.filter(a => a.activa).length;
-    const sinUso = actividades.filter(a => a.activa && a.procesosAsociadosCount === 0).length;
-    return { activas, sinUso };
-  }, [actividades, isLoadingActividades]);
+  const dashboardMetrics = useMemo(() => {
+    if (isLoadingProcessData || isLoadingActividades || isLoadingAcciones) {
+      return {
+        procesosMapeadosCount: 0,
+        actividadesActivasCount: 0,
+        actividadesSinUsoCount: 0,
+        accionesCompletadasCount: 0,
+        procesosConVariacionesCount: 0,
+        actividadesDuplicadasCount: 0,
+      };
+    }
 
-  const isLoadingDashboardData = isLoadingProcessData || isLoadingSistemasCostos;
+    const activeProcesses = capturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
+    const procesosMapeadosCount = activeProcesses.length;
+
+    const actividadesActivasCount = actividades.filter(a => a.activa).length;
+    const actividadesSinUsoCount = actividades.filter(a => a.activa && a.procesosAsociadosCount === 0).length;
+    
+    const accionesCompletadasCount = acciones.filter(acc => acc.estado === 'Completada').length;
+
+    const processContexts = new Map<string, Set<string>>();
+    activeProcesses.forEach(proc => {
+        if (!processContexts.has(proc.proceso)) {
+            processContexts.set(proc.proceso, new Set());
+        }
+        processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
+    });
+    let procesosConVariacionesCount = 0;
+    processContexts.forEach(contexts => {
+        if (contexts.size > 1) {
+            procesosConVariacionesCount++;
+        }
+    });
+
+    const actividadesDuplicadasCount = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
+
+    return {
+      procesosMapeadosCount,
+      actividadesActivasCount,
+      actividadesSinUsoCount,
+      accionesCompletadasCount,
+      procesosConVariacionesCount,
+      actividadesDuplicadasCount,
+    };
+  }, [capturedProcesses, actividades, acciones, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
+
+
+  const isLoadingAllData = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos;
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
     if (loading) {
@@ -145,28 +188,32 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(procesosMapeadosCount, isLoadingProcessData)}
+              {renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingProcessData || isLoadingActividades)}
             </div>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Duplicidades Detectadas</CardTitle>
-            <Users className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle>
+            <Layers className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
-            <p className="text-xs text-muted-foreground text-destructive">-2 identificadas esta semana</p>
+            <div className="text-2xl font-bold">
+              {renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingProcessData)}
+            </div>
+             <p className="text-xs text-muted-foreground">Mismo nombre de proceso en &gt;1 Área/Puesto.</p>
           </CardContent>
         </Card>
-        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ahorro Potencial</CardTitle>
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
+            <CopyCheck className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">18%</div>
-            <p className="text-xs text-muted-foreground">Estimado $12,500 USD/mes</p>
+            <div className="text-2xl font-bold">
+                 {renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingActividades)}
+            </div>
+            <p className="text-xs text-muted-foreground">Actividades asignadas a más de un proceso.</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -175,8 +222,9 @@ export default function DashboardPage() {
             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">47</div>
-            <p className="text-xs text-muted-foreground">+8 este trimestre</p>
+            <div className="text-2xl font-bold">
+              {renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAcciones)}
+            </div>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -186,7 +234,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(metricasActividades.activas, isLoadingActividades)}
+              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingActividades)}
             </div>
           </CardContent>
         </Card>
@@ -197,8 +245,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-               {renderMetric(metricasActividades.sinUso, isLoadingActividades)}
+               {renderMetric(dashboardMetrics.actividadesSinUsoCount, isLoadingActividades)}
             </div>
+          </CardContent>
+        </Card>
+         <Card className="shadow-lg hover:shadow-xl transition-shadow col-span-1 md:col-span-2 lg:col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ahorro Potencial (Ejemplo)</CardTitle>
+            <TrendingUp className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">18%</div>
+            <p className="text-xs text-muted-foreground">Estimado $12,500 USD/mes</p>
           </CardContent>
         </Card>
       </div>
@@ -221,7 +279,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias.</CardDescription>
-            {isLoadingDashboardData ? (
+            {isLoadingAllData ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
                 </div>
@@ -249,13 +307,6 @@ export default function DashboardPage() {
                 </TableBody>
                 </Table>
             )}
-            <div className="mt-6">
-              <div className="flex justify-between text-sm">
-                <p>Ahorro Acumulado:</p>
-                <p className="font-semibold text-green-600">$3,500 USD</p>
-              </div>
-              <p className="text-xs text-muted-foreground">Por acciones de optimización completadas. (Ejemplo)</p>
-            </div>
           </CardContent>
         </Card>
       </div>

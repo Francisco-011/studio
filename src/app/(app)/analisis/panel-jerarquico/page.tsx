@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers, CheckSquare, Ban, Eye } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -18,7 +18,6 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { frecuenciaOptions } from '../../captura/page';
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -118,9 +117,6 @@ export default function PanelJerarquicoPage() {
   const [treeProcessStatusFilter, setTreeProcessStatusFilter] = useState<ProcessStatusFilterType>('active');
 
 
-  const [repeatedActivitiesCount, setRepeatedActivitiesCount] = useState(0);
-  const [repeatedProcessesInMultipleContextsCount, setRepeatedProcessesInMultipleContextsCount] = useState(0);
-
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | null>(null);
   const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | null>(null);
@@ -201,28 +197,6 @@ export default function PanelJerarquicoPage() {
 
   useEffect(() => {
     if (isLoadingAllData) return;
-
-    const rptActivities = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
-    setRepeatedActivitiesCount(rptActivities);
-
-    const activeTreeProcessesForMetrics = capturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
-    const processContexts = new Map<string, Set<string>>();
-
-    activeTreeProcessesForMetrics.forEach(proc => {
-        if (!processContexts.has(proc.proceso)) {
-            processContexts.set(proc.proceso, new Set());
-        }
-        processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
-    });
-
-    let rptProcessesCount = 0;
-    processContexts.forEach(contexts => {
-        if (contexts.size > 1) {
-            rptProcessesCount++;
-        }
-    });
-    setRepeatedProcessesInMultipleContextsCount(rptProcessesCount);
-
 
     const buildTree = (): TreeNode[] => {
       const finalTreeNodes: TreeNode[] = [];
@@ -871,32 +845,6 @@ export default function PanelJerarquicoPage() {
             Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. 
             Use el ícono del ojo (<Eye className="inline-block h-3 w-3" />) para ver detalles completos.
           </CardDescription>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle>
-                    <Layers className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                    <div className="text-2xl font-bold">{repeatedProcessesInMultipleContextsCount}</div>
-                    <p className="text-xs text-muted-foreground">
-                        Mismo nombre de proceso activo en &gt;1 Área/Puesto.
-                    </p>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
-                    <CopyCheck className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                    <div className="text-2xl font-bold">{repeatedActivitiesCount}</div>
-                    <p className="text-xs text-muted-foreground">
-                        Asignadas a más de un proceso (activas).
-                    </p>
-                    </CardContent>
-                </Card>
-            </div>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
           <Card>
@@ -1046,14 +994,14 @@ export default function PanelJerarquicoPage() {
                         draggable={act.activa} 
                         onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()}
                         className={cn(
-                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", // Added 'group' for hover effect on button
+                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", 
                             act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
                             !act.activa && "italic text-muted-foreground"
                         )}
                         title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
                       >
                         <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
-                        <span className="flex-grow">{act.nombre}</span> {/* Added flex-grow to push subsequent items to the right */}
+                        <span className="flex-grow">{act.nombre}</span> 
                         {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
                         <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
                             <Eye className="h-4 w-4 text-muted-foreground" />
@@ -1063,7 +1011,7 @@ export default function PanelJerarquicoPage() {
                             variant="outline" 
                             size="sm" 
                             className={cn(
-                              "p-1 h-auto text-xs ml-1", // Adjusted margin
+                              "p-1 h-auto text-xs ml-1", 
                               filterByActivityId === act.id && "bg-primary/20 text-primary border-primary"
                             )} 
                             onClick={() => handleActivityBadgeClick(act)}
@@ -1166,4 +1114,3 @@ export default function PanelJerarquicoPage() {
     </div>
   );
 }
-
