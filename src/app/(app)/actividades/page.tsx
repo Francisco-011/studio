@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { frecuenciaOptions } from '@/app/(app)/captura/page';
@@ -62,7 +63,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2 } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -144,9 +145,9 @@ export default function ActividadesPage() {
           id: editingActividad.id, 
           nombre: editingActividad.nombre, 
           descripcionBreve: editingActividad.descripcionBreve || '',
-          sistemaUtilizado: editingActividad.sistemaUtilizado || undefined, // handles NO_SYSTEM_SELECTED if we stored that. Best to store undefined.
+          sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           tiempoEstimadoActividad: editingActividad.tiempoEstimadoActividad,
-          frecuenciaActividad: editingActividad.frecuenciaActividad || undefined, // handles NO_FRECUENCIA_SELECTED if stored.
+          frecuenciaActividad: editingActividad.frecuenciaActividad || undefined,
           activa: editingActividad.activa,
           procesosAsociadosIds: editingActividad.procesosAsociadosIds || [] 
         });
@@ -255,7 +256,8 @@ export default function ActividadesPage() {
       (usageFilter === 'inUse' && actividad.procesosAsociadosCount > 0) ||
       (usageFilter === 'notInUse' && actividad.procesosAsociadosCount === 0);
     return matchesSearchTerm && matchesStatus && matchesUsage;
-  });
+  }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
 
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo);
@@ -423,7 +425,7 @@ export default function ActividadesPage() {
                             <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
                             <Select 
                               onValueChange={field.onChange} 
-                              value={field.value || undefined} // Handle undefined to show placeholder
+                              value={field.value || undefined} 
                               disabled={isLoadingSistemasCostos}
                             >
                               <FormControl>
@@ -466,7 +468,7 @@ export default function ActividadesPage() {
                               <FormLabel>Frecuencia de la Actividad</FormLabel>
                               <Select 
                                 onValueChange={field.onChange} 
-                                value={field.value || undefined} // Handle undefined for placeholder
+                                value={field.value || undefined}
                               >
                                 <FormControl>
                                   <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
@@ -574,11 +576,15 @@ export default function ActividadesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre de la Actividad</TableHead>
-                    <TableHead>Descripción Breve</TableHead>
-                    <TableHead className="w-[180px] text-center">Última Modificación</TableHead>
-                    <TableHead className="w-[120px] text-center">Estado</TableHead>
-                    <TableHead className="w-[180px] text-center">Procesos Asociados</TableHead>
+                    <TableHead className="min-w-[200px]">Nombre Actividad</TableHead>
+                    <TableHead className="max-w-sm">Desc. Breve</TableHead>
+                    <TableHead className="w-[150px] text-center">Sistema</TableHead>
+                    <TableHead className="w-[120px] text-center">Tiempo (min)</TableHead>
+                    <TableHead className="w-[150px] text-center">Frecuencia</TableHead>
+                    <TableHead className="w-[140px] text-center">Fecha Creación</TableHead>
+                    <TableHead className="w-[140px] text-center">Últ. Modif.</TableHead>
+                    <TableHead className="w-[100px] text-center">Estado</TableHead>
+                    <TableHead className="w-[150px] text-center">En Uso</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -586,9 +592,15 @@ export default function ActividadesPage() {
                   {filteredActividades.map((actividad) => (
                     <TableRow key={actividad.id}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-pre-wrap max-w-xs">{actividad.descripcionBreve || '-'}</TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {actividad.updatedAt ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : <CalendarClock className="h-4 w-4 inline-block" />}
+                      <TableCell className="text-sm text-muted-foreground whitespace-pre-wrap max-w-sm">{actividad.descripcionBreve || '-'}</TableCell>
+                      <TableCell className="text-center text-xs">{actividad.sistemaUtilizado || '-'}</TableCell>
+                      <TableCell className="text-center text-xs">{actividad.tiempoEstimadoActividad ?? '-'}</TableCell>
+                      <TableCell className="text-center text-xs">{actividad.frecuenciaActividad || '-'}</TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">
+                         {actividad.createdAt ? format(new Date(actividad.createdAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">
+                        {actividad.updatedAt ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'}>

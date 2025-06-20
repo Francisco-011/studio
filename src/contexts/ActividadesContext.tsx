@@ -10,6 +10,7 @@ export interface Actividad {
   activa: boolean;
   procesosAsociadosCount: number;
   procesosAsociadosIds?: string[];
+  createdAt: number; // Timestamp of creation
   updatedAt?: number;
   deletedAt?: number;
 
@@ -23,8 +24,8 @@ export interface Actividad {
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Actividad;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => void;
+  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Actividad;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   softDeleteActividad: (id: string) => void;
   restoreActividad: (id: string) => void;
   toggleActividadStatus: (id: string) => void;
@@ -46,11 +47,20 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       try {
         const savedActividades = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
         if (savedActividades) {
-          setActividades(JSON.parse(savedActividades));
+          const parsedActividades = JSON.parse(savedActividades) as Actividad[];
+          // Ensure createdAt exists for older data, can default to id if it's a timestamp, or updatedAt
+          setActividades(parsedActividades.map(act => ({
+            ...act,
+            createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now() 
+          })));
         }
         const savedDeletedActividades = localStorage.getItem(LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY);
         if (savedDeletedActividades) {
-          setDeletedActividades(JSON.parse(savedDeletedActividades));
+          const parsedDeleted = JSON.parse(savedDeletedActividades) as Actividad[];
+           setDeletedActividades(parsedDeleted.map(act => ({
+            ...act,
+            createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now()
+          })));
         }
       } catch (error) {
         console.error("Failed to load actividades from localStorage", error);
@@ -75,19 +85,21 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [actividades, deletedActividades, isLoadingActividades]);
 
-  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Actividad => {
+  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Actividad => {
+    const currentTime = Date.now();
     const newActividad: Actividad = {
       ...data,
-      id: Date.now().toString(), // Simple ID generation
+      id: currentTime.toString(), // Simple ID generation, can be improved
+      createdAt: currentTime,
       procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
-      updatedAt: Date.now(),
+      updatedAt: currentTime,
       activa: data.activa === undefined ? true : data.activa, // Default to active if not specified
     };
     setActividades((prev) => [...prev, newActividad]);
     return newActividad;
   }, []);
 
-  const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => {
+  const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
     setActividades((prev) =>
       prev.map((act) =>
         act.id === id ? { 
