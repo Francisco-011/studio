@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers, CheckSquare, Ban } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -28,6 +28,7 @@ interface TreeNode {
 }
 
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
+type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 
 export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
@@ -44,6 +45,8 @@ export default function PanelJerarquicoPage() {
 
   const [activitySearchTerm, setActivitySearchTerm] = useState('');
   const [assignmentCountFilter, setAssignmentCountFilter] = useState<AssignmentCountFilterType>('all');
+  const [activityStatusFilter, setActivityStatusFilter] = useState<ActivityStatusFilterType>('active');
+
 
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
@@ -142,12 +145,21 @@ export default function PanelJerarquicoPage() {
                 puestosMap: {}
              };
         }
-
-        if (!areaNodesMap[targetAreaId]) { 
-            return;
+        
+        if (!areaNodesMap[targetAreaId]) {
+           if (!filterByActivityId && (selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned' && targetAreaId !== selectedAreaFilter)) {
+                return; // Skip if area filter is active and this process doesn't match
+            }
+             if (filterByActivityId && targetAreaId !== (procAreaObject?.id || 'area-unassigned')) {
+                 return; // Skip if filtering by activity and this process's area is not the one being built
+             }
         }
+
+
         
         const currentAreaNode = areaNodesMap[targetAreaId];
+        if (!currentAreaNode) return; // Ensure currentAreaNode exists before proceeding
+
 
         const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ((p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject)));
         
@@ -199,7 +211,26 @@ export default function PanelJerarquicoPage() {
                   activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                   if (treeActivitySearchTerm) { 
                     const searchTermLower = treeActivitySearchTerm.toLowerCase();
-                    activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
+                    // Filter activities within the process node if tree search term is active
+                    const matchingActivities = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
+                    // If process name also matches, include all its activities, otherwise only matching ones
+                    if (proc.proceso.toLowerCase().includes(searchTermLower)) {
+                        // Keep all original activitiesForNode if process name matches, then filter those if necessary or add distinct matching ones.
+                        // This part can be complex if both process and activity names need to match.
+                        // For simplicity now, if process matches, show all its activities; if only activity matches, show only that.
+                        // The logic below already filters processes based on name or activity name.
+                        // So, here we just ensure the activities are correctly populated or filtered based on the context.
+                         activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id) && act.nombre.toLowerCase().includes(searchTermLower));
+                         if (!proc.proceso.toLowerCase().includes(searchTermLower) && activitiesForNode.length === 0) {
+                            // if process name doesnt match and no activities match, this process node shouldn't be here.
+                         } else if (proc.proceso.toLowerCase().includes(searchTermLower)) {
+                             activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id)); // Show all activities for this process
+                         }
+
+                    } else {
+                         activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
+                    }
+
                   }
               }
               
@@ -212,9 +243,10 @@ export default function PanelJerarquicoPage() {
             if (targetActivityForFiltering) {
                 finalProcessNodesForPuesto = processTreeNodes.filter(ptn => ptn.activities && ptn.activities.length > 0);
             } else if (treeActivitySearchTerm) {
+                const searchTermLower = treeActivitySearchTerm.toLowerCase();
                 finalProcessNodesForPuesto = processTreeNodes.filter(ptn => 
-                    (ptn.activities && ptn.activities.length > 0) || 
-                    ptn.name.toLowerCase().includes(treeActivitySearchTerm.toLowerCase())
+                    ptn.name.toLowerCase().includes(searchTermLower) || // Process name matches
+                    (ptn.activities && ptn.activities.some(act => act.nombre.toLowerCase().includes(searchTermLower))) // Or any activity name matches
                 );
             }
             else {
@@ -248,6 +280,12 @@ export default function PanelJerarquicoPage() {
   };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, activityId: string, sourceProcessId?: string) => {
+    const activity = actividades.find(a => a.id === activityId);
+    if (!activity || !activity.activa) { // Prevent dragging inactive activities
+        e.preventDefault();
+        toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar.", variant: "default" });
+        return;
+    }
     setDraggedActivity({ activityId, sourceProcessId });
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", activityId); 
@@ -274,7 +312,12 @@ export default function PanelJerarquicoPage() {
     if (!draggedActivity) return;
     const { activityId, sourceProcessId } = draggedActivity;
     const activity = actividades.find(a => a.id === activityId);
-    if (!activity) return;
+    if (!activity || !activity.activa) { // Double check, though dragStart should prevent
+        toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
+        setDraggedActivity(null);
+        setDropTargetId(null);
+        return;
+    }
 
     let newProcesosAsociadosIds = [...(activity.procesosAsociadosIds || [])];
 
@@ -361,12 +404,18 @@ export default function PanelJerarquicoPage() {
                 {node.activities.map(act => (
                   <div 
                     key={act.id} 
-                    draggable 
-                    onDragStart={(e) => handleDragStart(e, act.id, node.originalId)}
-                    className="flex items-center p-1.5 bg-secondary/30 rounded text-xs cursor-grab active:cursor-grabbing"
+                    draggable={act.activa} // Only active activities are draggable from the tree
+                    onDragStart={(e) => act.activa ? handleDragStart(e, act.id, node.originalId) : e.preventDefault()}
+                    className={cn(
+                        "flex items-center p-1.5 bg-secondary/30 rounded text-xs",
+                        act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
+                        !act.activa && "italic text-muted-foreground"
+                    )}
+                    title={!act.activa ? "Esta actividad está inactiva" : act.nombre}
                   >
-                    <GripVertical className="h-3 w-3 mr-1.5 text-muted-foreground"/>
+                    <GripVertical className={cn("h-3 w-3 mr-1.5", act.activa ? "text-muted-foreground" : "text-transparent")}/>
                     {act.nombre}
+                    {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                   </div>
                 ))}
                  {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
@@ -381,11 +430,17 @@ export default function PanelJerarquicoPage() {
   const unassignedCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 0).length, [actividades]);
   const assignedOnceCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 1).length, [actividades]);
   const assignedMultipleCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) > 1).length, [actividades]);
+  
+  const activeActivitiesCount = useMemo(() => actividades.filter(a => a.activa).length, [actividades]);
+  const inactiveActivitiesCount = useMemo(() => actividades.filter(a => !a.activa).length, [actividades]);
+
 
   const availableActivities = useMemo(() => {
     return actividades
       .filter(a => {
-        if (!a.activa) return false;
+        if (activityStatusFilter === 'active' && !a.activa) return false;
+        if (activityStatusFilter === 'inactive' && a.activa) return false;
+        // 'all' shows both
 
         if (activitySearchTerm && !a.nombre.toLowerCase().includes(activitySearchTerm.toLowerCase())) {
           return false;
@@ -399,7 +454,7 @@ export default function PanelJerarquicoPage() {
         return true;
       })
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
-  }, [actividades, activitySearchTerm, assignmentCountFilter]);
+  }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter]);
 
   const getProcessNamesForActivity = (activity: Actividad): string => {
     if (!activity.procesosAsociadosIds || activity.procesosAsociadosIds.length === 0) {
@@ -439,23 +494,11 @@ export default function PanelJerarquicoPage() {
             <CardTitle className="text-2xl font-headline">Panel Jerárquico de Procesos y Actividades</CardTitle>
           </div>
           <CardDescription className="mb-4">
-            Arrastre actividades desde el panel derecho (Pool) hacia los procesos en el árbol izquierdo para asignarlas.
+            Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos en el árbol izquierdo para asignarlas.
             También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
-            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad.
+            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. Las actividades inactivas se muestran con un estilo diferente y no son arrastrables.
           </CardDescription>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
-                    <CopyCheck className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                    <div className="text-2xl font-bold">{repeatedActivitiesCount}</div>
-                    <p className="text-xs text-muted-foreground">
-                        Asignadas a más de un proceso.
-                    </p>
-                    </CardContent>
-                </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle>
@@ -465,6 +508,18 @@ export default function PanelJerarquicoPage() {
                     <div className="text-2xl font-bold">{repeatedProcessesInMultipleContextsCount}</div>
                     <p className="text-xs text-muted-foreground">
                         Mismo nombre de proceso en &gt;1 Área/Puesto.
+                    </p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
+                    <CopyCheck className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{repeatedActivitiesCount}</div>
+                    <p className="text-xs text-muted-foreground">
+                        Asignadas a más de un proceso (activas).
                     </p>
                     </CardContent>
                 </Card>
@@ -555,25 +610,38 @@ export default function PanelJerarquicoPage() {
             <CardHeader>
               <CardTitle className="text-lg">Pool de Actividades</CardTitle>
                <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque para refinar.</CardDescription>
-               <div className="mt-4 space-y-3">
+               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="relative">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Buscar actividad por nombre..."
+                    placeholder="Buscar actividad..."
                     value={activitySearchTerm}
                     onChange={(e) => setActivitySearchTerm(e.target.value)}
                     className="w-full pl-9"
                   />
                 </div>
                 <div>
+                  <Select value={activityStatusFilter} onValueChange={(value) => setActivityStatusFilter(value as ActivityStatusFilterType)}>
+                    <SelectTrigger className="w-full">
+                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Filtrar por estado actividad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todas ({actividades.length})</SelectItem>
+                        <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Activas ({activeActivitiesCount})</SelectItem>
+                        <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Inactivas ({inactiveActivitiesCount})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2"> {/* Span full width on small screens if only two filters, or adjust as needed */}
                   <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
                     <SelectTrigger className="w-full">
                       <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                       <SelectValue placeholder="Filtrar por asignación" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas ({actividades.filter(a => a.activa).length})</SelectItem>
+                      <SelectItem value="all">Todas (Asignación) ({actividades.filter(a => a.activa).length})</SelectItem>
                       <SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem>
                       <SelectItem value="assigned_once">Asignadas a 1 proc. ({assignedOnceCount})</SelectItem>
                       <SelectItem value="assigned_multiple">Asignadas a 2+ proc. ({assignedMultipleCount})</SelectItem>
@@ -583,19 +651,24 @@ export default function PanelJerarquicoPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col">
-              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md">
+              <ScrollArea className="flex-grow h-[calc(45vh-110px)] p-1 border rounded-md"> {/* Adjusted height */}
                 {availableActivities.length > 0 ? (
                   <div className="space-y-2">
                     {availableActivities.map(act => (
                       <div 
                         key={act.id} 
-                        draggable 
-                        onDragStart={(e) => handleDragStart(e, act.id)}
-                        className="flex items-center p-2 bg-card border rounded shadow-sm text-sm cursor-grab active:cursor-grabbing hover:shadow-md"
-                        title={act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos'}
+                        draggable={act.activa} // Only active activities are draggable from pool
+                        onDragStart={(e) => act.activa ? handleDragStart(e, act.id) : e.preventDefault()}
+                        className={cn(
+                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md",
+                            act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
+                            !act.activa && "italic text-muted-foreground"
+                        )}
+                        title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
                       >
-                        <GripVertical className="h-4 w-4 mr-2 text-muted-foreground"/>
+                        <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
                         {act.nombre}
+                        {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
                         {act.procesosAsociadosCount > 0 && 
                           <Button 
                             variant="outline" 
@@ -617,13 +690,13 @@ export default function PanelJerarquicoPage() {
                   <div className="flex flex-col items-center justify-center h-full text-center p-4">
                     <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
                     <p className="text-muted-foreground">
-                      {activitySearchTerm || assignmentCountFilter !== 'all' 
+                      {activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all'
                         ? "No hay actividades que coincidan con los filtros."
                         : "No hay actividades disponibles."
                       }
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {!(activitySearchTerm || assignmentCountFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
+                      {!(activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
                     </p>
                   </div>
                 )}
@@ -633,7 +706,7 @@ export default function PanelJerarquicoPage() {
         </CardContent>
       </Card>
        <div className="mt-4 text-xs text-muted-foreground text-center">
-        Nota: La funcionalidad de arrastrar y soltar (drag & drop) se implementa con HTML5 nativo. Para una experiencia más pulida, se recomendaría una biblioteca especializada como dnd-kit.
+        Nota: La funcionalidad de arrastrar y soltar (drag & drop) se implementa con HTML5 nativo.
       </div>
     </div>
   );
