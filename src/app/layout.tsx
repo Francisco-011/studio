@@ -5,7 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider } from '@/components/ui/sidebar';
 
 export const metadata: Metadata = {
-  title: 'SIAP - STUFFACTRY',
+  title: 'SIAP - STUFFACTORY',
   description: 'Sistema Integral de Análisis de Procesos (SIAP)',
 };
 

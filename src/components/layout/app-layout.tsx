@@ -22,7 +22,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-headline font-semibold text-black group-data-[collapsible=icon]:hidden">
-              STUFFACTRY
+              STUFFACTORY
             </h1>
           </div>
         </SidebarHeader>
@@ -31,7 +31,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarContent>
         <SidebarFooter className="p-2 group-data-[collapsible=icon]:hidden">
           <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} STUFFACTRY
+            &copy; {new Date().getFullYear()} STUFFACTORY
           </p>
         </SidebarFooter>
       </Sidebar>
