@@ -117,7 +117,7 @@ const sistemaFormSchema = z.object({
 });
 type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 
-const sistemaCostoFormSchema = z.object({
+const costoSistemaFormSchema = z.object({
   id: z.string().optional(),
   sistemaId: z.string().min(1, "Debe seleccionar un sistema."),
   tipoCosto: z.array(z.enum(tiposDeCostoOptions)).min(1, "Debe seleccionar al menos un tipo de costo."),
@@ -166,7 +166,7 @@ const sistemaCostoFormSchema = z.object({
     }
   }
 });
-type SistemaCostoFormData = z.infer<typeof sistemaCostoFormSchema>;
+type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
 const fuenteDestinoFormSchema = z.object({
   id: z.string().optional(),
