@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -38,8 +39,14 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateProcessAuditOutputSchema},
   prompt: `You are an AI assistant specialized in generating audit logs.
   Based on the provided process changes, generate a concise and readable audit log.
+  The audit log should clearly state what was changed, by whom, and when, if this information is available in the input.
+  Focus on clarity and chronological order if multiple changes are described.
+  Present the output as a clean, textual log.
 
-  Process Changes: {{{processChanges}}}
+  Process Changes:
+  {{{processChanges}}}
+
+  Generated Audit Log:
   `,
 });
 
@@ -54,3 +61,4 @@ const generateProcessAuditFlow = ai.defineFlow(
     return output!;
   }
 );
+
