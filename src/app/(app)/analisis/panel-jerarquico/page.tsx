@@ -894,7 +894,9 @@ export default function PanelJerarquicoPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="sm:col-span-2">
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
                     <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)} disabled={!!filterByActivityId}>
                       <SelectTrigger className="w-full">
                           <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -907,17 +909,17 @@ export default function PanelJerarquicoPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="relative pt-2">
-                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                      type="search"
-                      placeholder="Buscar actividad o proceso en árbol..."
-                      value={treeActivitySearchTerm}
-                      onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
-                      className="w-full pl-9"
-                      disabled={!!filterByActivityId}
-                  />
+                  <div className="relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar actividad o proceso en árbol..."
+                        value={treeActivitySearchTerm}
+                        onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
+                        className="w-full pl-9"
+                        disabled={!!filterByActivityId}
+                    />
+                  </div>
                 </div>
               </div>
 
