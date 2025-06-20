@@ -36,12 +36,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-auto flex-col items-start gap-2 border-b bg-background px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
+        <header className="sticky top-0 z-10 flex h-auto flex-col items-start gap-2 border-b border-border bg-background px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
           <div className="flex w-full items-center">
             <SidebarTrigger className="md:hidden mr-2" />
             <div className="flex flex-col flex-grow items-center">
-              <h1 className="text-4xl font-bold text-primary">SIAP</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-3xl font-bold text-primary">SIAP</h1>
+              <p className="text-sm text-primary">
                 Sistema Integral de Análisis de Procesos
               </p>
             </div>
