@@ -164,6 +164,7 @@ export default function DashboardPage() {
   });
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
+  const [availablePuestosForFilter, setAvailablePuestosForFilter] = useState<PuestoType[]>([]);
 
 
   const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
@@ -187,35 +188,68 @@ export default function DashboardPage() {
       setIsLoadingProcessData(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (isLoadingPuestos) {
+      setAvailablePuestosForFilter([]);
+      return;
+    }
+    if (selectedArea === 'all') {
+      setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    } else {
+      const areaObj = areas.find(a => a.nombre === selectedArea);
+      if (areaObj) {
+        const filtered = puestos.filter(p => p.areaId === areaObj.id).sort((a,b) => a.nombre.localeCompare(b.nombre));
+        setAvailablePuestosForFilter(filtered);
+        // If current selectedPuesto is not in the new list and not 'all', reset it
+        if (selectedPuesto !== 'all' && !filtered.some(p => p.nombre === selectedPuesto)) {
+          setSelectedPuesto('all');
+        }
+      } else {
+        setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre))); // Should not happen if selectedArea is valid
+      }
+    }
+  }, [selectedArea, puestos, areas, isLoadingPuestos, selectedPuesto]);
+
+  useEffect(() => {
+    if (isLoadingPuestos || isLoadingAreas || selectedPuesto === 'all') return;
+
+    const puestoObj = puestos.find(p => p.nombre === selectedPuesto);
+    if (puestoObj && puestoObj.areaId) {
+      const areaObj = areas.find(a => a.id === puestoObj.areaId);
+      if (areaObj && areaObj.nombre !== selectedArea) {
+        setSelectedArea(areaObj.nombre);
+      }
+    }
+    // If a puesto without a specific area is selected, we don't change the area filter automatically
+    // Or if the puesto's area is already the selectedArea, no change needed.
+  }, [selectedPuesto, puestos, areas, isLoadingPuestos, isLoadingAreas, selectedArea]);
+  
   
   useEffect(() => {
     if (!isLoadingSistemasCostos && !isLoadingAreas && !isLoadingPuestos && sistemas && costosSistemas && areas && puestos) {
+        let systemsToDisplay: Sistema[] = [];
         const selectedAreaObject = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea) : null;
         const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
-        
-        const selectedAreaId = selectedAreaObject?.id;
-        const selectedPuestoId = selectedPuestoObject?.id;
 
-        let systemsToDisplay: Sistema[];
-
-        if (selectedPuestoId) {
+        if (selectedPuestoObject) {
             // Rule 1: Specific Puesto selected
             systemsToDisplay = sistemas.filter(system => 
-                system.scope === "Puesto" && system.scopeId === selectedPuestoId
+                system.scope === "Puesto" && system.scopeId === selectedPuestoObject.id
             );
-        } else if (selectedAreaId) {
+        } else if (selectedAreaObject) {
             // Rule 2: Specific Area selected, Puesto is "all"
             const puestosInSelectedAreaIds = puestos
-                .filter(p => p.areaId === selectedAreaId)
+                .filter(p => p.areaId === selectedAreaObject.id)
                 .map(p => p.id);
             
             systemsToDisplay = sistemas.filter(system =>
-                (system.scope === "Área" && system.scopeId === selectedAreaId) ||
+                (system.scope === "Área" && system.scopeId === selectedAreaObject.id) ||
                 (system.scope === "Puesto" && system.scopeId && puestosInSelectedAreaIds.includes(system.scopeId))
             );
-        } else {
-            // Rule 3: Area is "all" AND Puesto is "all"
-            systemsToDisplay = [...sistemas]; // Show all systems
+        } else { // Area is "all" AND Puesto is "all"
+            // Rule 3: Show all systems
+            systemsToDisplay = [...sistemas]; 
         }
         
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(systemsToDisplay, costosSistemas));
@@ -607,11 +641,19 @@ export default function DashboardPage() {
                 </div>
                 <div>
                     <Label htmlFor="puestoFilter" className="text-xs">Puesto</Label>
-                    <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
-                        <SelectTrigger id="puestoFilter" className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos || availablePuestosForFilter.length === 0}>
+                        <SelectTrigger id="puestoFilter" className="h-9 text-sm">
+                           <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : (availablePuestosForFilter.length === 0 && selectedArea !== 'all' ? "Sin puestos para área" : "Todos los Puestos")} />
+                        </SelectTrigger>
                         <SelectContent>
                         <SelectItem value="all">Todos los Puestos</SelectItem>
-                        {puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                        {isLoadingPuestos ? (
+                             <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
+                        ) : availablePuestosForFilter.length === 0 && selectedArea !== 'all' ? (
+                            <SelectItem value="no-puestos-for-area" disabled>No hay puestos para esta área</SelectItem>
+                        ) : (
+                            availablePuestosForFilter.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)
+                        )}
                         </SelectContent>
                     </Select>
                 </div>
@@ -621,7 +663,9 @@ export default function DashboardPage() {
             </div>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground mb-8">Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados (excepto Análisis de Entidad IA, que tiene sus propios selectores).</p>
+      <p className="text-sm text-muted-foreground mb-8">
+        Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados (excepto Análisis de Entidad IA y Costos de Sistemas, que tienen su propia lógica de filtrado).
+      </p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -770,7 +814,12 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Costos anuales estimados. Si filtra por Puesto, muestra costos de ese Puesto. Si filtra por Área, muestra costos de esa Área y sus Puestos. Sin filtros, muestra todos.</CardDescription>
+            <CardDescription className="mb-4">
+                Costos anuales estimados.
+                Si filtra por Puesto, muestra costos solo de ese Puesto.
+                Si filtra por Área (y Puesto='Todos'), muestra costos de esa Área y sus Puestos.
+                Si Área y Puesto son 'Todos', muestra todos los sistemas.
+            </CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
