@@ -1,10 +1,11 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider } from '@/components/ui/sidebar';
 
 export const metadata: Metadata = {
-  title: 'Proceza',
+  title: 'SIAP - STUFFACTRY',
   description: 'Sistema Integral de Análisis de Procesos (SIAP)',
 };
 
