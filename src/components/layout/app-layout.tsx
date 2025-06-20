@@ -21,7 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-headline font-semibold text-black group-data-[collapsible=icon]:hidden">
+            <h1 className="text-3xl font-headline font-bold text-black group-data-[collapsible=icon]:hidden">
               STUFFACTORY
             </h1>
           </div>
@@ -40,7 +40,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex w-full items-center">
             <SidebarTrigger className="md:hidden mr-2" />
             <div className="flex flex-col flex-grow items-center">
-              <h1 className="text-3xl font-bold text-foreground">SIAP</h1>
+              <h1 className="text-4xl font-bold text-foreground">SIAP</h1>
               <p className="text-sm text-muted-foreground">
                 Sistema Integral de Análisis de Procesos
               </p>
