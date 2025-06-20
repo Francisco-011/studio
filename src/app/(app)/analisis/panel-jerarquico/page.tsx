@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -818,7 +819,7 @@ export default function PanelJerarquicoPage() {
             <CardHeader>
                 <div className="flex items-center gap-2 mb-1">
                 <FolderTree className="h-6 w-6 text-primary" />
-                <CardTitle className="text-2xl font-headline">Panel Jerárquico de Procesos y Actividades</CardTitle>
+                <CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle>
                 </div>
                 <CardDescription>Cargando datos...</CardDescription>
             </CardHeader>
@@ -836,210 +837,239 @@ export default function PanelJerarquicoPage() {
         <CardHeader>
           <div className="flex items-center gap-2 mb-1">
             <FolderTree className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-headline">Panel Jerárquico de Procesos y Actividades</CardTitle>
+            <CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle>
           </div>
           <CardDescription className="mb-4">
-            Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos activos en el árbol izquierdo para asignarlas.
-            También puede mover actividades entre procesos, reordenarlas dentro de un proceso, o de un proceso de vuelta al pool para desasignarlas.
-            Los procesos pueden reordenarse dentro de su puesto arrastrándolos.
-            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. 
-            Use el ícono del ojo (<Eye className="inline-block h-3 w-3" />) para ver detalles completos.
+            Explore la estructura organizativa y las relaciones de procesos mediante vistas jerárquicas y diagramas de flujo. 
+            La vista de árbol permite arrastrar actividades activas desde el pool hacia procesos activos, moverlas entre procesos, reordenarlas, o devolverlas al pool. Los procesos activos también pueden reordenarse dentro de su puesto.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
-          <Card>
-            <CardHeader className="space-y-3">
-              <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto, estado del proceso o actividad/proceso. Los procesos inactivos se muestran atenuados y no permiten interacciones de asignación o reordenamiento.</CardDescription>
-              {filteredByActivityName && (
-                <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
-                  <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
-                  <Button variant="ghost" size="sm" className="p-1 h-auto text-primary hover:bg-primary/20" onClick={() => handleActivityBadgeClick({id: filterByActivityId!} as Actividad)}>
-                      <XCircle className="h-4 w-4 mr-1" /> Limpiar
-                  </Button>
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas || !!filterByActivityId}>
-                    <SelectTrigger className="w-full">
-                      <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Filtrar por Área" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las Áreas</SelectItem>
-                      <SelectItem value="area-unassigned">Procesos Sin Área Específica</SelectItem>
-                      {areas.map(area => (
-                        <SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || !!filterByActivityId}>
-                    <SelectTrigger className="w-full">
-                       <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Filtrar por Puesto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los Puestos</SelectItem>
-                      <SelectItem value="puesto-unassigned">Procesos Sin Puesto Específico</SelectItem>
-                      {puestos.map(puesto => (
-                        <SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="sm:col-span-2">
-                  <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)} disabled={!!filterByActivityId}>
-                    <SelectTrigger className="w-full">
-                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Filtrar por estado del proceso" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Procesos Activos</SelectItem>
-                        <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Procesos Inactivos</SelectItem>
-                        <SelectItem value="all">Todos los Estados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="relative pt-2">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    type="search"
-                    placeholder="Buscar actividad o proceso en árbol..."
-                    value={treeActivitySearchTerm}
-                    onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
-                    className="w-full pl-9"
-                    disabled={!!filterByActivityId}
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[calc(40vh-30px)] p-1 border rounded-md">
-                {treeData.length > 0 ? renderTree(treeData) : 
-                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                    <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
-                    <p className="text-muted-foreground">
-                      No hay procesos para mostrar.
-                    </p>
-                     <p className="text-xs text-muted-foreground">
-                      Verifique filtros o la configuración de áreas, puestos y procesos capturados.
-                    </p>
-                  </div>
-                }
-              </ScrollArea>
-            </CardContent>
-          </Card>
-          
-          <Card 
-            id="activity-pool"
-            className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")}
-            onDragOver={(e) => handleDragOver(e, 'pool')}
-            onDrop={(e) => handleDrop(e)}
-            onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')}
-            onDragLeave={handleDragLeave}
-          >
-            <CardHeader>
-              <CardTitle className="text-lg">Pool de Actividades</CardTitle>
-               <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque para refinar. Las actividades inactivas están atenuadas y no pueden ser arrastradas.</CardDescription>
-               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative">
-                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Buscar actividad..."
-                    value={activitySearchTerm}
-                    onChange={(e) => setActivitySearchTerm(e.target.value)}
-                    className="w-full pl-9"
-                  />
-                </div>
-                <div>
-                  <Select value={activityStatusFilter} onValueChange={(value) => setActivityStatusFilter(value as ActivityStatusFilterType)}>
-                    <SelectTrigger className="w-full">
-                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Filtrar por estado actividad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todas ({actividades.length})</SelectItem>
-                        <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Activas ({activeActivitiesCount})</SelectItem>
-                        <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Inactivas ({inactiveActivitiesCount})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="sm:col-span-2"> 
-                  <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
-                    <SelectTrigger className="w-full">
-                      <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Filtrar por asignación" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas (Asignación) ({actividades.filter(a => a.activa || activityStatusFilter !== 'active').length})</SelectItem>
-                      <SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem>
-                      <SelectItem value="assigned_once">Asignadas a 1 proc. ({assignedOnceCount})</SelectItem>
-                      <SelectItem value="assigned_multiple">Asignadas a 2+ proc. ({assignedMultipleCount})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-grow flex flex-col">
-              <ScrollArea className="flex-grow h-[calc(45vh-110px)] p-1 border rounded-md"> 
-                {availableActivities.length > 0 ? (
-                  <div className="space-y-2">
-                    {availableActivities.map((act, index) => (
-                      <div 
-                        key={`${act.id}-${index}`} 
-                        draggable={act.activa} 
-                        onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()}
-                        className={cn(
-                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", 
-                            act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
-                            !act.activa && "italic text-muted-foreground"
-                        )}
-                        title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
-                      >
-                        <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
-                        <span className="flex-grow">{act.nombre}</span> 
-                        {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
-                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        {act.procesosAsociadosCount > 0 && 
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className={cn(
-                              "p-1 h-auto text-xs ml-1", 
-                              filterByActivityId === act.id && "bg-primary/20 text-primary border-primary"
-                            )} 
-                            onClick={() => handleActivityBadgeClick(act)}
-                            title={`Filtrar árbol por esta actividad (${act.procesosAsociadosCount} procesos)`}
-                          >
-                            {act.procesosAsociadosCount}P
-                          </Button>
-                        }
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                    <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
-                    <p className="text-muted-foreground">
-                      {activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all'
-                        ? "No hay actividades que coincidan con los filtros."
-                        : "No hay actividades disponibles."
-                      }
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {!(activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
-                    </p>
+        <CardContent>
+          <Tabs defaultValue="arbol" className="w-full">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 mb-4">
+              <TabsTrigger value="arbol"><ListTreeIcon className="mr-2 h-4 w-4"/>Vista de Árbol</TabsTrigger>
+              <TabsTrigger value="diagrama"><Share2 className="mr-2 h-4 w-4"/>Diagrama de Relaciones</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="arbol">
+              <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
+                <CardTitle className="text-lg">Filtros del Árbol de Procesos</CardTitle>
+                <CardDescription className="text-xs">Filtre la vista de árbol por área, puesto, estado del proceso o actividad/proceso. Los procesos inactivos se muestran atenuados y no permiten interacciones de asignación o reordenamiento.</CardDescription>
+                {filteredByActivityName && (
+                  <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
+                    <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
+                    <Button variant="ghost" size="sm" className="p-1 h-auto text-primary hover:bg-primary/20" onClick={() => handleActivityBadgeClick({id: filterByActivityId!} as Actividad)}>
+                        <XCircle className="h-4 w-4 mr-1" /> Limpiar
+                    </Button>
                   </div>
                 )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas || !!filterByActivityId}>
+                      <SelectTrigger className="w-full">
+                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Filtrar por Área" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las Áreas</SelectItem>
+                        <SelectItem value="area-unassigned">Procesos Sin Área Específica</SelectItem>
+                        {areas.map(area => (
+                          <SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || !!filterByActivityId}>
+                      <SelectTrigger className="w-full">
+                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Filtrar por Puesto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los Puestos</SelectItem>
+                        <SelectItem value="puesto-unassigned">Procesos Sin Puesto Específico</SelectItem>
+                        {puestos.map(puesto => (
+                          <SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)} disabled={!!filterByActivityId}>
+                      <SelectTrigger className="w-full">
+                          <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <SelectValue placeholder="Filtrar por estado del proceso" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Procesos Activos</SelectItem>
+                          <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Procesos Inactivos</SelectItem>
+                          <SelectItem value="all">Todos los Estados</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="relative pt-2">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                      type="search"
+                      placeholder="Buscar actividad o proceso en árbol..."
+                      value={treeActivitySearchTerm}
+                      onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
+                      className="w-full pl-9"
+                      disabled={!!filterByActivityId}
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">
+                      {treeData.length > 0 ? renderTree(treeData) : 
+                        <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                          <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
+                          <p className="text-muted-foreground">No hay procesos para mostrar.</p>
+                          <p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p>
+                        </div>
+                      }
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+                
+                <Card 
+                  id="activity-pool"
+                  className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")}
+                  onDragOver={(e) => handleDragOver(e, 'pool')}
+                  onDrop={(e) => handleDrop(e)}
+                  onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')}
+                  onDragLeave={handleDragLeave}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-lg">Pool de Actividades</CardTitle>
+                    <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque. Las inactivas no se pueden arrastrar.</CardDescription>
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="search"
+                          placeholder="Buscar actividad..."
+                          value={activitySearchTerm}
+                          onChange={(e) => setActivitySearchTerm(e.target.value)}
+                          className="w-full pl-9"
+                        />
+                      </div>
+                      <div>
+                        <Select value={activityStatusFilter} onValueChange={(value) => setActivityStatusFilter(value as ActivityStatusFilterType)}>
+                          <SelectTrigger className="w-full">
+                              <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                              <SelectValue placeholder="Filtrar por estado actividad" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="all">Todas ({actividades.length})</SelectItem>
+                              <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Activas ({activeActivitiesCount})</SelectItem>
+                              <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Inactivas ({inactiveActivitiesCount})</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="sm:col-span-2"> 
+                        <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
+                          <SelectTrigger className="w-full">
+                            <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <SelectValue placeholder="Filtrar por asignación" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas (Asignación) ({actividades.filter(a => a.activa || activityStatusFilter !== 'active').length})</SelectItem>
+                            <SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem>
+                            <SelectItem value="assigned_once">Asignadas a 1 proc. ({assignedOnceCount})</SelectItem>
+                            <SelectItem value="assigned_multiple">Asignadas a 2+ proc. ({assignedMultipleCount})</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-grow flex flex-col">
+                    <ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md"> 
+                      {availableActivities.length > 0 ? (
+                        <div className="space-y-2">
+                          {availableActivities.map((act, index) => (
+                            <div 
+                              key={`${act.id}-${index}`} 
+                              draggable={act.activa} 
+                              onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()}
+                              className={cn(
+                                  "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", 
+                                  act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
+                                  !act.activa && "italic text-muted-foreground"
+                              )}
+                              title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
+                            >
+                              <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
+                              <span className="flex-grow">{act.nombre}</span> 
+                              {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
+                              <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                              {act.procesosAsociadosCount > 0 && 
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className={cn(
+                                    "p-1 h-auto text-xs ml-1", 
+                                    filterByActivityId === act.id && "bg-primary/20 text-primary border-primary"
+                                  )} 
+                                  onClick={() => handleActivityBadgeClick(act)}
+                                  title={`Filtrar árbol por esta actividad (${act.procesosAsociadosCount} procesos)`}
+                                >
+                                  {act.procesosAsociadosCount}P
+                                </Button>
+                              }
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                          <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
+                          <p className="text-muted-foreground">
+                            {activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all'
+                              ? "No hay actividades que coincidan con los filtros."
+                              : "No hay actividades disponibles."
+                            }
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {!(activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
+                          </p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="diagrama">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Diagrama de Relaciones de Procesos</CardTitle>
+                  <CardDescription>Visualización gráfica de las interconexiones entre áreas, puestos, procesos y actividades.</CardDescription>
+                </CardHeader>
+                <CardContent className="min-h-[calc(60vh)]"> {/* Adjusted height to match tree view area */}
+                  <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center h-full bg-muted/20">
+                      <Share2 className="h-16 w-16 text-muted-foreground mb-4" />
+                      <p className="text-lg font-semibold text-foreground">Visualización de Diagrama (Conceptual)</p>
+                      <p className="text-sm text-muted-foreground text-center max-w-md">
+                          Esta sección está diseñada para mostrar un diagrama interactivo de las relaciones entre entidades (áreas, puestos, procesos, actividades).
+                          La implementación de un componente de diagramación dinámica (ej: usando bibliotecas como React Flow o Mermaid.js)
+                          requiere desarrollo adicional y está fuera del alcance de las modificaciones actuales.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">Un futuro desarrollo podría permitir filtrar y visualizar flujos de trabajo interconectados aquí.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -1075,8 +1105,8 @@ export default function PanelJerarquicoPage() {
                   <DetailSectionDisplay title="Procesos de Salida" value={process.procesosSalida} isList />
                   <DetailSectionDisplay title="Estado" value={process.activo !== false ? 'Activo' : 'Inactivo'} />
                   <DetailSectionDisplay title="Actividades en Orden" value={processActivities} isList />
-                  <DetailSectionDisplay title="Fecha de Captura" value={process.capturedAt ? format(parseISO(process.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                  <DetailSectionDisplay title="Última Modificación" value={process.updatedAt ? format(new Date(process.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Fecha de Captura" value={process.capturedAt && isValid(parseISO(process.capturedAt)) ? format(parseISO(process.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Última Modificación" value={process.updatedAt && isValid(new Date(process.updatedAt)) ? format(new Date(process.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
                 </>
               );
             })()}
@@ -1094,8 +1124,8 @@ export default function PanelJerarquicoPage() {
                   <DetailSectionDisplay title="Frecuencia de la Actividad" value={activity.frecuenciaActividad} />
                   <DetailSectionDisplay title="Estado" value={activity.activa ? 'Activa' : 'Inactiva'} />
                   <DetailSectionDisplay title="Procesos Asociados" value={associatedProcessNames} isList />
-                  <DetailSectionDisplay title="Fecha de Creación" value={activity.createdAt ? format(new Date(activity.createdAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                  <DetailSectionDisplay title="Última Modificación" value={activity.updatedAt ? format(new Date(activity.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Fecha de Creación" value={activity.createdAt && isValid(new Date(activity.createdAt)) ? format(new Date(activity.createdAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Última Modificación" value={activity.updatedAt && isValid(new Date(activity.updatedAt)) ? format(new Date(activity.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
                 </>
               );
             })()}
@@ -1114,3 +1144,6 @@ export default function PanelJerarquicoPage() {
     </div>
   );
 }
+
+
+    
