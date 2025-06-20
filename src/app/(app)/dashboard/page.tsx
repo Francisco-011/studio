@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -45,6 +45,7 @@ interface CalculatedSystemCost {
     annualUsageCost: number;
     annualLicenseCost: number;
     totalAnnualCost: number;
+    totalLicenses: number;
     currency: TipoMoneda | string;
 }
 
@@ -57,13 +58,14 @@ function calculateAllSystemAnnualCosts(
   return allSistemas.map(system => {
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
-    let totalAnnualLicense = 0;
+    let totalAnnualLicenseCost = 0;
     let systemCurrency: TipoMoneda | string = 'USD';
+    let systemTotalLicenses = 0;
 
     if (costsForSystem.length > 0) {
       systemCurrency = costsForSystem[0].moneda;
       costsForSystem.forEach(cost => {
-        if (cost.moneda === systemCurrency) {
+        if (cost.moneda === systemCurrency) { // Simple assumption: sum costs of the same currency
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
@@ -72,17 +74,18 @@ function calculateAllSystemAnnualCosts(
           let periodicLicense = 0;
           if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
             periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
+            systemTotalLicenses += cost.numeroLicencias; // Sum up licenses
           }
 
           if (cost.frecuencia === "Mensual") {
             totalAnnualUsage += periodicUsage * 12;
-            totalAnnualLicense += periodicLicense * 12;
+            totalAnnualLicenseCost += periodicLicense * 12;
           } else if (cost.frecuencia === "Anual") {
             totalAnnualUsage += periodicUsage;
-            totalAnnualLicense += periodicLicense;
-          } else { // For "Otro", assume it's an annual equivalent or a one-time for simplicity
+            totalAnnualLicenseCost += periodicLicense;
+          } else { 
             totalAnnualUsage += periodicUsage;
-            totalAnnualLicense += periodicLicense;
+            totalAnnualLicenseCost += periodicLicense;
           }
         }
       });
@@ -91,8 +94,9 @@ function calculateAllSystemAnnualCosts(
       id: system.id,
       name: system.nombre,
       annualUsageCost: totalAnnualUsage,
-      annualLicenseCost: totalAnnualLicense,
-      totalAnnualCost: totalAnnualUsage + totalAnnualLicense,
+      annualLicenseCost: totalAnnualLicenseCost,
+      totalAnnualCost: totalAnnualUsage + totalAnnualLicenseCost,
+      totalLicenses: systemTotalLicenses,
       currency: systemCurrency,
     };
   });
@@ -143,7 +147,7 @@ export default function DashboardPage() {
   }, []);
   
   useEffect(() => {
-    if (!isLoadingSistemasCostos) {
+    if (!isLoadingSistemasCostos && sistemas && costosSistemas) {
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
     }
   }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
@@ -191,6 +195,8 @@ export default function DashboardPage() {
         actividadesActivasCount: 0,
         actividadesSinUsoCount: 0,
         accionesCompletadasCount: 0,
+        accionesEnRevisionCount: 0,
+        accionesEnProgresoCount: 0,
         procesosConVariacionesCount: 0,
         actividadesDuplicadasCount: 0,
       };
@@ -203,6 +209,8 @@ export default function DashboardPage() {
     const actividadesSinUsoCount = actividades.filter(a => a.activa && a.procesosAsociadosCount === 0).length;
     
     const accionesCompletadasCount = acciones.filter(acc => acc.estado === 'Completada').length;
+    const accionesEnRevisionCount = acciones.filter(acc => acc.estado === 'En Revisión').length;
+    const accionesEnProgresoCount = acciones.filter(acc => acc.estado === 'En Progreso').length;
 
     const processContexts = new Map<string, Set<string>>();
     activeProcesses.forEach(proc => {
@@ -218,7 +226,6 @@ export default function DashboardPage() {
         }
     });
 
-    // Actividades Duplicadas: activas y asociadas a >1 proceso
     const actividadesDuplicadasCount = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
 
     return {
@@ -226,6 +233,8 @@ export default function DashboardPage() {
       actividadesActivasCount,
       actividadesSinUsoCount,
       accionesCompletadasCount,
+      accionesEnRevisionCount,
+      accionesEnProgresoCount,
       procesosConVariacionesCount,
       actividadesDuplicadasCount,
     };
@@ -245,7 +254,7 @@ export default function DashboardPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-headline font-bold mb-8 text-primary">Dashboard Ejecutivo</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Procesos Activos Mapeados</CardTitle>
@@ -271,6 +280,17 @@ export default function DashboardPage() {
         </Card>
          <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Actividades Activas</CardTitle>
+            <ListChecks className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingActividades)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
             <CopyCheck className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
@@ -292,14 +312,25 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividades Activas</CardTitle>
-            <ListChecks className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Acciones en Revisión</CardTitle>
+            <FileSearch2 className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingActividades)}
+              {renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAcciones)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Acciones en Progreso</CardTitle>
+            <ActivityIcon className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAcciones)}
             </div>
           </CardContent>
         </Card>
@@ -361,7 +392,7 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias.</CardDescription>
+            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias, y número total de licencias.</CardDescription>
             {isLoadingAllData ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
@@ -369,26 +400,30 @@ export default function DashboardPage() {
             ) : calculatedSystemCosts.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas configurados.</p>
             ) : (
-                <Table>
-                <TableHeader>
-                    <TableRow>
-                    <TableHead className="w-[30%]">Sistema</TableHead>
-                    <TableHead className="text-right">Uso Anual</TableHead>
-                    <TableHead className="text-right">Licencias Anual</TableHead>
-                    <TableHead className="text-right">Total Anual</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {calculatedSystemCosts.map((cost) => (
-                    <TableRow key={cost.id}>
-                        <TableCell className="font-medium text-xs">{cost.name}</TableCell>
-                        <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
-                        <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
-                        <TableCell className="text-right font-semibold text-xs">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
-                    </TableRow>
-                    ))}
-                </TableBody>
-                </Table>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead className="w-[30%]">Sistema</TableHead>
+                        <TableHead className="text-right">Uso Anual</TableHead>
+                        <TableHead className="text-right">Lic. Anual</TableHead>
+                        <TableHead className="text-right">Total Lic.</TableHead>
+                        <TableHead className="text-right">Total Anual</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {calculatedSystemCosts.map((cost) => (
+                        <TableRow key={cost.id}>
+                            <TableCell className="font-medium text-xs">{cost.name}</TableCell>
+                            <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
+                            <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
+                            <TableCell className="text-right text-xs">{cost.totalLicenses > 0 ? cost.totalLicenses : '-'}</TableCell>
+                            <TableCell className="text-right font-semibold text-xs">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
             )}
           </CardContent>
         </Card>
@@ -396,6 +431,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
-    
