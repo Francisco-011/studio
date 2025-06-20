@@ -47,6 +47,7 @@ export default function PanelJerarquicoPage() {
 
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
+  const [treeActivitySearchTerm, setTreeActivitySearchTerm] = useState('');
 
 
   useEffect(() => {
@@ -63,62 +64,66 @@ export default function PanelJerarquicoPage() {
     }
   }, []);
 
+  const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
+
   useEffect(() => {
-    if (isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades) return;
+    if (isLoadingAllData) return;
 
     const buildTree = (): TreeNode[] => {
       const finalTreeNodes: TreeNode[] = [];
       const areaNodesMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> = {};
 
-      let areasToConsider = areas;
+      let areasToFilterOn = areas;
       if (selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned') {
-        areasToConsider = areas.filter(a => a.id === selectedAreaFilter);
+        areasToFilterOn = areas.filter(a => a.id === selectedAreaFilter);
       }
-
-      areasToConsider.forEach(area => {
+      
+      areasToFilterOn.forEach(area => {
         areaNodesMap[area.id] = {
-          id: `area-${area.id}`,
-          name: area.nombre,
-          type: 'area',
-          originalId: area.id,
-          children: [],
-          puestosMap: {}
+          id: `area-${area.id}`, name: area.nombre, type: 'area', originalId: area.id, children: [], puestosMap: {}
         };
       });
       
-      const unassignedAreaNode: TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> } = {
-        id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
-      };
       if (selectedAreaFilter === 'all' || selectedAreaFilter === 'area-unassigned') {
-          areaNodesMap['area-unassigned'] = unassignedAreaNode;
+         if (!areaNodesMap['area-unassigned']) {
+            areaNodesMap['area-unassigned'] = {
+                id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
+            };
+         }
       }
 
       capturedProcesses.forEach(proc => {
         const procAreaObject = areas.find(a => a.nombre === proc.area);
         const targetAreaId = procAreaObject ? procAreaObject.id : 'area-unassigned';
 
-        if (selectedAreaFilter !== 'all' && selectedAreaFilter !== targetAreaId) {
+        if (!areaNodesMap[targetAreaId]) { // If area is not in map (due to area filter), skip
             return;
         }
         
         let currentAreaNode = areaNodesMap[targetAreaId];
-        if (!currentAreaNode) { 
-            return;
-        }
 
-        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ( (p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject) ));
+        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ((p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject)));
         
-        if (selectedPuestoFilter !== 'all' && (!procPuestoObject || procPuestoObject.id !== selectedPuestoFilter)) {
-            // If a puesto filter is active, and this process's puesto doesn't match, skip it.
-            // Also consider processes that don't have a puesto if the filter is not for a specific puesto.
-            // If 'selectedPuestoFilter' is for a specific puesto, then procPuestoObject must exist and match.
-            if(selectedPuestoFilter !== 'puesto-unassigned' || procPuestoObject) return;
-        } else if (selectedPuestoFilter === 'puesto-unassigned' && procPuestoObject) {
-            // If "Sin Puesto" is selected, skip processes that *do* have an assigned puesto.
-            return;
+        if (selectedPuestoFilter !== 'all') {
+            if (selectedPuestoFilter === 'puesto-unassigned') {
+                if (procPuestoObject) return; 
+            } else {
+                if (!procPuestoObject || procPuestoObject.id !== selectedPuestoFilter) return;
+            }
         }
 
+        // Activity/Process Name Search Logic for Tree
+        if (treeActivitySearchTerm) {
+            const searchTermLower = treeActivitySearchTerm.toLowerCase();
+            const processNameMatches = proc.proceso.toLowerCase().includes(searchTermLower);
+            const originalAssignedActsForSearch = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+            const anyOriginalActivityNameMatches = originalAssignedActsForSearch.some(act => act.nombre.toLowerCase().includes(searchTermLower));
 
+            if (!processNameMatches && !anyOriginalActivityNameMatches) {
+                return; 
+            }
+        }
+        
         const targetPuestoIdKey = procPuestoObject?.id || `puesto-unassigned-in-${targetAreaId}`;
         const targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
 
@@ -126,11 +131,7 @@ export default function PanelJerarquicoPage() {
         if (!currentPuestoNode) {
           currentPuestoNode = {
             id: `puesto-${currentAreaNode.id}-${procPuestoObject?.id || targetPuestoName.replace(/\s+/g, '-')}`,
-            name: targetPuestoName,
-            type: 'puesto',
-            originalId: procPuestoObject?.id,
-            children: [],
-            processList: []
+            name: targetPuestoName, type: 'puesto', originalId: procPuestoObject?.id, children: [], processList: []
           };
           currentAreaNode.puestosMap[targetPuestoIdKey] = currentPuestoNode;
         }
@@ -141,21 +142,24 @@ export default function PanelJerarquicoPage() {
         const puestoChildren: TreeNode[] = [];
         Object.values(areaNode.puestosMap).forEach(puestoNode => {
           if (puestoNode.processList.length > 0) {
-            puestoNode.children = puestoNode.processList.map(proc => {
-              const assignedActs = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+            const processTreeNodes = puestoNode.processList.map(proc => {
+              let activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
+              if (treeActivitySearchTerm) {
+                activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(treeActivitySearchTerm.toLowerCase()));
+              }
               return {
-                id: `proceso-${proc.id}`,
-                name: proc.proceso,
-                type: 'proceso',
-                originalId: proc.id,
-                activities: assignedActs,
+                id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode,
               };
             }).sort((a,b) => a.name.localeCompare(b.name));
-            puestoChildren.push(puestoNode);
+            
+            if (processTreeNodes.length > 0) { // Only add Puesto if it has visible processes
+                puestoNode.children = processTreeNodes;
+                puestoChildren.push(puestoNode);
+            }
           }
         });
         areaNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
-        if (areaNode.children.length > 0) {
+        if (areaNode.children.length > 0) { // Only add Area if it has visible puestos
             finalTreeNodes.push(areaNode);
         }
       });
@@ -164,7 +168,11 @@ export default function PanelJerarquicoPage() {
     };
 
     setTreeData(buildTree());
-  }, [areas, puestos, capturedProcesses, actividades, isLoadingAreas, isLoadingPuestos, isLoadingProcesses, isLoadingActividades, selectedAreaFilter, selectedPuestoFilter]);
+  }, [
+    areas, puestos, capturedProcesses, actividades, 
+    isLoadingAllData, 
+    selectedAreaFilter, selectedPuestoFilter, treeActivitySearchTerm
+  ]);
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
@@ -265,7 +273,7 @@ export default function PanelJerarquicoPage() {
                     {act.nombre}
                   </div>
                 ))}
-                 {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada</p>}
+                 {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
               </div>
             )}
           </>
@@ -306,7 +314,6 @@ export default function PanelJerarquicoPage() {
       .join(', ');
   };
 
-  const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
 
   if (isLoadingAllData) {
     return (
@@ -340,11 +347,11 @@ export default function PanelJerarquicoPage() {
             También puede mover actividades entre procesos o de un proceso de vuelta al pool para desasignarlas.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(60vh+120px)]"> {/* Increased min-height */}
+        <CardContent className="grid md:grid-cols-2 gap-6 min-h-[calc(60vh+120px)]">
           <Card>
             <CardHeader className="space-y-3">
               <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área o puesto.</CardDescription>
+              <CardDescription className="text-xs">Expanda para ver puestos, procesos y actividades asignadas. Filtre por área, puesto o actividad/proceso.</CardDescription>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
@@ -377,9 +384,19 @@ export default function PanelJerarquicoPage() {
                   </Select>
                 </div>
               </div>
+              <div className="relative pt-2">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar actividad o proceso en árbol..."
+                    value={treeActivitySearchTerm}
+                    onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
+                    className="w-full pl-9"
+                />
+              </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[calc(45vh+20px)] p-1 border rounded-md"> {/* Adjusted height to make space for filters */}
+              <ScrollArea className="h-[calc(45vh-40px)] p-1 border rounded-md">
                 {treeData.length > 0 ? renderTree(treeData) : 
                   <div className="flex flex-col items-center justify-center h-full text-center p-4">
                     <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
@@ -434,7 +451,7 @@ export default function PanelJerarquicoPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col">
-              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md"> {/* Original height for activity pool scroll area */}
+              <ScrollArea className="flex-grow h-[calc(45vh-74px)] p-1 border rounded-md">
                 {availableActivities.length > 0 ? (
                   <div className="space-y-2">
                     {availableActivities.map(act => (
