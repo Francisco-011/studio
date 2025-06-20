@@ -7,6 +7,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { frecuenciaOptions } from '@/app/(app)/captura/page';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -39,6 +41,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -59,16 +62,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2 } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
+const NO_FRECUENCIA_SELECTED_VALUE = "__NO_FRECUENCIA_SELECTED__";
 
-// Actividad interface is now imported from ActividadesContext
 
 const actividadFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
+  descripcionBreve: z.string().optional(),
+  sistemaUtilizado: z.string().optional(),
+  tiempoEstimadoActividad: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
+  ),
+  frecuenciaActividad: z.string().optional(),
   activa: z.boolean().default(true),
   procesosAsociadosIds: z.array(z.string()).optional().default([]),
 });
@@ -85,6 +96,7 @@ export default function ActividadesPage() {
     toggleActividadStatus, 
     isLoadingActividades 
   } = useActividades();
+  const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
   
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   
@@ -116,6 +128,10 @@ export default function ActividadesPage() {
     resolver: zodResolver(actividadFormSchema),
     defaultValues: {
       nombre: '',
+      descripcionBreve: '',
+      sistemaUtilizado: undefined,
+      tiempoEstimadoActividad: undefined,
+      frecuenciaActividad: undefined,
       activa: true,
       procesosAsociadosIds: [],
     },
@@ -127,22 +143,43 @@ export default function ActividadesPage() {
         actividadForm.reset({ 
           id: editingActividad.id, 
           nombre: editingActividad.nombre, 
+          descripcionBreve: editingActividad.descripcionBreve || '',
+          sistemaUtilizado: editingActividad.sistemaUtilizado || undefined, // handles NO_SYSTEM_SELECTED if we stored that. Best to store undefined.
+          tiempoEstimadoActividad: editingActividad.tiempoEstimadoActividad,
+          frecuenciaActividad: editingActividad.frecuenciaActividad || undefined, // handles NO_FRECUENCIA_SELECTED if stored.
           activa: editingActividad.activa,
           procesosAsociadosIds: editingActividad.procesosAsociadosIds || [] 
         });
       } else {
-        actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] });
+        actividadForm.reset({ 
+          nombre: '', 
+          descripcionBreve: '',
+          sistemaUtilizado: undefined,
+          tiempoEstimadoActividad: undefined,
+          frecuenciaActividad: undefined,
+          activa: true, 
+          procesosAsociadosIds: [] 
+        });
       }
     }
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
   function handleActividadSubmit(data: ActividadFormData) {
-    const { id, ...activityData } = data; 
+    const { id, ...activityDataFromForm } = data; 
+    
+    const activityDataForStorage = {
+      ...activityDataFromForm,
+      sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
+      frecuenciaActividad: data.frecuenciaActividad === NO_FRECUENCIA_SELECTED_VALUE 
+        ? undefined 
+        : data.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
+    };
+    
     if (editingActividad && id) {
-      updateActividad(id, activityData);
+      updateActividad(id, activityDataForStorage);
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      addActividad(activityData);
+      addActividad(activityDataForStorage);
       toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
     }
     setEditingActividad(null);
@@ -171,7 +208,6 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-    // Double-check, although UI should prevent this state if count > 0
     if (activityToDelete.procesosAsociadosCount > 0) {
         toast({
             title: 'Error en Eliminación',
@@ -208,7 +244,8 @@ export default function ActividadesPage() {
   }
 
   const filteredActividades = actividades.filter(actividad => {
-    const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'active' && actividad.activa) ||
@@ -223,12 +260,12 @@ export default function ActividadesPage() {
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo);
 
-  if (isLoadingActividades) {
+  if (isLoadingActividades || isLoadingSistemasCostos) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
-          <ListChecks className="h-16 w-16 text-muted-foreground animate-pulse" />
-          <p className="ml-4 text-lg text-muted-foreground">Cargando actividades...</p>
+          <Loader2 className="h-16 w-16 text-primary animate-spin" />
+          <p className="ml-4 text-lg text-muted-foreground">Cargando datos de actividades...</p>
         </div>
       </div>
     );
@@ -252,7 +289,7 @@ export default function ActividadesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Buscar actividad por nombre..."
+                placeholder="Buscar por nombre o descripción..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10"
@@ -337,15 +374,15 @@ export default function ActividadesPage() {
                 setIsActividadDialogOpen(isOpen);
                 if (!isOpen) {
                   setEditingActividad(null);
-                  actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] });
+                  actividadForm.reset();
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset({ nombre: '', activa: true, procesosAsociadosIds: [] }); setIsActividadDialogOpen(true); }} className="w-full sm:w-auto">
+                  <Button onClick={() => { setEditingActividad(null); actividadForm.reset(); setIsActividadDialogOpen(true); }} className="w-full sm:w-auto">
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-lg">
                   <DialogHeader>
                     <DialogTitle>{editingActividad ? 'Editar Actividad' : 'Agregar Nueva Actividad'}</DialogTitle>
                     <DialogDescription>
@@ -353,7 +390,7 @@ export default function ActividadesPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <Form {...actividadForm}>
-                    <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4">
+                    <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
                       <FormField
                         control={actividadForm.control}
                         name="nombre"
@@ -367,6 +404,85 @@ export default function ActividadesPage() {
                           </FormItem>
                         )}
                       />
+                       <FormField
+                        control={actividadForm.control}
+                        name="descripcionBreve"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Descripción Breve (Opcional)</FormLabel>
+                            <FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={actividadForm.control}
+                        name="sistemaUtilizado"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value || undefined} // Handle undefined to show placeholder
+                              disabled={isLoadingSistemasCostos}
+                            >
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando sistemas..." : "Seleccione un sistema"} /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno / Manual</SelectItem>
+                                {isLoadingSistemasCostos ? (
+                                    <SelectItem value="loading-sistemas" disabled>Cargando...</SelectItem>
+                                ) : availableSystems.length === 0 ? (
+                                    <SelectItem value="no-sistemas-available" disabled>No hay sistemas configurados</SelectItem>
+                                ) : (
+                                    availableSystems.map((sys) => (
+                                    <SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>
+                                    ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={actividadForm.control}
+                          name="tiempoEstimadoActividad"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Tiempo Estimado (min)</FormLabel>
+                              <FormControl><Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} min="0" /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={actividadForm.control}
+                          name="frecuenciaActividad"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Frecuencia de la Actividad</FormLabel>
+                              <Select 
+                                onValueChange={field.onChange} 
+                                value={field.value || undefined} // Handle undefined for placeholder
+                              >
+                                <FormControl>
+                                  <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value={NO_FRECUENCIA_SELECTED_VALUE}>No aplica / Por instancia</SelectItem>
+                                  {frecuenciaOptions.map((opt) => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                       <FormField
                         control={actividadForm.control}
                         name="procesosAsociadosIds"
@@ -459,6 +575,7 @@ export default function ActividadesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre de la Actividad</TableHead>
+                    <TableHead>Descripción Breve</TableHead>
                     <TableHead className="w-[180px] text-center">Última Modificación</TableHead>
                     <TableHead className="w-[120px] text-center">Estado</TableHead>
                     <TableHead className="w-[180px] text-center">Procesos Asociados</TableHead>
@@ -469,6 +586,7 @@ export default function ActividadesPage() {
                   {filteredActividades.map((actividad) => (
                     <TableRow key={actividad.id}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-pre-wrap max-w-xs">{actividad.descripcionBreve || '-'}</TableCell>
                       <TableCell className="text-center text-sm text-muted-foreground">
                         {actividad.updatedAt ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : <CalendarClock className="h-4 w-4 inline-block" />}
                       </TableCell>
@@ -544,5 +662,4 @@ export default function ActividadesPage() {
     </div>
   );
 }
-
     

@@ -40,12 +40,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; // Import context
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
-// Removed: export const availableSystems
 
-export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const; // Export
+export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
@@ -76,7 +75,7 @@ export default function CapturaPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos(); // Use context for sistemas
+  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
@@ -126,7 +125,6 @@ export default function CapturaPage() {
           const processToEdit = existingData.find(p => p.id === editIdFromQuery);
           
           if (processToEdit) {
-            // Explicitly type processToEdit as 'any' for migration purposes
             const processToEditAny: any = processToEdit;
             const formDataToReset: Partial<CapturaFormData> & { id?: string, capturedAt?: string, activo?: boolean } = { 
               ...processToEditAny 
@@ -238,7 +236,6 @@ export default function CapturaPage() {
           title: "Proceso Registrado",
           description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
         });
-        // Instead of form.reset(), navigate to activity definition page
         router.push(`/captura/${newProcess.id}/actividades`);
       }
     } catch (error) {
@@ -252,7 +249,7 @@ export default function CapturaPage() {
   }
 
   const renderMultiSelectDropdown = (
-    field: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    field: any, 
     label: string,
     placeholder: string,
     options: { id: string; nombre: string }[],
