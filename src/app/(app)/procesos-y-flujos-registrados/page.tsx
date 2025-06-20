@@ -46,16 +46,20 @@ import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 
 
-export interface CapturedProcess extends CapturaFormData {
+export interface CapturedProcess extends Omit<CapturaFormData, 'formatosRecibe' | 'formatosEntrega'> {
   id: string;
   capturedAt: string;
   deletedAt?: string; 
+  formatosRecibe?: string; // Changed from string[] to string
+  formatosEntrega?: string; // Changed from string[] to string
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList && !isTextarea) || (isTextarea && typeof value === 'string' && value.trim() === '')) {
+  const displayValue = Array.isArray(value) ? value.join(', ') : value;
+
+  if (displayValue === undefined || (typeof displayValue === 'string' && displayValue.trim() === '')) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -63,8 +67,8 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
       </div>
     );
   }
-
-  if (isList && Array.isArray(value)) {
+  
+  if (isList && Array.isArray(value)) { // Keep for 'sistemas' which is still an array
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -76,11 +80,13 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
       </div>
     );
   }
-  
+
   return (
     <div>
       <h4 className="font-semibold text-sm">{title}:</h4>
-      <p className={cn("text-sm text-muted-foreground", isTextarea && "whitespace-pre-wrap")}>{typeof value === 'number' ? value.toString() : value}</p>
+      <p className={cn("text-sm text-muted-foreground", isTextarea && "whitespace-pre-wrap")}>
+        {typeof displayValue === 'number' ? displayValue.toString() : displayValue}
+      </p>
     </div>
   );
 };
@@ -210,7 +216,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (cellData === undefined || cellData === null) {
       return '';
     }
-    if (Array.isArray(cellData)) {
+    // Handle 'sistemas' which is still an array
+    if (Array.isArray(cellData)) { 
       const joinedString = cellData.join('; '); 
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
         return `"${joinedString.replace(/"/g, '""')}"`;
@@ -476,9 +483,9 @@ export default function ProcesosYFlujosRegistradosPage() {
               <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
               <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
               <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
-              <DetailSection title="Formatos de Información Utilizados (Entradas)" value={selectedProcess.formatosRecibe} isList />
+              <DetailSection title="Formatos de Información Utilizados (Entradas)" value={selectedProcess.formatosRecibe} />
               <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />
-              <DetailSection title="Formatos de Información Utilizados (Salidas)" value={selectedProcess.formatosEntrega} isList />
+              <DetailSection title="Formatos de Información Utilizados (Salidas)" value={selectedProcess.formatosEntrega} />
             </div>
           )}
           <DialogClose asChild>

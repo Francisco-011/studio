@@ -40,7 +40,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
@@ -68,9 +67,9 @@ const capturaFormSchema = z.object({
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
-  formatosRecibe: z.array(z.string()).optional().default([]),
+  formatosRecibe: z.string().optional(),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
-  formatosEntrega: z.array(z.string()).optional().default([]),
+  formatosEntrega: z.string().optional(),
 });
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
@@ -83,7 +82,6 @@ export default function CapturaPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { fuentesDestinos, isLoadingFuentesDestinos } = useFuentesDestinos();
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -98,9 +96,9 @@ export default function CapturaPage() {
       frecuencia: undefined,
       sistemas: [],
       informacionRecibe: "",
-      formatosRecibe: [],
+      formatosRecibe: "",
       informacionEntrega: "",
-      formatosEntrega: [],
+      formatosEntrega: "",
     },
   });
 
@@ -119,7 +117,17 @@ export default function CapturaPage() {
           const processToEdit = existingData.find(p => p.id === editIdFromQuery);
           
           if (processToEdit) {
-            form.reset(processToEdit);
+            // Ensure formatosRecibe and formatosEntrega are strings for the form
+            const formDataToReset = {
+              ...processToEdit,
+              formatosRecibe: Array.isArray(processToEdit.formatosRecibe) 
+                ? processToEdit.formatosRecibe.join(', ') 
+                : processToEdit.formatosRecibe || "",
+              formatosEntrega: Array.isArray(processToEdit.formatosEntrega) 
+                ? processToEdit.formatosEntrega.join(', ') 
+                : processToEdit.formatosEntrega || "",
+            };
+            form.reset(formDataToReset);
           } else {
             toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
             if (editingId !== null) setEditingId(null); 
@@ -187,7 +195,7 @@ export default function CapturaPage() {
     }
   }
 
-  const renderMultiSelectDropdown = (
+  const renderMultiSelectDropdownForSystems = (
     field: any, // eslint-disable-line @typescript-eslint/no-explicit-any
     label: string,
     placeholder: string,
@@ -202,7 +210,7 @@ export default function CapturaPage() {
               <div className="flex flex-wrap gap-1">
                 {field.value.map((itemName: string) => (
                   <Badge key={itemName} variant="secondary" className="font-normal">
-                    {itemName}
+                    {options.find(opt => opt.nombre === itemName)?.nombre || itemName}
                   </Badge>
                 ))}
               </div>
@@ -432,7 +440,7 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
+                     {renderMultiSelectDropdownForSystems(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
                     <FormDescription>
                       Seleccione los sistemas o software involucrados en la ejecución del proceso.
                     </FormDescription>
@@ -470,11 +478,17 @@ export default function CapturaPage() {
                 control={form.control}
                 name="formatosRecibe"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Formatos de Información Utilizados (Entradas)</FormLabel>
-                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos de entrada...", fuentesDestinos, isLoadingFuentesDestinos)}
+                    <FormControl>
+                      <Input 
+                        placeholder="Ej: PDF, Email, Excel, Sistema X" 
+                        {...field}
+                        value={field.value || ''}
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Seleccione los formatos en los que se recibe la información (Ej: PDF, Email, Sistema X).
+                      Mencione los formatos en los que se recibe la información.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -505,11 +519,17 @@ export default function CapturaPage() {
                 control={form.control}
                 name="formatosEntrega"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Formatos de Información Utilizados (Salidas)</FormLabel>
-                    {renderMultiSelectDropdown(field, "Formatos de Información", "Seleccionar formatos de salida...", fuentesDestinos, isLoadingFuentesDestinos)}
+                     <FormControl>
+                      <Input 
+                        placeholder="Ej: Documento Word, Correo electrónico, Actualización en CRM" 
+                        {...field} 
+                        value={field.value || ''}
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Seleccione los formatos en los que se entrega la información (Ej: Documento Word, Correo electrónico, Actualización en CRM).
+                      Mencione los formatos en los que se entrega la información.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -535,6 +555,4 @@ export default function CapturaPage() {
     </div>
   );
 }
-
-
     

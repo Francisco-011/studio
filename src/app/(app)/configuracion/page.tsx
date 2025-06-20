@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
-import { useFuentesDestinos, type FuenteDestino } from '@/contexts/FuentesDestinosContext';
+// Removed: import { useFuentesDestinos, type FuenteDestino } from '@/contexts/FuentesDestinosContext';
 
 
 import { Button } from '@/components/ui/button';
@@ -168,12 +168,7 @@ const costoSistemaFormSchema = z.object({
 });
 type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
-const fuenteDestinoFormSchema = z.object({
-  id: z.string().optional(),
-  nombre: z.string().min(1, 'El nombre es requerido.'),
-});
-type FuenteDestinoFormData = z.infer<typeof fuenteDestinoFormSchema>;
-
+// Removed: fuenteDestinoFormSchema and FuenteDestinoFormData
 
 interface ConfigSectionProps {
   title: string;
@@ -231,7 +226,7 @@ const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
   const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
-  const { fuentesDestinos, addFuenteDestino, updateFuenteDestino: updateContextFuenteDestino, deleteFuenteDestino: deleteContextFuenteDestino, isLoadingFuentesDestinos } = useFuentesDestinos();
+  // Removed: useFuentesDestinos
 
 
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -250,8 +245,9 @@ export default function ConfiguracionPage() {
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
 
-  const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
-  const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
+  // Removed states for Fuentes/Destinos
+  // const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
+  // const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
 
   // Load sistemas from localStorage
   useEffect(() => {
@@ -345,12 +341,7 @@ export default function ConfiguracionPage() {
     },
   });
 
-  const fuenteDestinoForm = useForm<FuenteDestinoFormData>({
-    resolver: zodResolver(fuenteDestinoFormSchema),
-    defaultValues: {
-      nombre: '',
-    },
-  });
+  // Removed: fuenteDestinoForm
 
   useEffect(() => {
     if (editingArea) {
@@ -419,13 +410,7 @@ export default function ConfiguracionPage() {
     }
   }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
 
-  useEffect(() => {
-    if (editingFuenteDestino) {
-      fuenteDestinoForm.reset({ id: editingFuenteDestino.id, nombre: editingFuenteDestino.nombre });
-    } else {
-      fuenteDestinoForm.reset({ nombre: '' });
-    }
-  }, [editingFuenteDestino, fuenteDestinoForm]);
+  // Removed: useEffect for editingFuenteDestino
 
 
   function handleAreaSubmit(data: AreaFormData) {
@@ -578,28 +563,7 @@ export default function ConfiguracionPage() {
     setIsCostoSistemaDialogOpen(true);
   }
 
-  function handleFuenteDestinoSubmit(data: FuenteDestinoFormData) {
-    if (editingFuenteDestino && editingFuenteDestino.id) {
-      updateContextFuenteDestino(editingFuenteDestino.id, data.nombre);
-      toast({ title: 'Fuente/Destino Actualizado', description: 'El elemento ha sido actualizado exitosamente.' });
-    } else {
-      addFuenteDestino(data.nombre);
-      toast({ title: 'Fuente/Destino Agregado', description: 'El elemento ha sido agregado exitosamente.' });
-    }
-    setEditingFuenteDestino(null);
-    setIsFuenteDestinoDialogOpen(false);
-    fuenteDestinoForm.reset();
-  }
-
-  function handleEditFuenteDestino(fd: FuenteDestino) {
-    setEditingFuenteDestino(fd);
-    setIsFuenteDestinoDialogOpen(true);
-  }
-
-  function handleDeleteFuenteDestino(fdId: string) {
-    deleteContextFuenteDestino(fdId);
-    toast({ title: 'Fuente/Destino Eliminado', description: 'El elemento ha sido eliminado exitosamente.', variant: 'destructive' });
-  }
+  // Removed: CRUD functions for Fuentes/Destinos
   
   const configSections: Array<{
     value: string;
@@ -1251,94 +1215,7 @@ export default function ConfiguracionPage() {
         </div>
       ),
     },
-    {
-      value: 'fuentesDestinos',
-      label: 'Fuentes/Destinos',
-      icon: <Share2 className="h-5 w-5 mr-2" />,
-      fullDescription: 'Administrar listas para "Información que Recibe" y "Entrega" en Captura. Campos: Nombre de la fuente/destino/formato.',
-      content: (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Gestión de Fuentes/Destinos de Información</h3>
-             <Dialog open={isFuenteDestinoDialogOpen} onOpenChange={(isOpen) => {
-                setIsFuenteDestinoDialogOpen(isOpen);
-                if (!isOpen) {
-                    setEditingFuenteDestino(null);
-                    fuenteDestinoForm.reset({ nombre: '' });
-                }
-            }}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingFuenteDestino(null); fuenteDestinoForm.reset({ nombre: '' }); setIsFuenteDestinoDialogOpen(true); }}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Elemento
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{editingFuenteDestino ? 'Editar Elemento' : 'Agregar Nuevo Elemento'}</DialogTitle>
-                  <DialogDescription>
-                    {editingFuenteDestino ? 'Modifica el nombre del elemento.' : 'Completa la información para agregar un nuevo elemento a la lista.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...fuenteDestinoForm}>
-                  <form onSubmit={fuenteDestinoForm.handleSubmit(handleFuenteDestinoSubmit)} className="space-y-4 py-4">
-                    <FormField
-                      control={fuenteDestinoForm.control}
-                      name="nombre"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre del Elemento</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: Factura Cliente, Reporte Interno, API Externa" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline" onClick={() => { setIsFuenteDestinoDialogOpen(false); setEditingFuenteDestino(null); }}>Cancelar</Button>
-                      </DialogClose>
-                      <Button type="submit">{editingFuenteDestino ? 'Guardar Cambios' : 'Agregar Elemento'}</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {isLoadingFuentesDestinos ? (
-            <PlaceholderContent title="Cargando elementos..." description="Por favor espere." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} isLoading />
-          ) : fuentesDestinos.length === 0 ? (
-            <PlaceholderContent title="No hay elementos registrados" description="Comienza agregando fuentes, destinos o formatos de información." icon={<Share2 className="h-12 w-12 text-muted-foreground" />} />
-          ) : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre del Elemento</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fuentesDestinos.map((fd) => (
-                    <TableRow key={fd.id}>
-                      <TableCell>{fd.nombre}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditFuenteDestino(fd)} className="mr-2">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteFuenteDestino(fd.id)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </div>
-      ),
-    },
+    // Removed "Fuentes/Destinos" section
   ];
 
 
@@ -1354,7 +1231,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-2 md:grid-cols-4 mb-4">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-3 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
