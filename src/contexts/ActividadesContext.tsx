@@ -12,12 +12,18 @@ export interface Actividad {
   procesosAsociadosIds?: string[];
   updatedAt?: number;
   deletedAt?: number;
+
+  // New fields for detailed capture
+  descripcionBreve?: string;
+  sistemaUtilizado?: string;
+  tiempoEstimadoActividad?: number; // in minutes
+  frecuenciaActividad?: string; 
 }
 
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => void;
+  addActividad: (data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Actividad;
   updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => void;
   softDeleteActividad: (id: string) => void;
   restoreActividad: (id: string) => void;
@@ -69,20 +75,27 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [actividades, deletedActividades, isLoadingActividades]);
 
-  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => {
+  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Actividad => {
     const newActividad: Actividad = {
       ...data,
-      id: Date.now().toString(),
+      id: Date.now().toString(), // Simple ID generation
       procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
       updatedAt: Date.now(),
+      activa: data.activa === undefined ? true : data.activa, // Default to active if not specified
     };
     setActividades((prev) => [...prev, newActividad]);
+    return newActividad;
   }, []);
 
   const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'updatedAt'>>) => {
     setActividades((prev) =>
       prev.map((act) =>
-        act.id === id ? { ...act, ...data, procesosAsociadosCount: data.procesosAsociadosIds?.length ?? act.procesosAsociadosCount, updatedAt: Date.now() } : act
+        act.id === id ? { 
+          ...act, 
+          ...data, 
+          procesosAsociadosCount: data.procesosAsociadosIds?.length ?? act.procesosAsociadosCount, 
+          updatedAt: Date.now() 
+        } : act
       )
     );
   }, []);

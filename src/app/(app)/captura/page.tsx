@@ -43,7 +43,7 @@ import { usePuestos } from "@/contexts/PuestosContext";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
-const availableSystems = [
+export const availableSystems = [ // Export for use in activities page
   { id: "1", nombre: "SAP S/4HANA" },
   { id: "2", nombre: "Salesforce CRM" },
   { id: "3", nombre: "ERP Interno 'Phoenix'" },
@@ -52,7 +52,7 @@ const availableSystems = [
   { id: "6", nombre: "Google Workspace" },
 ];
 
-const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
+export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const; // Export
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
@@ -138,7 +138,6 @@ export default function CapturaPage() {
               ...processToEditAny 
             };
             
-            // Migrate formatosRecibe to procesosEntrada
             if (processToEditAny.procesosEntrada) {
               formDataToReset.procesosEntrada = processToEditAny.procesosEntrada;
             } else if (typeof processToEditAny.formatosRecibe === 'string') {
@@ -149,7 +148,6 @@ export default function CapturaPage() {
               formDataToReset.procesosEntrada = [];
             }
 
-            // Migrate formatosEntrega to procesosSalida
             if (processToEditAny.procesosSalida) {
               formDataToReset.procesosSalida = processToEditAny.procesosSalida;
             } else if (typeof processToEditAny.formatosEntrega === 'string') {
@@ -160,7 +158,6 @@ export default function CapturaPage() {
               formDataToReset.procesosSalida = [];
             }
             
-            // Remove old fields from the object that will be reset into the form
             const finalFormDataToReset = { ...formDataToReset };
             delete (finalFormDataToReset as any).formatosRecibe;
             delete (finalFormDataToReset as any).formatosEntrega;
@@ -183,7 +180,7 @@ export default function CapturaPage() {
       if (editingId !== null) { 
           setEditingId(null);
       }
-      form.reset({ // Reset to default, ensuring new fields are empty arrays
+      form.reset({ 
         area: "",
         puesto: "",
         proceso: "",
@@ -206,7 +203,6 @@ export default function CapturaPage() {
       const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
 
-      // Ensure new fields are arrays even if undefined from form state
       const dataToSave: CapturaFormData = {
         ...values,
         procesosEntrada: values.procesosEntrada || [],
@@ -218,11 +214,10 @@ export default function CapturaPage() {
         const processToUpdate = existingData.find(p => p.id === editingId);
         if (processToUpdate) {
             const updatedProcess: CapturedProcess = {
-                ...(processToUpdate as any), // Cast to any to avoid type issues with old fields temporarily
-                ...dataToSave, // New data with correct array fields
+                ...(processToUpdate as any), 
+                ...dataToSave, 
                 activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
             };
-            // Remove old fields before saving if they somehow persisted
             delete (updatedProcess as any).formatosRecibe;
             delete (updatedProcess as any).formatosEntrega;
 
@@ -236,7 +231,7 @@ export default function CapturaPage() {
         } else {
              toast({ title: "Error", description: "No se encontró el proceso para actualizar.", variant: "destructive" });
         }
-      } else {
+      } else { // Creating a new process
         const newProcess: CapturedProcess = {
           ...dataToSave,
           id: Date.now().toString(),
@@ -247,22 +242,10 @@ export default function CapturaPage() {
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
         toast({
           title: "Proceso Registrado",
-          description: "La información del proceso ha sido guardada exitosamente.",
+          description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
         });
-        form.reset({ // Reset to default, ensuring new fields are empty arrays
-            area: "",
-            puesto: "",
-            proceso: "",
-            descripcion: "",
-            tiempoEstimado: undefined,
-            frecuencia: undefined,
-            sistemas: [],
-            informacionRecibe: "",
-            procesosEntrada: [],
-            informacionEntrega: "",
-            procesosSalida: [],
-            activityOrder: [],
-        }); 
+        // Instead of form.reset(), navigate to activity definition page
+        router.push(`/captura/${newProcess.id}/actividades`);
       }
     } catch (error) {
       console.error("Error saving to localStorage:", error);
@@ -361,7 +344,7 @@ export default function CapturaPage() {
   )};
   
   const availableProcessesForSelection = allProcesses
-    .filter(p => !p.deletedAt && p.id !== editingId) // Exclude self and deleted
+    .filter(p => !p.deletedAt && p.id !== editingId) 
     .map(p => ({ id: p.id, nombre: p.proceso }));
 
   return (
@@ -370,14 +353,14 @@ export default function CapturaPage() {
         <CardHeader className="flex flex-row items-center gap-2">
           <ClipboardEdit className="h-6 w-6 text-primary" />
           <CardTitle className="text-2xl font-headline">
-            {editingId ? "Editar Proceso Capturado" : "Módulo de Captura"}
+            {editingId ? "Editar Proceso Capturado" : "Módulo de Captura de Proceso"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground mb-6">
             {editingId 
               ? "Modifique los detalles del proceso seleccionado."
-              : "Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos y sus flujos de información asociados."
+              : "Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus actividades."
             }
           </p>
           <Form {...form}>
@@ -644,7 +627,7 @@ export default function CapturaPage() {
                 )}
                 <Button type="submit" size="lg">
                   <Save className="mr-2 h-5 w-5" />
-                  {editingId ? "Guardar Cambios" : "Guardar Proceso"}
+                  {editingId ? "Guardar Cambios" : "Guardar Proceso y Definir Actividades"}
                 </Button>
               </div>
             </form>
