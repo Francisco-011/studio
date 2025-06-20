@@ -1,6 +1,9 @@
 
+'use client';
+
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX } from "lucide-react";
+import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX, Loader2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -9,14 +12,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useActividades } from '@/contexts/ActividadesContext'; // Assuming Actividad interface is also exported or can be accessed
 
-// Dummy data for dashboard system costs - replace with dynamic data later
-const exampleSystemCosts = [
-  { id: '1', name: 'ERP Principal', annualUsage: 2400, annualNumLicenses: 10, annualCostPerLicense: 1500, currency: 'USD' },
-  { id: '2', name: 'CRM Ventas', annualUsage: 600, annualNumLicenses: 5, annualCostPerLicense: 1000, currency: 'USD' },
-  { id: '3', name: 'Software Contable', annualUsage: 0, annualNumLicenses: 2, annualCostPerLicense: 600, currency: 'MXN' },
-  { id: '4', name: 'Herramienta BI', annualUsage: 1000, annualNumLicenses: 0, annualCostPerLicense: 0, currency: 'USD' },
-];
+// Interfaces for data from localStorage (mirroring ConfiguracionPage)
+const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
+type TipoMoneda = typeof tiposDeMonedaOptions[number];
+
+interface Sistema {
+  id: string;
+  nombre: string;
+}
+
+interface SistemaCosto {
+  id: string;
+  sistemaId: string;
+  tipoCosto: ("Por Uso del Sistema" | "Por Licencias")[];
+  montoUso?: number;
+  numeroLicencias?: number;
+  costoPorLicencia?: number;
+  formaPago: "Transferencia" | "Efectivo" | "Tarjeta" | "Otros";
+  frecuencia: "Mensual" | "Anual" | "Otro";
+  moneda: TipoMoneda;
+  descripcion?: string;
+}
+
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
+const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
+
 
 function formatDashboardCurrency(amount: number, currency: string) {
   try {
@@ -26,8 +50,114 @@ function formatDashboardCurrency(amount: number, currency: string) {
   }
 }
 
+interface CalculatedSystemCost {
+    id: string;
+    name: string;
+    annualUsageCost: number;
+    annualLicenseCost: number;
+    totalAnnualCost: number;
+    currency: TipoMoneda | string;
+}
+
+function calculateAllSystemAnnualCosts(
+  allSistemas: Sistema[],
+  allCostos: SistemaCosto[]
+): CalculatedSystemCost[] {
+  if (!allSistemas || !allCostos) return [];
+
+  return allSistemas.map(system => {
+    const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
+    let totalAnnualUsage = 0;
+    let totalAnnualLicense = 0;
+    let systemCurrency: TipoMoneda | string = 'USD'; // Default currency
+
+    if (costsForSystem.length > 0) {
+      systemCurrency = costsForSystem[0].moneda; // Assume consistent currency per system for simplicity
+      costsForSystem.forEach(cost => {
+        if (cost.moneda === systemCurrency) { // Basic check, real app might need conversion
+          let periodicUsage = 0;
+          if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
+            periodicUsage = cost.montoUso;
+          }
+          
+          let periodicLicense = 0;
+          if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
+            periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
+          }
+
+          if (cost.frecuencia === "Mensual") {
+            totalAnnualUsage += periodicUsage * 12;
+            totalAnnualLicense += periodicLicense * 12;
+          } else if (cost.frecuencia === "Anual") {
+            totalAnnualUsage += periodicUsage;
+            totalAnnualLicense += periodicLicense;
+          } else { // "Otro" - treat as one-time/annual for summary
+            totalAnnualUsage += periodicUsage;
+            totalAnnualLicense += periodicLicense;
+          }
+        }
+      });
+    }
+    return {
+      id: system.id,
+      name: system.nombre,
+      annualUsageCost: totalAnnualUsage,
+      annualLicenseCost: totalAnnualLicense,
+      totalAnnualCost: totalAnnualUsage + totalAnnualLicense,
+      currency: systemCurrency,
+    };
+  });
+}
+
 
 export default function DashboardPage() {
+  const [procesosMapeadosCount, setProcesosMapeadosCount] = useState(0);
+  const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const { actividades, isLoadingActividades } = useActividades();
+
+  useEffect(() => {
+    setIsLoadingData(true);
+    try {
+      // Load Captured Processes
+      const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedProcesses) {
+        const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
+        setProcesosMapeadosCount(parsedProcesses.filter(p => !p.deletedAt).length);
+      }
+
+      // Load Sistemas and CostosSistemas
+      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+      const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
+      
+      const storedCostos = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
+      const costos: SistemaCosto[] = storedCostos ? JSON.parse(storedCostos) : [];
+      
+      setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costos));
+
+    } catch (error) {
+      console.error("Error loading dashboard data from localStorage:", error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+  
+  const metricasActividades = useMemo(() => {
+    if (isLoadingActividades) return { activas: 0, sinUso: 0 };
+    const activas = actividades.filter(a => a.activa).length;
+    const sinUso = actividades.filter(a => a.activa && a.procesosAsociadosCount === 0).length;
+    return { activas, sinUso };
+  }, [actividades, isLoadingActividades]);
+
+
+  const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
+    if (loading) {
+      return <Loader2 className={`h-5 w-5 animate-spin ${icon ? 'mr-2' : ''}`} />;
+    }
+    return <>{icon}{value}</>;
+  }
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-headline font-bold mb-8 text-primary">Dashboard Ejecutivo</h1>
@@ -39,8 +169,10 @@ export default function DashboardPage() {
             <Factory className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">152</div>
-            <p className="text-xs text-muted-foreground">+5 desde el último mes</p>
+            <div className="text-2xl font-bold">
+              {renderMetric(procesosMapeadosCount, isLoadingData)}
+            </div>
+            {/* <p className="text-xs text-muted-foreground">+5 desde el último mes</p> */}
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -79,8 +211,10 @@ export default function DashboardPage() {
             <ListChecks className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">78</div>
-            <p className="text-xs text-muted-foreground">+12 esta semana</p>
+            <div className="text-2xl font-bold">
+              {renderMetric(metricasActividades.activas, isLoadingActividades)}
+            </div>
+            {/* <p className="text-xs text-muted-foreground">+12 esta semana</p> */}
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -89,8 +223,10 @@ export default function DashboardPage() {
             <PackageX className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">13</div>
-            <p className="text-xs text-muted-foreground">Oportunidad de depuración</p>
+            <div className="text-2xl font-bold">
+               {renderMetric(metricasActividades.sinUso, isLoadingActividades)}
+            </div>
+            {/* <p className="text-xs text-muted-foreground">Oportunidad de depuración</p> */}
           </CardContent>
         </Card>
       </div>
@@ -112,37 +248,41 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias. (Datos de ejemplo)</CardDescription>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[30%]">Sistema</TableHead>
-                  <TableHead className="text-right">Uso Anual</TableHead>
-                  <TableHead className="text-right">Licencias Anual</TableHead>
-                  <TableHead className="text-right">Total Anual</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exampleSystemCosts.map((cost) => {
-                  const totalLicenseCost = (cost.annualNumLicenses || 0) * (cost.annualCostPerLicense || 0);
-                  const totalAnnualCost = (cost.annualUsage || 0) + totalLicenseCost;
-                  return (
-                    <TableRow key={cost.id}>
-                      <TableCell className="font-medium">{cost.name}</TableCell>
-                      <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsage || 0, cost.currency)}</TableCell>
-                      <TableCell className="text-right">{formatDashboardCurrency(totalLicenseCost, cost.currency)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatDashboardCurrency(totalAnnualCost, cost.currency)}</TableCell>
+            <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias.</CardDescription>
+            {isLoadingData ? (
+                <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
+                </div>
+            ) : calculatedSystemCosts.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas configurados.</p>
+            ) : (
+                <Table>
+                <TableHeader>
+                    <TableRow>
+                    <TableHead className="w-[30%]">Sistema</TableHead>
+                    <TableHead className="text-right">Uso Anual</TableHead>
+                    <TableHead className="text-right">Licencias Anual</TableHead>
+                    <TableHead className="text-right">Total Anual</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                    {calculatedSystemCosts.map((cost) => (
+                    <TableRow key={cost.id}>
+                        <TableCell className="font-medium">{cost.name}</TableCell>
+                        <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
+                        <TableCell className="text-right">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+            )}
             <div className="mt-6">
               <div className="flex justify-between text-sm">
                 <p>Ahorro Acumulado:</p>
                 <p className="font-semibold text-green-600">$3,500 USD</p>
               </div>
-              <p className="text-xs text-muted-foreground">Por acciones de optimización completadas.</p>
+              <p className="text-xs text-muted-foreground">Por acciones de optimización completadas. (Ejemplo)</p>
             </div>
           </CardContent>
         </Card>
