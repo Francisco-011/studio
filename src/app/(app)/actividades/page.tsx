@@ -65,6 +65,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
 import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { cn } from '@/lib/utils';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
@@ -238,8 +239,8 @@ export default function ActividadesPage() {
     const actividadActual = actividades.find(act => act.id === actividadId); 
     if (actividadActual) { 
       toast({
-        title: `Actividad ${actividadActual.activa ? 'Activada' : 'Desactivada'}`,
-        description: `La actividad "${actividadActual.nombre}" ha sido ${actividadActual.activa ? 'activada' : 'desactivada'}.`,
+        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`, // Corrected logic here
+        description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
       });
     }
   }
@@ -348,8 +349,8 @@ export default function ActividadesPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {recoverableActividades.map(act => (
-                            <TableRow key={act.id}>
+                          {recoverableActividades.map((act, index) => (
+                            <TableRow key={`${act.id}-${index}`}>
                               <TableCell>{act.nombre}</TableCell>
                               <TableCell>{act.deletedAt ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                               <TableCell className="text-right">
@@ -589,8 +590,8 @@ export default function ActividadesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredActividades.map((actividad) => (
-                    <TableRow key={actividad.id}>
+                  {filteredActividades.map((actividad, index) => (
+                    <TableRow key={`${actividad.id}-${index}`}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-pre-wrap max-w-sm">{actividad.descripcionBreve || '-'}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.sistemaUtilizado || '-'}</TableCell>
