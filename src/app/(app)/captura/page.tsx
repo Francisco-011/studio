@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { parseISO } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -126,7 +127,7 @@ export default function CapturaPage() {
           
           if (processToEdit) {
             const processToEditAny: any = processToEdit;
-            const formDataToReset: Partial<CapturaFormData> & { id?: string, capturedAt?: string, activo?: boolean } = { 
+            const formDataToReset: Partial<CapturaFormData> & { id?: string, capturedAt?: string, activo?: boolean, updatedAt?: number } = { 
               ...processToEditAny 
             };
             
@@ -194,6 +195,7 @@ export default function CapturaPage() {
     try {
       const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
+      const currentTime = new Date().getTime();
 
       const dataToSave: CapturaFormData = {
         ...values,
@@ -209,6 +211,7 @@ export default function CapturaPage() {
                 ...(processToUpdate as any), 
                 ...dataToSave, 
                 activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
+                updatedAt: currentTime,
             };
             delete (updatedProcess as any).formatosRecibe;
             delete (updatedProcess as any).formatosEntrega;
@@ -228,6 +231,7 @@ export default function CapturaPage() {
           ...dataToSave,
           id: Date.now().toString(),
           capturedAt: new Date().toISOString(),
+          updatedAt: currentTime,
           activo: true, 
         };
         existingData.push(newProcess);

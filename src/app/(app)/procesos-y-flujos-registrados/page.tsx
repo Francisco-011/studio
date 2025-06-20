@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -51,6 +51,7 @@ import type { Actividad } from '@/contexts/ActividadesContext';
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   capturedAt: string;
+  updatedAt?: number; 
   deletedAt?: string;
   activo?: boolean;
   // activityOrder is already in CapturaFormData schema if optional
@@ -127,6 +128,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             ...p,
             activo: p.activo === undefined ? true : p.activo,
             activityOrder: p.activityOrder || [],
+            updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now())
           };
 
           if (!newP.procesosEntrada) {
@@ -215,7 +217,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
 
-    return dataToFilter.sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
+    return dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter]);
 
   const recoverableProcesses = useMemo(() => {
@@ -240,7 +242,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     try {
       const updatedData = allCapturedData.map(p =>
         p.id === processToDelete.id
-          ? { ...p, deletedAt: new Date().toISOString() }
+          ? { ...p, deletedAt: new Date().toISOString(), updatedAt: Date.now() }
           : p
       );
       setAllCapturedData(updatedData);
@@ -259,7 +261,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         if (p.id === processId) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
-          return { ...restoredProc, activo: true };
+          return { ...restoredProc, activo: true, updatedAt: Date.now() };
         }
         return p;
       });
@@ -295,7 +297,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     const updatedData = allCapturedData.map(p =>
-      p.id === processId ? { ...p, activo: targetStatus } : p
+      p.id === processId ? { ...p, activo: targetStatus, updatedAt: Date.now() } : p
     );
     setAllCapturedData(updatedData);
     toast({
@@ -338,7 +340,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
       "Información Recibe", "Procesos Entradas",
       "Información Entrega", "Procesos Salidas",
-      "Fecha Captura", "Estado Activo", "Num. Actividades"
+      "Fecha Captura", "Últ. Modif.", "Estado Activo", "Num. Actividades"
     ];
 
     const csvRows = [
@@ -357,6 +359,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.informacionEntrega),
         escapeCsvCell(proc.procesosSalida),
         escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss')),
+        escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
         escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
         escapeCsvCell(proc.activityOrder?.length || 0)
       ].join(','))
@@ -380,6 +383,15 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   };
 
+  const renderTruncatedText = (text: string | undefined, maxLength: number = 50) => {
+    if (!text) return '-';
+    if (text.length <= maxLength) return text;
+    return (
+      <span title={text}>
+        {text.substring(0, maxLength)}...
+      </span>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -516,13 +528,21 @@ export default function ProcesosYFlujosRegistradosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre del Proceso</TableHead>
-                    <TableHead>Área</TableHead>
-                    <TableHead>Puesto</TableHead>
-                    <TableHead className="text-center">Actividades</TableHead>
-                    <TableHead className="w-[120px] text-center">Estado</TableHead>
-                    <TableHead>Fecha de Captura</TableHead>
-                    <TableHead className="text-right w-[180px]">Acciones</TableHead>
+                    <TableHead className="min-w-[150px]">Proceso</TableHead>
+                    <TableHead className="w-[120px]">Área</TableHead>
+                    <TableHead className="w-[120px]">Puesto</TableHead>
+                    <TableHead className="text-center w-[80px]">Estado</TableHead>
+                    <TableHead className="text-center w-[100px]" title="Tiempo Estimado (minutos)"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo</TableHead>
+                    <TableHead className="text-center w-[100px]" title="Frecuencia"><Repeat className="inline-block h-4 w-4 mr-1" />Frec.</TableHead>
+                    <TableHead className="w-[120px]" title="Sistemas Utilizados"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</TableHead>
+                    <TableHead className="w-[120px]" title="Procesos de Entradas"><ArrowRightLeft className="inline-block h-4 w-4 mr-1 transform rotate-180" />Ent. Procesos</TableHead>
+                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Recibe"><Info className="inline-block h-4 w-4 mr-1" />Info. Recibe</TableHead>
+                    <TableHead className="w-[120px]" title="Procesos de Salida"><ArrowRightLeft className="inline-block h-4 w-4 mr-1" />Sal. Procesos</TableHead>
+                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Entrega"><Info className="inline-block h-4 w-4 mr-1" />Info. Entrega</TableHead>
+                    <TableHead className="text-center w-[80px]" title="Número de Actividades"><ListTree className="inline-block h-4 w-4 mr-1" />Activ.</TableHead>
+                    <TableHead className="w-[140px]" title="Fecha de Captura"><CalendarClock className="inline-block h-4 w-4 mr-1" />F. Captura</TableHead>
+                    <TableHead className="w-[140px]" title="Última Modificación"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif.</TableHead>
+                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -532,26 +552,65 @@ export default function ProcesosYFlujosRegistradosPage() {
                       <TableCell>{proc.area}</TableCell>
                       <TableCell>{proc.puesto}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono">
-                           <ListTree className="h-3 w-3 mr-1.5" />
-                          {proc.activityOrder?.length || 0}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
                          <Badge variant={proc.activo !== false ? 'default' : 'outline'}
                                 className={cn(proc.activo === false && "border-destructive text-destructive")}>
                           {proc.activo !== false ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-center">{proc.tiempoEstimado ?? '-'}</TableCell>
+                      <TableCell className="text-center">{proc.frecuencia}</TableCell>
                       <TableCell>
-                        {format(new Date(proc.capturedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
+                        <div className="flex flex-wrap gap-1">
+                          {proc.sistemas && proc.sistemas.length > 0 ? (
+                            proc.sistemas.map((sys, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-xs">{sys}</Badge>
+                            ))
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                         <div className="flex flex-wrap gap-1">
+                          {proc.procesosEntrada && proc.procesosEntrada.length > 0 ? (
+                            proc.procesosEntrada.map((pe, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">{pe}</Badge>
+                            ))
+                          ) : (
+                             <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-pre-wrap max-w-[200px] overflow-hidden text-ellipsis">{renderTruncatedText(proc.informacionRecibe)}</TableCell>
+                       <TableCell>
+                         <div className="flex flex-wrap gap-1">
+                          {proc.procesosSalida && proc.procesosSalida.length > 0 ? (
+                            proc.procesosSalida.map((ps, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">{ps}</Badge>
+                            ))
+                          ) : (
+                             <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-pre-wrap max-w-[200px] overflow-hidden text-ellipsis">{renderTruncatedText(proc.informacionEntrega)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {proc.activityOrder?.length || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {format(new Date(proc.capturedAt), 'dd/MM/yy HH:mm', { locale: es })}
+                      </TableCell>
+                       <TableCell className="text-xs">
+                        {proc.updatedAt ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
                         <Switch
                           checked={proc.activo !== false}
                           onCheckedChange={() => handleToggleProcessStatus(proc.id)}
                           aria-label={proc.activo !== false ? 'Inactivar proceso' : 'Activar proceso'}
-                          className="mr-2"
+                          className="mr-1"
                         />
                         <Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)} title="Ver detalles">
                           <Eye className="h-4 w-4" />
@@ -591,6 +650,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             <DialogTitle>Detalles del Proceso: {selectedProcess?.proceso}</DialogTitle>
             <DialogDescription>
               Información completa del proceso y flujo registrado el {selectedProcess && format(new Date(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es })}.
+              Última modificación: {selectedProcess?.updatedAt ? format(new Date(selectedProcess.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
               Estado: {selectedProcess?.activo !== false ? 'Activo' : 'Inactivo'}.
               Actividades Asociadas: {selectedProcess?.activityOrder?.length || 0}.
             </DialogDescription>
