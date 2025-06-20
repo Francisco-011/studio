@@ -21,7 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-headline font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            <h1 className="text-3xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
               STUFFACTORY
             </h1>
           </div>
@@ -36,7 +36,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-auto flex-col items-start gap-2 border-b border-border bg-background px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
+        <header className="sticky top-0 z-10 flex h-auto flex-col items-start gap-2 border-b border-border bg-background px-4 pt-3 pb-2 sm:static sm:border-0 sm:bg-transparent sm:px-6 sm:pt-4 sm:pb-2">
           <div className="flex w-full items-center">
             <SidebarTrigger className="md:hidden mr-2" />
             <div className="flex flex-col flex-grow items-center">
@@ -47,7 +47,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 sm:px-6 sm:py-0 md:gap-8">
+        <main className="flex-1 px-4 pt-2 pb-4 sm:px-6 sm:py-0 md:gap-8">
           {children}
         </main>
       </SidebarInset>
