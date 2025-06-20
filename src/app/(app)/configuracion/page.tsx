@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
 import { useFuentesDestinos, type FuenteDestino } from '@/contexts/FuentesDestinosContext';
-import { useProcesos, type Proceso } from '@/contexts/ProcesosContext';
 
 
 import { Button } from '@/components/ui/button';
@@ -100,13 +99,6 @@ const areaFormSchema = z.object({
   nombre: z.string().min(1, 'El nombre del área es requerido.'),
 });
 type AreaFormData = z.infer<typeof areaFormSchema>;
-
-const procesoFormSchema = z.object({
-  id: z.string().optional(),
-  nombre: z.string().min(1, 'El nombre del proceso es requerido.'),
-});
-type ProcesoFormData = z.infer<typeof procesoFormSchema>;
-
 
 const puestoFormSchema = z.object({
   id: z.string().optional(),
@@ -238,7 +230,6 @@ const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
-  const { procesos, addProceso, updateProceso: updateContextProceso, deleteProceso: deleteContextProceso, isLoadingProcesos } = useProcesos();
   const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
   const { fuentesDestinos, addFuenteDestino, updateFuenteDestino: updateContextFuenteDestino, deleteFuenteDestino: deleteContextFuenteDestino, isLoadingFuentesDestinos } = useFuentesDestinos();
 
@@ -246,9 +237,6 @@ export default function ConfiguracionPage() {
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   
-  const [isProcesoDialogOpen, setIsProcesoDialogOpen] = useState(false);
-  const [editingProceso, setEditingProceso] = useState<Proceso | null>(null);
-
   const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
 
@@ -325,13 +313,6 @@ export default function ConfiguracionPage() {
     },
   });
 
-  const procesoForm = useForm<ProcesoFormData>({
-    resolver: zodResolver(procesoFormSchema),
-    defaultValues: {
-      nombre: '',
-    },
-  });
-
   const puestoForm = useForm<PuestoFormData>({
     resolver: zodResolver(puestoFormSchema),
     defaultValues: {
@@ -350,7 +331,7 @@ export default function ConfiguracionPage() {
   });
 
   const costoSistemaForm = useForm<SistemaCostoFormData>({
-    resolver: zodResolver(sistemaCostoFormSchema),
+    resolver: zodResolver(costoSistemaFormSchema),
     defaultValues: {
       sistemaId: '',
       tipoCosto: [],
@@ -378,14 +359,6 @@ export default function ConfiguracionPage() {
       areaForm.reset({ nombre: '' });
     }
   }, [editingArea, areaForm]);
-
-  useEffect(() => {
-    if (editingProceso) {
-      procesoForm.reset({ id: editingProceso.id, nombre: editingProceso.nombre });
-    } else {
-      procesoForm.reset({ nombre: '' });
-    }
-  }, [editingProceso, procesoForm]);
 
   useEffect(() => {
     if (editingPuesto) {
@@ -485,30 +458,6 @@ export default function ConfiguracionPage() {
     }
     deleteContextArea(areaId);
     toast({ title: 'Área Eliminada', description: 'El área ha sido eliminada exitosamente.', variant: 'destructive' });
-  }
-
-  function handleProcesoSubmit(data: ProcesoFormData) {
-    if (editingProceso && editingProceso.id) {
-      updateContextProceso(editingProceso.id, data.nombre);
-      toast({ title: 'Proceso Actualizado', description: 'El proceso ha sido actualizado exitosamente.' });
-    } else {
-      addProceso(data.nombre);
-      toast({ title: 'Proceso Agregado', description: 'El proceso ha sido agregado exitosamente.' });
-    }
-    setEditingProceso(null);
-    setIsProcesoDialogOpen(false);
-    procesoForm.reset();
-  }
-
-  function handleEditProceso(proceso: Proceso) {
-    setEditingProceso(proceso);
-    setIsProcesoDialogOpen(true);
-  }
-
-  function handleDeleteProceso(procesoId: string) {
-    // TODO: Check if proceso is in use in Captura module
-    deleteContextProceso(procesoId);
-    toast({ title: 'Proceso Eliminado', description: 'El proceso ha sido eliminado exitosamente.', variant: 'destructive' });
   }
 
   function handlePuestoSubmit(data: PuestoFormData) {
@@ -735,94 +684,6 @@ export default function ConfiguracionPage() {
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteArea(area.id)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </div>
-      ),
-    },
-    {
-      value: 'procesos',
-      label: 'Procesos',
-      icon: <ClipboardList className="h-5 w-5 mr-2" />,
-      fullDescription: 'Administrar los nombres de los procesos principales de la empresa. Estos nombres se usarán en el módulo de Captura.',
-      content: (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Gestión de Procesos</h3>
-            <Dialog open={isProcesoDialogOpen} onOpenChange={(isOpen) => {
-              setIsProcesoDialogOpen(isOpen);
-              if (!isOpen) {
-                setEditingProceso(null);
-                procesoForm.reset({nombre: ''});
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingProceso(null); procesoForm.reset({nombre: ''}); setIsProcesoDialogOpen(true); }}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Proceso
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{editingProceso ? 'Editar Proceso' : 'Agregar Nuevo Proceso'}</DialogTitle>
-                  <DialogDescription>
-                    {editingProceso ? 'Modifica el nombre del proceso.' : 'Completa la información para agregar un nuevo nombre de proceso.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...procesoForm}>
-                  <form onSubmit={procesoForm.handleSubmit(handleProcesoSubmit)} className="space-y-4 py-4">
-                    <FormField
-                      control={procesoForm.control}
-                      name="nombre"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre del Proceso</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: Proceso de Ventas, Gestión de Inventario" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <DialogClose asChild>
-                         <Button type="button" variant="outline" onClick={() => {setIsProcesoDialogOpen(false); setEditingProceso(null);}}>Cancelar</Button>
-                      </DialogClose>
-                      <Button type="submit">{editingProceso ? 'Guardar Cambios' : 'Agregar Proceso'}</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {isLoadingProcesos ? (
-            <PlaceholderContent title="Cargando procesos..." description="Por favor espere." icon={<ClipboardList className="h-12 w-12 text-muted-foreground" />} isLoading />
-          ) : procesos.length === 0 ? (
-             <PlaceholderContent title="No hay procesos registrados" description="Comienza agregando nombres de procesos para usarlos en la captura." icon={<ClipboardList className="h-12 w-12 text-muted-foreground" />} />
-          ) : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre del Proceso</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {procesos.map((proceso) => (
-                    <TableRow key={proceso.id}>
-                      <TableCell>{proceso.nombre}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditProceso(proceso)} className="mr-2">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteProceso(proceso.id)} className="text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -1493,7 +1354,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 mb-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-2 md:grid-cols-4 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}

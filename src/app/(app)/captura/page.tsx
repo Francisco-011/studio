@@ -41,7 +41,6 @@ import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useFuentesDestinos } from "@/contexts/FuentesDestinosContext";
-import { useProcesos } from "@/contexts/ProcesosContext";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
@@ -60,7 +59,7 @@ const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestr
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
   puesto: z.string().min(1, "El puesto es requerido."),
-  proceso: z.string().min(1, "El nombre del proceso es requerido."),
+  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
   tiempoEstimado: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
@@ -84,7 +83,6 @@ export default function CapturaPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { procesos, isLoadingProcesos } = useProcesos();
   const { fuentesDestinos, isLoadingFuentesDestinos } = useFuentesDestinos();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -114,7 +112,7 @@ export default function CapturaPage() {
         setEditingId(editIdFromQuery);
       }
   
-      if (!isLoadingAreas && !isLoadingPuestos && !isLoadingProcesos) {
+      if (!isLoadingAreas && !isLoadingPuestos) {
         try {
           const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
           const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
@@ -140,7 +138,7 @@ export default function CapturaPage() {
       }
       form.reset(); 
     }
-  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, isLoadingProcesos, editingId]);
+  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId]);
 
 
   function onSubmit(values: CapturaFormData) {
@@ -347,32 +345,14 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nombre del Proceso</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={isLoadingProcesos}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingProcesos ? "Cargando procesos..." : "Seleccione un proceso"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isLoadingProcesos ? (
-                          <SelectItem value="loading" disabled>Cargando procesos...</SelectItem>
-                        ) : procesos.length === 0 ? (
-                          <SelectItem value="no-procesos" disabled>No hay procesos configurados</SelectItem>
-                        ) : (
-                          procesos.map((proc) => (
-                            <SelectItem key={proc.id} value={proc.nombre}>
-                              {proc.nombre}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Input 
+                        placeholder="Ej: Gestión de Pedidos de Clientes, Cierre Contable Mensual" 
+                        {...field} 
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Seleccione el proceso principal de la lista configurada.
+                      Ingrese el nombre descriptivo del proceso que está capturando.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
