@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2 } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import {
@@ -134,9 +135,9 @@ export default function DashboardPage() {
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingProcessData, setIsLoadingProcessData] = useState(true);
   
-  const { actividades: allActividades, isLoadingActividades } = useActividades();
+  const { actividades: globalActividades, isLoadingActividades } = useActividades();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
-  const { acciones: allAcciones, isLoadingAcciones } = useAcciones();
+  const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
 
@@ -147,6 +148,9 @@ export default function DashboardPage() {
     from: startOfMonth(subMonths(new Date(), 5)), 
     to: endOfMonth(new Date()),
   });
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
+
 
   // State for AI Entity Summarization
   const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
@@ -162,7 +166,7 @@ export default function DashboardPage() {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setAllCapturedProcesses(parsedProcesses.filter(p => p.activo !== false)); // Keep active and non-deleted for calculations
+        setAllCapturedProcesses(parsedProcesses); // Keep all for now, filter later
       }
     } catch (error) {
       console.error("Error loading process data from localStorage:", error);
@@ -191,44 +195,66 @@ export default function DashboardPage() {
   }, [selectedEntityType, areas, puestos, isLoadingAreas, isLoadingPuestos]);
 
 
+  const processesFilteredByAreaPuesto = useMemo(() => {
+    let processes = allCapturedProcesses.filter(p => p.activo !== false && !p.deletedAt);
+    if (selectedArea !== 'all') {
+      processes = processes.filter(proc => proc.area === selectedArea);
+    }
+    if (selectedPuesto !== 'all') {
+      processes = processes.filter(proc => proc.puesto === selectedPuesto);
+    }
+    return processes;
+  }, [allCapturedProcesses, selectedArea, selectedPuesto]);
+
   const filteredCapturedProcesses = useMemo(() => {
-    if (!dashboardDateRange.from || !dashboardDateRange.to) return allCapturedProcesses.filter(p => !p.deletedAt); // ensure only non-deleted
-    return allCapturedProcesses.filter(proc => {
-        if (proc.deletedAt) return false;
+    if (!dashboardDateRange.from || !dashboardDateRange.to) return processesFilteredByAreaPuesto;
+    return processesFilteredByAreaPuesto.filter(proc => {
         if (!proc.capturedAt) return false;
         const capturedDate = parseISO(proc.capturedAt);
         return isValid(capturedDate) && isWithinInterval(capturedDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
     });
-  }, [allCapturedProcesses, dashboardDateRange]);
+  }, [processesFilteredByAreaPuesto, dashboardDateRange]);
 
   const filteredAcciones = useMemo(() => {
-    if (!dashboardDateRange.from || !dashboardDateRange.to) return allAcciones;
+    // Acciones are not filtered by Area/Puesto for now
+    if (!dashboardDateRange.from || !dashboardDateRange.to) return globalAcciones;
     
     const rangeStart = dashboardDateRange.from;
     const rangeEnd = dashboardDateRange.to;
 
-    return allAcciones.filter(accion => {
+    return globalAcciones.filter(accion => {
         if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: rangeStart, end: rangeEnd });
         }
-        // For "En Progreso" or "En Revisión", filter by creation date within the range
         if ((accion.estado === 'En Progreso' || accion.estado === 'En Revisión') && accion.fechaCreacion) {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
         return false; 
     });
-  }, [allAcciones, dashboardDateRange]);
+  }, [globalAcciones, dashboardDateRange]);
 
   const filteredActividades = useMemo(() => {
-    if (!dashboardDateRange.from || !dashboardDateRange.to) return allActividades;
-    return allActividades.filter(act => {
+    const relevantProcessIds = new Set(filteredCapturedProcesses.map(p => p.id));
+    return globalActividades.filter(act => {
         if (!act.createdAt) return false;
         const createdAtDate = new Date(act.createdAt);
-        return isValid(createdAtDate) && isWithinInterval(createdAtDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
+        if (!isValid(createdAtDate)) return false;
+        
+        let dateMatch = true;
+        if (dashboardDateRange.from && dashboardDateRange.to) {
+          dateMatch = isWithinInterval(createdAtDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
+        }
+        if (!dateMatch) return false;
+
+        if (selectedArea !== 'all' || selectedPuesto !== 'all') {
+          if (!act.procesosAsociadosIds || act.procesosAsociadosIds.length === 0) return false;
+          return act.procesosAsociadosIds.some(procId => relevantProcessIds.has(procId));
+        }
+        return true;
     });
-  }, [allActividades, dashboardDateRange]);
+  }, [globalActividades, dashboardDateRange, filteredCapturedProcesses, selectedArea, selectedPuesto]);
 
 
  useEffect(() => {
@@ -239,18 +265,23 @@ export default function DashboardPage() {
         end: dashboardDateRange.to,
       });
 
+      // Use processes already filtered by area/puesto for chart calculations
+      const baseProcessesForChart = processesFilteredByAreaPuesto;
+      // Actions are globally filtered by date for the chart
+      const baseActionsForChart = globalAcciones;
+
+
       monthsInInterval.forEach(monthStart => {
         const monthEnd = endOfMonth(monthStart);
         const monthLabel = format(monthStart, "MMM yy", { locale: es });
 
-        const procesosEsteMes = allCapturedProcesses.filter(proc => { 
-          if (proc.deletedAt) return false;
+        const procesosEsteMes = baseProcessesForChart.filter(proc => { 
           if (!proc.capturedAt) return false;
           const capturedDate = parseISO(proc.capturedAt);
           return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
         }).length;
 
-        const accionesEsteMes = allAcciones.filter(accion => { 
+        const accionesEsteMes = baseActionsForChart.filter(accion => { 
           if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
@@ -266,7 +297,7 @@ export default function DashboardPage() {
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [allCapturedProcesses, allAcciones, isLoadingProcessData, isLoadingAcciones, dashboardDateRange]);
+  }, [processesFilteredByAreaPuesto, globalAcciones, isLoadingProcessData, isLoadingAcciones, dashboardDateRange]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -288,10 +319,15 @@ export default function DashboardPage() {
     const activeFilteredActividades = filteredActividades.filter(a => a.activa);
     const actividadesActivasCount = activeFilteredActividades.length;
     
-    const actividadesSinUsoCount = activeFilteredActividades.filter(a => a.procesosAsociadosCount === 0).length;
+    const actividadesSinUsoCount = activeFilteredActividades.filter(a => {
+      const globalActivity = globalActividades.find(ga => ga.id === a.id);
+      return globalActivity?.procesosAsociadosCount === 0;
+    }).length;
     
-    // For "duplicadas", count active activities (created in range) associated with more than one process (overall, not just in-range processes)
-    const actividadesDuplicadasCount = activeFilteredActividades.filter(act => (allActividades.find(globalAct => globalAct.id === act.id)?.procesosAsociadosCount || 0) > 1).length;
+    const actividadesDuplicadasCount = activeFilteredActividades.filter(act => {
+       const globalActivity = globalActividades.find(ga => ga.id === act.id);
+       return (globalActivity?.procesosAsociadosCount || 0) > 1;
+    }).length;
     
     const accionesCompletadasCount = filteredAcciones.filter(acc => acc.estado === 'Completada').length;
     const accionesEnRevisionCount = filteredAcciones.filter(acc => acc.estado === 'En Revisión').length;
@@ -324,10 +360,10 @@ export default function DashboardPage() {
       actividadesDuplicadasCount,
       procesosSinActividadesCount,
     };
-  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, allActividades, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
+  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, globalActividades, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
 
 
-  const isLoadingAllData = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
+  const isLoadingAll = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
     if (loading) {
@@ -360,7 +396,7 @@ export default function DashboardPage() {
 
       const processDataString = relevantProcesses.map(proc => {
         const activitiesString = (proc.activityOrder || [])
-          .map(actId => allActividades.find(a => a.id === actId)?.nombre)
+          .map(actId => globalActividades.find(a => a.id === actId)?.nombre)
           .filter(Boolean)
           .join(', ');
         
@@ -385,72 +421,83 @@ export default function DashboardPage() {
       setIsGeneratingSummary(false);
     }
   };
+  
+  const handleExportPdf = () => {
+    toast({
+      title: "Función en Desarrollo",
+      description: "La exportación a PDF ejecutivo es una característica planificada y se implementará en futuras actualizaciones.",
+      duration: 5000,
+    });
+  };
 
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-        <h1 className="text-3xl font-headline font-bold text-primary mb-2 sm:mb-0">Dashboard Ejecutivo</h1>
-        <div className="flex flex-col sm:flex-row gap-2">
-            <Popover>
-                <PopoverTrigger asChild>
-                <Button
-                    variant={"outline"}
-                    size="sm"
-                    className={cn(
-                    "w-full sm:w-[180px] justify-start text-left font-normal",
-                    !dashboardDateRange.from && "text-muted-foreground"
-                    )}
-                >
-                    <CalendarIconLucide className="mr-2 h-4 w-4" />
-                    {dashboardDateRange.from ? format(dashboardDateRange.from, "dd MMM yy", {locale: es}) : <span>Desde</span>}
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+          <h1 className="text-3xl font-headline font-bold text-primary mb-2 sm:mb-0">Dashboard Ejecutivo</h1>
+        </div>
+        <div className="p-4 border rounded-lg bg-muted/30">
+            <div className="flex items-center gap-2 mb-3">
+                <FilterIcon className="h-5 w-5 text-primary"/>
+                <h4 className="text-md font-semibold">Filtros del Dashboard</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+                <div>
+                    <Label htmlFor="dateFrom" className="text-xs">Desde</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button id="dateFrom" variant={"outline"} size="sm" className={cn("w-full justify-start text-left font-normal", !dashboardDateRange.from && "text-muted-foreground")}>
+                            <CalendarIconLucide className="mr-2 h-4 w-4" />
+                            {dashboardDateRange.from ? format(dashboardDateRange.from, "dd MMM yy", {locale: es}) : <span>Seleccione</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dashboardDateRange.from} onSelect={(date) => setDashboardDateRange(prev => ({ ...prev, from: date ? startOfMonth(date) : undefined }))} defaultMonth={dashboardDateRange.from} captionLayout="dropdown-buttons" fromYear={2020} toYear={new Date().getFullYear() + 1} disabled={(date) => dashboardDateRange.to ? date > dashboardDateRange.to : false} initialFocus />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <div>
+                    <Label htmlFor="dateTo" className="text-xs">Hasta</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button id="dateTo" variant={"outline"} size="sm" className={cn("w-full justify-start text-left font-normal", !dashboardDateRange.to && "text-muted-foreground")}>
+                            <CalendarIconLucide className="mr-2 h-4 w-4" />
+                            {dashboardDateRange.to ? format(dashboardDateRange.to, "dd MMM yy", {locale: es}) : <span>Seleccione</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dashboardDateRange.to} onSelect={(date) => setDashboardDateRange(prev => ({ ...prev, to: date ? endOfMonth(date) : undefined }))} defaultMonth={dashboardDateRange.to} captionLayout="dropdown-buttons" fromYear={2020} toYear={new Date().getFullYear() + 1} disabled={(date) => dashboardDateRange.from ? date < dashboardDateRange.from : false} initialFocus />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <div>
+                    <Label htmlFor="areaFilter" className="text-xs">Área</Label>
+                    <Select value={selectedArea} onValueChange={setSelectedArea} disabled={isLoadingAreas}>
+                        <SelectTrigger id="areaFilter" className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="all">Todas las Áreas</SelectItem>
+                        {areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div>
+                    <Label htmlFor="puestoFilter" className="text-xs">Puesto</Label>
+                    <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
+                        <SelectTrigger id="puestoFilter" className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="all">Todos los Puestos</SelectItem>
+                        {puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button onClick={handleExportPdf} variant="outline" size="sm" className="w-full self-end">
+                    <Download className="mr-2 h-4 w-4" /> Exportar PDF (Conceptual)
                 </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                    mode="single"
-                    selected={dashboardDateRange.from}
-                    onSelect={(date) => setDashboardDateRange(prev => ({ ...prev, from: date ? startOfMonth(date) : undefined }))}
-                    defaultMonth={dashboardDateRange.from}
-                    captionLayout="dropdown-buttons"
-                    fromYear={2020}
-                    toYear={new Date().getFullYear() + 1}
-                    disabled={(date) => dashboardDateRange.to ? date > dashboardDateRange.to : false}
-                    initialFocus
-                />
-                </PopoverContent>
-            </Popover>
-            <Popover>
-                <PopoverTrigger asChild>
-                <Button
-                    variant={"outline"}
-                    size="sm"
-                    className={cn(
-                    "w-full sm:w-[180px] justify-start text-left font-normal",
-                    !dashboardDateRange.to && "text-muted-foreground"
-                    )}
-                >
-                    <CalendarIconLucide className="mr-2 h-4 w-4" />
-                    {dashboardDateRange.to ? format(dashboardDateRange.to, "dd MMM yy", {locale: es}) : <span>Hasta</span>}
-                </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                    mode="single"
-                    selected={dashboardDateRange.to}
-                    onSelect={(date) => setDashboardDateRange(prev => ({ ...prev, to: date ? endOfMonth(date) : undefined }))}
-                    defaultMonth={dashboardDateRange.to}
-                    captionLayout="dropdown-buttons"
-                    fromYear={2020}
-                    toYear={new Date().getFullYear() + 1}
-                    disabled={(date) => dashboardDateRange.from ? date < dashboardDateRange.from : false}
-                    initialFocus
-                />
-                </PopoverContent>
-            </Popover>
+            </div>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground mb-8">Métricas clave basadas en el rango de fechas seleccionado (excepto Costos de Sistemas).</p>
+      <p className="text-sm text-muted-foreground mb-8">Métricas clave basadas en el rango de fechas y filtros seleccionados (excepto Costos de Sistemas y Análisis de Entidad IA).</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -460,7 +507,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingProcessData || isLoadingActividades)}
+              {renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}
             </div>
           </CardContent>
         </Card>
@@ -471,7 +518,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingProcessData)}
+              {renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll)}
             </div>
              <p className="text-xs text-muted-foreground">Mismo nombre de proceso en &gt;1 Área/Puesto.</p>
           </CardContent>
@@ -483,9 +530,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingActividades)}
+              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingAll)}
             </div>
-            <p className="text-xs text-muted-foreground">(Creadas en el periodo)</p>
+            <p className="text-xs text-muted-foreground">(Creadas en el periodo, según filtros)</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -495,9 +542,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-                 {renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingActividades)}
+                 {renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll)}
             </div>
-            <p className="text-xs text-muted-foreground">Actividades (creadas en periodo) en &gt;1 proceso.</p>
+            <p className="text-xs text-muted-foreground">Actividades (creadas en periodo, según filtros) en &gt;1 proceso.</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -507,7 +554,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAcciones)}
+              {renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAll)}
             </div>
              <p className="text-xs text-muted-foreground">(Finalizadas en el periodo)</p>
           </CardContent>
@@ -519,7 +566,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAcciones)}
+              {renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}
             </div>
              <p className="text-xs text-muted-foreground">(Creadas en el periodo)</p>
           </CardContent>
@@ -531,7 +578,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAcciones)}
+              {renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAll)}
             </div>
              <p className="text-xs text-muted-foreground">(Creadas en el periodo)</p>
           </CardContent>
@@ -543,9 +590,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-               {renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingProcessData)}
+               {renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}
             </div>
-            <p className="text-xs text-muted-foreground">Procesos (capturados en periodo) sin actividades detalladas.</p>
+            <p className="text-xs text-muted-foreground">Procesos (capturados en periodo, según filtros) sin actividades detalladas.</p>
           </CardContent>
         </Card>
       </div>
@@ -561,7 +608,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="h-[350px] pt-4">
-            {isLoadingAllData ? (
+            {isLoadingAll ? (
                 <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando datos del gráfico...
                 </div>
@@ -600,7 +647,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias, y número total de licencias (no afectado por filtro de fecha).</CardDescription>
-            {isLoadingAllData ? (
+            {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
                 </div>
