@@ -239,7 +239,7 @@ export default function AuditoriaPage() {
                   <div className="grid gap-4 md:grid-cols-3 mb-6">
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total de Cambios (Filtrado)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Total de Cambios</CardTitle>
                         <Layers className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
@@ -248,7 +248,7 @@ export default function AuditoriaPage() {
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Cambios Hoy (Filtrado)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Cambios Hoy</CardTitle>
                         <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
@@ -257,7 +257,7 @@ export default function AuditoriaPage() {
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Usuarios Únicos (Filtrado)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Usuarios Únicos</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
