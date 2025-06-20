@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon, FileText } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -73,6 +73,17 @@ const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false
       <p className={cn("text-sm text-foreground", isTextarea && "whitespace-pre-wrap")}>{typeof value === 'number' ? value.toString() : value}</p>
     </div>
   );
+};
+
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
 };
 
 
@@ -811,6 +822,78 @@ export default function PanelJerarquicoPage() {
       .join(', ');
   };
 
+  const handleExportTreeDataToCsv = () => {
+    if (isLoadingAllData || treeData.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay datos en el árbol para exportar o los datos aún están cargando.", variant: "default" });
+      return;
+    }
+
+    const csvRows: string[][] = [];
+    const headers = [
+      "ID Área", "Nombre Área", "ID Puesto", "Nombre Puesto", 
+      "ID Proceso", "Nombre Proceso", "Estado Proceso", 
+      "Orden Actividad en Proceso", "ID Actividad", "Nombre Actividad", "Estado Actividad"
+    ];
+    csvRows.push(headers);
+
+    treeData.forEach(areaNode => {
+      const areaId = areaNode.originalId || 'N/A';
+      const areaName = areaNode.name;
+
+      (areaNode.children || []).forEach(puestoNode => {
+        const puestoId = puestoNode.originalId || 'N/A';
+        const puestoName = puestoNode.name;
+
+        (puestoNode.children || []).forEach(procesoNode => {
+          const procesoOriginalId = procesoNode.originalId;
+          const procesoCaptured = capturedProcesses.find(p => p.id === procesoOriginalId);
+          const procesoName = procesoNode.name;
+          const procesoActivo = procesoCaptured ? (procesoCaptured.activo !== false ? 'Activo' : 'Inactivo') : 'N/A';
+
+          if (!procesoNode.activities || procesoNode.activities.length === 0) {
+            csvRows.push([
+              escapeCsvCell(areaId), escapeCsvCell(areaName),
+              escapeCsvCell(puestoId), escapeCsvCell(puestoName),
+              escapeCsvCell(procesoOriginalId), escapeCsvCell(procesoName), escapeCsvCell(procesoActivo),
+              '', '', '', '' // Empty activity fields
+            ]);
+          } else {
+            procesoNode.activities.forEach((act, index) => {
+              const activityId = act.id;
+              const activityOriginal = actividades.find(a => a.id === activityId);
+              const activityName = act.nombre;
+              const activityActiva = activityOriginal ? (activityOriginal.activa ? 'Activa' : 'Inactiva') : 'N/A';
+              
+              csvRows.push([
+                escapeCsvCell(areaId), escapeCsvCell(areaName),
+                escapeCsvCell(puestoId), escapeCsvCell(puestoName),
+                escapeCsvCell(procesoOriginalId), escapeCsvCell(procesoName), escapeCsvCell(procesoActivo),
+                escapeCsvCell(index + 1), escapeCsvCell(activityId), escapeCsvCell(activityName), escapeCsvCell(activityActiva)
+              ]);
+            });
+          }
+        });
+      });
+    });
+
+    const csvString = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `panel_jerarquico_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV del árbol jerárquico se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoadingAllData) {
     return (
@@ -840,8 +923,8 @@ export default function PanelJerarquicoPage() {
             <CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle>
           </div>
           <CardDescription className="mb-4">
-            Explore la estructura organizativa y las relaciones de procesos mediante vistas jerárquicas y diagramas de flujo. 
-            La vista de árbol permite arrastrar actividades activas desde el pool hacia procesos activos, moverlas entre procesos, reordenarlas, o devolverlas al pool. Los procesos activos también pueden reordenarse dentro de su puesto.
+            Explore la estructura organizativa y las relaciones de procesos. 
+            La vista de árbol permite arrastrar actividades activas del pool a procesos activos, moverlas entre procesos, reordenarlas, o devolverlas al pool. Los procesos activos también pueden reordenarse dentro de su puesto.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -853,8 +936,15 @@ export default function PanelJerarquicoPage() {
 
             <TabsContent value="arbol">
               <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
-                <CardTitle className="text-lg">Filtros del Árbol de Procesos</CardTitle>
-                <CardDescription className="text-xs">Filtre la vista de árbol por área, puesto, estado del proceso o actividad/proceso. Los procesos inactivos se muestran atenuados y no permiten interacciones de asignación o reordenamiento.</CardDescription>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle className="text-lg">Filtros del Árbol de Procesos</CardTitle>
+                        <CardDescription className="text-xs">Filtre la vista de árbol. Procesos inactivos se muestran atenuados y no permiten interacciones.</CardDescription>
+                    </div>
+                    <Button onClick={handleExportTreeDataToCsv} variant="outline" size="sm" disabled={isLoadingAllData || treeData.length === 0}>
+                        <FileText className="mr-2 h-4 w-4" /> Exportar Vista CSV
+                    </Button>
+                </div>
                 {filteredByActivityName && (
                   <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
                     <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
