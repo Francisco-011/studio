@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2 } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -325,9 +325,10 @@ export default function PanelJerarquicoPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-full">
+                  <div className="flex flex-col items-center justify-center h-full text-center">
                     <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
-                    <p className="text-muted-foreground text-center">No hay actividades disponibles. <br/> Agréguelas en el módulo de 'Actividades'.</p>
+                    <p className="text-muted-foreground">No hay actividades disponibles.</p>
+                    <p className="text-xs text-muted-foreground">Agréguelas en 'Gestión de Actividades'.</p>
                   </div>
                 )}
               </ScrollArea>
@@ -341,3 +342,4 @@ export default function PanelJerarquicoPage() {
     </div>
   );
 }
+
