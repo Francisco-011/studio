@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,6 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -19,8 +22,9 @@ import {
   ChartTooltipContent,
   type ChartConfig
 } from "@/components/ui/chart";
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, eachMonthOfInterval, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -65,7 +69,7 @@ function calculateAllSystemAnnualCosts(
     if (costsForSystem.length > 0) {
       systemCurrency = costsForSystem[0].moneda;
       costsForSystem.forEach(cost => {
-        if (cost.moneda === systemCurrency) { // Simple assumption: sum costs of the same currency
+        if (cost.moneda === systemCurrency) { 
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
@@ -74,7 +78,7 @@ function calculateAllSystemAnnualCosts(
           let periodicLicense = 0;
           if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
             periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
-            systemTotalLicenses += cost.numeroLicencias; // Sum up licenses
+            systemTotalLicenses += cost.numeroLicencias; 
           }
 
           if (cost.frecuencia === "Mensual") {
@@ -131,6 +135,12 @@ export default function DashboardPage() {
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
   const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
 
+  const [chartDateRange, setChartDateRange] = useState<{ from?: Date; to?: Date }>({
+    from: startOfMonth(subMonths(new Date(), 5)), // Default: last 6 months including current
+    to: endOfMonth(new Date()),
+  });
+
+
   useEffect(() => {
     setIsLoadingProcessData(true);
     try {
@@ -152,40 +162,41 @@ export default function DashboardPage() {
     }
   }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
 
-  useEffect(() => {
-    if (!isLoadingProcessData && !isLoadingAcciones) {
-      const now = new Date();
+ useEffect(() => {
+    if (!isLoadingProcessData && !isLoadingAcciones && chartDateRange.from && chartDateRange.to) {
       const monthlyData: MonthlyEvolutionData[] = [];
+      const monthsInInterval = eachMonthOfInterval({
+        start: chartDateRange.from,
+        end: chartDateRange.to,
+      });
 
-      for (let i = 5; i >= 0; i--) {
-        const targetMonthDate = subMonths(now, i);
-        const monthStart = startOfMonth(targetMonthDate);
-        const monthEnd = endOfMonth(targetMonthDate);
-        
+      monthsInInterval.forEach(monthStart => {
+        const monthEnd = endOfMonth(monthStart);
         const monthLabel = format(monthStart, "MMM yy", { locale: es });
 
         const procesosEsteMes = capturedProcesses.filter(proc => {
+          if (!proc.capturedAt) return false;
           const capturedDate = parseISO(proc.capturedAt);
-          return isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
+          return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
         }).length;
 
         const accionesEsteMes = acciones.filter(accion => {
           if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
-            return isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
+            return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
           }
           return false;
         }).length;
         
         monthlyData.push({
-          month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), // Capitalize month
+          month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
           procesosMapeados: procesosEsteMes,
           accionesCompletadas: accionesEsteMes,
         });
-      }
+      });
       setEvolutionChartData(monthlyData);
     }
-  }, [capturedProcesses, acciones, isLoadingProcessData, isLoadingAcciones]);
+  }, [capturedProcesses, acciones, isLoadingProcessData, isLoadingAcciones, chartDateRange]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -355,8 +366,70 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader>
-            <CardTitle>Evolución de Optimización de Procesos</CardTitle>
-            <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas (últimos 6 meses).</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <CardTitle>Evolución de Optimización de Procesos</CardTitle>
+                    <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas.</CardDescription>
+                </div>
+                <div className="flex gap-2 mt-4 sm:mt-0">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={"outline"}
+                            size="sm"
+                            className={cn(
+                            "w-[150px] justify-start text-left font-normal",
+                            !chartDateRange.from && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIconLucide className="mr-2 h-4 w-4" />
+                            {chartDateRange.from ? format(chartDateRange.from, "LLL yy", {locale: es}) : <span>Desde</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                            mode="single"
+                            selected={chartDateRange.from}
+                            onSelect={(date) => setChartDateRange(prev => ({ ...prev, from: date ? startOfMonth(date) : undefined }))}
+                            defaultMonth={chartDateRange.from}
+                            captionLayout="dropdown-buttons"
+                            fromYear={2020}
+                            toYear={new Date().getFullYear() + 1}
+                            disabled={(date) => chartDateRange.to ? date > chartDateRange.to : false}
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={"outline"}
+                            size="sm"
+                            className={cn(
+                            "w-[150px] justify-start text-left font-normal",
+                            !chartDateRange.to && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIconLucide className="mr-2 h-4 w-4" />
+                            {chartDateRange.to ? format(chartDateRange.to, "LLL yy", {locale: es}) : <span>Hasta</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                            mode="single"
+                            selected={chartDateRange.to}
+                            onSelect={(date) => setChartDateRange(prev => ({ ...prev, to: date ? endOfMonth(date) : undefined }))}
+                            defaultMonth={chartDateRange.to}
+                            captionLayout="dropdown-buttons"
+                            fromYear={2020}
+                            toYear={new Date().getFullYear() + 1}
+                            disabled={(date) => chartDateRange.from ? date < chartDateRange.from : false}
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            </div>
           </CardHeader>
           <CardContent className="h-[350px] pt-4">
             {isLoadingAllData ? (
@@ -386,7 +459,7 @@ export default function DashboardPage() {
               </ChartContainer>
             ) : (
                  <div className="flex items-center justify-center h-full">
-                    <p className="text-muted-foreground">No hay suficientes datos para mostrar la evolución.</p>
+                    <p className="text-muted-foreground">No hay suficientes datos para mostrar la evolución en el rango seleccionado.</p>
                 </div>
             )}
           </CardContent>
@@ -436,3 +509,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
