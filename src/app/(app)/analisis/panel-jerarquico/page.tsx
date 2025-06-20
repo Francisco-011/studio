@@ -297,6 +297,15 @@ export default function PanelJerarquicoPage() {
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [actividades, activitySearchTerm, assignmentCountFilter]);
 
+  const getProcessNamesForActivity = (activity: Actividad): string => {
+    if (!activity.procesosAsociadosIds || activity.procesosAsociadosIds.length === 0) {
+      return "No asignada a procesos.";
+    }
+    return activity.procesosAsociadosIds
+      .map(procId => capturedProcesses.find(cp => cp.id === procId)?.proceso || `ID: ${procId} (no encontrado)`)
+      .join(', ');
+  };
+
   const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
 
   if (isLoadingAllData) {
@@ -434,10 +443,15 @@ export default function PanelJerarquicoPage() {
                         draggable 
                         onDragStart={(e) => handleDragStart(e, act.id)}
                         className="flex items-center p-2 bg-card border rounded shadow-sm text-sm cursor-grab active:cursor-grabbing hover:shadow-md"
+                        title={act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos'}
                       >
                         <GripVertical className="h-4 w-4 mr-2 text-muted-foreground"/>
                         {act.nombre}
-                        {act.procesosAsociadosCount > 0 && <Badge variant="outline" className="ml-auto text-xs">{act.procesosAsociadosCount}P</Badge>}
+                        {act.procesosAsociadosCount > 0 && 
+                          <Badge variant="outline" className="ml-auto text-xs">
+                            {act.procesosAsociadosCount}P
+                          </Badge>
+                        }
                       </div>
                     ))}
                   </div>
