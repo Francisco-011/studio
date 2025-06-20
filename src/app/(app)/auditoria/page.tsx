@@ -61,7 +61,8 @@ export default function AuditoriaPage() {
   useEffect(() => {
     setIsLoadingLog(true);
     const generatedLog: SimulatedAuditEntry[] = [];
-    const user = "Sistema"; // Assuming a system user for now
+    const user = "Sistema"; 
+    let auditLogIndex = 0; // Counter for unique IDs
 
     try {
       const storedCapturedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
@@ -70,7 +71,7 @@ export default function AuditoriaPage() {
       capturedProcesses.forEach(proc => {
         if (proc.capturedAt && isValid(parseISO(proc.capturedAt))) {
           generatedLog.push({
-            id: `proc_create_${proc.id}_${parseISO(proc.capturedAt).getTime()}`,
+            id: `log_${auditLogIndex++}_proc_create_${proc.id}_${parseISO(proc.capturedAt).getTime()}`,
             timestamp: proc.capturedAt,
             user,
             module: "Procesos y Flujos",
@@ -80,7 +81,7 @@ export default function AuditoriaPage() {
         }
         if (proc.deletedAt && isValid(parseISO(proc.deletedAt))) {
            generatedLog.push({
-            id: `proc_delete_${proc.id}_${parseISO(proc.deletedAt).getTime()}`,
+            id: `log_${auditLogIndex++}_proc_delete_${proc.id}_${parseISO(proc.deletedAt).getTime()}`,
             timestamp: proc.deletedAt,
             user,
             module: "Procesos y Flujos",
@@ -88,9 +89,11 @@ export default function AuditoriaPage() {
             details: `Proceso '${proc.proceso}' (ID: ${proc.id}) eliminado.`
           });
         }
-        if (proc.updatedAt && proc.capturedAt && isValid(new Date(proc.updatedAt)) && isValid(parseISO(proc.capturedAt)) && proc.updatedAt > (parseISO(proc.capturedAt).getTime() + 60000) && !proc.deletedAt) {
+        // Ensure proc.updatedAt is a number and different enough from capturedAt to be considered a distinct update
+        const capturedTime = proc.capturedAt ? parseISO(proc.capturedAt).getTime() : 0;
+        if (proc.updatedAt && typeof proc.updatedAt === 'number' && isValid(new Date(proc.updatedAt)) && proc.updatedAt > (capturedTime + 60000) && !proc.deletedAt) {
           generatedLog.push({
-            id: `proc_update_${proc.id}_${proc.updatedAt}`,
+            id: `log_${auditLogIndex++}_proc_update_${proc.id}_${proc.updatedAt}`,
             timestamp: new Date(proc.updatedAt).toISOString(),
             user,
             module: "Procesos y Flujos",
@@ -108,44 +111,41 @@ export default function AuditoriaPage() {
       const allActividades = [...activeActividades, ...deletedActividadesData];
 
       allActividades.forEach(act => {
-        const creationTime = act.createdAt || parseInt(act.id, 10) || Date.now();
-
-        // Log creation if it's a valid creation and not a deleted record that was never active
-        // For activities from deleted list, only log if they were once active (i.e., have a creation time before deletion)
+        // Ensure act.id is a string for key generation consistency
+        const activityIdStr = String(act.id);
+        const creationTime = act.createdAt || parseInt(activityIdStr, 10) || Date.now();
         const isEffectivelyCreated = !deletedActividadesData.some(da => da.id === act.id) || (act.deletedAt && creationTime < act.deletedAt);
 
         if (isValid(new Date(creationTime)) && isEffectivelyCreated) {
              generatedLog.push({
-                id: `act_create_${act.id}_${creationTime}`,
+                id: `log_${auditLogIndex++}_act_create_${activityIdStr}_${creationTime}`,
                 timestamp: new Date(creationTime).toISOString(),
                 user,
                 module: "Actividades",
                 action: "Creación",
-                details: `Actividad '${act.nombre}' (ID: ${act.id}) creada. Estado inicial: ${act.activa ? 'Activa' : 'Inactiva'}.`
+                details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) creada. Estado inicial: ${act.activa ? 'Activa' : 'Inactiva'}.`
               });
         }
         
-        // Log updates if updatedAt exists and is different from creation, and not a deleted record
-        if (act.updatedAt && act.updatedAt > (creationTime + 1000) && !act.deletedAt && isValid(new Date(act.updatedAt))) {
+        if (act.updatedAt && typeof act.updatedAt === 'number' && act.updatedAt > (creationTime + 1000) && !act.deletedAt && isValid(new Date(act.updatedAt))) {
              generatedLog.push({
-                id: `act_update_${act.id}_${act.updatedAt}`,
+                id: `log_${auditLogIndex++}_act_update_${activityIdStr}_${act.updatedAt}`,
                 timestamp: new Date(act.updatedAt).toISOString(),
                 user,
                 module: "Actividades",
                 action: "Actualización",
-                details: `Actividad '${act.nombre}' (ID: ${act.id}) actualizada. Estado: ${act.activa ? 'Activa' : 'Inactiva'}.`
+                details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) actualizada. Estado: ${act.activa ? 'Activa' : 'Inactiva'}.`
               });
         }
 
-        // Log deletion
-        if (act.deletedAt && isValid(new Date(act.deletedAt))) {
+        if (act.deletedAt && typeof act.deletedAt === 'number' && isValid(new Date(act.deletedAt))) {
           generatedLog.push({
-            id: `act_delete_${act.id}_${act.deletedAt}`,
+            id: `log_${auditLogIndex++}_act_delete_${activityIdStr}_${act.deletedAt}`,
             timestamp: new Date(act.deletedAt).toISOString(),
             user,
             module: "Actividades",
             action: "Eliminación",
-            details: `Actividad '${act.nombre}' (ID: ${act.id}) eliminada.`
+            details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) eliminada.`
           });
         }
       });
@@ -154,24 +154,28 @@ export default function AuditoriaPage() {
       const acciones: AccionContextType[] = storedAcciones ? JSON.parse(storedAcciones) : [];
 
       acciones.forEach(acc => {
+        // Ensure acc.id is a string
+        const accionIdStr = String(acc.id);
         if (acc.fechaCreacion && isValid(parseISO(acc.fechaCreacion))) {
           generatedLog.push({
-            id: `accion_create_${acc.id}_${parseISO(acc.fechaCreacion).getTime()}`,
+            id: `log_${auditLogIndex++}_accion_create_${accionIdStr}_${parseISO(acc.fechaCreacion).getTime()}`,
             timestamp: acc.fechaCreacion,
             user,
             module: "Acciones",
             action: "Creación",
-            details: `Acción de mejora '${acc.nombre}' (ID: ${acc.id}) creada.`
+            details: `Acción de mejora '${acc.nombre}' (ID: ${accionIdStr}) creada.`
           });
         }
-        if (acc.updatedAt && acc.fechaCreacion && isValid(new Date(acc.updatedAt)) && isValid(parseISO(acc.fechaCreacion)) && (acc.updatedAt > (parseISO(acc.fechaCreacion).getTime() + 60000))) {
+        // Ensure acc.updatedAt is a number and different enough from fechaCreacion
+        const creacionTimeAccion = acc.fechaCreacion ? parseISO(acc.fechaCreacion).getTime() : 0;
+        if (acc.updatedAt && typeof acc.updatedAt === 'number' && isValid(new Date(acc.updatedAt)) && (acc.updatedAt > (creacionTimeAccion + 60000))) {
            generatedLog.push({
-            id: `accion_update_${acc.id}_${acc.updatedAt}`,
+            id: `log_${auditLogIndex++}_accion_update_${accionIdStr}_${acc.updatedAt}`,
             timestamp: new Date(acc.updatedAt).toISOString(),
             user,
             module: "Acciones",
             action: "Actualización",
-            details: `Acción de mejora '${acc.nombre}' (ID: ${acc.id}) actualizada. Estado: ${acc.estado}.`
+            details: `Acción de mejora '${acc.nombre}' (ID: ${accionIdStr}) actualizada. Estado: ${acc.estado}.`
           });
         }
       });
@@ -198,7 +202,7 @@ export default function AuditoriaPage() {
   }, [dynamicSimulatedLog]);
 
   const filteredSimulatedLog = useMemo(() => {
-    setCurrentPage(1); // Reset page on filter change
+    setCurrentPage(1); 
     return dynamicSimulatedLog
       .filter(entry => {
         if (actionTypeFilter !== 'all' && entry.action !== actionTypeFilter) {
@@ -263,7 +267,7 @@ export default function AuditoriaPage() {
       return;
     }
 
-    const headers = ["ID", "Fecha y Hora", "Usuario", "Módulo", "Acción", "Detalles"];
+    const headers = ["ID Log", "Fecha y Hora", "Usuario", "Módulo", "Acción", "Detalles"];
     const csvRows = [
       headers.join(','),
       ...filteredSimulatedLog.map(entry => [
