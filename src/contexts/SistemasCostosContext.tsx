@@ -18,9 +18,15 @@ export type FrecuenciaPago = typeof frecuenciasDePagoOptions[number];
 export const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
 export type TipoMoneda = typeof tiposDeMonedaOptions[number];
 
+export type SistemaScope = "Empresa" | "Área" | "Puesto";
+export const sistemaScopeOptions: SistemaScope[] = ["Empresa", "Área", "Puesto"];
+
+
 export interface Sistema {
   id: string;
   nombre: string;
+  scope: SistemaScope;
+  scopeId?: string; // ID of Area or Puesto if scope is "Área" or "Puesto"
 }
 
 export interface SistemaCosto {
@@ -36,11 +42,15 @@ export interface SistemaCosto {
   descripcion?: string;
 }
 
+export interface SistemaCreationData extends Omit<Sistema, 'id'> {}
+export interface SistemaUpdateData extends Partial<Omit<Sistema, 'id'>> {}
+
+
 interface SistemasCostosContextType {
   sistemas: Sistema[];
   costosSistemas: SistemaCosto[];
-  addSistema: (nombre: string) => Sistema;
-  updateSistema: (id: string, nombre: string) => void;
+  addSistema: (data: SistemaCreationData) => Sistema;
+  updateSistema: (id: string, data: SistemaUpdateData) => void;
   deleteSistema: (id: string) => void;
   addCostoSistema: (costoData: Omit<SistemaCosto, 'id'>) => void;
   updateCostoSistema: (id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => void;
@@ -65,7 +75,12 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
       try {
         const savedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
         if (savedSistemas) {
-          setSistemas(JSON.parse(savedSistemas));
+          // Migrate existing data: old systems won't have scope, default to "Empresa"
+          const parsedSistemas: Sistema[] = JSON.parse(savedSistemas).map((s: any) => ({
+            ...s,
+            scope: s.scope || "Empresa",
+          }));
+          setSistemas(parsedSistemas);
         }
         const savedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
         if (savedCostosSistemas) {
@@ -104,15 +119,24 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
     }
   }, [costosSistemas, isLoadingSistemasCostos]);
 
-  const addSistema = useCallback((nombre: string): Sistema => {
-    const newSistema: Sistema = { id: Date.now().toString(), nombre };
+  const addSistema = useCallback((data: SistemaCreationData): Sistema => {
+    const newSistema: Sistema = { 
+        id: Date.now().toString(), 
+        nombre: data.nombre,
+        scope: data.scope || "Empresa",
+        scopeId: data.scope === "Empresa" ? undefined : data.scopeId,
+    };
     setSistemas((prev) => [...prev, newSistema]);
     return newSistema;
   }, []);
 
-  const updateSistema = useCallback((id: string, nombre: string) => {
+  const updateSistema = useCallback((id: string, data: SistemaUpdateData) => {
     setSistemas((prev) =>
-      prev.map((sistema) => (sistema.id === id ? { ...sistema, nombre } : sistema))
+      prev.map((sistema) => (sistema.id === id ? { 
+        ...sistema, 
+        ...data,
+        scopeId: data.scope === "Empresa" ? undefined : (data.scopeId !== undefined ? data.scopeId : sistema.scopeId)
+      } : sistema))
     );
   }, []);
 

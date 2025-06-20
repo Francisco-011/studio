@@ -20,6 +20,10 @@ import {
   type FormaPago,
   type FrecuenciaPago,
   type TipoMoneda,
+  type SistemaScope,
+  sistemaScopeOptions,
+  type SistemaCreationData,
+  type SistemaUpdateData
 } from '@/contexts/SistemasCostosContext';
 
 
@@ -73,8 +77,9 @@ import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSig
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
+const NO_SCOPE_ID_VALUE = "__NO_SCOPE_ID__";
 
-const ITEMS_PER_PAGE_CONFIG = 5; // Lower for config tables as they might be dense
+const ITEMS_PER_PAGE_CONFIG = 5; 
 
 // Zod schemas
 const areaFormSchema = z.object({
@@ -97,6 +102,16 @@ type PuestoFormData = z.infer<typeof puestoFormSchema>;
 const sistemaFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del sistema es requerido.'),
+  scope: z.enum(sistemaScopeOptions, { errorMap: () => ({ message: "Seleccione un ámbito válido."}) }),
+  scopeId: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if ((data.scope === "Área" || data.scope === "Puesto") && (!data.scopeId || data.scopeId === NO_SCOPE_ID_VALUE)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Debe seleccionar un${data.scope === "Área" ? " área" : " puesto"} específico.`,
+      path: ["scopeId"],
+    });
+  }
 });
 type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 
@@ -261,6 +276,8 @@ export default function ConfiguracionPage() {
     resolver: zodResolver(sistemaFormSchema),
     defaultValues: {
       nombre: '',
+      scope: "Empresa",
+      scopeId: undefined,
     },
   });
 
@@ -309,9 +326,14 @@ export default function ConfiguracionPage() {
 
   useEffect(() => {
     if (editingSistema) {
-      sistemaForm.reset({ id: editingSistema.id, nombre: editingSistema.nombre });
+      sistemaForm.reset({ 
+        id: editingSistema.id, 
+        nombre: editingSistema.nombre,
+        scope: editingSistema.scope,
+        scopeId: editingSistema.scope === "Empresa" ? undefined : editingSistema.scopeId,
+      });
     } else {
-      sistemaForm.reset({ nombre: '' });
+      sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
     }
   }, [editingSistema, sistemaForm]);
 
@@ -367,11 +389,19 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteArea(areaId: string) {
-    const isAreaInUse = puestos.some(puesto => puesto.areaId === areaId);
-    if (isAreaInUse) {
+    const isAreaInUseByPuesto = puestos.some(puesto => puesto.areaId === areaId);
+    const isAreaInUseBySistema = sistemas.some(sistema => sistema.scope === "Área" && sistema.scopeId === areaId);
+
+    if (isAreaInUseByPuesto || isAreaInUseBySistema) {
+      let message = 'El área no puede ser eliminada porque está asignada a:';
+      if (isAreaInUseByPuesto) message += ' uno o más puestos';
+      if (isAreaInUseByPuesto && isAreaInUseBySistema) message += ' y';
+      if (isAreaInUseBySistema) message += ' uno o más sistemas';
+      message += '.';
+      
       toast({
         title: 'Error al eliminar',
-        description: 'El área no puede ser eliminada porque está asignada a uno o más puestos.',
+        description: message,
         variant: 'destructive',
       });
       return;
@@ -407,10 +437,17 @@ export default function ConfiguracionPage() {
 
   function handleDeletePuesto(puestoId: string) {
     const isJefeInmediato = puestos.some(p => p.jefeInmediato === puestoId);
-    if (isJefeInmediato) {
+    const isPuestoInUseBySistema = sistemas.some(sistema => sistema.scope === "Puesto" && sistema.scopeId === puestoId);
+
+    if (isJefeInmediato || isPuestoInUseBySistema) {
+      let message = 'El puesto no puede ser eliminado porque:';
+      if (isJefeInmediato) message += ' es Jefe Inmediato de otro puesto';
+      if (isJefeInmediato && isPuestoInUseBySistema) message += ' y';
+      if (isPuestoInUseBySistema) message += ' está asignado a uno o más sistemas';
+      message += '.';
       toast({
         title: 'Error al eliminar',
-        description: 'El puesto no puede ser eliminado porque es Jefe Inmediato de otro puesto.',
+        description: message,
         variant: 'destructive',
       });
       return;
@@ -420,17 +457,23 @@ export default function ConfiguracionPage() {
   }
 
  function handleSistemaSubmit(data: SistemaFormData) {
+    const sistemaData: SistemaCreationData | SistemaUpdateData = {
+        nombre: data.nombre,
+        scope: data.scope,
+        scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId),
+    };
+
     if (editingSistema && editingSistema.id) {
-      updateContextSistema(editingSistema.id, data.nombre);
+      updateContextSistema(editingSistema.id, sistemaData as SistemaUpdateData);
       toast({ title: 'Sistema Actualizado', description: 'El sistema ha sido actualizado exitosamente.' });
     } else {
-      const newSystem = addContextSistema(data.nombre);
+      const newSystem = addContextSistema(sistemaData as SistemaCreationData);
       toast({ title: 'Sistema Agregado', description: 'El sistema ha sido agregado exitosamente.' });
-      openManageCostsDialog(newSystem); // Open costs dialog for the new system
+      openManageCostsDialog(newSystem); 
     }
     setEditingSistema(null);
     setIsSistemaDialogOpen(false);
-    sistemaForm.reset();
+    sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
   }
 
   function handleEditSistema(sistema: Sistema) {
@@ -439,6 +482,7 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteSistema(sistemaId: string) {
+    // Future check: see if system is used in any captured processes or activities
     deleteContextSistema(sistemaId);
     toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' });
   }
@@ -484,7 +528,7 @@ export default function ConfiguracionPage() {
 
   function openManageCostsDialog(sistema: Sistema) {
     setSelectedSystemForCosts(sistema);
-    setCostosDialogCurrentPage(1); // Reset page when opening
+    setCostosDialogCurrentPage(1); 
     setIsManageCostsDialogOpen(true);
   }
 
@@ -530,6 +574,8 @@ export default function ConfiguracionPage() {
     );
   }, [costsForSelectedSystem, costosDialogCurrentPage]);
   const totalCostosDialogPages = Math.ceil(costsForSelectedSystem.length / ITEMS_PER_PAGE_CONFIG);
+
+  const watchedScope = sistemaForm.watch('scope');
 
 
   
@@ -886,15 +932,15 @@ export default function ConfiguracionPage() {
               setIsSistemaDialogOpen(isOpen);
               if (!isOpen) {
                 setEditingSistema(null);
-                sistemaForm.reset({nombre: ''});
+                sistemaForm.reset({nombre: '', scope: "Empresa", scopeId: undefined});
               }
             }}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingSistema(null); sistemaForm.reset({nombre: ''}); setIsSistemaDialogOpen(true); }}>
+                <Button onClick={() => { setEditingSistema(null); sistemaForm.reset({nombre: '', scope: "Empresa", scopeId: undefined}); setIsSistemaDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Agregar Sistema
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[480px]"> {/* Adjusted width */}
                 <DialogHeader>
                   <DialogTitle>{editingSistema ? 'Editar Sistema' : 'Agregar Nuevo Sistema'}</DialogTitle>
                   <DialogDescription>
@@ -916,6 +962,68 @@ export default function ConfiguracionPage() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={sistemaForm.control}
+                      name="scope"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ámbito del Sistema</FormLabel>
+                          <Select onValueChange={(value) => {
+                              field.onChange(value);
+                              sistemaForm.setValue('scopeId', undefined); // Reset scopeId when scope changes
+                            }} 
+                            value={field.value}
+                          >
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un ámbito" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {sistemaScopeOptions.map(opt => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                           <FormDescription>Define dónde se utiliza principalmente el sistema.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {watchedScope === "Área" && (
+                      <FormField
+                        control={sistemaForm.control}
+                        name="scopeId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Seleccionar Área</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingAreas}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione el área específica" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione un área...</SelectItem>
+                                {areas.map(area => (<SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>))}
+                                {areas.length === 0 && <SelectItem value="no-area" disabled>No hay áreas configuradas</SelectItem>}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {watchedScope === "Puesto" && (
+                      <FormField
+                        control={sistemaForm.control}
+                        name="scopeId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Seleccionar Puesto</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingPuestos}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione el puesto específico" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                 <SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione un puesto...</SelectItem>
+                                {puestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>))}
+                                {puestos.length === 0 && <SelectItem value="no-puesto" disabled>No hay puestos configurados</SelectItem>}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <DialogFooter>
                       <DialogClose asChild>
                          <Button type="button" variant="outline" onClick={() => {setIsSistemaDialogOpen(false); setEditingSistema(null);}}>Cancelar</Button>
@@ -938,14 +1046,25 @@ export default function ConfiguracionPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre del Sistema</TableHead>
+                    <TableHead>Ámbito</TableHead>
                     <TableHead>Total Costo Anual Estimado</TableHead>
                     <TableHead className="text-right w-[220px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedSistemas.map((sistema) => (
+                  {paginatedSistemas.map((sistema) => {
+                    let scopeDisplay = sistema.scope;
+                    if (sistema.scope === "Área" && sistema.scopeId) {
+                        const area = areas.find(a => a.id === sistema.scopeId);
+                        scopeDisplay = area ? `Área: ${area.nombre}` : "Área: (ID no encontrado)";
+                    } else if (sistema.scope === "Puesto" && sistema.scopeId) {
+                        const puesto = puestos.find(p => p.id === sistema.scopeId);
+                        scopeDisplay = puesto ? `Puesto: ${puesto.nombre}` : "Puesto: (ID no encontrado)";
+                    }
+                    return (
                     <TableRow key={sistema.id}>
                       <TableCell>{sistema.nombre}</TableCell>
+                      <TableCell>{scopeDisplay}</TableCell>
                       <TableCell>{getSystemAnnualCost(sistema.id, costosSistemas, sistemas)}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="outline" size="sm" onClick={() => openManageCostsDialog(sistema)}>
@@ -959,7 +1078,7 @@ export default function ConfiguracionPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  );})}
                 </TableBody>
               </Table>
             </Card>
