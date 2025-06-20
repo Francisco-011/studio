@@ -1046,21 +1046,24 @@ export default function PanelJerarquicoPage() {
                         draggable={act.activa} 
                         onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()}
                         className={cn(
-                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md",
+                            "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", // Added 'group' for hover effect on button
                             act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
                             !act.activa && "italic text-muted-foreground"
                         )}
                         title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
                       >
                         <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
-                        {act.nombre}
+                        <span className="flex-grow">{act.nombre}</span> {/* Added flex-grow to push subsequent items to the right */}
                         {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
+                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                        </Button>
                         {act.procesosAsociadosCount > 0 && 
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className={cn(
-                              "p-1 h-auto text-xs ml-auto",
+                              "p-1 h-auto text-xs ml-1", // Adjusted margin
                               filterByActivityId === act.id && "bg-primary/20 text-primary border-primary"
                             )} 
                             onClick={() => handleActivityBadgeClick(act)}
