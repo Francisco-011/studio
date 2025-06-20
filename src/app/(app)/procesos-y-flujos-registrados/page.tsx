@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -38,13 +39,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter, ArrowUpZA, ArrowDownAZ, ChevronsUpDown, ArrowDown, ArrowUp } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import type { Actividad } from '@/contexts/ActividadesContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 export interface CapturedProcess extends CapturaFormData {
@@ -60,6 +62,13 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
+type SortableProcessKeys = keyof CapturedProcess | 'numActividades';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig {
+  key: SortableProcessKeys;
+  direction: SortDirection;
+}
 
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
@@ -117,6 +126,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
 
   useEffect(() => {
@@ -190,7 +200,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   }, [allCapturedData, isLoading]);
 
-  const filteredData = useMemo(() => {
+  const sortedAndFilteredData = useMemo(() => {
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
 
     if (searchTerm) {
@@ -226,10 +236,64 @@ export default function ProcesosYFlujosRegistradosPage() {
         return true;
       });
     }
+    
+    if (sortConfig !== null) {
+      dataToFilter.sort((a, b) => {
+        let valA: any = a[sortConfig.key as keyof CapturedProcess];
+        let valB: any = b[sortConfig.key as keyof CapturedProcess];
+
+        if (sortConfig.key === 'numActividades') {
+          valA = a.activityOrder?.length || 0;
+          valB = b.activityOrder?.length || 0;
+        } else if (sortConfig.key === 'capturedAt' || sortConfig.key === 'updatedAt') {
+          valA = valA ? (isValid(parseISO(valA as string)) ? parseISO(valA as string).getTime() : (typeof valA === 'number' ? valA : 0)) : 0;
+          valB = valB ? (isValid(parseISO(valB as string)) ? parseISO(valB as string).getTime() : (typeof valB === 'number' ? valB : 0)) : 0;
+        } else if (sortConfig.key === 'activo') {
+            valA = a.activo !== false;
+            valB = b.activo !== false;
+        }
 
 
-    return dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter]);
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        
+        if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
+
+        if (valA < valB) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (valA > valB) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    } else {
+       dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+
+
+    return dataToFilter;
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+
+  const requestSort = (key: SortableProcessKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortableProcessKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-2 h-3 w-3 opacity-40" />;
+    }
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3" /> : <ArrowDown className="ml-2 h-3 w-3" />;
+  };
+
 
   const recoverableProcesses = useMemo(() => {
     const thirtyDaysAgo = new Date();
@@ -341,7 +405,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
 
   const handleExport = () => {
-    if (filteredData.length === 0) {
+    if (sortedAndFilteredData.length === 0) {
       toast({ title: "Nada que exportar", description: "No hay procesos/flujos que coincidan con los filtros actuales.", variant: "default" });
       return;
     }
@@ -356,7 +420,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
     const csvRows = [
       headers.join(','),
-      ...filteredData.map(proc => [
+      ...sortedAndFilteredData.map(proc => [
         escapeCsvCell(proc.id),
         escapeCsvCell(proc.proceso),
         escapeCsvCell(proc.area),
@@ -403,7 +467,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       </span>
     );
   };
-  
+
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedAreaFilter('all');
@@ -475,9 +539,9 @@ export default function ProcesosYFlujosRegistradosPage() {
                     </SelectTrigger>
                     <SelectContent>
                     <SelectItem value="all">Todos los Puestos</SelectItem>
-                    {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
-                    : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
-                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
+                   : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
+                   : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 </div>
@@ -513,7 +577,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
            <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
             <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
-              <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredData.length})
+              <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredData.length})
             </Button>
             <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
               <DialogTrigger asChild>
@@ -566,30 +630,53 @@ export default function ProcesosYFlujosRegistradosPage() {
           </div>
 
 
-          {filteredData.length > 0 ? (
+          {sortedAndFilteredData.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[150px]">Proceso</TableHead>
-                    <TableHead className="w-[120px]">Área</TableHead>
-                    <TableHead className="w-[120px]">Puesto</TableHead>
-                    <TableHead className="text-center w-[80px]">Estado</TableHead>
-                    <TableHead className="text-center w-[100px]" title="Tiempo Estimado (minutos)"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo</TableHead>
-                    <TableHead className="text-center w-[100px]" title="Frecuencia"><Repeat className="inline-block h-4 w-4 mr-1" />Frec.</TableHead>
-                    <TableHead className="w-[120px]" title="Sistemas Utilizados"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</TableHead>
-                    <TableHead className="w-[120px]" title="Procesos de Entradas"><ArrowRightLeft className="inline-block h-4 w-4 mr-1 transform rotate-180" />Ent. Procesos</TableHead>
-                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Recibe"><Info className="inline-block h-4 w-4 mr-1" />Info. Recibe</TableHead>
-                    <TableHead className="w-[120px]" title="Procesos de Salida"><ArrowRightLeft className="inline-block h-4 w-4 mr-1" />Sal. Procesos</TableHead>
-                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Entrega"><Info className="inline-block h-4 w-4 mr-1" />Info. Entrega</TableHead>
-                    <TableHead className="text-center w-[80px]" title="Número de Actividades"><ListTree className="inline-block h-4 w-4 mr-1" />Activ.</TableHead>
-                    <TableHead className="w-[140px]" title="Fecha de Captura"><CalendarClock className="inline-block h-4 w-4 mr-1" />F. Captura</TableHead>
-                    <TableHead className="w-[140px]" title="Última Modificación"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif.</TableHead>
+                    <TableHead className="min-w-[150px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('proceso')}>
+                      <div className="flex items-center">Proceso {getSortIcon('proceso')}</div>
+                    </TableHead>
+                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('area')}>
+                      <div className="flex items-center">Área {getSortIcon('area')}</div>
+                    </TableHead>
+                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('puesto')}>
+                      <div className="flex items-center">Puesto {getSortIcon('puesto')}</div>
+                    </TableHead>
+                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('activo')}>
+                      <div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div>
+                    </TableHead>
+                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado (minutos)">
+                        <div className="flex items-center justify-center"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo {getSortIcon('tiempoEstimado')}</div>
+                    </TableHead>
+                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('frecuencia')} title="Frecuencia">
+                        <div className="flex items-center justify-center"><Repeat className="inline-block h-4 w-4 mr-1" />Frec. {getSortIcon('frecuencia')}</div>
+                    </TableHead>
+                    <TableHead className="w-[120px]" title="Sistemas Utilizados"><div className="flex items-center"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</div></TableHead>
+                    <TableHead className="w-[120px]" title="Procesos de Entradas"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1 transform rotate-180" />Ent. Procesos</div></TableHead>
+                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Recibe"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Recibe</div></TableHead>
+                    <TableHead className="w-[120px]" title="Procesos de Salida"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1" />Sal. Procesos</div></TableHead>
+                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Entrega"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Entrega</div></TableHead>
+                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('numActividades')} title="Número de Actividades">
+                        <div className="flex items-center justify-center"><ListTree className="inline-block h-4 w-4 mr-1" />Activ. {getSortIcon('numActividades')}</div>
+                    </TableHead>
+                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('capturedAt')} title="Fecha de Captura">
+                        <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />F. Captura {getSortIcon('capturedAt')}</div>
+                    </TableHead>
+                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50" onClick={() => requestSort('updatedAt')} title="Última Modificación">
+                        <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif. {getSortIcon('updatedAt')}</div>
+                    </TableHead>
                     <TableHead className="text-right w-[120px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData.map((proc) => (
+                  {sortedAndFilteredData.map((proc) => {
+                    const associatedActivityNames = proc.activityOrder
+                        ?.map(actId => allActivities.find(a => a.id === actId)?.nombre)
+                        .filter(Boolean)
+                        .join(', ') || "Ninguna actividad asociada";
+                    return (
                     <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
                       <TableCell className="font-medium">{proc.proceso}</TableCell>
                       <TableCell>{proc.area}</TableCell>
@@ -638,15 +725,24 @@ export default function ProcesosYFlujosRegistradosPage() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-pre-wrap max-w-[200px] overflow-hidden text-ellipsis">{renderTruncatedText(proc.informacionEntrega)}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {proc.activityOrder?.length || 0}
-                        </Badge>
+                         <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                               <Badge variant="outline" className="font-mono text-xs cursor-default hover:bg-muted">
+                                {proc.activityOrder?.length || 0}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="max-w-xs break-words">
+                              <p className="text-xs">{associatedActivityNames}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-xs">
-                        {format(new Date(proc.capturedAt), 'dd/MM/yy HH:mm', { locale: es })}
+                        {isValid(parseISO(proc.capturedAt)) ? format(parseISO(proc.capturedAt), 'dd/MM/yy HH:mm', { locale: es }) : 'Fecha inválida'}
                       </TableCell>
                        <TableCell className="text-xs">
-                        {proc.updatedAt ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
+                        {proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
                         <Switch
@@ -666,7 +762,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>
@@ -692,8 +788,8 @@ export default function ProcesosYFlujosRegistradosPage() {
           <DialogHeader>
             <DialogTitle>Detalles del Proceso: {selectedProcess?.proceso}</DialogTitle>
             <DialogDescription>
-              Información completa del proceso y flujo registrado el {selectedProcess && format(new Date(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es })}.
-              Última modificación: {selectedProcess?.updatedAt ? format(new Date(selectedProcess.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
+              Información completa del proceso y flujo registrado el {selectedProcess && isValid(parseISO(selectedProcess.capturedAt)) ? format(parseISO(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
+              Última modificación: {selectedProcess?.updatedAt && isValid(new Date(selectedProcess.updatedAt)) ? format(new Date(selectedProcess.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
               Estado: {selectedProcess?.activo !== false ? 'Activo' : 'Inactivo'}.
               Actividades Asociadas: {selectedProcess?.activityOrder?.length || 0}.
             </DialogDescription>
@@ -741,3 +837,4 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
+

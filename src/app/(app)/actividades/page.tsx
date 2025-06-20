@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
@@ -63,9 +63,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
@@ -87,6 +88,15 @@ const actividadFormSchema = z.object({
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
+type SortableActividadKeys = keyof Actividad | 'procesosAsociadosCount';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig {
+  key: SortableActividadKeys;
+  direction: SortDirection;
+}
+
+
 export default function ActividadesPage() {
   const { 
     actividades, 
@@ -101,6 +111,7 @@ export default function ActividadesPage() {
   const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
   
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const [isLoadingCapturedProcesses, setIsLoadingCapturedProcesses] = useState(true);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -112,8 +123,11 @@ export default function ActividadesPage() {
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
 
   useEffect(() => {
+    setIsLoadingCapturedProcesses(true);
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
@@ -123,6 +137,8 @@ export default function ActividadesPage() {
     } catch (error) {
       console.error("Error loading captured processes from localStorage:", error);
       toast({ title: "Error al cargar procesos", description: "No se pudieron cargar los procesos para asociar.", variant: "destructive" });
+    } finally {
+        setIsLoadingCapturedProcesses(false);
     }
   }, []);
 
@@ -227,7 +243,7 @@ export default function ActividadesPage() {
   }
   
   function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
+    const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
     if (activityToRestore) {
         restoreActividad(actividadId);
         toast({ title: 'Actividad Restaurada', description: `"${activityToRestore.nombre}" ha sido restaurada y activada.`});
@@ -236,34 +252,87 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividadId: string) {
     toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id === actividadId); 
+    const actividadActual = actividades.find(act => act.id ===ividadId) || deletedActividades.find(act => act.id ===ividadId); 
     if (actividadActual) { 
       toast({
-        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`, // Corrected logic here
+        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
         description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
       });
     }
   }
 
-  const filteredActividades = actividades.filter(actividad => {
-    const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && actividad.activa) ||
-      (statusFilter === 'inactive' && !actividad.activa);
-    const matchesUsage =
-      usageFilter === 'all' ||
-      (usageFilter === 'inUse' && actividad.procesosAsociadosCount > 0) ||
-      (usageFilter === 'notInUse' && actividad.procesosAsociadosCount === 0);
-    return matchesSearchTerm && matchesStatus && matchesUsage;
-  }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const sortedAndFilteredActividades = useMemo(() => {
+    let filtered = actividades.filter(actividad => {
+      const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && actividad.activa) ||
+        (statusFilter === 'inactive' && !actividad.activa);
+      const matchesUsage =
+        usageFilter === 'all' ||
+        (usageFilter === 'inUse' && actividad.procesosAsociadosCount > 0) ||
+        (usageFilter === 'notInUse' && actividad.procesosAsociadosCount === 0);
+      return matchesSearchTerm && matchesStatus && matchesUsage;
+    });
+
+    if (sortConfig !== null) {
+      filtered.sort((a, b) => {
+        let valA: any = a[sortConfig.key as keyof Actividad];
+        let valB: any = b[sortConfig.key as keyof Actividad];
+
+        if (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt') {
+          valA = valA || 0;
+          valB = valB || 0;
+        } else if (sortConfig.key === 'activa') {
+           valA = a.activa;
+           valB = b.activa;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        
+        if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
+
+        if (valA < valB) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (valA > valB) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    } else {
+      filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+    return filtered;
+  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig]);
+
+  const requestSort = (key: SortableActividadKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortableActividadKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    }
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
 
 
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo);
+  const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo)
+                                  .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 
-  if (isLoadingActividades || isLoadingSistemasCostos) {
+  if (isLoadingActividades || isLoadingSistemasCostos || isLoadingCapturedProcesses) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -352,7 +421,7 @@ export default function ActividadesPage() {
                           {recoverableActividades.map((act, index) => (
                             <TableRow key={`${act.id}-${index}`}>
                               <TableCell>{act.nombre}</TableCell>
-                              <TableCell>{act.deletedAt ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
+                              <TableCell>{act.deletedAt && isValid(new Date(act.deletedAt)) ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                               <TableCell className="text-right">
                                 <Button size="sm" onClick={() => handleRestoreActividad(act.id)}>
                                   <RotateCcw className="mr-2 h-3 w-3" /> Restaurar
@@ -426,7 +495,7 @@ export default function ActividadesPage() {
                             <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
                             <Select 
                               onValueChange={field.onChange} 
-                              value={field.value || undefined} 
+                              value={field.value || NO_SYSTEM_SELECTED_VALUE} 
                               disabled={isLoadingSistemasCostos}
                             >
                               <FormControl>
@@ -469,7 +538,7 @@ export default function ActividadesPage() {
                               <FormLabel>Frecuencia de la Actividad</FormLabel>
                               <Select 
                                 onValueChange={field.onChange} 
-                                value={field.value || undefined}
+                                value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
                               >
                                 <FormControl>
                                   <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
@@ -508,7 +577,9 @@ export default function ActividadesPage() {
                               <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
                                 <DropdownMenuLabel>Procesos Capturados Disponibles</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                {capturedProcesses.length === 0 ? (
+                                {isLoadingCapturedProcesses ? (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando procesos...</div>
+                                ) : capturedProcesses.length === 0 ? (
                                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
                                     No hay procesos capturados.
                                   </div>
@@ -572,25 +643,46 @@ export default function ActividadesPage() {
             </div>
           </div>
 
-          {filteredActividades.length > 0 ? (
+          {sortedAndFilteredActividades.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Nombre Actividad</TableHead>
+                    <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
+                      <div className="flex items-center">Nombre Actividad {getSortIcon('nombre')}</div>
+                    </TableHead>
                     <TableHead className="max-w-sm">Desc. Breve</TableHead>
-                    <TableHead className="w-[150px] text-center">Sistema</TableHead>
-                    <TableHead className="w-[120px] text-center">Tiempo (min)</TableHead>
-                    <TableHead className="w-[150px] text-center">Frecuencia</TableHead>
-                    <TableHead className="w-[140px] text-center">Fecha Creación</TableHead>
-                    <TableHead className="w-[140px] text-center">Últ. Modif.</TableHead>
-                    <TableHead className="w-[100px] text-center">Estado</TableHead>
-                    <TableHead className="w-[150px] text-center">En Uso</TableHead>
+                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('sistemaUtilizado')}>
+                      <div className="flex items-center justify-center">Sistema {getSortIcon('sistemaUtilizado')}</div>
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimadoActividad')}>
+                      <div className="flex items-center justify-center">Tiempo (min) {getSortIcon('tiempoEstimadoActividad')}</div>
+                    </TableHead>
+                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('frecuenciaActividad')}>
+                      <div className="flex items-center justify-center">Frecuencia {getSortIcon('frecuenciaActividad')}</div>
+                    </TableHead>
+                    <TableHead className="w-[140px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('createdAt')}>
+                      <div className="flex items-center justify-center">Fecha Creación {getSortIcon('createdAt')}</div>
+                    </TableHead>
+                    <TableHead className="w-[140px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}>
+                      <div className="flex items-center justify-center">Últ. Modif. {getSortIcon('updatedAt')}</div>
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activa')}>
+                      <div className="flex items-center justify-center">Estado {getSortIcon('activa')}</div>
+                    </TableHead>
+                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('procesosAsociadosCount')}>
+                      <div className="flex items-center justify-center">En Uso {getSortIcon('procesosAsociadosCount')}</div>
+                    </TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredActividades.map((actividad, index) => (
+                  {sortedAndFilteredActividades.map((actividad, index) => {
+                    const associatedProcessNames = actividad.procesosAsociadosIds
+                        ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
+                        .filter(Boolean)
+                        .join(', ') || "No asociada a procesos.";
+                    return (
                     <TableRow key={`${actividad.id}-${index}`}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-pre-wrap max-w-sm">{actividad.descripcionBreve || '-'}</TableCell>
@@ -598,10 +690,10 @@ export default function ActividadesPage() {
                       <TableCell className="text-center text-xs">{actividad.tiempoEstimadoActividad ?? '-'}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.frecuenciaActividad || '-'}</TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
-                         {actividad.createdAt ? format(new Date(actividad.createdAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
+                         {actividad.createdAt && isValid(new Date(actividad.createdAt)) ? format(new Date(actividad.createdAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
                       </TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
-                        {actividad.updatedAt ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
+                        {actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'}>
@@ -609,15 +701,18 @@ export default function ActividadesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {actividad.procesosAsociadosCount > 0 ? 
-                         (<Badge variant="outline" className="cursor-pointer hover:bg-muted" title={
-                            actividad.procesosAsociadosIds?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso).filter(Boolean).join(', ') || 'N/A'
-                         }>
-                            <Link2 className="h-3 w-3 mr-1 inline-block"/>
-                            {`${actividad.procesosAsociadosCount} procesos`}
-                          </Badge>) 
-                         : (<Badge variant="secondary">Sin Uso</Badge>)
-                        }
+                       <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                               <Badge variant={actividad.procesosAsociadosCount > 0 ? "outline" : "secondary"} className="cursor-default hover:bg-muted">
+                                {actividad.procesosAsociadosCount > 0 ? (<><Link2 className="h-3 w-3 mr-1 inline-block"/> {`${actividad.procesosAsociadosCount} procesos`}</>) : "Sin Uso"}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="max-w-xs break-words">
+                              <p className="text-xs">{associatedProcessNames}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                        <TableCell className="text-right space-x-1">
                         <Switch
@@ -636,7 +731,7 @@ export default function ActividadesPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  );})}
                 </TableBody>
               </Table>
             </div>
