@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -41,7 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
@@ -76,7 +76,7 @@ export default function CapturaPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
@@ -98,6 +98,24 @@ export default function CapturaPage() {
       activityOrder: [],
     },
   });
+  
+  const watchedAreaName = form.watch('area');
+  const watchedPuestoName = form.watch('puesto');
+
+  const availableSistemasForForm = useMemo(() => {
+    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) return [];
+
+    const selectedAreaObj = areas.find(a => a.nombre === watchedAreaName);
+    const selectedPuestoObj = puestos.find(p => p.nombre === watchedPuestoName);
+
+    return allConfiguredSistemas.filter(sistema => {
+      if (sistema.scope === "Empresa") return true;
+      if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
+      if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
+      return false;
+    });
+  }, [allConfiguredSistemas, watchedAreaName, watchedPuestoName, areas, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos]);
+
 
   useEffect(() => {
     try {
@@ -258,7 +276,8 @@ export default function CapturaPage() {
     placeholder: string,
     options: { id: string; nombre: string }[],
     isLoading: boolean,
-    specialOption?: string
+    specialOption?: string,
+    dropdownType: 'sistemas' | 'procesos' = 'procesos'
   ) => {
     const currentSelectionNames = (field.value || [])
       .map((val: string) => {
@@ -266,6 +285,18 @@ export default function CapturaPage() {
         return options.find(opt => opt.nombre === val)?.nombre || val;
       })
       .filter(Boolean);
+    
+    let finalOptions = options;
+    if (dropdownType === 'sistemas') {
+        const currentSelectedSystemNames = new Set(field.value || []);
+        const additionalSelectedSystems = allConfiguredSistemas.filter(
+            sys => currentSelectedSystemNames.has(sys.nombre) && !options.some(opt => opt.id === sys.id)
+        );
+        finalOptions = [...options, ...additionalSelectedSystems.map(s => ({id: s.id, nombre: s.nombre}))]
+                        .filter((option, index, self) => index === self.findIndex(o => o.id === option.id)) // distinct by id
+                        .sort((a,b) => a.nombre.localeCompare(b.nombre)); 
+    }
+
 
     return (
     <DropdownMenu>
@@ -310,12 +341,16 @@ export default function CapturaPage() {
                 {specialOption}
               </DropdownMenuCheckboxItem>
             )}
-            {options.length === 0 && !specialOption ? (
+            {finalOptions.length === 0 && !specialOption && dropdownType !== 'sistemas' ? (
               <div className="px-2 py-1.5 text-sm text-muted-foreground">
                 No hay elementos configurados.
               </div>
+            ) : finalOptions.length === 0 && !specialOption && dropdownType === 'sistemas' ? (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No hay sistemas disponibles para el Área/Puesto actual o no hay sistemas configurados.
+                </div>
             ) : (
-              options.map((option) => (
+              finalOptions.map((option) => (
                 <DropdownMenuCheckboxItem
                   key={option.id}
                   checked={field.value?.includes(option.nombre)}
@@ -368,7 +403,30 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Área / Departamento</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                            field.onChange(value);
+                            // Optionally clear 'puesto' if area changes and current puesto is tied to old area
+                            // For now, let user manually adjust puesto.
+                            // Also, clear selected systems if they are no longer valid for the new area/puesto
+                            const currentSelectedSystems = form.getValues('sistemas') || [];
+                            if (currentSelectedSystems.length > 0) {
+                                const selectedAreaObj = areas.find(a => a.nombre === value);
+                                const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto'));
+                                
+                                const validSystemsForNewContext = allConfiguredSistemas.filter(sistema => {
+                                    if (sistema.scope === "Empresa") return true;
+                                    if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
+                                    if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
+                                    return false;
+                                }).map(s => s.nombre);
+                                
+                                const newSelectedSystems = currentSelectedSystems.filter(sName => validSystemsForNewContext.includes(sName));
+                                if (newSelectedSystems.length !== currentSelectedSystems.length) {
+                                    form.setValue('sistemas', newSelectedSystems);
+                                    toast({title: "Sistemas Ajustados", description: "Algunos sistemas seleccionados fueron removidos por no aplicar al nuevo contexto de Área/Puesto.", variant:"default"});
+                                }
+                            }
+                        }}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
@@ -405,7 +463,28 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Puesto / Rol Principal</FormLabel>
                        <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                            field.onChange(value);
+                            // Clear selected systems if they are no longer valid for the new puesto
+                            const currentSelectedSystems = form.getValues('sistemas') || [];
+                             if (currentSelectedSystems.length > 0) {
+                                const selectedAreaObj = areas.find(a => a.nombre === form.getValues('area'));
+                                const selectedPuestoObj = puestos.find(p => p.nombre === value);
+                                
+                                const validSystemsForNewContext = allConfiguredSistemas.filter(sistema => {
+                                    if (sistema.scope === "Empresa") return true;
+                                    if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
+                                    if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
+                                    return false;
+                                }).map(s => s.nombre);
+                                
+                                const newSelectedSystems = currentSelectedSystems.filter(sName => validSystemsForNewContext.includes(sName));
+                                 if (newSelectedSystems.length !== currentSelectedSystems.length) {
+                                    form.setValue('sistemas', newSelectedSystems);
+                                     toast({title: "Sistemas Ajustados", description: "Algunos sistemas seleccionados fueron removidos por no aplicar al nuevo contexto de Área/Puesto.", variant:"default"});
+                                }
+                            }
+                        }}
                         value={field.value}
                         disabled={isLoadingPuestos}
                       >
@@ -530,9 +609,9 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", sistemas, isLoadingSistemasCostos)}
+                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSistemasForForm, isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos, undefined, 'sistemas')}
                     <FormDescription>
-                      Seleccione los sistemas o software involucrados en la ejecución del proceso.
+                      Seleccione los sistemas o software involucrados en la ejecución del proceso. La lista se filtra según el Área y Puesto seleccionados.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

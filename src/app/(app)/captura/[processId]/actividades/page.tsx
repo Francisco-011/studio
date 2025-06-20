@@ -9,7 +9,9 @@ import { z } from "zod";
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 import { frecuenciaOptions } from '@/app/(app)/captura/page'; 
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; // Import context
+import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext'; 
+import { useAreas } from '@/contexts/AreasContext';
+import { usePuestos } from '@/contexts/PuestosContext';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,28 +33,25 @@ import { cn } from '@/lib/utils';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
-// Constants for special SelectItem values to avoid empty string errors
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
 const NO_FRECUENCIA_SELECTED_VALUE = "__NO_FRECUENCIA_SELECTED__";
 
-// Schema for the individual activity form within this page
 const activityCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre de la actividad es requerido (mínimo 3 caracteres).'),
   descripcionBreve: z.string().optional(),
-  sistemaUtilizado: z.string().optional(), // Will hold actual system name or NO_SYSTEM_SELECTED_VALUE
+  sistemaUtilizado: z.string().optional(), 
   tiempoEstimadoActividad: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
-  frecuenciaActividad: z.string().optional(), // Will hold actual frecuencia or NO_FRECUENCIA_SELECTED_VALUE
+  frecuenciaActividad: z.string().optional(), 
 });
 type ActivityCaptureFormData = z.infer<typeof activityCaptureFormSchema>;
 
-// Type for activities managed locally on this page before saving globally
 type LocalActivityDefinition = Omit<ActivityCaptureFormData, 'sistemaUtilizado' | 'frecuenciaActividad'> & {
   tempId: string;
-  sistemaUtilizado?: string; // This will store undefined if "Ninguno" was chosen
-  frecuenciaActividad?: typeof frecuenciaOptions[number]; // This will store undefined if "No aplica" was chosen
+  sistemaUtilizado?: string; 
+  frecuenciaActividad?: typeof frecuenciaOptions[number]; 
 };
 
 
@@ -62,7 +61,10 @@ export default function DefinirActividadesProcesoPage() {
   const processId = params.processId as string;
 
   const { actividades: globalActivities, addActividad: addGlobalActivity, updateActividad: updateGlobalActivity } = useActividades();
-  const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos(); // Use context
+  const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos(); 
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, isLoadingPuestos } = usePuestos();
+
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
   const [definedActivities, setDefinedActivities] = useState<LocalActivityDefinition[]>([]);
@@ -77,9 +79,9 @@ export default function DefinirActividadesProcesoPage() {
     defaultValues: {
       nombre: '',
       descripcionBreve: '',
-      sistemaUtilizado: undefined, // Placeholder will show
+      sistemaUtilizado: undefined, 
       tiempoEstimadoActividad: undefined,
-      frecuenciaActividad: undefined, // Placeholder will show
+      frecuenciaActividad: undefined, 
     },
   });
 
@@ -92,6 +94,27 @@ export default function DefinirActividadesProcesoPage() {
           const currentProcess = allProcesses.find(p => p.id === processId);
           if (currentProcess) {
             setParentProcess(currentProcess);
+             // Preload defined activities if they exist in activityOrder
+            if (currentProcess.activityOrder && currentProcess.activityOrder.length > 0) {
+                const preloadedActivities: LocalActivityDefinition[] = currentProcess.activityOrder
+                    .map(actId => {
+                        const globalAct = globalActivities.find(ga => ga.id === actId);
+                        if (globalAct) {
+                            return {
+                                tempId: globalAct.id, // Use global ID as tempId for consistency if editing
+                                nombre: globalAct.nombre,
+                                descripcionBreve: globalAct.descripcionBreve,
+                                sistemaUtilizado: globalAct.sistemaUtilizado,
+                                tiempoEstimadoActividad: globalAct.tiempoEstimadoActividad,
+                                frecuenciaActividad: globalAct.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
+                            };
+                        }
+                        return null;
+                    })
+                    .filter((act): act is LocalActivityDefinition => act !== null);
+                setDefinedActivities(preloadedActivities);
+            }
+
           } else {
             toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive" });
             router.push('/captura');
@@ -105,10 +128,25 @@ export default function DefinirActividadesProcesoPage() {
         setIsLoading(false);
       }
     }
-  }, [processId, router]);
+  }, [processId, router, globalActivities]);
+
+  const availableSistemasForActivityForm = useMemo(() => {
+    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || !parentProcess) return [];
+    
+    const parentAreaObj = areas.find(a => a.nombre === parentProcess.area);
+    const parentPuestoObj = puestos.find(p => p.nombre === parentProcess.puesto);
+
+    return allConfiguredSistemas.filter(sistema => {
+      if (sistema.scope === "Empresa") return true;
+      if (sistema.scope === "Área" && parentAreaObj && sistema.scopeId === parentAreaObj.id) return true;
+      if (sistema.scope === "Puesto" && parentPuestoObj && sistema.scopeId === parentPuestoObj.id) return true;
+      return false;
+    }).sort((a,b) => a.nombre.localeCompare(b.nombre));
+  }, [allConfiguredSistemas, parentProcess, areas, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos]);
+
 
   const openAddActivityDialog = () => {
-    activityForm.reset({ // Ensure form defaults to showing placeholders
+    activityForm.reset({ 
         nombre: '',
         descripcionBreve: '',
         sistemaUtilizado: undefined,
@@ -120,20 +158,18 @@ export default function DefinirActividadesProcesoPage() {
   };
 
   const openEditActivityDialog = (activity: LocalActivityDefinition, index: number) => {
-    // Map undefined values from stored data to special select values for form display
     activityForm.reset({
         nombre: activity.nombre,
         descripcionBreve: activity.descripcionBreve,
-        sistemaUtilizado: activity.sistemaUtilizado, // If undefined, placeholder shows. If actual value, it shows.
+        sistemaUtilizado: activity.sistemaUtilizado || NO_SYSTEM_SELECTED_VALUE,
         tiempoEstimadoActividad: activity.tiempoEstimadoActividad,
-        frecuenciaActividad: activity.frecuenciaActividad, // If undefined, placeholder shows.
+        frecuenciaActividad: activity.frecuenciaActividad || NO_FRECUENCIA_SELECTED_VALUE,
     });
     setEditingActivity({ ...activity, index });
     setIsActivityFormOpen(true);
   };
 
   const handleActivityFormSubmit = (data: ActivityCaptureFormData) => {
-    // Convert special select values back to undefined for storage
     const activityDataForStorage: Omit<LocalActivityDefinition, 'tempId'> = {
       ...data,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
@@ -165,9 +201,9 @@ export default function DefinirActividadesProcesoPage() {
 
     const newActivities = [...definedActivities];
     const activityToMove = newActivities[index];
-    newActivities.splice(index, 1); // Remove item
+    newActivities.splice(index, 1); 
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    newActivities.splice(newIndex, 0, activityToMove); // Insert item
+    newActivities.splice(newIndex, 0, activityToMove); 
     setDefinedActivities(newActivities);
   };
 
@@ -189,7 +225,13 @@ export default function DefinirActividadesProcesoPage() {
 
       for (const localAct of definedActivities) {
         let activityIdToLink: string;
-        const existingGlobalActivity = currentGlobalActivities.find(ga => ga.nombre === localAct.nombre);
+        
+        // Check if an activity with this name already exists globally.
+        // If editing, localAct.tempId might be the actual global ID if it was preloaded.
+        const existingGlobalActivityByName = currentGlobalActivities.find(ga => ga.nombre.toLowerCase() === localAct.nombre.toLowerCase());
+        const existingGlobalActivityById = currentGlobalActivities.find(ga => ga.id === localAct.tempId); // If preloaded, tempId IS the global ID.
+        const existingGlobalActivity = existingGlobalActivityById || existingGlobalActivityByName;
+
 
         const activityDataPayload = {
           nombre: localAct.nombre,
@@ -204,14 +246,14 @@ export default function DefinirActividadesProcesoPage() {
           const updatedAssociatedIds = Array.from(new Set([...(existingGlobalActivity.procesosAsociadosIds || []), parentProcess.id]));
           
           updateGlobalActivity(existingGlobalActivity.id, {
-            ...activityDataPayload,
+            ...activityDataPayload, // Update details from the local definition
             procesosAsociadosIds: updatedAssociatedIds,
-            activa: existingGlobalActivity.activa, 
+            activa: existingGlobalActivity.activa, // Preserve existing 'activa' status
           });
         } else {
           const newGlobalActData = {
             ...activityDataPayload,
-            activa: true, 
+            activa: true, // New activities default to active
             procesosAsociadosIds: [parentProcess.id],
           };
           const addedActivity = addGlobalActivity(newGlobalActData); 
@@ -229,6 +271,7 @@ export default function DefinirActividadesProcesoPage() {
         allProcesses[processIndex] = {
           ...allProcesses[processIndex],
           activityOrder: finalActivityIdsForProcessOrder,
+          updatedAt: Date.now(), // Update parent process's updatedAt timestamp
         };
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allProcesses));
         toast({ title: "Éxito", description: `Actividades guardadas y vinculadas al proceso '${parentProcess.proceso}'.` });
@@ -266,7 +309,7 @@ export default function DefinirActividadesProcesoPage() {
             </CardTitle>
           </div>
           <CardDescription>
-            Agregue, ordene y detalle las actividades que componen este proceso. Se guardarán en orden cronológico de adición, pero puede ajustar el orden.
+            Agregue, ordene y detalle las actividades que componen este proceso. Las actividades se guardarán en el orden definido en la tabla.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -327,8 +370,8 @@ export default function DefinirActividadesProcesoPage() {
           )}
 
           <div className="flex justify-between items-center mt-8">
-             <Button variant="outline" onClick={() => router.push('/captura')} disabled={isSaving}>
-              Cancelar y Volver a Captura
+             <Button variant="outline" onClick={() => router.push('/procesos-y-flujos-registrados')} disabled={isSaving}>
+              Volver a Procesos Registrados
             </Button>
             <Button onClick={handleSaveAllAndFinish} size="lg" disabled={isSaving || definedActivities.length === 0}>
               {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
@@ -338,7 +381,6 @@ export default function DefinirActividadesProcesoPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog for Adding/Editing Activity in this page's list */}
       <Dialog open={isActivityFormOpen} onOpenChange={(isOpen) => {
           if (isSaving && isOpen) return; 
           setIsActivityFormOpen(isOpen);
@@ -383,25 +425,31 @@ export default function DefinirActividadesProcesoPage() {
                     <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value} // This will be undefined if not selected or the special value
-                      disabled={isLoadingSistemasCostos}
+                      value={field.value || NO_SYSTEM_SELECTED_VALUE} 
+                      disabled={isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos}
                     >
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando sistemas..." : "Seleccione un sistema"} /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder={
+                                (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) ? "Cargando..." : 
+                                (availableSistemasForActivityForm.length === 0 ? "No hay sistemas aplicables" : "Seleccione un sistema")
+                            } />
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno / Manual</SelectItem>
-                        {isLoadingSistemasCostos ? (
+                        {(isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) ? (
                             <SelectItem value="loading-sistemas" disabled>Cargando...</SelectItem>
-                        ) : availableSystems.length === 0 ? (
-                            <SelectItem value="no-sistemas-available" disabled>No hay sistemas configurados</SelectItem>
+                        ) : availableSistemasForActivityForm.length === 0 ? (
+                            <SelectItem value="no-sistemas-available" disabled>No hay sistemas para el contexto del proceso</SelectItem>
                         ) : (
-                            availableSystems.map((sys) => (
+                            availableSistemasForActivityForm.map((sys) => (
                             <SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>
                             ))
                         )}
                       </SelectContent>
                     </Select>
+                     <FormDescription>Sistemas filtrados por el ámbito del proceso padre.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -426,7 +474,7 @@ export default function DefinirActividadesProcesoPage() {
                       <FormLabel>Frecuencia de la Actividad</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
-                        value={field.value} // This will be undefined if not selected or the special value
+                        value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
                       >
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
