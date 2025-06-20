@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react'; 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -73,6 +73,8 @@ import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSig
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
+
+const ITEMS_PER_PAGE_CONFIG = 5; // Lower for config tables as they might be dense
 
 // Zod schemas
 const areaFormSchema = z.object({
@@ -231,6 +233,11 @@ export default function ConfiguracionPage() {
   const [editingCostoSistema, setEditingCostoSistema] = useState<SistemaCosto | null>(null);
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
+
+  const [areasCurrentPage, setAreasCurrentPage] = useState(1);
+  const [puestosCurrentPage, setPuestosCurrentPage] = useState(1);
+  const [sistemasCurrentPage, setSistemasCurrentPage] = useState(1);
+  const [costosDialogCurrentPage, setCostosDialogCurrentPage] = useState(1);
 
 
   const areaForm = useForm<AreaFormData>({
@@ -477,6 +484,7 @@ export default function ConfiguracionPage() {
 
   function openManageCostsDialog(sistema: Sistema) {
     setSelectedSystemForCosts(sistema);
+    setCostosDialogCurrentPage(1); // Reset page when opening
     setIsManageCostsDialogOpen(true);
   }
 
@@ -485,6 +493,45 @@ export default function ConfiguracionPage() {
     setEditingCostoSistema(null); 
     setIsCostoSistemaDialogOpen(true);
   }
+
+  const paginatedAreas = useMemo(() => {
+    return areas.slice(
+      (areasCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG,
+      areasCurrentPage * ITEMS_PER_PAGE_CONFIG
+    );
+  }, [areas, areasCurrentPage]);
+  const totalAreasPages = Math.ceil(areas.length / ITEMS_PER_PAGE_CONFIG);
+
+  const paginatedPuestos = useMemo(() => {
+    return puestos.slice(
+      (puestosCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG,
+      puestosCurrentPage * ITEMS_PER_PAGE_CONFIG
+    );
+  }, [puestos, puestosCurrentPage]);
+  const totalPuestosPages = Math.ceil(puestos.length / ITEMS_PER_PAGE_CONFIG);
+
+  const paginatedSistemas = useMemo(() => {
+    return sistemas.slice(
+      (sistemasCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG,
+      sistemasCurrentPage * ITEMS_PER_PAGE_CONFIG
+    );
+  }, [sistemas, sistemasCurrentPage]);
+  const totalSistemasPages = Math.ceil(sistemas.length / ITEMS_PER_PAGE_CONFIG);
+
+  const costsForSelectedSystem = useMemo(() => {
+    if (!selectedSystemForCosts) return [];
+    return getCostsForSystem(selectedSystemForCosts.id);
+  }, [selectedSystemForCosts, getCostsForSystem]);
+
+  const paginatedCostosDialog = useMemo(() => {
+    return costsForSelectedSystem.slice(
+      (costosDialogCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG,
+      costosDialogCurrentPage * ITEMS_PER_PAGE_CONFIG
+    );
+  }, [costsForSelectedSystem, costosDialogCurrentPage]);
+  const totalCostosDialogPages = Math.ceil(costsForSelectedSystem.length / ITEMS_PER_PAGE_CONFIG);
+
+
   
   const configSections: Array<{
     value: string;
@@ -552,6 +599,7 @@ export default function ConfiguracionPage() {
           ) : areas.length === 0 ? (
              <PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />
           ) : (
+            <>
             <Card>
               <Table>
                 <TableHeader>
@@ -561,7 +609,7 @@ export default function ConfiguracionPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {areas.map((area) => (
+                  {paginatedAreas.map((area) => (
                     <TableRow key={area.id}>
                       <TableCell>{area.nombre}</TableCell>
                       <TableCell className="text-right">
@@ -577,6 +625,30 @@ export default function ConfiguracionPage() {
                 </TableBody>
               </Table>
             </Card>
+            {totalAreasPages > 1 && (
+              <div className="flex items-center justify-end space-x-2 py-4">
+                <span className="text-sm text-muted-foreground">
+                  Página {areasCurrentPage} de {totalAreasPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAreasCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={areasCurrentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAreasCurrentPage(prev => Math.min(totalAreasPages, prev + 1))}
+                  disabled={areasCurrentPage === totalAreasPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </div>
       ),
@@ -737,6 +809,7 @@ export default function ConfiguracionPage() {
           ) : puestos.length === 0 ? (
              <PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
           ) : (
+            <>
             <Card>
               <Table>
                 <TableHeader>
@@ -749,7 +822,7 @@ export default function ConfiguracionPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {puestos.map((puesto) => {
+                  {paginatedPuestos.map((puesto) => {
                     const areaPuesto = puesto.areaId ? areas.find(a => a.id === puesto.areaId) : null;
                     const jefeInmediato = puesto.jefeInmediato ? puestos.find(p => p.id === puesto.jefeInmediato) : null;
                     return (
@@ -772,6 +845,30 @@ export default function ConfiguracionPage() {
                 </TableBody>
               </Table>
             </Card>
+             {totalPuestosPages > 1 && (
+              <div className="flex items-center justify-end space-x-2 py-4">
+                <span className="text-sm text-muted-foreground">
+                  Página {puestosCurrentPage} de {totalPuestosPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPuestosCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={puestosCurrentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPuestosCurrentPage(prev => Math.min(totalPuestosPages, prev + 1))}
+                  disabled={puestosCurrentPage === totalPuestosPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </div>
       ),
@@ -835,6 +932,7 @@ export default function ConfiguracionPage() {
           ) : sistemas.length === 0 ? (
              <PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas para gestionar tu inventario tecnológico y sus costos." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
           ) : (
+            <>
             <Card>
               <Table>
                 <TableHeader>
@@ -845,7 +943,7 @@ export default function ConfiguracionPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sistemas.map((sistema) => (
+                  {paginatedSistemas.map((sistema) => (
                     <TableRow key={sistema.id}>
                       <TableCell>{sistema.nombre}</TableCell>
                       <TableCell>{getSystemAnnualCost(sistema.id, costosSistemas, sistemas)}</TableCell>
@@ -865,6 +963,30 @@ export default function ConfiguracionPage() {
                 </TableBody>
               </Table>
             </Card>
+            {totalSistemasPages > 1 && (
+               <div className="flex items-center justify-end space-x-2 py-4">
+                 <span className="text-sm text-muted-foreground">
+                   Página {sistemasCurrentPage} de {totalSistemasPages}
+                 </span>
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={() => setSistemasCurrentPage(prev => Math.max(1, prev - 1))}
+                   disabled={sistemasCurrentPage === 1}
+                 >
+                   Anterior
+                 </Button>
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={() => setSistemasCurrentPage(prev => Math.min(totalSistemasPages, prev + 1))}
+                   disabled={sistemasCurrentPage === totalSistemasPages}
+                 >
+                   Siguiente
+                 </Button>
+               </div>
+            )}
+            </>
           )}
 
           {/* Manage Costs Dialog */}
@@ -885,9 +1007,10 @@ export default function ConfiguracionPage() {
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo
                   </Button>
                 </div>
-                {getCostsForSystem(selectedSystemForCosts?.id || '').length === 0 ? (
+                {costsForSelectedSystem.length === 0 ? (
                    <PlaceholderContent title="No hay costos registrados" description={`Aún no se han registrado costos para ${selectedSystemForCosts?.nombre}. Comience agregando uno.`} icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
                 ) : (
+                  <>
                   <Card>
                     <Table>
                       <TableHeader>
@@ -904,8 +1027,7 @@ export default function ConfiguracionPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {getCostsForSystem(selectedSystemForCosts?.id || '')
-                          .map((costo) => {
+                        {paginatedCostosDialog.map((costo) => {
                             const costoUso = costo.montoUso || 0;
                             const costoLicenciasTotal = (costo.costoPorLicencia || 0) * (costo.numeroLicencias || 0);
                             const costoTotalPeriodico = costoUso + costoLicenciasTotal;
@@ -933,6 +1055,30 @@ export default function ConfiguracionPage() {
                       </TableBody>
                     </Table>
                   </Card>
+                  {totalCostosDialogPages > 1 && (
+                    <div className="flex items-center justify-end space-x-2 py-4">
+                        <span className="text-sm text-muted-foreground">
+                        Página {costosDialogCurrentPage} de {totalCostosDialogPages}
+                        </span>
+                        <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCostosDialogCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={costosDialogCurrentPage === 1}
+                        >
+                        Anterior
+                        </Button>
+                        <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCostosDialogCurrentPage(prev => Math.min(totalCostosDialogPages, prev + 1))}
+                        disabled={costosDialogCurrentPage === totalCostosDialogPages}
+                        >
+                        Siguiente
+                        </Button>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
                <DialogFooter>

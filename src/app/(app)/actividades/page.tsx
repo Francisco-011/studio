@@ -96,6 +96,7 @@ interface SortConfig {
   direction: SortDirection;
 }
 
+const ITEMS_PER_PAGE = 10;
 
 export default function ActividadesPage() {
   const { 
@@ -124,6 +125,7 @@ export default function ActividadesPage() {
   const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
 
   useEffect(() => {
@@ -262,6 +264,7 @@ export default function ActividadesPage() {
   }
 
   const sortedAndFilteredActividades = useMemo(() => {
+    setCurrentPage(1); // Reset to first page on filter change
     let filtered = actividades.filter(actividad => {
       const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -311,6 +314,24 @@ export default function ActividadesPage() {
     }
     return filtered;
   }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig]);
+
+  const totalPages = Math.ceil(sortedAndFilteredActividades.length / ITEMS_PER_PAGE);
+  const paginatedActividades = useMemo(() => {
+    return sortedAndFilteredActividades.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  }, [sortedAndFilteredActividades, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredActividades.length > 0) {
+      // This case might happen if filters result in 0 pages but there was data
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages, sortedAndFilteredActividades.length]);
+
 
   const requestSort = (key: SortableActividadKeys) => {
     let direction: SortDirection = 'ascending';
@@ -643,7 +664,8 @@ export default function ActividadesPage() {
             </div>
           </div>
 
-          {sortedAndFilteredActividades.length > 0 ? (
+          {paginatedActividades.length > 0 ? (
+            <>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -677,7 +699,7 @@ export default function ActividadesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAndFilteredActividades.map((actividad, index) => {
+                  {paginatedActividades.map((actividad, index) => {
                     const associatedProcessNames = actividad.procesosAsociadosIds
                         ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
                         .filter(Boolean)
@@ -735,6 +757,30 @@ export default function ActividadesPage() {
                 </TableBody>
               </Table>
             </div>
+            <div className="flex items-center justify-between space-x-2 py-4">
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages} (Total: {sortedAndFilteredActividades.length} actividades)
+              </span>
+              <div className="space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+            </>
           ) : (
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
               <ListChecks className="h-16 w-16 text-muted-foreground mb-4" />

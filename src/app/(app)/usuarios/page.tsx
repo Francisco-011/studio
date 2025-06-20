@@ -79,6 +79,8 @@ const initialMockUsers: User[] = [
   { id: '5', nombreCompleto: 'Laura Torres Díaz', email: 'laura.torres@example.com', rol: 'Consultor', activo: true },
 ];
 
+const ITEMS_PER_PAGE = 10;
+
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>(initialMockUsers);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,6 +92,7 @@ export default function UsuariosPage() {
 
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const userForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
@@ -157,16 +160,36 @@ export default function UsuariosPage() {
     }
   }
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearchTerm = user.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.rol === roleFilter;
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && user.activo) ||
-      (statusFilter === 'inactive' && !user.activo);
-    return matchesSearchTerm && matchesRole && matchesStatus;
-  });
+  const filteredUsers = useMemo(() => {
+    setCurrentPage(1); // Reset page on filter change
+    return users.filter(user => {
+      const matchesSearchTerm = user.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRole = roleFilter === 'all' || user.rol === roleFilter;
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && user.activo) ||
+        (statusFilter === 'inactive' && !user.activo);
+      return matchesSearchTerm && matchesRole && matchesStatus;
+    });
+  }, [users, searchTerm, roleFilter, statusFilter]);
+
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const paginatedUsers = useMemo(() => {
+    return filteredUsers.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  }, [filteredUsers, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (currentPage !== 1 && totalPages === 0 && filteredUsers.length > 0) {
+       setCurrentPage(1);
+    }
+  }, [currentPage, totalPages, filteredUsers.length]);
+
 
   return (
     <div className="container mx-auto py-8">
@@ -324,7 +347,8 @@ export default function UsuariosPage() {
             </div>
           </div>
 
-          {filteredUsers.length > 0 ? (
+          {paginatedUsers.length > 0 ? (
+            <>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -337,7 +361,7 @@ export default function UsuariosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {paginatedUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.nombreCompleto}</TableCell>
                       <TableCell>{user.email}</TableCell>
@@ -368,6 +392,30 @@ export default function UsuariosPage() {
                 </TableBody>
               </Table>
             </div>
+            <div className="flex items-center justify-between space-x-2 py-4">
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages} (Total: {filteredUsers.length} usuarios)
+              </span>
+              <div className="space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+            </>
           ) : (
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
               <Users className="h-16 w-16 text-muted-foreground mb-4" />
@@ -403,5 +451,3 @@ export default function UsuariosPage() {
     </div>
   );
 }
-
-    

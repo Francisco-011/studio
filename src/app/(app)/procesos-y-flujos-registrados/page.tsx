@@ -70,6 +70,7 @@ interface SortConfig {
   direction: SortDirection;
 }
 
+const ITEMS_PER_PAGE = 10;
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
 
@@ -127,6 +128,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
 
   useEffect(() => {
@@ -201,6 +203,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   }, [allCapturedData, isLoading]);
 
   const sortedAndFilteredData = useMemo(() => {
+    setCurrentPage(1); // Reset to first page on filter change
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
 
     if (searchTerm) {
@@ -278,6 +281,22 @@ export default function ProcesosYFlujosRegistradosPage() {
 
     return dataToFilter;
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+
+  const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
+  const paginatedData = useMemo(() => {
+    return sortedAndFilteredData.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  }, [sortedAndFilteredData, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredData.length > 0) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages, sortedAndFilteredData.length]);
 
   const requestSort = (key: SortableProcessKeys) => {
     let direction: SortDirection = 'ascending';
@@ -630,7 +649,8 @@ export default function ProcesosYFlujosRegistradosPage() {
           </div>
 
 
-          {sortedAndFilteredData.length > 0 ? (
+          {paginatedData.length > 0 ? (
+            <>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -671,7 +691,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAndFilteredData.map((proc) => {
+                  {paginatedData.map((proc) => {
                     const associatedActivityNames = proc.activityOrder
                         ?.map(actId => allActivities.find(a => a.id === actId)?.nombre)
                         .filter(Boolean)
@@ -766,6 +786,30 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </TableBody>
               </Table>
             </div>
+             <div className="flex items-center justify-between space-x-2 py-4">
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages} (Total: {sortedAndFilteredData.length} procesos)
+              </span>
+              <div className="space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+            </>
           ) : (
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
               <FileX className="h-16 w-16 text-muted-foreground mb-4" />

@@ -64,6 +64,8 @@ const accionFormSchema = z.object({
 
 type AccionFormData = z.infer<typeof accionFormSchema>;
 
+const ITEMS_PER_PAGE = 10;
+
 function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
   if (amount === undefined || amount === null || currency === undefined) return "-";
   try {
@@ -84,6 +86,7 @@ export default function AccionesPage() {
 
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [accionToDelete, setAccionToDelete] = useState<Accion | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const accionForm = useForm<AccionFormData>({
     resolver: zodResolver(accionFormSchema),
@@ -162,6 +165,7 @@ export default function AccionesPage() {
   }
   
   const filteredAcciones = useMemo(() => {
+    setCurrentPage(1); // Reset page on filter change
     return acciones.filter(accion => {
       const matchesSearchTerm = 
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -172,6 +176,22 @@ export default function AccionesPage() {
       return matchesSearchTerm && matchesStatus;
     }).sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
   }, [acciones, searchTerm, statusFilter]);
+
+  const totalPages = Math.ceil(filteredAcciones.length / ITEMS_PER_PAGE);
+  const paginatedAcciones = useMemo(() => {
+     return filteredAcciones.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  }, [filteredAcciones, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (currentPage !== 1 && totalPages === 0 && filteredAcciones.length > 0) {
+       setCurrentPage(1);
+    }
+  }, [currentPage, totalPages, filteredAcciones.length]);
 
   if (isLoadingAcciones) {
     return (
@@ -400,7 +420,8 @@ export default function AccionesPage() {
             </div>
           </div>
 
-          {filteredAcciones.length > 0 ? (
+          {paginatedAcciones.length > 0 ? (
+            <>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -415,7 +436,7 @@ export default function AccionesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAcciones.map((accion) => (
+                  {paginatedAcciones.map((accion) => (
                     <TableRow key={accion.id}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
@@ -451,6 +472,30 @@ export default function AccionesPage() {
                 </TableBody>
               </Table>
             </div>
+            <div className="flex items-center justify-between space-x-2 py-4">
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages} (Total: {filteredAcciones.length} acciones)
+              </span>
+              <div className="space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+            </>
           ) : (
              <div className="mt-10 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
                 <Target className="h-16 w-16 text-muted-foreground mb-4" />

@@ -35,6 +35,7 @@ interface SimulatedAuditEntry {
   details: string;
 }
 
+const ITEMS_PER_PAGE = 15;
 
 export default function AuditoriaPage() {
   const [dynamicSimulatedLog, setDynamicSimulatedLog] = useState<SimulatedAuditEntry[]>([]);
@@ -43,6 +44,7 @@ export default function AuditoriaPage() {
   const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setIsLoadingLog(true);
@@ -166,6 +168,7 @@ export default function AuditoriaPage() {
   }, [dynamicSimulatedLog]);
 
   const filteredSimulatedLog = useMemo(() => {
+    setCurrentPage(1); // Reset page on filter change
     return dynamicSimulatedLog
       .filter(entry => {
         if (actionTypeFilter !== 'all' && entry.action !== actionTypeFilter) {
@@ -186,6 +189,22 @@ export default function AuditoriaPage() {
         return true;
       });
   }, [dynamicSimulatedLog, actionTypeFilter, userFilter, dateRange]);
+
+  const totalPages = Math.ceil(filteredSimulatedLog.length / ITEMS_PER_PAGE);
+  const paginatedLog = useMemo(() => {
+    return filteredSimulatedLog.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  }, [filteredSimulatedLog, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (currentPage !== 1 && totalPages === 0 && filteredSimulatedLog.length > 0) {
+       setCurrentPage(1);
+    }
+  }, [currentPage, totalPages, filteredSimulatedLog.length]);
 
   const totalCambiosFiltrados = useMemo(() => filteredSimulatedLog.length, [filteredSimulatedLog]);
 
@@ -315,7 +334,8 @@ export default function AuditoriaPage() {
                 <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Filtros</Button>
               </div>
 
-              {filteredSimulatedLog.length > 0 ? (
+              {paginatedLog.length > 0 ? (
+                <>
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -328,7 +348,7 @@ export default function AuditoriaPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSimulatedLog.map((entry) => (
+                      {paginatedLog.map((entry) => (
                         <TableRow key={entry.id}>
                           <TableCell className="text-xs text-muted-foreground">
                             {isValid(parseISO(entry.timestamp)) ? format(parseISO(entry.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es }) : 'Fecha inválida'}
@@ -351,6 +371,30 @@ export default function AuditoriaPage() {
                     </TableBody>
                   </Table>
                 </div>
+                <div className="flex items-center justify-between space-x-2 py-4">
+                  <span className="text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages} (Total: {filteredSimulatedLog.length} entradas)
+                  </span>
+                  <div className="space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages || totalPages === 0}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+                </>
               ) : (
                 <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
                     <ListOrdered className="h-16 w-16 text-muted-foreground mb-4" />
