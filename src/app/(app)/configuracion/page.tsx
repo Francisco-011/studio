@@ -8,7 +8,19 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
-// Removed: import { useFuentesDestinos, type FuenteDestino } from '@/contexts/FuentesDestinosContext';
+import { 
+  useSistemasCostos, 
+  type Sistema, 
+  type SistemaCosto,
+  tiposDeCostoOptions,
+  formasDePagoOptions,
+  frecuenciasDePagoOptions,
+  tiposDeMonedaOptions,
+  type TipoCosto,
+  type FormaPago,
+  type FrecuenciaPago,
+  type TipoMoneda,
+} from '@/contexts/SistemasCostosContext';
 
 
 import { Button } from '@/components/ui/button';
@@ -57,41 +69,10 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2 } from 'lucide-react';
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
-
-
-interface Sistema {
-  id: string;
-  nombre: string;
-}
-
-const tiposDeCostoOptions = ["Por Uso del Sistema", "Por Licencias"] as const;
-type TipoCosto = typeof tiposDeCostoOptions[number];
-
-const formasDePagoOptions = ["Transferencia", "Efectivo", "Tarjeta", "Otros"] as const;
-type FormaPago = typeof formasDePagoOptions[number];
-
-const frecuenciasDePagoOptions = ["Mensual", "Anual", "Otro"] as const;
-type FrecuenciaPago = typeof frecuenciasDePagoOptions[number];
-
-const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
-type TipoMoneda = typeof tiposDeMonedaOptions[number];
-
-interface SistemaCosto {
-  id: string;
-  sistemaId: string;
-  tipoCosto: TipoCosto[];
-  montoUso?: number;
-  numeroLicencias?: number;
-  costoPorLicencia?: number;
-  formaPago: FormaPago;
-  frecuencia: FrecuenciaPago;
-  moneda: TipoMoneda;
-  descripcion?: string;
-}
 
 // Zod schemas
 const areaFormSchema = z.object({
@@ -168,7 +149,6 @@ const costoSistemaFormSchema = z.object({
 });
 type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
-// Removed: fuenteDestinoFormSchema and FuenteDestinoFormData
 
 interface ConfigSectionProps {
   title: string;
@@ -220,13 +200,22 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
   return formatCurrency(totalAnnualCost, displayCurrency);
 }
 
-const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
-const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
   const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
-  // Removed: useFuentesDestinos
+  const { 
+    sistemas, 
+    costosSistemas, 
+    addSistema: addContextSistema, 
+    updateSistema: updateContextSistema, 
+    deleteSistema: deleteContextSistema, 
+    addCostoSistema: addContextCostoSistema,
+    updateCostoSistema: updateContextCostoSistema,
+    deleteCostoSistema: deleteContextCostoSistema,
+    isLoadingSistemasCostos,
+    getCostsForSystem,
+  } = useSistemasCostos();
 
 
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -235,71 +224,13 @@ export default function ConfiguracionPage() {
   const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
 
-  const [sistemas, setSistemas] = useState<Sistema[]>([]);
   const [isSistemaDialogOpen, setIsSistemaDialogOpen] = useState(false);
   const [editingSistema, setEditingSistema] = useState<Sistema | null>(null);
 
-  const [costosSistemas, setCostosSistemas] = useState<SistemaCosto[]>([]);
   const [isCostoSistemaDialogOpen, setIsCostoSistemaDialogOpen] = useState(false);
   const [editingCostoSistema, setEditingCostoSistema] = useState<SistemaCosto | null>(null);
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
-
-  // Removed states for Fuentes/Destinos
-  // const [isFuenteDestinoDialogOpen, setIsFuenteDestinoDialogOpen] = useState(false);
-  // const [editingFuenteDestino, setEditingFuenteDestino] = useState<FuenteDestino | null>(null);
-
-  // Load sistemas from localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-        if (savedSistemas) {
-          setSistemas(JSON.parse(savedSistemas));
-        }
-      } catch (error) {
-        console.error("Failed to load sistemas from localStorage", error);
-        setSistemas([]);
-      }
-    }
-  }, []);
-
-  // Save sistemas to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_SISTEMAS_KEY, JSON.stringify(sistemas));
-      } catch (error) {
-        console.error("Failed to save sistemas to localStorage", error);
-      }
-    }
-  }, [sistemas]);
-
-  // Load costosSistemas from localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
-        if (savedCostosSistemas) {
-          setCostosSistemas(JSON.parse(savedCostosSistemas));
-        }
-      } catch (error) {
-        console.error("Failed to load costosSistemas from localStorage", error);
-        setCostosSistemas([]);
-      }
-    }
-  }, []);
-
-  // Save costosSistemas to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY, JSON.stringify(costosSistemas));
-      } catch (error) {
-        console.error("Failed to save costosSistemas to localStorage", error);
-      }
-    }
-  }, [costosSistemas]);
 
 
   const areaForm = useForm<AreaFormData>({
@@ -341,7 +272,6 @@ export default function ConfiguracionPage() {
     },
   });
 
-  // Removed: fuenteDestinoForm
 
   useEffect(() => {
     if (editingArea) {
@@ -409,8 +339,6 @@ export default function ConfiguracionPage() {
         }
     }
   }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
-
-  // Removed: useEffect for editingFuenteDestino
 
 
   function handleAreaSubmit(data: AreaFormData) {
@@ -485,20 +413,17 @@ export default function ConfiguracionPage() {
   }
 
  function handleSistemaSubmit(data: SistemaFormData) {
-    if (editingSistema) {
-      setSistemas(sistemas.map((sistema) => (sistema.id === editingSistema.id ? { ...sistema, nombre: data.nombre } : sistema)));
+    if (editingSistema && editingSistema.id) {
+      updateContextSistema(editingSistema.id, data.nombre);
       toast({ title: 'Sistema Actualizado', description: 'El sistema ha sido actualizado exitosamente.' });
-      setEditingSistema(null);
-      setIsSistemaDialogOpen(false);
-      sistemaForm.reset();
     } else {
-      const newSistema: Sistema = { id: Date.now().toString(), nombre: data.nombre };
-      setSistemas([...sistemas, newSistema]);
+      const newSystem = addContextSistema(data.nombre);
       toast({ title: 'Sistema Agregado', description: 'El sistema ha sido agregado exitosamente.' });
-      setIsSistemaDialogOpen(false); 
-      sistemaForm.reset();
-      openManageCostsDialog(newSistema); 
+      openManageCostsDialog(newSystem); // Open costs dialog for the new system
     }
+    setEditingSistema(null);
+    setIsSistemaDialogOpen(false);
+    sistemaForm.reset();
   }
 
   function handleEditSistema(sistema: Sistema) {
@@ -507,14 +432,12 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteSistema(sistemaId: string) {
-    setCostosSistemas(prevCostos => prevCostos.filter(costo => costo.sistemaId !== sistemaId));
-    setSistemas(sistemas.filter((sistema) => sistema.id !== sistemaId));
+    deleteContextSistema(sistemaId);
     toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' });
   }
 
   function handleCostoSistemaSubmit(data: SistemaCostoFormData) {
-    const costoData: SistemaCosto = {
-      id: editingCostoSistema ? editingCostoSistema.id : Date.now().toString(),
+    const costoDataToSave: Omit<SistemaCosto, 'id'> = {
       sistemaId: data.sistemaId,
       tipoCosto: data.tipoCosto,
       montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined,
@@ -526,11 +449,11 @@ export default function ConfiguracionPage() {
       descripcion: data.descripcion,
     };
 
-    if (editingCostoSistema) {
-      setCostosSistemas(costosSistemas.map((c) => (c.id === editingCostoSistema.id ? costoData : c)));
+    if (editingCostoSistema && editingCostoSistema.id) {
+      updateContextCostoSistema(editingCostoSistema.id, costoDataToSave);
       toast({ title: 'Costo de Sistema Actualizado', description: 'El costo ha sido actualizado exitosamente.' });
     } else {
-      setCostosSistemas([...costosSistemas, costoData]);
+      addContextCostoSistema(costoDataToSave);
       toast({ title: 'Costo de Sistema Agregado', description: 'El costo ha sido agregado exitosamente.' });
     }
     setEditingCostoSistema(null);
@@ -548,7 +471,7 @@ export default function ConfiguracionPage() {
   }
 
   function handleDeleteCostoSistema(costoId: string) {
-    setCostosSistemas(costosSistemas.filter((c) => c.id !== costoId));
+    deleteContextCostoSistema(costoId);
     toast({ title: 'Costo de Sistema Eliminado', description: 'El costo ha sido eliminado exitosamente.', variant: 'destructive' });
   }
 
@@ -562,8 +485,6 @@ export default function ConfiguracionPage() {
     setEditingCostoSistema(null); 
     setIsCostoSistemaDialogOpen(true);
   }
-
-  // Removed: CRUD functions for Fuentes/Destinos
   
   const configSections: Array<{
     value: string;
@@ -627,7 +548,7 @@ export default function ConfiguracionPage() {
             </Dialog>
           </div>
           {isLoadingAreas ? (
-            <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Building className="h-12 w-12 text-muted-foreground" />} isLoading />
+            <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />
           ) : areas.length === 0 ? (
              <PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />
           ) : (
@@ -812,7 +733,7 @@ export default function ConfiguracionPage() {
             </Dialog>
           </div>
           {isLoadingPuestos ? (
-            <PlaceholderContent title="Cargando puestos..." description="Por favor espere." icon={<Users className="h-12 w-12 text-muted-foreground" />} isLoading />
+             <PlaceholderContent title="Cargando puestos..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />
           ) : puestos.length === 0 ? (
              <PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
           ) : (
@@ -909,7 +830,9 @@ export default function ConfiguracionPage() {
               </DialogContent>
             </Dialog>
           </div>
-          {sistemas.length === 0 ? (
+          {isLoadingSistemasCostos ? (
+            <PlaceholderContent title="Cargando sistemas..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />
+          ) : sistemas.length === 0 ? (
              <PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas para gestionar tu inventario tecnológico y sus costos." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
           ) : (
             <Card>
@@ -962,7 +885,7 @@ export default function ConfiguracionPage() {
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo
                   </Button>
                 </div>
-                {costosSistemas.filter(c => c.sistemaId === selectedSystemForCosts?.id).length === 0 ? (
+                {getCostsForSystem(selectedSystemForCosts?.id || '').length === 0 ? (
                    <PlaceholderContent title="No hay costos registrados" description={`Aún no se han registrado costos para ${selectedSystemForCosts?.nombre}. Comience agregando uno.`} icon={<DollarSign className="h-12 w-12 text-muted-foreground" />} />
                 ) : (
                   <Card>
@@ -981,8 +904,7 @@ export default function ConfiguracionPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {costosSistemas
-                          .filter(c => c.sistemaId === selectedSystemForCosts?.id)
+                        {getCostsForSystem(selectedSystemForCosts?.id || '')
                           .map((costo) => {
                             const costoUso = costo.montoUso || 0;
                             const costoLicenciasTotal = (costo.costoPorLicencia || 0) * (costo.numeroLicencias || 0);
@@ -1215,7 +1137,6 @@ export default function ConfiguracionPage() {
         </div>
       ),
     },
-    // Removed "Fuentes/Destinos" section
   ];
 
 

@@ -14,31 +14,10 @@ import {
 } from "@/components/ui/table";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades } from '@/contexts/ActividadesContext'; 
+import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 
-const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
-type TipoMoneda = typeof tiposDeMonedaOptions[number];
-
-interface Sistema {
-  id: string;
-  nombre: string;
-}
-
-interface SistemaCosto {
-  id: string;
-  sistemaId: string;
-  tipoCosto: ("Por Uso del Sistema" | "Por Licencias")[];
-  montoUso?: number;
-  numeroLicencias?: number;
-  costoPorLicencia?: number;
-  formaPago: "Transferencia" | "Efectivo" | "Tarjeta" | "Otros";
-  frecuencia: "Mensual" | "Anual" | "Otro";
-  moneda: TipoMoneda;
-  descripcion?: string;
-}
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
-const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 
 
 function formatDashboardCurrency(amount: number, currency: string) {
@@ -112,35 +91,32 @@ function calculateAllSystemAnnualCosts(
 export default function DashboardPage() {
   const [procesosMapeadosCount, setProcesosMapeadosCount] = useState(0);
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingProcessData, setIsLoadingProcessData] = useState(true);
 
   const { actividades, isLoadingActividades } = useActividades();
+  const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   useEffect(() => {
-    setIsLoadingData(true);
+    setIsLoadingProcessData(true);
     try {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        // Count only active and non-deleted processes
         setProcesosMapeadosCount(parsedProcesses.filter(p => !p.deletedAt && p.activo !== false).length);
       }
-
-      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-      const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
-      
-      const storedCostos = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
-      const costos: SistemaCosto[] = storedCostos ? JSON.parse(storedCostos) : [];
-      
-      setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costos));
-
     } catch (error) {
-      console.error("Error loading dashboard data from localStorage:", error);
+      console.error("Error loading process data from localStorage:", error);
     } finally {
-      setIsLoadingData(false);
+      setIsLoadingProcessData(false);
     }
   }, []);
   
+  useEffect(() => {
+    if (!isLoadingSistemasCostos) {
+        setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
+    }
+  }, [sistemas, costosSistemas, isLoadingSistemasCostos])
+
   const metricasActividades = useMemo(() => {
     if (isLoadingActividades) return { activas: 0, sinUso: 0 };
     const activas = actividades.filter(a => a.activa).length;
@@ -148,6 +124,7 @@ export default function DashboardPage() {
     return { activas, sinUso };
   }, [actividades, isLoadingActividades]);
 
+  const isLoadingDashboardData = isLoadingProcessData || isLoadingSistemasCostos;
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
     if (loading) {
@@ -168,7 +145,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {renderMetric(procesosMapeadosCount, isLoadingData)}
+              {renderMetric(procesosMapeadosCount, isLoadingProcessData)}
             </div>
           </CardContent>
         </Card>
@@ -244,7 +221,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4">Resumen de costos anuales estimados por uso y licencias.</CardDescription>
-            {isLoadingData ? (
+            {isLoadingDashboardData ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando costos...
                 </div>

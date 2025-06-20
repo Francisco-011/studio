@@ -9,31 +9,10 @@ import { Lightbulb, Sparkles, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
-const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
 
-// Interfaces for data from localStorage (mirroring ConfiguracionPage)
-interface Sistema {
-  id: string;
-  nombre: string;
-}
-const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
-type TipoMoneda = typeof tiposDeMonedaOptions[number];
-
-interface SistemaCosto {
-  id: string;
-  sistemaId: string;
-  tipoCosto: ("Por Uso del Sistema" | "Por Licencias")[];
-  montoUso?: number;
-  numeroLicencias?: number;
-  costoPorLicencia?: number;
-  formaPago: "Transferencia" | "Efectivo" | "Tarjeta" | "Otros";
-  frecuencia: "Mensual" | "Anual" | "Otro";
-  moneda: TipoMoneda;
-  descripcion?: string;
-}
 
 // Helper function to format currency (simplified for this context)
 function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda = "USD"): string {
@@ -95,11 +74,22 @@ export default function MejorasPage() {
   const [analysisResult, setAnalysisResult] = useState<AnalyzeProcessesOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   const handleAnalyzeInefficiencies = async () => {
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
+
+    if (isLoadingSistemasCostos) {
+        toast({
+            title: "Cargando datos de configuración",
+            description: "Espere un momento mientras se cargan los datos de sistemas y costos.",
+            variant: "default",
+        });
+        setIsLoading(false);
+        return;
+    }
 
     try {
       // Load captured processes
@@ -140,13 +130,7 @@ export default function MejorasPage() {
       const systemUsageText = `Sistemas informáticos utilizados en los procesos documentados: ${
         allSystemsUsedInProcesses.size > 0 ? Array.from(allSystemsUsedInProcesses).join(', ') : 'No se especificaron sistemas en los procesos.'
       }`;
-
-      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-      const sistemas: Sistema[] = storedSistemas ? JSON.parse(storedSistemas) : [];
       
-      const storedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
-      const costosSistemas: SistemaCosto[] = storedCostosSistemas ? JSON.parse(storedCostosSistemas) : [];
-
       let systemCostInformationText = "";
       if (sistemas.length > 0) {
         systemCostInformationText = "Detalles de Costos de Sistemas:\n";
@@ -203,13 +187,13 @@ export default function MejorasPage() {
           </CardDescription>
 
           <div className="mb-6">
-            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading} size="lg">
-              {isLoading ? (
+            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos} size="lg">
+              {isLoading || isLoadingSistemasCostos ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <Sparkles className="mr-2 h-5 w-5" />
               )}
-              {isLoading ? "Analizando..." : "Analizar Ineficiencias con IA"}
+              {isLoading || isLoadingSistemasCostos ? "Analizando..." : "Analizar Ineficiencias con IA"}
             </Button>
           </div>
 

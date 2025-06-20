@@ -6,6 +6,7 @@ import { PuestosProvider } from '@/contexts/PuestosContext';
 // Removed: import { FuentesDestinosProvider } from '@/contexts/FuentesDestinosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
+import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -16,11 +17,13 @@ export default function AuthenticatedAppLayout({
     <AreasProvider>
       <PuestosProvider>
         {/* <FuentesDestinosProvider> */}
-            <ActividadesProvider>
-              <AccionesProvider>
-                <AppLayout>{children}</AppLayout>
-              </AccionesProvider>
-            </ActividadesProvider>
+        <SistemasCostosProvider>
+          <ActividadesProvider>
+            <AccionesProvider>
+              <AppLayout>{children}</AppLayout>
+            </AccionesProvider>
+          </ActividadesProvider>
+        </SistemasCostosProvider>
         {/* </FuentesDestinosProvider> */}
       </PuestosProvider>
     </AreasProvider>
