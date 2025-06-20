@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Users, TrendingUp, CheckCircle2, Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,6 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig
+} from "@/components/ui/chart";
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
+
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
@@ -70,7 +80,7 @@ function calculateAllSystemAnnualCosts(
           } else if (cost.frecuencia === "Anual") {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
-          } else {
+          } else { // For "Otro", assume it's an annual equivalent or a one-time for simplicity
             totalAnnualUsage += periodicUsage;
             totalAnnualLicense += periodicLicense;
           }
@@ -88,6 +98,23 @@ function calculateAllSystemAnnualCosts(
   });
 }
 
+interface MonthlyEvolutionData {
+  month: string;
+  procesosMapeados: number;
+  accionesCompletadas: number;
+}
+
+const chartConfig = {
+  procesosMapeados: {
+    label: "Procesos Mapeados",
+    color: "hsl(var(--chart-1))",
+  },
+  accionesCompletadas: {
+    label: "Acciones Completadas",
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig;
+
 
 export default function DashboardPage() {
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
@@ -98,6 +125,7 @@ export default function DashboardPage() {
   const { acciones, isLoadingAcciones } = useAcciones();
 
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
+  const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
 
   useEffect(() => {
     setIsLoadingProcessData(true);
@@ -105,7 +133,7 @@ export default function DashboardPage() {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
-        setCapturedProcesses(parsedProcesses);
+        setCapturedProcesses(parsedProcesses.filter(p => !p.deletedAt && p.activo !== false));
       }
     } catch (error) {
       console.error("Error loading process data from localStorage:", error);
@@ -119,6 +147,42 @@ export default function DashboardPage() {
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
     }
   }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
+
+  useEffect(() => {
+    if (!isLoadingProcessData && !isLoadingAcciones) {
+      const now = new Date();
+      const monthlyData: MonthlyEvolutionData[] = [];
+
+      for (let i = 5; i >= 0; i--) {
+        const targetMonthDate = subMonths(now, i);
+        const monthStart = startOfMonth(targetMonthDate);
+        const monthEnd = endOfMonth(targetMonthDate);
+        
+        const monthLabel = format(monthStart, "MMM yy", { locale: es });
+
+        const procesosEsteMes = capturedProcesses.filter(proc => {
+          const capturedDate = parseISO(proc.capturedAt);
+          return isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
+        }).length;
+
+        const accionesEsteMes = acciones.filter(accion => {
+          if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
+            const finalizacionDate = parseISO(accion.fechaFinalizacion);
+            return isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
+          }
+          return false;
+        }).length;
+        
+        monthlyData.push({
+          month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), // Capitalize month
+          procesosMapeados: procesosEsteMes,
+          accionesCompletadas: accionesEsteMes,
+        });
+      }
+      setEvolutionChartData(monthlyData);
+    }
+  }, [capturedProcesses, acciones, isLoadingProcessData, isLoadingAcciones]);
+
 
   const dashboardMetrics = useMemo(() => {
     if (isLoadingProcessData || isLoadingActividades || isLoadingAcciones) {
@@ -154,6 +218,7 @@ export default function DashboardPage() {
         }
     });
 
+    // Actividades Duplicadas: activas y asociadas a >1 proceso
     const actividadesDuplicadasCount = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
 
     return {
@@ -249,27 +314,45 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-         <Card className="shadow-lg hover:shadow-xl transition-shadow col-span-1 md:col-span-2 lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ahorro Potencial (Ejemplo)</CardTitle>
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">18%</div>
-            <p className="text-xs text-muted-foreground">Estimado $12,500 USD/mes</p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader>
             <CardTitle>Evolución de Optimización de Procesos</CardTitle>
-            <CardDescription>Seguimiento mensual de métricas clave.</CardDescription>
+            <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas (últimos 6 meses).</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] flex items-center justify-center">
-            <BarChart3 className="w-24 h-24 text-muted-foreground" />
-            <p className="text-muted-foreground ml-4">Gráfico de evolución de procesos (Próximamente)</p>
+          <CardContent className="h-[350px] pt-4">
+            {isLoadingAllData ? (
+                <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando datos del gráfico...
+                </div>
+            ) : evolutionChartData.length > 0 ? (
+              <ChartContainer config={chartConfig} className="w-full h-full">
+                <BarChart data={evolutionChartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="month"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tickFormatter={(value) => value.slice(0, 3)}
+                  />
+                  <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent indicator="dot" />}
+                  />
+                  <Legend contentStyle={{fontSize: '0.8rem'}} iconSize={10} />
+                  <Bar dataKey="procesosMapeados" fill="var(--color-procesosMapeados)" radius={4} />
+                  <Bar dataKey="accionesCompletadas" fill="var(--color-accionesCompletadas)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+                 <div className="flex items-center justify-center h-full">
+                    <p className="text-muted-foreground">No hay suficientes datos para mostrar la evolución.</p>
+                </div>
+            )}
           </CardContent>
         </Card>
         <Card className="shadow-lg">
@@ -298,10 +381,10 @@ export default function DashboardPage() {
                 <TableBody>
                     {calculatedSystemCosts.map((cost) => (
                     <TableRow key={cost.id}>
-                        <TableCell className="font-medium">{cost.name}</TableCell>
-                        <TableCell className="text-right">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
-                        <TableCell className="text-right">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
-                        <TableCell className="text-right font-semibold">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
+                        <TableCell className="font-medium text-xs">{cost.name}</TableCell>
+                        <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
+                        <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
+                        <TableCell className="text-right font-semibold text-xs">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
                     </TableRow>
                     ))}
                 </TableBody>
@@ -313,3 +396,6 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
+    
