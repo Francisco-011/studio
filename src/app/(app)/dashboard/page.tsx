@@ -199,6 +199,7 @@ export default function DashboardPage() {
         accionesEnProgresoCount: 0,
         procesosConVariacionesCount: 0,
         actividadesDuplicadasCount: 0,
+        procesosSinActividadesCount: 0,
       };
     }
 
@@ -227,6 +228,8 @@ export default function DashboardPage() {
     });
 
     const actividadesDuplicadasCount = actividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1).length;
+    const procesosSinActividadesCount = activeProcesses.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length;
+
 
     return {
       procesosMapeadosCount,
@@ -237,6 +240,7 @@ export default function DashboardPage() {
       accionesEnProgresoCount,
       procesosConVariacionesCount,
       actividadesDuplicadasCount,
+      procesosSinActividadesCount,
     };
   }, [capturedProcesses, actividades, acciones, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
 
@@ -336,13 +340,14 @@ export default function DashboardPage() {
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividades Activas Sin Uso</CardTitle>
+            <CardTitle className="text-sm font-medium">Procesos Sin Actividades</CardTitle>
             <PackageX className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-               {renderMetric(dashboardMetrics.actividadesSinUsoCount, isLoadingActividades)}
+               {renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingProcessData)}
             </div>
+            <p className="text-xs text-muted-foreground">Procesos activos sin actividades detalladas.</p>
           </CardContent>
         </Card>
       </div>
