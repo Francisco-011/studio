@@ -5,11 +5,12 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Lightbulb, Sparkles, AlertTriangle, Loader2 } from "lucide-react";
+import { Lightbulb, Sparkles, AlertTriangle, Loader2, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
+import { useAcciones, type AccionEstado } from '@/contexts/AccionesContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -75,6 +76,7 @@ export default function MejorasPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { addAccion } = useAcciones();
 
   const handleAnalyzeInefficiencies = async () => {
     setIsLoading(true);
@@ -174,6 +176,70 @@ export default function MejorasPage() {
     }
   };
 
+  const handleGenerateProposedActions = () => {
+    if (!analysisResult) {
+      toast({ title: "Sin Análisis", description: "No hay resultados de análisis para generar acciones.", variant: "default" });
+      return;
+    }
+
+    let actionsGeneratedCount = 0;
+
+    const processAIOutputList = (outputText: string): string[] => {
+      if (!outputText || outputText.trim() === "") return [];
+      const cleanedText = outputText
+        .replace(/Procesos Duplicados Potenciales:/gi, '')
+        .replace(/Sistemas Redundantes Potenciales \(considerando costos\):/gi, '')
+        .replace(/Posibles procesos duplicados identificados por la IA:/gi, '')
+        .replace(/Posibles sistemas redundantes identificados por la IA, considerando su costo si se proporciona.:/gi, '')
+        .replace(/Lista de posibles procesos duplicados identificados por la IA./gi, '')
+        .replace(/Lista de posibles sistemas redundantes identificados por la IA, considerando su costo si se proporciona./gi, '')
+        .trim();
+      
+      return cleanedText.split('\n')
+        .map(line => line.replace(/^-\s*/, '').trim()) // Remove leading hyphens and trim
+        .filter(line => line !== "" && line.length > 3); // Basic filter
+    };
+
+    const duplicateProcessItems = processAIOutputList(analysisResult.duplicateProcesses);
+    const redundantSystemItems = processAIOutputList(analysisResult.redundantSystems);
+
+    duplicateProcessItems.forEach(item => {
+      addAccion({
+        nombre: `Revisar Proceso Duplicado: ${item.substring(0, 50)}${item.length > 50 ? '...' : ''}`,
+        descripcion: `Sugerencia de IA: Identificado posible proceso duplicado o superpuesto: "${item}". Se requiere análisis detallado para confirmar y definir acciones correctivas.`,
+        responsable: "Por definir",
+        estado: "En Revisión" as AccionEstado,
+        origenMejora: "Análisis IA - Mejoras",
+      });
+      actionsGeneratedCount++;
+    });
+
+    redundantSystemItems.forEach(item => {
+      addAccion({
+        nombre: `Evaluar Sistema Redundante: ${item.substring(0, 50)}${item.length > 50 ? '...' : ''}`,
+        descripcion: `Sugerencia de IA: Identificado posible sistema redundante o subutilizado: "${item}". Evaluar funcionalidad, costos y alternativas.`,
+        responsable: "Por definir",
+        estado: "En Revisión" as AccionEstado,
+        origenMejora: "Análisis IA - Mejoras",
+      });
+      actionsGeneratedCount++;
+    });
+
+    if (actionsGeneratedCount > 0) {
+      toast({
+        title: "Acciones Propuestas Generadas",
+        description: `${actionsGeneratedCount} acciones han sido creadas con estado "En Revisión". Revíselas en el módulo de Acciones.`,
+      });
+    } else {
+      toast({
+        title: "No se generaron nuevas acciones",
+        description: "El análisis de IA no arrojó elementos claros para crear acciones automáticas o ya fueron procesados.",
+        variant: "default"
+      });
+    }
+  };
+
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
@@ -186,7 +252,7 @@ export default function MejorasPage() {
             Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos, para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos.
           </CardDescription>
 
-          <div className="mb-6">
+          <div className="mb-6 flex flex-wrap gap-2">
             <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos} size="lg">
               {isLoading || isLoadingSistemasCostos ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -195,6 +261,12 @@ export default function MejorasPage() {
               )}
               {isLoading || isLoadingSistemasCostos ? "Analizando..." : "Analizar Ineficiencias con IA"}
             </Button>
+            {analysisResult && !isLoading && (
+                 <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
+                    <Send className="mr-2 h-5 w-5" />
+                    Generar Acciones Propuestas
+                </Button>
+            )}
           </div>
 
           {error && (

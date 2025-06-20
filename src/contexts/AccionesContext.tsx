@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 
-export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada"] as const;
+export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada", "En Revisión"] as const;
 export type AccionEstado = typeof accionEstados[number];
 
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;

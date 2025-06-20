@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useAcciones, type Accion, accionEstados, monedaOptions } from '@/contexts/AccionesContext';
+import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado } from '@/contexts/AccionesContext';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -422,8 +422,10 @@ export default function AccionesPage() {
                       <TableCell className="text-center">
                         <Badge 
                           variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
-                          className={cn(accion.estado === "En Progreso" && "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-300",
-                                        accion.estado === "Pendiente" && "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300"
+                          className={cn(
+                            accion.estado === "En Progreso" && "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-300",
+                            accion.estado === "Pendiente" && "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300",
+                            accion.estado === "En Revisión" && "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-300"
                           )}
                         >
                           {accion.estado}
@@ -484,4 +486,3 @@ export default function AccionesPage() {
     </div>
   );
 }
-
