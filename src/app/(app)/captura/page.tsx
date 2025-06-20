@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardEdit, Save } from "lucide-react";
+import { ClipboardEdit, Save, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -54,7 +54,6 @@ const availableSystems = [
 
 const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 
-
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
   puesto: z.string().min(1, "El puesto es requerido."),
@@ -67,17 +66,17 @@ const capturaFormSchema = z.object({
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   sistemas: z.array(z.string()).optional().default([]),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
-  formatosRecibe: z.string().optional(),
+  procesosEntrada: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
-  formatosEntrega: z.string().optional(),
-  activityOrder: z.array(z.string()).optional().default([]), // Added for reordering
-  // activo field is managed in 'ProcesosYFlujosRegistradosPage', defaults to true on creation
+  procesosSalida: z.array(z.string()).optional().default([]),
+  activityOrder: z.array(z.string()).optional().default([]),
 });
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
-
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const SPECIAL_ENTRADA_OPTION = "Iniciador";
+const SPECIAL_SALIDA_OPTION = "Finalizador";
 
 export default function CapturaPage() {
   const router = useRouter();
@@ -86,6 +85,7 @@ export default function CapturaPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
@@ -98,12 +98,24 @@ export default function CapturaPage() {
       frecuencia: undefined,
       sistemas: [],
       informacionRecibe: "",
-      formatosRecibe: "",
+      procesosEntrada: [],
       informacionEntrega: "",
-      formatosEntrega: "",
+      procesosSalida: [],
       activityOrder: [],
     },
   });
+
+  useEffect(() => {
+    try {
+      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedData) {
+        setAllProcesses(JSON.parse(storedData));
+      }
+    } catch (error) {
+      console.error("Error loading all processes from localStorage for dropdowns:", error);
+      toast({ title: "Error al Cargar Procesos", description: "No se pudieron cargar los procesos para las listas de selección.", variant: "destructive" });
+    }
+  }, []);
 
   useEffect(() => {
     const editIdFromQuery = searchParams.get('editId');
@@ -113,24 +125,48 @@ export default function CapturaPage() {
         setEditingId(editIdFromQuery);
       }
   
-      if (!isLoadingAreas && !isLoadingPuestos) {
+      if (!isLoadingAreas && !isLoadingPuestos && allProcesses.length > 0) {
         try {
           const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
           const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
           const processToEdit = existingData.find(p => p.id === editIdFromQuery);
           
           if (processToEdit) {
-            const formDataToReset = {
-              ...processToEdit,
-              formatosRecibe: Array.isArray(processToEdit.formatosRecibe) 
-                ? processToEdit.formatosRecibe.join(', ') 
-                : processToEdit.formatosRecibe || "",
-              formatosEntrega: Array.isArray(processToEdit.formatosEntrega) 
-                ? processToEdit.formatosEntrega.join(', ') 
-                : processToEdit.formatosEntrega || "",
-              activityOrder: processToEdit.activityOrder || [],
+            // Explicitly type processToEdit as 'any' for migration purposes
+            const processToEditAny: any = processToEdit;
+            const formDataToReset: Partial<CapturaFormData> & { id?: string, capturedAt?: string, activo?: boolean } = { 
+              ...processToEditAny 
             };
-            form.reset(formDataToReset);
+            
+            // Migrate formatosRecibe to procesosEntrada
+            if (processToEditAny.procesosEntrada) {
+              formDataToReset.procesosEntrada = processToEditAny.procesosEntrada;
+            } else if (typeof processToEditAny.formatosRecibe === 'string') {
+              formDataToReset.procesosEntrada = [processToEditAny.formatosRecibe];
+            } else if (Array.isArray(processToEditAny.formatosRecibe)) {
+               formDataToReset.procesosEntrada = processToEditAny.formatosRecibe;
+            } else {
+              formDataToReset.procesosEntrada = [];
+            }
+
+            // Migrate formatosEntrega to procesosSalida
+            if (processToEditAny.procesosSalida) {
+              formDataToReset.procesosSalida = processToEditAny.procesosSalida;
+            } else if (typeof processToEditAny.formatosEntrega === 'string') {
+              formDataToReset.procesosSalida = [processToEditAny.formatosEntrega];
+            } else if (Array.isArray(processToEditAny.formatosEntrega)) {
+              formDataToReset.procesosSalida = processToEditAny.formatosEntrega;
+            } else {
+              formDataToReset.procesosSalida = [];
+            }
+            
+            // Remove old fields from the object that will be reset into the form
+            const finalFormDataToReset = { ...formDataToReset };
+            delete (finalFormDataToReset as any).formatosRecibe;
+            delete (finalFormDataToReset as any).formatosEntrega;
+            
+            form.reset(finalFormDataToReset as CapturaFormData);
+
           } else {
             toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
             if (editingId !== null) setEditingId(null); 
@@ -147,9 +183,22 @@ export default function CapturaPage() {
       if (editingId !== null) { 
           setEditingId(null);
       }
-      form.reset(); 
+      form.reset({ // Reset to default, ensuring new fields are empty arrays
+        area: "",
+        puesto: "",
+        proceso: "",
+        descripcion: "",
+        tiempoEstimado: undefined,
+        frecuencia: undefined,
+        sistemas: [],
+        informacionRecibe: "",
+        procesosEntrada: [],
+        informacionEntrega: "",
+        procesosSalida: [],
+        activityOrder: [],
+      }); 
     }
-  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId]);
+  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId, allProcesses]);
 
 
   function onSubmit(values: CapturaFormData) {
@@ -157,15 +206,26 @@ export default function CapturaPage() {
       const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
 
+      // Ensure new fields are arrays even if undefined from form state
+      const dataToSave: CapturaFormData = {
+        ...values,
+        procesosEntrada: values.procesosEntrada || [],
+        procesosSalida: values.procesosSalida || [],
+        activityOrder: values.activityOrder || [],
+      };
+
       if (editingId) {
         const processToUpdate = existingData.find(p => p.id === editingId);
         if (processToUpdate) {
             const updatedProcess: CapturedProcess = {
-                ...processToUpdate, 
-                ...values,
-                activityOrder: values.activityOrder || processToUpdate.activityOrder || [],
+                ...(processToUpdate as any), // Cast to any to avoid type issues with old fields temporarily
+                ...dataToSave, // New data with correct array fields
                 activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
             };
+            // Remove old fields before saving if they somehow persisted
+            delete (updatedProcess as any).formatosRecibe;
+            delete (updatedProcess as any).formatosEntrega;
+
             existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
             localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
             toast({
@@ -178,11 +238,10 @@ export default function CapturaPage() {
         }
       } else {
         const newProcess: CapturedProcess = {
-          ...values,
+          ...dataToSave,
           id: Date.now().toString(),
           capturedAt: new Date().toISOString(),
           activo: true, 
-          activityOrder: values.activityOrder || [],
         };
         existingData.push(newProcess);
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
@@ -190,7 +249,20 @@ export default function CapturaPage() {
           title: "Proceso Registrado",
           description: "La información del proceso ha sido guardada exitosamente.",
         });
-        form.reset(); 
+        form.reset({ // Reset to default, ensuring new fields are empty arrays
+            area: "",
+            puesto: "",
+            proceso: "",
+            descripcion: "",
+            tiempoEstimado: undefined,
+            frecuencia: undefined,
+            sistemas: [],
+            informacionRecibe: "",
+            procesosEntrada: [],
+            informacionEntrega: "",
+            procesosSalida: [],
+            activityOrder: [],
+        }); 
       }
     } catch (error) {
       console.error("Error saving to localStorage:", error);
@@ -202,28 +274,38 @@ export default function CapturaPage() {
     }
   }
 
-  const renderMultiSelectDropdownForSystems = (
+  const renderMultiSelectDropdown = (
     field: any, // eslint-disable-line @typescript-eslint/no-explicit-any
     label: string,
     placeholder: string,
     options: { id: string; nombre: string }[],
-    isLoading: boolean
-  ) => (
+    isLoading: boolean,
+    specialOption?: string
+  ) => {
+    const currentSelectionNames = (field.value || [])
+      .map((val: string) => {
+        if (specialOption && val === specialOption) return specialOption;
+        return options.find(opt => opt.nombre === val)?.nombre || val;
+      })
+      .filter(Boolean);
+
+    return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <FormControl>
-          <Button variant="outline" className="w-full justify-start text-left font-normal h-auto min-h-10">
-            {field.value && field.value.length > 0 ? (
+          <Button variant="outline" className="w-full justify-between text-left font-normal h-auto min-h-10">
+            {currentSelectionNames.length > 0 ? (
               <div className="flex flex-wrap gap-1">
-                {field.value.map((itemName: string) => (
+                {currentSelectionNames.map((itemName: string) => (
                   <Badge key={itemName} variant="secondary" className="font-normal">
-                    {options.find(opt => opt.nombre === itemName)?.nombre || itemName}
+                    {itemName}
                   </Badge>
                 ))}
               </div>
             ) : (
               <span className="text-muted-foreground">{placeholder}</span>
             )}
+            <ChevronDown className="ml-auto h-4 w-4 opacity-50 shrink-0" />
           </Button>
         </FormControl>
       </DropdownMenuTrigger>
@@ -232,32 +314,55 @@ export default function CapturaPage() {
         <DropdownMenuSeparator />
         {isLoading ? (
            <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
-        ) : options.length === 0 ? (
-          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-            No hay elementos configurados.
-          </div>
         ) : (
-          options.map((option) => (
-            <DropdownMenuCheckboxItem
-              key={option.id}
-              checked={field.value?.includes(option.nombre)}
-              onCheckedChange={(checked) => {
-                const currentSelected = field.value || [];
-                if (checked) {
-                  field.onChange([...currentSelected, option.nombre]);
-                } else {
-                  field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
-                }
-              }}
-            >
-              {option.nombre}
-            </DropdownMenuCheckboxItem>
-          ))
+          <>
+            {specialOption && (
+              <DropdownMenuCheckboxItem
+                key={specialOption}
+                checked={field.value?.includes(specialOption)}
+                onCheckedChange={(checked) => {
+                  const currentSelected = field.value || [];
+                  if (checked) {
+                    field.onChange([...currentSelected, specialOption]);
+                  } else {
+                    field.onChange(currentSelected.filter((s: string) => s !== specialOption));
+                  }
+                }}
+              >
+                {specialOption}
+              </DropdownMenuCheckboxItem>
+            )}
+            {options.length === 0 && !specialOption ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                No hay elementos configurados.
+              </div>
+            ) : (
+              options.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.id}
+                  checked={field.value?.includes(option.nombre)}
+                  onCheckedChange={(checked) => {
+                    const currentSelected = field.value || [];
+                    if (checked) {
+                      field.onChange([...currentSelected, option.nombre]);
+                    } else {
+                      field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
+                    }
+                  }}
+                >
+                  {option.nombre}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-
+  )};
+  
+  const availableProcessesForSelection = allProcesses
+    .filter(p => !p.deletedAt && p.id !== editingId) // Exclude self and deleted
+    .map(p => ({ id: p.id, nombre: p.proceso }));
 
   return (
     <div className="container mx-auto py-8">
@@ -447,7 +552,7 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdownForSystems(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
+                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
                     <FormDescription>
                       Seleccione los sistemas o software involucrados en la ejecución del proceso.
                     </FormDescription>
@@ -483,19 +588,13 @@ export default function CapturaPage() {
               />
               <FormField
                 control={form.control}
-                name="formatosRecibe"
+                name="procesosEntrada"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Formatos de Información Utilizados (Entradas)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Ej: PDF, Email, Excel, Sistema X" 
-                        {...field}
-                        value={field.value || ''}
-                      />
-                    </FormControl>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Procesos de Entradas (Opcional)</FormLabel>
+                    {renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_ENTRADA_OPTION)}
                     <FormDescription>
-                      Mencione los formatos en los que se recibe la información.
+                      Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -524,25 +623,18 @@ export default function CapturaPage() {
               />
               <FormField
                 control={form.control}
-                name="formatosEntrega"
+                name="procesosSalida"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Formatos de Información Utilizados (Salidas)</FormLabel>
-                     <FormControl>
-                      <Input 
-                        placeholder="Ej: Documento Word, Correo electrónico, Actualización en CRM" 
-                        {...field} 
-                        value={field.value || ''}
-                      />
-                    </FormControl>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Procesos de Salida (Opcional)</FormLabel>
+                    {renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_SALIDA_OPTION)}
                     <FormDescription>
-                      Mencione los formatos en los que se entrega la información.
+                      Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
 
               <div className="flex justify-end space-x-2">
                 {editingId && (

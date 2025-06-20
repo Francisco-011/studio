@@ -48,14 +48,12 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import type { Actividad } from '@/contexts/ActividadesContext';
 
 
-export interface CapturedProcess extends Omit<CapturaFormData, 'formatosRecibe' | 'formatosEntrega'> {
+export interface CapturedProcess extends CapturaFormData { // CapturaFormData will have the new array fields
   id: string;
   capturedAt: string;
   deletedAt?: string; 
-  formatosRecibe?: string; 
-  formatosEntrega?: string;
   activo?: boolean;
-  activityOrder?: string[]; // Added for reordering in Panel Jerarquico
+  // activityOrder is already in CapturaFormData schema if optional
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -63,9 +61,8 @@ const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
 
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-  const displayValue = Array.isArray(value) ? value.join(', ') : value;
-
-  if (displayValue === undefined || (typeof displayValue === 'string' && displayValue.trim() === '')) {
+  
+  if (value === undefined || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea)) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -86,6 +83,8 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
       </div>
     );
   }
+
+  const displayValue = Array.isArray(value) ? value.join(', ') : value;
 
   return (
     <div>
@@ -122,13 +121,41 @@ export default function ProcesosYFlujosRegistradosPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        const dataWithStatusAndOrder = parsedData.map(proc => ({
-          ...proc,
-          activo: proc.activo === undefined ? true : proc.activo,
-          activityOrder: proc.activityOrder || [], // Ensure activityOrder exists
-        }));
-        setAllCapturedData(dataWithStatusAndOrder);
+        const parsedData: any[] = JSON.parse(storedData); // Load as any first
+        const migratedData: CapturedProcess[] = parsedData.map(p => {
+          const newP: any = { 
+            ...p,
+            activo: p.activo === undefined ? true : p.activo,
+            activityOrder: p.activityOrder || [],
+          };
+          
+          // Migrate formatosRecibe to procesosEntrada
+          if (!newP.procesosEntrada) { // Only migrate if new field doesn't exist
+            if (typeof p.formatosRecibe === 'string') {
+              newP.procesosEntrada = [p.formatosRecibe];
+            } else if (Array.isArray(p.formatosRecibe)) {
+              newP.procesosEntrada = p.formatosRecibe;
+            } else {
+              newP.procesosEntrada = []; // Default to empty array if old field was absent or wrong type
+            }
+          }
+          delete newP.formatosRecibe; // Remove old field regardless
+
+          // Migrate formatosEntrega to procesosSalida
+          if (!newP.procesosSalida) { // Only migrate if new field doesn't exist
+            if (typeof p.formatosEntrega === 'string') {
+              newP.procesosSalida = [p.formatosEntrega];
+            } else if (Array.isArray(p.formatosEntrega)) {
+              newP.procesosSalida = p.formatosEntrega;
+            } else {
+              newP.procesosSalida = []; // Default to empty array
+            }
+          }
+          delete newP.formatosEntrega; // Remove old field regardless
+          
+          return newP as CapturedProcess;
+        });
+        setAllCapturedData(migratedData);
       } else {
         setAllCapturedData([]);
       }
@@ -310,8 +337,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     const headers = [
       "ID", "Proceso", "Area", "Puesto", "Descripción", 
       "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
-      "Información Recibe", "Formatos Recibe", 
-      "Información Entrega", "Formatos Entrega", 
+      "Información Recibe", "Procesos Entradas", 
+      "Información Entrega", "Procesos Salidas", 
       "Fecha Captura", "Estado Activo"
     ];
 
@@ -327,9 +354,9 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.frecuencia),
         escapeCsvCell(proc.sistemas), 
         escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.formatosRecibe), 
+        escapeCsvCell(proc.procesosEntrada), 
         escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.formatosEntrega), 
+        escapeCsvCell(proc.procesosSalida), 
         escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss')),
         escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo')
       ].join(','))
@@ -568,10 +595,10 @@ export default function ProcesosYFlujosRegistradosPage() {
               <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
               <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
               <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
-              <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
-              <DetailSection title="Formatos de Información Utilizados (Entradas)" value={selectedProcess.formatosRecibe} />
-              <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />
-              <DetailSection title="Formatos de Información Utilizados (Salidas)" value={selectedProcess.formatosEntrega} />
+              <DetailSection title="Información que Recibe (Descripción)" value={selectedProcess.informacionRecibe} isTextarea />
+              <DetailSection title="Procesos de Entradas" value={selectedProcess.procesosEntrada} isList />
+              <DetailSection title="Información que Entrega (Descripción)" value={selectedProcess.informacionEntrega} isTextarea />
+              <DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList />
             </div>
           )}
           <DialogClose asChild>
