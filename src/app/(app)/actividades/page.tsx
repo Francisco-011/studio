@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown, FileText } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -98,26 +98,44 @@ interface SortConfig {
 
 const ITEMS_PER_PAGE = 10;
 
+const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  if (Array.isArray(cellData)) {
+    const joinedString = cellData.join('; ');
+    if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
+      return `"${joinedString.replace(/"/g, '""')}"`;
+    }
+    return joinedString;
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
 export default function ActividadesPage() {
-  const { 
-    actividades, 
-    deletedActividades, 
-    addActividad, 
-    updateActividad, 
-    softDeleteActividad, 
-    restoreActividad, 
-    toggleActividadStatus, 
-    isLoadingActividades 
+  const {
+    actividades,
+    deletedActividades,
+    addActividad,
+    updateActividad,
+    softDeleteActividad,
+    restoreActividad,
+    toggleActividadStatus,
+    isLoadingActividades
   } = useActividades();
   const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
-  
+
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingCapturedProcesses, setIsLoadingCapturedProcesses] = useState(true);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [usageFilter, setUsageFilter] = useState<'all' | 'inUse' | 'notInUse'>('all');
-  
+
   const [isActividadDialogOpen, setIsActividadDialogOpen] = useState(false);
   const [editingActividad, setEditingActividad] = useState<Actividad | null>(null);
 
@@ -134,7 +152,7 @@ export default function ActividadesPage() {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
         const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        setCapturedProcesses(parsedData.filter(p => !p.deletedAt)); 
+        setCapturedProcesses(parsedData.filter(p => !p.deletedAt));
       }
     } catch (error) {
       console.error("Error loading captured processes from localStorage:", error);
@@ -160,41 +178,41 @@ export default function ActividadesPage() {
   useEffect(() => {
     if (isActividadDialogOpen) {
       if (editingActividad) {
-        actividadForm.reset({ 
-          id: editingActividad.id, 
-          nombre: editingActividad.nombre, 
+        actividadForm.reset({
+          id: editingActividad.id,
+          nombre: editingActividad.nombre,
           descripcionBreve: editingActividad.descripcionBreve || '',
           sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           tiempoEstimadoActividad: editingActividad.tiempoEstimadoActividad,
           frecuenciaActividad: editingActividad.frecuenciaActividad || undefined,
           activa: editingActividad.activa,
-          procesosAsociadosIds: editingActividad.procesosAsociadosIds || [] 
+          procesosAsociadosIds: editingActividad.procesosAsociadosIds || []
         });
       } else {
-        actividadForm.reset({ 
-          nombre: '', 
+        actividadForm.reset({
+          nombre: '',
           descripcionBreve: '',
           sistemaUtilizado: undefined,
           tiempoEstimadoActividad: undefined,
           frecuenciaActividad: undefined,
-          activa: true, 
-          procesosAsociadosIds: [] 
+          activa: true,
+          procesosAsociadosIds: []
         });
       }
     }
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
   function handleActividadSubmit(data: ActividadFormData) {
-    const { id, ...activityDataFromForm } = data; 
-    
+    const { id, ...activityDataFromForm } = data;
+
     const activityDataForStorage = {
       ...activityDataFromForm,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
-      frecuenciaActividad: data.frecuenciaActividad === NO_FRECUENCIA_SELECTED_VALUE 
-        ? undefined 
+      frecuenciaActividad: data.frecuenciaActividad === NO_FRECUENCIA_SELECTED_VALUE
+        ? undefined
         : data.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
     };
-    
+
     if (editingActividad && id) {
       updateActividad(id, activityDataForStorage);
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
@@ -243,7 +261,7 @@ export default function ActividadesPage() {
     setActivityToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
-  
+
   function handleRestoreActividad(actividadId: string) {
     const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
     if (activityToRestore) {
@@ -254,8 +272,8 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividadId: string) {
     toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id ===ividadId) || deletedActividades.find(act => act.id ===ividadId); 
-    if (actividadActual) { 
+    const actividadActual = actividades.find(act => act.id ===ividadId) || deletedActividades.find(act => act.id ===ividadId);
+    if (actividadActual) {
       toast({
         title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
         description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
@@ -296,7 +314,7 @@ export default function ActividadesPage() {
           valA = valA.toLowerCase();
           valB = valB.toLowerCase();
         }
-        
+
         if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
         if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
 
@@ -352,6 +370,61 @@ export default function ActividadesPage() {
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo)
                                   .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
+
+  const handleExport = () => {
+    if (sortedAndFilteredActividades.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay actividades que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", "Tiempo Estimado (min)",
+      "Frecuencia Actividad", "Estado", "Num. Procesos Asociados", "Nombres Procesos Asociados",
+      "Fecha Creación", "Última Modificación"
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...sortedAndFilteredActividades.map(act => {
+        const associatedProcessNames = act.procesosAsociadosIds
+            ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
+            .filter(Boolean)
+            .join('; ') || ""; // Use semicolon for multi-value cells
+        return [
+          escapeCsvCell(act.id),
+          escapeCsvCell(act.nombre),
+          escapeCsvCell(act.descripcionBreve),
+          escapeCsvCell(act.sistemaUtilizado),
+          escapeCsvCell(act.tiempoEstimadoActividad),
+          escapeCsvCell(act.frecuenciaActividad),
+          escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
+          escapeCsvCell(act.procesosAsociadosCount),
+          escapeCsvCell(associatedProcessNames),
+          escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
+          escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
+        ].join(',');
+      })
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `actividades_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoadingActividades || isLoadingSistemasCostos || isLoadingCapturedProcesses) {
     return (
@@ -415,6 +488,9 @@ export default function ActividadesPage() {
                   <SelectItem value="notInUse">Sin Uso</SelectItem>
                 </SelectContent>
               </Select>
+              <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
+                  <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredActividades.length})
+              </Button>
               <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" disabled={recoverableActividades.length === 0} className="w-full sm:w-auto">
@@ -514,9 +590,9 @@ export default function ActividadesPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              value={field.value || NO_SYSTEM_SELECTED_VALUE} 
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || NO_SYSTEM_SELECTED_VALUE}
                               disabled={isLoadingSistemasCostos}
                             >
                               <FormControl>
@@ -557,8 +633,8 @@ export default function ActividadesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Frecuencia de la Actividad</FormLabel>
-                              <Select 
-                                onValueChange={field.onChange} 
+                              <Select
+                                onValueChange={field.onChange}
                                 value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
                               >
                                 <FormControl>
@@ -746,7 +822,7 @@ export default function ActividadesPage() {
                         <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive" 
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive"
                           title={actividad.procesosAsociadosCount > 0 ? `No se puede eliminar: actividad asociada a ${actividad.procesosAsociadosCount} proceso(s)` : "Eliminar actividad"}
                         >
                           {actividad.procesosAsociadosCount > 0 ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
@@ -816,4 +892,3 @@ export default function ActividadesPage() {
     </div>
   );
 }
-    
