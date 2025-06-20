@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -25,6 +25,14 @@ import {
   ChartTooltipContent,
   type ChartConfig
 } from "@/components/ui/chart";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, eachMonthOfInterval, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -61,12 +69,12 @@ interface CalculatedSystemCost {
 }
 
 function calculateAllSystemAnnualCosts(
-  systemsToCalculate: Sistema[], 
+  systemsToCalculate: Sistema[],
   allCostos: SistemaCosto[]
 ): CalculatedSystemCost[] {
   if (!systemsToCalculate || !allCostos) return [];
 
-  return systemsToCalculate.map(system => { 
+  return systemsToCalculate.map(system => {
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
     let totalAnnualUsage = 0;
     let totalAnnualLicenseCost = 0;
@@ -81,7 +89,7 @@ function calculateAllSystemAnnualCosts(
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
             periodicUsage = cost.montoUso;
           }
-          
+
           let periodicLicense = 0;
           if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
             periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
@@ -94,7 +102,7 @@ function calculateAllSystemAnnualCosts(
           } else if (cost.frecuencia === "Anual") {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicenseCost += periodicLicense;
-          } else { 
+          } else {
             totalAnnualUsage += periodicUsage;
             totalAnnualLicenseCost += periodicLicense;
           }
@@ -117,27 +125,28 @@ interface MonthlyEvolutionData {
   month: string;
   procesosMapeados: number;
   accionesCompletadas: number;
+  accionesEnProgreso: number;
+  accionesEnRevision: number;
+  actividadesCreadas: number;
 }
 
-const chartConfig = {
-  procesosMapeados: {
-    label: "Procesos Mapeados",
-    color: "hsl(var(--chart-1))",
-  },
-  accionesCompletadas: {
-    label: "Acciones Completadas",
-    color: "hsl(var(--chart-2))",
-  },
+type ChartMetricKey = keyof Omit<MonthlyEvolutionData, 'month'>;
+
+const baseChartConfig = {
+  procesosMapeados: { label: "Procesos Mapeados", color: "hsl(var(--chart-1))" },
+  accionesCompletadas: { label: "Acciones Completadas", color: "hsl(var(--chart-2))" },
+  accionesEnProgreso: { label: "Acc. en Progreso", color: "hsl(var(--chart-3))" },
+  accionesEnRevision: { label: "Acc. en Revisión", color: "hsl(var(--chart-4))" },
+  actividadesCreadas: { label: "Activ. Creadas", color: "hsl(var(--chart-5))" },
 } satisfies ChartConfig;
+
 
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
   if (cellData === undefined || cellData === null) {
     return '';
   }
   const stringValue = String(cellData);
-  // Replace all double quotes with two double quotes
   const escapedString = stringValue.replace(/"/g, '""');
-  // If the string contains a comma, newline, or double quote, enclose it in double quotes
   if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
     return `"${escapedString}"`;
   }
@@ -148,7 +157,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 export default function DashboardPage() {
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingProcessData, setIsLoadingProcessData] = useState(true);
-  
+
   const { actividades: globalActividades, isLoadingActividades } = useActividades();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
@@ -157,9 +166,10 @@ export default function DashboardPage() {
 
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
   const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
+  const [selectedChartMetrics, setSelectedChartMetrics] = useState<ChartMetricKey[]>(['procesosMapeados', 'accionesCompletadas']);
 
   const [dashboardDateRange, setDashboardDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: startOfMonth(subMonths(new Date(), 5)), 
+    from: startOfMonth(subMonths(new Date(), 5)),
     to: endOfMonth(new Date()),
   });
   const [selectedArea, setSelectedArea] = useState<string>('all');
@@ -201,12 +211,11 @@ export default function DashboardPage() {
       if (areaObj) {
         const filtered = puestos.filter(p => p.areaId === areaObj.id).sort((a,b) => a.nombre.localeCompare(b.nombre));
         setAvailablePuestosForFilter(filtered);
-        // If current selectedPuesto is not in the new list and not 'all', reset it
         if (selectedPuesto !== 'all' && !filtered.some(p => p.nombre === selectedPuesto)) {
           setSelectedPuesto('all');
         }
       } else {
-        setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre))); // Should not happen if selectedArea is valid
+        setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre)));
       }
     }
   }, [selectedArea, puestos, areas, isLoadingPuestos, selectedPuesto]);
@@ -221,11 +230,9 @@ export default function DashboardPage() {
         setSelectedArea(areaObj.nombre);
       }
     }
-    // If a puesto without a specific area is selected, we don't change the area filter automatically
-    // Or if the puesto's area is already the selectedArea, no change needed.
   }, [selectedPuesto, puestos, areas, isLoadingPuestos, isLoadingAreas, selectedArea]);
-  
-  
+
+
   useEffect(() => {
     if (!isLoadingSistemasCostos && !isLoadingAreas && !isLoadingPuestos && sistemas && costosSistemas && areas && puestos) {
         let systemsToDisplay: Sistema[] = [];
@@ -233,36 +240,33 @@ export default function DashboardPage() {
         const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
 
         if (selectedPuestoObject) {
-            // Rule 1: Specific Puesto selected
-            systemsToDisplay = sistemas.filter(system => 
+            systemsToDisplay = sistemas.filter(system =>
                 system.scope === "Puesto" && system.scopeId === selectedPuestoObject.id
             );
         } else if (selectedAreaObject) {
-            // Rule 2: Specific Area selected, Puesto is "all"
             const puestosInSelectedAreaIds = puestos
                 .filter(p => p.areaId === selectedAreaObject.id)
                 .map(p => p.id);
-            
+
             systemsToDisplay = sistemas.filter(system =>
                 (system.scope === "Área" && system.scopeId === selectedAreaObject.id) ||
                 (system.scope === "Puesto" && system.scopeId && puestosInSelectedAreaIds.includes(system.scopeId))
             );
-        } else { // Area is "all" AND Puesto is "all"
-            // Rule 3: Show all systems
-            systemsToDisplay = [...sistemas]; 
+        } else {
+            systemsToDisplay = [...sistemas];
         }
-        
+
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(systemsToDisplay, costosSistemas));
     }
   }, [
-    sistemas, 
-    costosSistemas, 
-    isLoadingSistemasCostos, 
-    selectedArea, 
-    selectedPuesto, 
-    areas, 
-    puestos, 
-    isLoadingAreas, 
+    sistemas,
+    costosSistemas,
+    isLoadingSistemasCostos,
+    selectedArea,
+    selectedPuesto,
+    areas,
+    puestos,
+    isLoadingAreas,
     isLoadingPuestos
   ]);
 
@@ -302,13 +306,11 @@ export default function DashboardPage() {
 
   const filteredAcciones = useMemo(() => {
     if (!dashboardDateRange.from || !dashboardDateRange.to) return globalAcciones;
-    
+
     const rangeStart = dashboardDateRange.from;
     const rangeEnd = dashboardDateRange.to;
 
     let actionsToFilter = globalAcciones;
-    // Note: Actions are not directly filtered by Area/Puesto in this version
-    // as they don't have direct area/puesto associations in their data structure.
 
     return actionsToFilter.filter(accion => {
         if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
@@ -323,9 +325,9 @@ export default function DashboardPage() {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: rangeStart, end: rangeEnd });
         }
-        return false; 
+        return false;
     });
-  }, [globalAcciones, dashboardDateRange]); 
+  }, [globalAcciones, dashboardDateRange]);
 
   const filteredActividades = useMemo(() => {
     const relevantProcessIds = new Set(filteredCapturedProcesses.map(p => p.id));
@@ -333,7 +335,7 @@ export default function DashboardPage() {
         if (!act.createdAt) return false;
         const createdAtDate = new Date(act.createdAt);
         if (!isValid(createdAtDate)) return false;
-        
+
         let dateMatch = true;
         if (dashboardDateRange.from && dashboardDateRange.to) {
           dateMatch = isWithinInterval(createdAtDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
@@ -350,45 +352,69 @@ export default function DashboardPage() {
 
 
  useEffect(() => {
-    if (!isLoadingProcessData && !isLoadingAcciones && dashboardDateRange.from && dashboardDateRange.to) {
+    if (!isLoadingProcessData && !isLoadingAcciones && !isLoadingActividades && dashboardDateRange.from && dashboardDateRange.to) {
       const monthlyData: MonthlyEvolutionData[] = [];
       const monthsInInterval = eachMonthOfInterval({
         start: dashboardDateRange.from,
         end: dashboardDateRange.to,
       });
 
-      // Use processesFilteredByAreaPuesto for chart to reflect Area/Puesto filters
-      const baseProcessesForChart = processesFilteredByAreaPuesto; 
-      // Actions for chart are not directly filtered by Area/Puesto in current design
-      const baseActionsForChart = globalAcciones; 
+      const baseProcessesForChart = processesFilteredByAreaPuesto;
+      const baseActionsForChart = globalAcciones;
+      const baseActivitiesForChart = globalActividades;
 
       monthsInInterval.forEach(monthStart => {
         const monthEnd = endOfMonth(monthStart);
         const monthLabel = format(monthStart, "MMM yy", { locale: es });
 
-        const procesosEsteMes = baseProcessesForChart.filter(proc => { 
+        const procesosMapeados = baseProcessesForChart.filter(proc => {
           if (!proc.capturedAt) return false;
           const capturedDate = parseISO(proc.capturedAt);
           return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
         }).length;
 
-        const accionesEsteMes = baseActionsForChart.filter(accion => { 
+        const accionesCompletadas = baseActionsForChart.filter(accion => {
           if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
           }
           return false;
         }).length;
+
+        const accionesEnProgreso = baseActionsForChart.filter(accion => {
+          if (accion.estado === 'En Progreso' && accion.fechaCreacion) {
+            const creacionDate = parseISO(accion.fechaCreacion);
+            return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
+          }
+          return false;
+        }).length;
+
+        const accionesEnRevision = baseActionsForChart.filter(accion => {
+          if (accion.estado === 'En Revisión' && accion.fechaCreacion) {
+            const creacionDate = parseISO(accion.fechaCreacion);
+            return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
+          }
+          return false;
+        }).length;
         
+        const actividadesCreadas = baseActivitiesForChart.filter(actividad => {
+          if (!actividad.createdAt) return false;
+          const creacionDate = new Date(actividad.createdAt);
+          return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
+        }).length;
+
         monthlyData.push({
           month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-          procesosMapeados: procesosEsteMes,
-          accionesCompletadas: accionesEsteMes,
+          procesosMapeados,
+          accionesCompletadas,
+          accionesEnProgreso,
+          accionesEnRevision,
+          actividadesCreadas,
         });
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [processesFilteredByAreaPuesto, globalAcciones, isLoadingProcessData, isLoadingAcciones, dashboardDateRange]);
+  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingProcessData, isLoadingAcciones, isLoadingActividades, dashboardDateRange]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -409,17 +435,17 @@ export default function DashboardPage() {
     const procesosMapeadosCount = filteredCapturedProcesses.length;
     const activeFilteredActividades = filteredActividades.filter(a => a.activa);
     const actividadesActivasCount = activeFilteredActividades.length;
-    
+
     const actividadesSinUsoCount = activeFilteredActividades.filter(a => {
       const globalActivity = globalActividades.find(ga => ga.id === a.id);
       return globalActivity?.procesosAsociadosCount === 0;
     }).length;
-    
+
     const actividadesDuplicadasCount = activeFilteredActividades.filter(act => {
        const globalActivity = globalActividades.find(ga => ga.id === act.id);
        return (globalActivity?.procesosAsociadosCount || 0) > 1;
     }).length;
-    
+
     const accionesCompletadasCount = filteredAcciones.filter(acc => acc.estado === 'Completada').length;
     const accionesEnRevisionCount = filteredAcciones.filter(acc => acc.estado === 'En Revisión').length;
     const accionesEnProgresoCount = filteredAcciones.filter(acc => acc.estado === 'En Progreso').length;
@@ -475,7 +501,7 @@ export default function DashboardPage() {
       let relevantProcesses: CapturedProcess[];
       if (selectedEntityType === 'area') {
         relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
-      } else { 
+      } else {
         relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
       }
 
@@ -490,7 +516,7 @@ export default function DashboardPage() {
           .map(actId => globalActividades.find(a => a.id === actId)?.nombre)
           .filter(Boolean)
           .join(', ');
-        
+
         return `Proceso: ${proc.proceso}\n` +
                `Descripción: ${proc.descripcion}\n` +
                (activitiesString ? `Actividades Clave: ${activitiesString}\n` : '') +
@@ -512,11 +538,10 @@ export default function DashboardPage() {
       setIsGeneratingSummary(false);
     }
   };
-  
+
   const handleExportCsv = () => {
     const csvRows: string[][] = [];
 
-    // Section 1: Dashboard Metrics
     csvRows.push(["Métricas del Dashboard (según filtros aplicados)"]);
     csvRows.push(["Métrica", "Valor"]);
     const metrics = [
@@ -530,9 +555,8 @@ export default function DashboardPage() {
       { name: "Procesos Sin Actividades", value: dashboardMetrics.procesosSinActividadesCount },
     ];
     metrics.forEach(metric => csvRows.push([escapeCsvCell(metric.name), escapeCsvCell(metric.value)]));
-    csvRows.push([]); // Empty row separator
+    csvRows.push([]);
 
-    // Section 2: Costos de Sistemas
     csvRows.push(["Costos de Sistemas (refleja filtros de Área/Puesto)"]);
     csvRows.push(["Sistema", "Uso Anual", "Lic. Anual", "Total Lic.", "Total Anual"]);
     calculatedSystemCosts.forEach(cost => {
@@ -546,26 +570,27 @@ export default function DashboardPage() {
     });
     csvRows.push([]);
 
-    // Section 3: Evolución de Optimización de Procesos
-    csvRows.push(["Evolución de Optimización de Procesos (refleja filtros de Área/Puesto)"]);
-    csvRows.push(["Mes", "Procesos Mapeados", "Acciones Completadas"]);
+    csvRows.push(["Evolución de Optimización de Procesos (refleja filtros de Área/Puesto y selección de métricas)"]);
+    const chartHeaderRow = ["Mes"];
+    selectedChartMetrics.forEach(metricKey => {
+      chartHeaderRow.push(escapeCsvCell(baseChartConfig[metricKey].label as string));
+    });
+    csvRows.push(chartHeaderRow);
     evolutionChartData.forEach(data => {
-      csvRows.push([
-        escapeCsvCell(data.month),
-        escapeCsvCell(data.procesosMapeados),
-        escapeCsvCell(data.accionesCompletadas),
-      ]);
+      const row = [escapeCsvCell(data.month)];
+      selectedChartMetrics.forEach(metricKey => {
+         row.push(escapeCsvCell(data[metricKey]));
+      });
+      csvRows.push(row);
     });
     csvRows.push([]);
 
-    // Section 4: Resumen de Entidad por IA (if available)
     if (generatedSummary && selectedEntityType !== 'none' && selectedEntityName) {
       csvRows.push(["Resumen de Entidad por IA"]);
       csvRows.push(["Tipo de Entidad", "Nombre de Entidad"]);
       csvRows.push([escapeCsvCell(selectedEntityType), escapeCsvCell(selectedEntityName)]);
       csvRows.push([]);
       csvRows.push(["Resumen Generado:"]);
-      // For multi-line summary, it's best to put it in one cell, already handled by escapeCsvCell
       csvRows.push([escapeCsvCell(generatedSummary)]);
     }
 
@@ -587,6 +612,12 @@ export default function DashboardPage() {
       toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa de archivos.", variant: "destructive" });
     }
   };
+
+  const currentActiveChartConfig = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(baseChartConfig).filter(([key]) => selectedChartMetrics.includes(key as ChartMetricKey))
+    );
+  }, [selectedChartMetrics]);
 
 
   return (
@@ -664,9 +695,9 @@ export default function DashboardPage() {
         </div>
       </div>
       <p className="text-sm text-muted-foreground mb-8">
-        Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados (excepto Análisis de Entidad IA y Costos de Sistemas, que tienen su propia lógica de filtrado).
+        Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados. La tabla de Costos de Sistemas tiene su propia lógica de filtrado basada en Área/Puesto.
       </p>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -768,11 +799,35 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+                <div className="mb-2 sm:mb-0">
                     <CardTitle>Evolución de Optimización de Procesos</CardTitle>
-                    <CardDescription>Seguimiento mensual de procesos mapeados vs. acciones completadas (refleja filtros Área/Puesto).</CardDescription>
+                    <CardDescription>Seguimiento mensual. Refleja filtros de Área/Puesto.</CardDescription>
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="ml-auto self-start sm:self-center">
+                            <Settings2 className="mr-2 h-4 w-4" /> Métricas del Gráfico
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Seleccionar Métricas</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {(Object.keys(baseChartConfig) as ChartMetricKey[]).map((key) => (
+                        <DropdownMenuCheckboxItem
+                            key={key}
+                            checked={selectedChartMetrics.includes(key)}
+                            onCheckedChange={(checked) => {
+                            setSelectedChartMetrics(prev =>
+                                checked ? [...prev, key] : prev.filter(m => m !== key)
+                            );
+                            }}
+                        >
+                            {baseChartConfig[key].label}
+                        </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent className="h-[350px] pt-4">
@@ -780,8 +835,8 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando datos del gráfico...
                 </div>
-            ) : evolutionChartData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="w-full h-full">
+            ) : evolutionChartData.length > 0 && selectedChartMetrics.length > 0 ? (
+              <ChartContainer config={currentActiveChartConfig} className="w-full h-full">
                 <BarChart data={evolutionChartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -797,13 +852,16 @@ export default function DashboardPage() {
                     content={<ChartTooltipContent indicator="dot" />}
                   />
                   <Legend contentStyle={{fontSize: '0.8rem'}} iconSize={10} />
-                  <Bar dataKey="procesosMapeados" fill="var(--color-procesosMapeados)" radius={4} />
-                  <Bar dataKey="accionesCompletadas" fill="var(--color-accionesCompletadas)" radius={4} />
+                  {selectedChartMetrics.map((metricKey) => (
+                    <Bar key={metricKey} dataKey={metricKey} fill={`var(--color-${metricKey})`} radius={4} />
+                  ))}
                 </BarChart>
               </ChartContainer>
             ) : (
                  <div className="flex items-center justify-center h-full">
-                    <p className="text-muted-foreground">No hay suficientes datos para mostrar la evolución en el rango seleccionado.</p>
+                    <p className="text-muted-foreground text-center">
+                        {selectedChartMetrics.length === 0 ? "Seleccione al menos una métrica para mostrar en el gráfico." : "No hay suficientes datos para mostrar la evolución en el rango/filtros seleccionados."}
+                    </p>
                 </div>
             )}
           </CardContent>
@@ -874,7 +932,7 @@ export default function DashboardPage() {
                 value={selectedEntityType}
                 onValueChange={(value: 'area' | 'puesto' | 'none') => {
                   setSelectedEntityType(value);
-                  setSelectedEntityName(''); 
+                  setSelectedEntityName('');
                   setGeneratedSummary('');
                 }}
               >
