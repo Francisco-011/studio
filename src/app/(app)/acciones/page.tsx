@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado } from '@/contexts/AccionesContext';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2 } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText } from "lucide-react";
 
 const accionFormSchema = z.object({
   id: z.string().optional(),
@@ -74,6 +74,17 @@ function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
     return `${amount.toFixed(2)} ${currency}`;
   }
 }
+
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
 export default function AccionesPage() {
   const { acciones, addAccion, updateAccion, deleteAccion, isLoadingAcciones } = useAcciones();
@@ -193,6 +204,55 @@ export default function AccionesPage() {
     }
   }, [currentPage, totalPages, filteredAcciones.length]);
 
+  const handleExport = () => {
+    if (filteredAcciones.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay acciones que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Nombre de la Acción", "Descripción", "Responsable", "Estado", 
+      "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
+      "Origen Mejora", "Fecha Creación", "Última Modificación"
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...filteredAcciones.map(acc => [
+        escapeCsvCell(acc.id),
+        escapeCsvCell(acc.nombre),
+        escapeCsvCell(acc.descripcion),
+        escapeCsvCell(acc.responsable),
+        escapeCsvCell(acc.estado),
+        escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
+        escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
+        escapeCsvCell(acc.ahorroEstimado),
+        escapeCsvCell(acc.monedaAhorro),
+        escapeCsvCell(acc.origenMejora),
+        escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
+        escapeCsvCell(isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
+      ].join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `acciones_mejora_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
+
   if (isLoadingAcciones) {
     return (
       <div className="container mx-auto py-8">
@@ -243,6 +303,9 @@ export default function AccionesPage() {
                   ))}
                 </SelectContent>
               </Select>
+               <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
+                  <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredAcciones.length})
+              </Button>
               <Dialog open={isAccionDialogOpen} onOpenChange={(isOpen) => {
                 setIsAccionDialogOpen(isOpen);
                 if (!isOpen) {
@@ -326,7 +389,7 @@ export default function AccionesPage() {
                                 <PopoverTrigger asChild>
                                   <FormControl>
                                     <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                      {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
+                                      {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
                                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
                                   </FormControl>
@@ -349,7 +412,7 @@ export default function AccionesPage() {
                                 <PopoverTrigger asChild>
                                   <FormControl>
                                     <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                      {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
+                                      {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
                                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
                                   </FormControl>
@@ -453,11 +516,11 @@ export default function AccionesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {accion.fechaObjetivo ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
+                        {accion.fechaObjetivo && isValid(parseISO(accion.fechaObjetivo)) ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
                       </TableCell>
                       <TableCell className="text-right">{formatCurrencyDisplay(accion.ahorroEstimado, accion.monedaAhorro)}</TableCell>
                        <TableCell className="text-center text-xs text-muted-foreground">
-                        {format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es })}
+                        {isValid(new Date(accion.updatedAt)) ? format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
                        <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => handleEditAccion(accion)} className="mr-1">

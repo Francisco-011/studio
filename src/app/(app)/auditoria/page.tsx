@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { History, Loader2, CalendarIcon, Users, Layers, Filter, ListOrdered } from "lucide-react";
+import { History, Loader2, CalendarIcon, Users, Layers, Filter, ListOrdered, FileText } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 
@@ -36,6 +36,18 @@ interface SimulatedAuditEntry {
 }
 
 const ITEMS_PER_PAGE = 15;
+
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
 
 export default function AuditoriaPage() {
   const [dynamicSimulatedLog, setDynamicSimulatedLog] = useState<SimulatedAuditEntry[]>([]);
@@ -77,7 +89,7 @@ export default function AuditoriaPage() {
           });
         }
          // Log for updates based on updatedAt timestamp
-        if (proc.updatedAt && proc.capturedAt && proc.updatedAt > parseISO(proc.capturedAt).getTime() + 60000 && !proc.deletedAt) {
+        if (proc.updatedAt && proc.capturedAt && isValid(new Date(proc.updatedAt)) && isValid(parseISO(proc.capturedAt)) && proc.updatedAt > parseISO(proc.capturedAt).getTime() + 60000 && !proc.deletedAt) {
           generatedLog.push({
             id: `proc_update_${proc.id}`,
             timestamp: new Date(proc.updatedAt).toISOString(),
@@ -227,6 +239,43 @@ export default function AuditoriaPage() {
     setDateRange({ from: undefined, to: undefined });
   };
 
+  const handleExport = () => {
+    if (filteredSimulatedLog.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay entradas de auditoría que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = ["ID", "Fecha y Hora", "Usuario", "Módulo", "Acción", "Detalles"];
+    const csvRows = [
+      headers.join(','),
+      ...filteredSimulatedLog.map(entry => [
+        escapeCsvCell(entry.id),
+        escapeCsvCell(isValid(parseISO(entry.timestamp)) ? format(parseISO(entry.timestamp), 'yyyy-MM-dd HH:mm:ss') : 'Fecha inválida'),
+        escapeCsvCell(entry.user),
+        escapeCsvCell(entry.module),
+        escapeCsvCell(entry.action),
+        escapeCsvCell(entry.details)
+      ].join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `auditoria_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
@@ -281,7 +330,7 @@ export default function AuditoriaPage() {
                     <Filter className="h-5 w-5 text-primary"/>
                     <h4 className="text-md font-semibold">Filtros de Auditoría</h4>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                   <div>
                     <Label htmlFor="actionTypeFilter" className="text-xs">Tipo de Acción</Label>
                     <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
@@ -330,6 +379,9 @@ export default function AuditoriaPage() {
                       </PopoverContent>
                     </Popover>
                   </div>
+                  <Button onClick={handleExport} variant="outline" className="w-full self-end">
+                    <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredSimulatedLog.length})
+                  </Button>
                 </div>
                 <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Filtros</Button>
               </div>
@@ -411,4 +463,3 @@ export default function AuditoriaPage() {
     </div>
   );
 }
-
