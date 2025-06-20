@@ -61,7 +61,7 @@ export default function AuditoriaPage() {
   useEffect(() => {
     setIsLoadingLog(true);
     const generatedLog: SimulatedAuditEntry[] = [];
-    const user = "Sistema";
+    const user = "Sistema"; // Assuming a system user for now
 
     try {
       const storedCapturedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
@@ -70,7 +70,7 @@ export default function AuditoriaPage() {
       capturedProcesses.forEach(proc => {
         if (proc.capturedAt && isValid(parseISO(proc.capturedAt))) {
           generatedLog.push({
-            id: `proc_create_${proc.id}`,
+            id: `proc_create_${proc.id}_${parseISO(proc.capturedAt).getTime()}`,
             timestamp: proc.capturedAt,
             user,
             module: "Procesos y Flujos",
@@ -80,7 +80,7 @@ export default function AuditoriaPage() {
         }
         if (proc.deletedAt && isValid(parseISO(proc.deletedAt))) {
            generatedLog.push({
-            id: `proc_delete_${proc.id}`,
+            id: `proc_delete_${proc.id}_${parseISO(proc.deletedAt).getTime()}`,
             timestamp: proc.deletedAt,
             user,
             module: "Procesos y Flujos",
@@ -88,10 +88,9 @@ export default function AuditoriaPage() {
             details: `Proceso '${proc.proceso}' (ID: ${proc.id}) eliminado.`
           });
         }
-         // Log for updates based on updatedAt timestamp
-        if (proc.updatedAt && proc.capturedAt && isValid(new Date(proc.updatedAt)) && isValid(parseISO(proc.capturedAt)) && proc.updatedAt > parseISO(proc.capturedAt).getTime() + 60000 && !proc.deletedAt) {
+        if (proc.updatedAt && proc.capturedAt && isValid(new Date(proc.updatedAt)) && isValid(parseISO(proc.capturedAt)) && proc.updatedAt > (parseISO(proc.capturedAt).getTime() + 60000) && !proc.deletedAt) {
           generatedLog.push({
-            id: `proc_update_${proc.id}`,
+            id: `proc_update_${proc.id}_${proc.updatedAt}`,
             timestamp: new Date(proc.updatedAt).toISOString(),
             user,
             module: "Procesos y Flujos",
@@ -109,20 +108,39 @@ export default function AuditoriaPage() {
       const allActividades = [...activeActividades, ...deletedActividadesData];
 
       allActividades.forEach(act => {
-        const creationTime = act.createdAt || parseInt(act.id, 10);
-        if (creationTime && isValid(new Date(creationTime)) && !act.deletedAt) {
-           generatedLog.push({
-            id: `act_create_update_${act.id}`,
-            timestamp: new Date(creationTime).toISOString(),
-            user,
-            module: "Actividades",
-            action: act.updatedAt && act.updatedAt > creationTime + 1000 ? "Actualización" : "Creación",
-            details: `Actividad '${act.nombre}' (ID: ${act.id}) ${act.updatedAt && act.updatedAt > creationTime + 1000 ? 'actualizada' : 'creada'}. Estado: ${act.activa ? 'Activa' : 'Inactiva'}.`
-          });
+        const creationTime = act.createdAt || parseInt(act.id, 10) || Date.now();
+
+        // Log creation if it's a valid creation and not a deleted record that was never active
+        // For activities from deleted list, only log if they were once active (i.e., have a creation time before deletion)
+        const isEffectivelyCreated = !deletedActividadesData.some(da => da.id === act.id) || (act.deletedAt && creationTime < act.deletedAt);
+
+        if (isValid(new Date(creationTime)) && isEffectivelyCreated) {
+             generatedLog.push({
+                id: `act_create_${act.id}_${creationTime}`,
+                timestamp: new Date(creationTime).toISOString(),
+                user,
+                module: "Actividades",
+                action: "Creación",
+                details: `Actividad '${act.nombre}' (ID: ${act.id}) creada. Estado inicial: ${act.activa ? 'Activa' : 'Inactiva'}.`
+              });
         }
+        
+        // Log updates if updatedAt exists and is different from creation, and not a deleted record
+        if (act.updatedAt && act.updatedAt > (creationTime + 1000) && !act.deletedAt && isValid(new Date(act.updatedAt))) {
+             generatedLog.push({
+                id: `act_update_${act.id}_${act.updatedAt}`,
+                timestamp: new Date(act.updatedAt).toISOString(),
+                user,
+                module: "Actividades",
+                action: "Actualización",
+                details: `Actividad '${act.nombre}' (ID: ${act.id}) actualizada. Estado: ${act.activa ? 'Activa' : 'Inactiva'}.`
+              });
+        }
+
+        // Log deletion
         if (act.deletedAt && isValid(new Date(act.deletedAt))) {
           generatedLog.push({
-            id: `act_delete_${act.id}`,
+            id: `act_delete_${act.id}_${act.deletedAt}`,
             timestamp: new Date(act.deletedAt).toISOString(),
             user,
             module: "Actividades",
@@ -138,7 +156,7 @@ export default function AuditoriaPage() {
       acciones.forEach(acc => {
         if (acc.fechaCreacion && isValid(parseISO(acc.fechaCreacion))) {
           generatedLog.push({
-            id: `accion_create_${acc.id}`,
+            id: `accion_create_${acc.id}_${parseISO(acc.fechaCreacion).getTime()}`,
             timestamp: acc.fechaCreacion,
             user,
             module: "Acciones",
@@ -146,9 +164,9 @@ export default function AuditoriaPage() {
             details: `Acción de mejora '${acc.nombre}' (ID: ${acc.id}) creada.`
           });
         }
-        if (acc.updatedAt && acc.fechaCreacion && isValid(new Date(acc.updatedAt)) && isValid(parseISO(acc.fechaCreacion)) && (new Date(acc.updatedAt).getTime() > parseISO(acc.fechaCreacion).getTime() + 60000)) {
+        if (acc.updatedAt && acc.fechaCreacion && isValid(new Date(acc.updatedAt)) && isValid(parseISO(acc.fechaCreacion)) && (acc.updatedAt > (parseISO(acc.fechaCreacion).getTime() + 60000))) {
            generatedLog.push({
-            id: `accion_update_${acc.id}`,
+            id: `accion_update_${acc.id}_${acc.updatedAt}`,
             timestamp: new Date(acc.updatedAt).toISOString(),
             user,
             module: "Acciones",
@@ -463,3 +481,4 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
