@@ -30,6 +30,11 @@
     --chart-3: 30 85% 60%; /* Matches accent */
     --chart-4: 260 60% 65%; /* Purple */
     --chart-5: 0 70% 60%;   /* Red/Coral */
+    --chart-6: 280 60% 60%; /* Vibrant Purple/Magenta */
+    --chart-7: 45 70% 55%;  /* Gold/Yellow */
+    --chart-8: 200 70% 60%; /* Sky Blue */
+    --chart-9: 330 65% 60%; /* Pink */
+
 
     /* Sidebar specific colors for light theme */
     --sidebar-background: 220 15% 18%; /* Darker sidebar for contrast */
@@ -68,6 +73,10 @@
     --chart-3: 30 85% 65%; /* Matches dark accent */
     --chart-4: 260 65% 70%; /* Lighter purple */
     --chart-5: 0 75% 65%;   /* Lighter red/coral */
+    --chart-6: 280 65% 65%; /* Lighter Vibrant Purple/Magenta */
+    --chart-7: 45 75% 60%;  /* Lighter Gold/Yellow */
+    --chart-8: 200 75% 65%; /* Lighter Sky Blue */
+    --chart-9: 330 70% 65%; /* Lighter Pink */
 
     /* Sidebar specific colors for dark theme */
     --sidebar-background: 220 15% 10%; /* Even darker for depth */

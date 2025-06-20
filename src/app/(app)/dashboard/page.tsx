@@ -128,6 +128,10 @@ interface MonthlyEvolutionData {
   accionesEnProgreso: number;
   accionesEnRevision: number;
   actividadesCreadas: number;
+  procesosSinActividades: number;
+  actividadesActivas: number;
+  actividadesDuplicadas: number;
+  procesosConVariaciones: number;
 }
 
 type ChartMetricKey = keyof Omit<MonthlyEvolutionData, 'month'>;
@@ -138,6 +142,10 @@ const baseChartConfig = {
   accionesEnProgreso: { label: "Acc. en Progreso", color: "hsl(var(--chart-3))" },
   accionesEnRevision: { label: "Acc. en Revisión", color: "hsl(var(--chart-4))" },
   actividadesCreadas: { label: "Activ. Creadas", color: "hsl(var(--chart-5))" },
+  procesosSinActividades: { label: "Proc. Sin Activ.", color: "hsl(var(--chart-6))" },
+  actividadesActivas: { label: "Activ. Activas Creadas", color: "hsl(var(--chart-7))" },
+  actividadesDuplicadas: { label: "Activ. Duplic. Creadas", color: "hsl(var(--chart-8))" },
+  procesosConVariaciones: { label: "Nuevos Proc. c/Variación", color: "hsl(var(--chart-9))" },
 } satisfies ChartConfig;
 
 
@@ -239,11 +247,11 @@ export default function DashboardPage() {
         const selectedAreaObject = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea) : null;
         const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
 
-        if (selectedPuestoObject) {
-            systemsToDisplay = sistemas.filter(system =>
+        if (selectedPuestoObject) { // Filter by specific Puesto
+             systemsToDisplay = sistemas.filter(system =>
                 system.scope === "Puesto" && system.scopeId === selectedPuestoObject.id
             );
-        } else if (selectedAreaObject) {
+        } else if (selectedAreaObject) { // Filter by specific Area (and Puesto is 'all')
             const puestosInSelectedAreaIds = puestos
                 .filter(p => p.areaId === selectedAreaObject.id)
                 .map(p => p.id);
@@ -252,8 +260,8 @@ export default function DashboardPage() {
                 (system.scope === "Área" && system.scopeId === selectedAreaObject.id) ||
                 (system.scope === "Puesto" && system.scopeId && puestosInSelectedAreaIds.includes(system.scopeId))
             );
-        } else {
-            systemsToDisplay = [...sistemas];
+        } else { // Both Area and Puesto are 'all'
+            systemsToDisplay = [...sistemas]; // Show all systems
         }
 
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(systemsToDisplay, costosSistemas));
@@ -359,21 +367,33 @@ export default function DashboardPage() {
         end: dashboardDateRange.to,
       });
 
+      // Use base data filtered by Area/Puesto for chart consistency across months
       const baseProcessesForChart = processesFilteredByAreaPuesto;
-      const baseActionsForChart = globalAcciones;
-      const baseActivitiesForChart = globalActividades;
+      const baseActionsForChart = globalAcciones.filter(accion => {
+         // Apply area/puesto filtering if needed here - for now, actions are global in chart
+         return true;
+      });
+      const baseActivitiesForChart = globalActividades.filter(actividad => {
+        const relevantProcessIdsForChart = new Set(baseProcessesForChart.map(p => p.id));
+        if (selectedArea !== 'all' || selectedPuesto !== 'all') {
+            if (!actividad.procesosAsociadosIds || actividad.procesosAsociadosIds.length === 0) return false;
+            return actividad.procesosAsociadosIds.some(procId => relevantProcessIdsForChart.has(procId));
+        }
+        return true;
+      });
+
 
       monthsInInterval.forEach(monthStart => {
         const monthEnd = endOfMonth(monthStart);
         const monthLabel = format(monthStart, "MMM yy", { locale: es });
 
-        const procesosMapeados = baseProcessesForChart.filter(proc => {
+        const procesosMapeadosEnMes = baseProcessesForChart.filter(proc => {
           if (!proc.capturedAt) return false;
           const capturedDate = parseISO(proc.capturedAt);
           return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
         }).length;
 
-        const accionesCompletadas = baseActionsForChart.filter(accion => {
+        const accionesCompletadasEnMes = baseActionsForChart.filter(accion => {
           if (accion.estado === 'Completada' && accion.fechaFinalizacion) {
             const finalizacionDate = parseISO(accion.fechaFinalizacion);
             return isValid(finalizacionDate) && isWithinInterval(finalizacionDate, { start: monthStart, end: monthEnd });
@@ -381,7 +401,7 @@ export default function DashboardPage() {
           return false;
         }).length;
 
-        const accionesEnProgreso = baseActionsForChart.filter(accion => {
+        const accionesEnProgresoEnMes = baseActionsForChart.filter(accion => {
           if (accion.estado === 'En Progreso' && accion.fechaCreacion) {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
@@ -389,7 +409,7 @@ export default function DashboardPage() {
           return false;
         }).length;
 
-        const accionesEnRevision = baseActionsForChart.filter(accion => {
+        const accionesEnRevisionEnMes = baseActionsForChart.filter(accion => {
           if (accion.estado === 'En Revisión' && accion.fechaCreacion) {
             const creacionDate = parseISO(accion.fechaCreacion);
             return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
@@ -397,24 +417,70 @@ export default function DashboardPage() {
           return false;
         }).length;
         
-        const actividadesCreadas = baseActivitiesForChart.filter(actividad => {
+        const actividadesCreadasEnMes = baseActivitiesForChart.filter(actividad => {
           if (!actividad.createdAt) return false;
           const creacionDate = new Date(actividad.createdAt);
           return isValid(creacionDate) && isWithinInterval(creacionDate, { start: monthStart, end: monthEnd });
         }).length;
 
+        const procesosSinActividadesEnMes = baseProcessesForChart.filter(proc => {
+            if (!proc.capturedAt) return false;
+            const capturedDate = parseISO(proc.capturedAt);
+            return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd }) && 
+                   (!proc.activityOrder || proc.activityOrder.length === 0);
+        }).length;
+
+        const actividadesActivasCreadasEnMes = baseActivitiesForChart.filter(act => {
+            if (!act.createdAt) return false;
+            const createdAtDate = new Date(act.createdAt);
+            return isValid(createdAtDate) && isWithinInterval(createdAtDate, { start: monthStart, end: monthEnd }) && act.activa;
+        }).length;
+
+        const actividadesDuplicadasCreadasEnMes = baseActivitiesForChart.filter(act => {
+            if (!act.createdAt) return false;
+            const createdAtDate = new Date(act.createdAt);
+            return isValid(createdAtDate) && isWithinInterval(createdAtDate, { start: monthStart, end: monthEnd }) && 
+                   act.activa && (act.procesosAsociadosCount || 0) > 1;
+        }).length;
+
+        let procesosConVariacionesEnMes = 0;
+        const processosCreadosEnMes = baseProcessesForChart.filter(proc => {
+            if (!proc.capturedAt) return false;
+            const capturedDate = parseISO(proc.capturedAt);
+            return isValid(capturedDate) && isWithinInterval(capturedDate, { start: monthStart, end: monthEnd });
+        });
+        
+        const processNamesOverall = new Map<string, Set<string>>();
+        baseProcessesForChart.forEach(p => { // Compare against all relevant processes for variation context
+            if (!processNamesOverall.has(p.proceso)) {
+                processNamesOverall.set(p.proceso, new Set());
+            }
+            processNamesOverall.get(p.proceso)!.add(`${p.area}|${p.puesto}`);
+        });
+
+        processosCreadosEnMes.forEach(newProc => {
+            if ((processNamesOverall.get(newProc.proceso)?.size || 0) > 1) {
+                procesosConVariacionesEnMes++;
+            }
+        });
+
+
         monthlyData.push({
           month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-          procesosMapeados,
-          accionesCompletadas,
-          accionesEnProgreso,
-          accionesEnRevision,
-          actividadesCreadas,
+          procesosMapeados: procesosMapeadosEnMes,
+          accionesCompletadas: accionesCompletadasEnMes,
+          accionesEnProgreso: accionesEnProgresoEnMes,
+          accionesEnRevision: accionesEnRevisionEnMes,
+          actividadesCreadas: actividadesCreadasEnMes,
+          procesosSinActividades: procesosSinActividadesEnMes,
+          actividadesActivas: actividadesActivasCreadasEnMes,
+          actividadesDuplicadas: actividadesDuplicadasCreadasEnMes,
+          procesosConVariaciones: procesosConVariacionesEnMes,
         });
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingProcessData, isLoadingAcciones, isLoadingActividades, dashboardDateRange]);
+  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingProcessData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -810,7 +876,7 @@ export default function DashboardPage() {
                             <Settings2 className="mr-2 h-4 w-4" /> Métricas del Gráfico
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
                         <DropdownMenuLabel>Seleccionar Métricas</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {(Object.keys(baseChartConfig) as ChartMetricKey[]).map((key) => (
@@ -872,11 +938,11 @@ export default function DashboardPage() {
             <CardTitle>Costos de Sistemas</CardTitle>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">
-                Costos anuales estimados.
-                Si filtra por Puesto, muestra costos solo de ese Puesto.
-                Si filtra por Área (y Puesto='Todos'), muestra costos de esa Área y sus Puestos.
-                Si Área y Puesto son 'Todos', muestra todos los sistemas.
+            <CardDescription className="mb-4 text-xs">
+              Costos anuales estimados.
+              Si filtra por Puesto, muestra costos solo de ese Puesto.
+              Si filtra por Área (y Puesto='Todos'), muestra costos de esa Área y de Puestos dentro de ella.
+              Si Área y Puesto son 'Todos', muestra todos los sistemas.
             </CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
@@ -995,4 +1061,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
