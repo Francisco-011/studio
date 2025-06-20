@@ -80,20 +80,19 @@ export default function PanelJerarquicoPage() {
         areasToFilterOn = areas.filter(a => a.id === selectedAreaFilter);
       }
       
-      areasToFilterOn.forEach(area => {
-         if (!filterByActivityId || (filterByActivityId && selectedAreaFilter === 'all') || (filterByActivityId && selectedAreaFilter === area.id) || (filterByActivityId && areaNodesMap[area.id])) {
+      if (!filterByActivityId) {
+          areasToFilterOn.forEach(area => {
             areaNodesMap[area.id] = {
                 id: `area-${area.id}`, name: area.nombre, type: 'area', originalId: area.id, children: [], puestosMap: {}
             };
-        }
-      });
-      
-      if (!filterByActivityId && (selectedAreaFilter === 'all' || selectedAreaFilter === 'area-unassigned')) {
-         if (!areaNodesMap['area-unassigned']) {
-            areaNodesMap['area-unassigned'] = {
-                id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
-            };
-         }
+          });
+          if (selectedAreaFilter === 'all' || selectedAreaFilter === 'area-unassigned') {
+             if (!areaNodesMap['area-unassigned']) {
+                areaNodesMap['area-unassigned'] = {
+                    id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
+                };
+             }
+          }
       }
       
       const targetActivityForFiltering = filterByActivityId ? actividades.find(act => act.id === filterByActivityId) : null;
@@ -121,7 +120,7 @@ export default function PanelJerarquicoPage() {
             return;
         }
         
-        let currentAreaNode = areaNodesMap[targetAreaId];
+        const currentAreaNode = areaNodesMap[targetAreaId];
 
         const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ((p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject)));
         
@@ -146,7 +145,7 @@ export default function PanelJerarquicoPage() {
         const targetPuestoIdKey = procPuestoObject?.id || `puesto-unassigned-in-${targetAreaId}`;
         const targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
 
-        if (filterByActivityId && !currentAreaNode.puestosMap[targetPuestoIdKey]) {
+        if (!currentAreaNode.puestosMap[targetPuestoIdKey]) {
             currentAreaNode.puestosMap[targetPuestoIdKey] = {
                 id: `puesto-${currentAreaNode.id}-${procPuestoObject?.id || targetPuestoName.replace(/\s+/g, '-')}`,
                 name: targetPuestoName,
@@ -156,18 +155,15 @@ export default function PanelJerarquicoPage() {
                 processList: []
             };
         }
-
-        let currentPuestoNode = currentAreaNode.puestosMap[targetPuestoIdKey];
-        if (!currentPuestoNode) {
-            return;
-        }
+        
+        const currentPuestoNode = currentAreaNode.puestosMap[targetPuestoIdKey];
         currentPuestoNode.processList.push(proc);
       });
 
       Object.values(areaNodesMap).forEach(areaNode => {
         const puestoChildren: TreeNode[] = [];
         Object.values(areaNode.puestosMap).forEach(puestoNode => {
-          if (puestoNode.processList.length > 0) {
+          if (puestoNode.processList && puestoNode.processList.length > 0) {
             const processTreeNodes = puestoNode.processList.map(proc => {
               let activitiesForNode: Actividad[];
               if (targetActivityForFiltering) {
@@ -175,7 +171,8 @@ export default function PanelJerarquicoPage() {
               } else {
                   activitiesForNode = actividades.filter(act => act.procesosAsociadosIds?.includes(proc.id));
                   if (treeActivitySearchTerm) { 
-                    activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(treeActivitySearchTerm.toLowerCase()));
+                    const searchTermLower = treeActivitySearchTerm.toLowerCase();
+                    activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
                   }
               }
               
@@ -184,11 +181,16 @@ export default function PanelJerarquicoPage() {
               };
             }).sort((a,b) => a.name.localeCompare(b.name));
             
-            if (processTreeNodes.length > 0 || (targetActivityForFiltering && puestoNode.processList.some(p => targetActivityForFiltering.procesosAsociadosIds?.includes(p.id)))) {
-                puestoNode.children = processTreeNodes.filter(ptn => ptn.activities && ptn.activities.length > 0); // Only show processes that have the activity if filtering
-                if(puestoNode.children.length > 0 || !targetActivityForFiltering) { // if not filtering by activity, or if filtering and has children
-                   puestoChildren.push(puestoNode);
-                }
+            let finalProcessNodesForPuesto: TreeNode[];
+            if (targetActivityForFiltering) {
+                finalProcessNodesForPuesto = processTreeNodes.filter(ptn => ptn.activities && ptn.activities.length > 0);
+            } else {
+                finalProcessNodesForPuesto = processTreeNodes;
+            }
+            
+            if (finalProcessNodesForPuesto.length > 0) {
+                puestoNode.children = finalProcessNodesForPuesto;
+                puestoChildren.push(puestoNode);
             }
           }
         });
@@ -278,20 +280,9 @@ export default function PanelJerarquicoPage() {
     } else {
         setFilterByActivityId(activity.id);
         setFilteredByActivityName(activity.nombre);
-        // Reset other tree filters
         setSelectedAreaFilter('all');
         setSelectedPuestoFilter('all');
         setTreeActivitySearchTerm('');
-        // Expand all nodes when a specific activity filter is applied for better visibility
-        const allNodeIds: Record<string, boolean> = {};
-        const expand = (nodes: TreeNode[]) => {
-            nodes.forEach(node => {
-                allNodeIds[node.id] = true;
-                if (node.children) expand(node.children);
-            });
-        };
-        // Need to call expand on a built tree; this requires a slight restructure or calling buildTree then expand
-        // For now, will rely on manual expansion after filter applies or do it in useEffect after treeData is set
     }
   };
    useEffect(() => {
