@@ -40,17 +40,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { usePuestos } from "@/contexts/PuestosContext";
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; // Import context
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
-
-export const availableSystems = [ // Export for use in activities page
-  { id: "1", nombre: "SAP S/4HANA" },
-  { id: "2", nombre: "Salesforce CRM" },
-  { id: "3", nombre: "ERP Interno 'Phoenix'" },
-  { id: "4", nombre: "Sistema de Tickets Jira" },
-  { id: "5", nombre: "Microsoft Excel" },
-  { id: "6", nombre: "Google Workspace" },
-];
+// Removed: export const availableSystems
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const; // Export
 
@@ -83,6 +76,7 @@ export default function CapturaPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos(); // Use context for sistemas
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
@@ -286,7 +280,7 @@ export default function CapturaPage() {
                 ))}
               </div>
             ) : (
-              <span className="text-muted-foreground">{placeholder}</span>
+              <span className="text-muted-foreground">{isLoading ? "Cargando opciones..." : placeholder}</span>
             )}
             <ChevronDown className="ml-auto h-4 w-4 opacity-50 shrink-0" />
           </Button>
@@ -535,7 +529,7 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSystems, false)}
+                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", sistemas, isLoadingSistemasCostos)}
                     <FormDescription>
                       Seleccione los sistemas o software involucrados en la ejecución del proceso.
                     </FormDescription>

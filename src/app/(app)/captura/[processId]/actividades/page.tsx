@@ -8,7 +8,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
-import { availableSystems, frecuenciaOptions } from '@/app/(app)/captura/page'; // Import shared consts
+import { frecuenciaOptions } from '@/app/(app)/captura/page'; 
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; // Import context
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,7 @@ export default function DefinirActividadesProcesoPage() {
   const processId = params.processId as string;
 
   const { actividades: globalActivities, addActividad: addGlobalActivity, updateActividad: updateGlobalActivity } = useActividades();
+  const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos(); // Use context
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
   const [definedActivities, setDefinedActivities] = useState<LocalActivityDefinition[]>([]);
@@ -382,15 +384,22 @@ export default function DefinirActividadesProcesoPage() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value} // This will be undefined if not selected or the special value
+                      disabled={isLoadingSistemasCostos}
                     >
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Seleccione un sistema" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando sistemas..." : "Seleccione un sistema"} /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno / Manual</SelectItem>
-                        {availableSystems.map((sys) => (
-                          <SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>
-                        ))}
+                        {isLoadingSistemasCostos ? (
+                            <SelectItem value="loading-sistemas" disabled>Cargando...</SelectItem>
+                        ) : availableSystems.length === 0 ? (
+                            <SelectItem value="no-sistemas-available" disabled>No hay sistemas configurados</SelectItem>
+                        ) : (
+                            availableSystems.map((sys) => (
+                            <SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>
+                            ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
