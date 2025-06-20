@@ -1,20 +1,25 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, type DragEvent } from 'react';
+import { useState, useEffect, useMemo, type DragEvent, type ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers, CheckSquare, Ban } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, CopyCheck, Layers, CheckSquare, Ban, Eye } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { format, parseISO, isValid } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { frecuenciaOptions } from '../../captura/page';
+
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY = 'proceza-puesto-process-order';
@@ -33,6 +38,43 @@ interface TreeNode {
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
+
+
+const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
+  if (value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea && !isList)) {
+    return (
+      <div>
+        <h4 className="font-semibold text-sm">{title}:</h4>
+        <p className="text-sm text-muted-foreground">No especificado.</p>
+      </div>
+    );
+  }
+
+  if (isList && Array.isArray(value)) {
+    return (
+      <div>
+        <h4 className="font-semibold text-sm">{title}:</h4>
+        {value.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {value.map((item, idx) => (
+              <Badge key={idx} variant="secondary">{item}</Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Ninguno.</p>
+        )}
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      <h4 className="font-semibold text-sm">{title}:</h4>
+      <p className={cn("text-sm text-foreground", isTextarea && "whitespace-pre-wrap")}>{typeof value === 'number' ? value.toString() : value}</p>
+    </div>
+  );
+};
+
 
 export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
@@ -78,6 +120,10 @@ export default function PanelJerarquicoPage() {
 
   const [repeatedActivitiesCount, setRepeatedActivitiesCount] = useState(0);
   const [repeatedProcessesInMultipleContextsCount, setRepeatedProcessesInMultipleContextsCount] = useState(0);
+
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | null>(null);
+  const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | null>(null);
 
 
   useEffect(() => {
@@ -323,7 +369,6 @@ export default function PanelJerarquicoPage() {
               };
             });
             
-            // Sort processes based on puestoProcessOrders or alphabetically
             const currentPuestoNodeId = puestoNode.id;
             const orderForThisPuesto = puestoProcessOrders[currentPuestoNodeId];
             let sortedProcessTreeNodes;
@@ -332,10 +377,10 @@ export default function PanelJerarquicoPage() {
                 sortedProcessTreeNodes = processTreeNodes.sort((a, b) => {
                     const indexA = orderForThisPuesto.indexOf(a.originalId!);
                     const indexB = orderForThisPuesto.indexOf(b.originalId!);
-                    if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name); // Both not in order, sort alphabetically
-                    if (indexA === -1) return 1; // a not in order, b is; b comes first
-                    if (indexB === -1) return -1; // b not in order, a is; a comes first
-                    return indexA - indexB; // Both in order, sort by their index
+                    if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name);
+                    if (indexA === -1) return 1; 
+                    if (indexB === -1) return -1;
+                    return indexA - indexB;
                 });
             } else {
                 sortedProcessTreeNodes = processTreeNodes.sort((a, b) => a.name.localeCompare(b.name));
@@ -375,7 +420,7 @@ export default function PanelJerarquicoPage() {
     areas, puestos, capturedProcesses, actividades, 
     isLoadingAllData, 
     selectedAreaFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId, treeProcessStatusFilter,
-    puestoProcessOrders // Add dependency
+    puestoProcessOrders
   ]);
 
   const toggleNode = (nodeId: string) => {
@@ -442,10 +487,10 @@ export default function PanelJerarquicoPage() {
     }
 
     if (draggedItem?.type === 'processNodeInPuesto' && targetType !== 'processNodeInPuesto') {
-      allowDrop = false; // Process nodes can only be dropped on other process nodes (for reordering)
+      allowDrop = false; 
     }
     if (draggedItem?.type !== 'processNodeInPuesto' && targetType === 'processNodeInPuesto') {
-      allowDrop = false; // Activities cannot be dropped on process nodes if the target type is for process reorder
+      allowDrop = false; 
     }
 
 
@@ -462,9 +507,9 @@ export default function PanelJerarquicoPage() {
     let canDropOnTarget = true;
 
     const getProcessStatus = (processId?: string) => {
-        if (!processId) return true; // If no processId, assume it's okay (e.g., pool)
+        if (!processId) return true; 
         const process = capturedProcesses.find(p => p.id === processId);
-        return process ? process.activo !== false : true; // Allow if active or not found (edge case)
+        return process ? process.activo !== false : true; 
     };
     
     if (targetType === 'proceso') {
@@ -480,15 +525,6 @@ export default function PanelJerarquicoPage() {
     if (draggedItem?.type === 'processNodeInPuesto') {
       if (targetType !== 'processNodeInPuesto') {
         canDropOnTarget = false;
-      } else {
-        // Check if from the same parent Puesto
-        const targetProcessNodeOriginalId = targetId.replace('proceso-', '');
-        const targetProcess = capturedProcesses.find(p => p.id === targetProcessNodeOriginalId);
-        const draggedProcess = capturedProcesses.find(p => p.id === draggedItem.id);
-        if (!targetProcess || !draggedProcess || targetProcess.puesto !== draggedProcess.puesto || targetProcess.area !== draggedProcess.area) {
-           // This logic might be too simple if Puesto IDs are complex. Better to use sourceParentPuestoNodeId.
-           // For now, we will rely on the `handleDrop` to correctly identify the Puesto Node ID from the `dropTargetInfo`.
-        }
       }
     }
     
@@ -515,14 +551,12 @@ export default function PanelJerarquicoPage() {
     e.preventDefault();
     if (!draggedItem || !dropTargetInfo) return;
 
-    const { type: draggedItemType, id: draggedItemId, sourceProcessId, sourceIndexInProcess, sourceParentPuestoNodeId } = draggedItem;
+    const { type: draggedItemType, id: draggedItemId, sourceProcessId, sourceParentPuestoNodeId } = draggedItem;
     const { type: targetType, id: dropTargetNodeId, targetProcessId: actualTargetProcessId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
 
-    // Handle Process Reordering
     if (draggedItemType === 'processNodeInPuesto' && targetType === 'processNodeInPuesto') {
         const targetProcessOriginalId = dropTargetNodeId.replace('proceso-', '');
         
-        // Find Puesto node ID from the tree structure for the target
         let parentPuestoNodeOfTarget: TreeNode | undefined;
         const findPuestoNode = (nodes: TreeNode[]): TreeNode | undefined => {
             for (const node of nodes) {
@@ -555,7 +589,7 @@ export default function PanelJerarquicoPage() {
         if (targetIndex > -1) {
             newOrder.splice(targetIndex, 0, draggedItemId);
         } else {
-            newOrder.push(draggedItemId); // Fallback: add to end
+            newOrder.push(draggedItemId);
         }
 
         setPuestoProcessOrders(prev => ({ ...prev, [currentPuestoNodeId]: newOrder }));
@@ -565,8 +599,6 @@ export default function PanelJerarquicoPage() {
         return;
     }
 
-
-    // Handle Activity Dragging (existing logic, slightly adjusted)
     if (draggedItemType === 'activityFromPool' || draggedItemType === 'activityInProcess') {
         const activity = actividades.find(a => a.id === draggedItemId);
         if (!activity || !activity.activa) {
@@ -576,8 +608,8 @@ export default function PanelJerarquicoPage() {
             return;
         }
 
-        if (targetType === 'pool') { // Dropping on the activity pool (unassign)
-            if (!sourceProcessId) { // Was dragged from pool to pool - no action
+        if (targetType === 'pool') { 
+            if (!sourceProcessId) { 
               setDraggedItem(null);
               setDropTargetInfo(null);
               return;
@@ -617,16 +649,16 @@ export default function PanelJerarquicoPage() {
 
             finalCapturedProcesses = finalCapturedProcesses.map(proc => {
                 if (proc.id === actualTargetProcessId) {
-                    let newOrder = (proc.activityOrder || []).filter(id => id !== draggedItemId); // Ensure not duplicated
+                    let newOrder = (proc.activityOrder || []).filter(id => id !== draggedItemId); 
                     
-                    if (actualTargetActivityId) { // Dropped on an existing activity in the target process
+                    if (actualTargetActivityId) { 
                         const targetIdx = newOrder.indexOf(actualTargetActivityId);
                         if (targetIdx !== -1) {
                             newOrder.splice(targetIdx, 0, draggedItemId);
                         } else {
                             newOrder.push(draggedItemId); 
                         }
-                    } else { // Dropped directly on the process area
+                    } else { 
                         newOrder.push(draggedItemId); 
                     }
                     return { ...proc, activityOrder: newOrder };
@@ -647,7 +679,6 @@ export default function PanelJerarquicoPage() {
     setDraggedItem(null);
     setDropTargetInfo(null);
   };
-
 
   const handleActivityBadgeClick = (activity: Actividad) => {
     if (filterByActivityId === activity.id) {
@@ -676,13 +707,18 @@ export default function PanelJerarquicoPage() {
     }
   }, [filterByActivityId, treeData]);
 
+  const openDetailDialog = (item: CapturedProcess | Actividad, type: 'process' | 'activity') => {
+    setSelectedItemForDetail(item);
+    setDetailItemType(type);
+    setIsDetailDialogOpen(true);
+  };
 
   const renderTree = (nodes: TreeNode[], parentPuestoNodeId?: string): JSX.Element[] => {
     return nodes.map(node => (
       <div key={node.id} className="ml-4">
         <div 
           className={cn(
-            "flex items-center py-1 px-2 rounded hover:bg-muted/50",
+            "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
             node.type === 'proceso' && "border-l-2 border-transparent",
              dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type.startsWith('activity') && "bg-primary/20 border-primary",
             dropTargetInfo?.type === 'processNodeInPuesto' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type === 'processNodeInPuesto' && "ring-2 ring-accent",
@@ -702,7 +738,7 @@ export default function PanelJerarquicoPage() {
             {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
           </Button>
           <span className={cn(
-              "text-sm", 
+              "text-sm flex-grow", 
               node.type === 'proceso' && "font-semibold", 
               node.type === 'area' && "font-bold", 
               node.type === 'puesto' && "font-medium",
@@ -712,6 +748,11 @@ export default function PanelJerarquicoPage() {
             {node.name}
             {node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}
           </span>
+          {node.type === 'proceso' && node.originalId && (
+            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(capturedProcesses.find(p => p.id === node.originalId)!, 'process')} title="Ver detalles del proceso">
+              <Eye className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          )}
         </div>
         {expandedNodes[node.id] && (
           <>
@@ -731,7 +772,7 @@ export default function PanelJerarquicoPage() {
                     onDragEnter={(e) => handleDragEnter(e, activityInTreeId, 'activity-in-tree', { processId: node.originalId, activityId: act.id })}
                     onDragLeave={handleDragLeave}
                     className={cn(
-                        "flex items-center p-1.5 bg-secondary/30 rounded text-xs",
+                        "flex items-center p-1.5 bg-secondary/30 rounded text-xs group",
                         (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
                         !act.activa && "italic text-muted-foreground",
                         dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === activityInTreeId && "ring-2 ring-primary"
@@ -739,8 +780,11 @@ export default function PanelJerarquicoPage() {
                     title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
                   >
                     <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
-                    {act.nombre}
+                    <span className="flex-grow">{act.nombre}</span>
                     {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
+                     <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
+                        <Eye className="h-3 w-3 text-muted-foreground" />
+                    </Button>
                   </div>
                 )})}
                  {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
@@ -824,7 +868,8 @@ export default function PanelJerarquicoPage() {
             Arrastre actividades activas desde el panel derecho (Pool) hacia los procesos activos en el árbol izquierdo para asignarlas.
             También puede mover actividades entre procesos, reordenarlas dentro de un proceso, o de un proceso de vuelta al pool para desasignarlas.
             Los procesos pueden reordenarse dentro de su puesto arrastrándolos.
-            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. Las actividades/procesos inactivos se muestran con un estilo diferente y tienen interacciones limitadas.
+            Haga clic en el contador de procesos de una actividad en el pool para filtrar el árbol por esa actividad. 
+            Use el ícono del ojo (<Eye className="inline-block h-3 w-3" />) para ver detalles completos.
           </CardDescription>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
@@ -1046,6 +1091,72 @@ export default function PanelJerarquicoPage() {
           </Card>
         </CardContent>
       </Card>
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Detalles de {detailItemType === 'process' ? 'Proceso' : 'Actividad'}: {selectedItemForDetail?.nombre}
+            </DialogTitle>
+            <DialogDescription>
+              Información completa del elemento seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+            {selectedItemForDetail && detailItemType === 'process' && (() => {
+              const process = selectedItemForDetail as CapturedProcess;
+              const processActivities = (process.activityOrder || [])
+                .map(actId => actividades.find(a => a.id === actId)?.nombre)
+                .filter(Boolean) as string[];
+              return (
+                <>
+                  <DetailSectionDisplay title="Nombre del Proceso" value={process.proceso} />
+                  <DetailSectionDisplay title="Área" value={process.area} />
+                  <DetailSectionDisplay title="Puesto Principal" value={process.puesto} />
+                  <DetailSectionDisplay title="Descripción Detallada" value={process.descripcion} isTextarea />
+                  <DetailSectionDisplay title="Tiempo Estimado" value={process.tiempoEstimado !== undefined ? `${process.tiempoEstimado} minutos` : undefined} />
+                  <DetailSectionDisplay title="Frecuencia" value={process.frecuencia} />
+                  <DetailSectionDisplay title="Sistemas Utilizados" value={process.sistemas} isList />
+                  <DetailSectionDisplay title="Información que Recibe (Entradas)" value={process.informacionRecibe} isTextarea />
+                  <DetailSectionDisplay title="Procesos de Entradas" value={process.procesosEntrada} isList />
+                  <DetailSectionDisplay title="Información que Entrega (Salidas)" value={process.informacionEntrega} isTextarea />
+                  <DetailSectionDisplay title="Procesos de Salida" value={process.procesosSalida} isList />
+                  <DetailSectionDisplay title="Estado" value={process.activo !== false ? 'Activo' : 'Inactivo'} />
+                  <DetailSectionDisplay title="Actividades en Orden" value={processActivities} isList />
+                  <DetailSectionDisplay title="Fecha de Captura" value={process.capturedAt ? format(parseISO(process.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Última Modificación" value={process.updatedAt ? format(new Date(process.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                </>
+              );
+            })()}
+            {selectedItemForDetail && detailItemType === 'activity' && (() => {
+              const activity = selectedItemForDetail as Actividad;
+              const associatedProcessNames = (activity.procesosAsociadosIds || [])
+                .map(procId => capturedProcesses.find(cp => cp.id === procId)?.proceso)
+                .filter(Boolean);
+              return (
+                <>
+                  <DetailSectionDisplay title="Nombre de la Actividad" value={activity.nombre} />
+                  <DetailSectionDisplay title="Descripción Breve" value={activity.descripcionBreve} isTextarea />
+                  <DetailSectionDisplay title="Sistema Utilizado" value={activity.sistemaUtilizado} />
+                  <DetailSectionDisplay title="Tiempo Estimado (min)" value={activity.tiempoEstimadoActividad} />
+                  <DetailSectionDisplay title="Frecuencia de la Actividad" value={activity.frecuenciaActividad} />
+                  <DetailSectionDisplay title="Estado" value={activity.activa ? 'Activa' : 'Inactiva'} />
+                  <DetailSectionDisplay title="Procesos Asociados" value={associatedProcessNames} isList />
+                  <DetailSectionDisplay title="Fecha de Creación" value={activity.createdAt ? format(new Date(activity.createdAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                  <DetailSectionDisplay title="Última Modificación" value={activity.updatedAt ? format(new Date(activity.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cerrar</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
        <div className="mt-4 text-xs text-muted-foreground text-center">
         Nota: La funcionalidad de arrastrar y soltar (drag & drop) se implementa con HTML5 nativo.
       </div>
