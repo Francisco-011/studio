@@ -83,13 +83,15 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
   }, [acciones, isLoadingAcciones]);
 
   const addAccion = useCallback((data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => {
-    const newAccion: Accion = {
-      ...data,
-      id: Date.now().toString(),
-      fechaCreacion: new Date().toISOString(),
-      updatedAt: Date.now(),
-    };
-    setAcciones(prevAcciones => [...prevAcciones, newAccion]);
+    setAcciones(prevAcciones => {
+        const newAccion: Accion = {
+          ...data,
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          fechaCreacion: new Date().toISOString(),
+          updatedAt: Date.now(),
+        };
+        return [...prevAcciones, newAccion];
+    });
   }, []);
 
   const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>) => {
