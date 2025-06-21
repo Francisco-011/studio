@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad } from '@/contexts/AccionesContext';
+import { useAreas } from '@/contexts/AreasContext';
+import { usePuestos } from '@/contexts/PuestosContext';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -35,6 +37,8 @@ const accionFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre de la acción es requerido (mínimo 3 caracteres).'),
   descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
   responsable: z.string().min(1, 'El responsable es requerido.'),
+  area: z.string().optional(),
+  puesto: z.string().optional(),
   estado: z.enum(accionEstados, { errorMap: () => ({ message: "Seleccione un estado válido."})}),
   fechaObjetivo: z.date().optional(),
   fechaFinalizacion: z.date().optional(),
@@ -50,7 +54,7 @@ const accionFormSchema = z.object({
   unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   origenMejora: z.string().optional(),
 }).refine(data => {
-  if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && data.monedaAhorro === undefined) {
+  if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && !data.monedaAhorro) {
     return false;
   }
   return true;
@@ -66,7 +70,7 @@ const accionFormSchema = z.object({
     message: "La fecha de finalización no puede ser anterior a la fecha objetivo.",
     path: ["fechaFinalizacion"],
 }).refine(data => {
-  if (data.ahorroTiempoEstimado !== undefined && data.ahorroTiempoEstimado > 0 && data.unidadTiempoAhorro === undefined) {
+  if (data.ahorroTiempoEstimado !== undefined && data.ahorroTiempoEstimado > 0 && !data.unidadTiempoAhorro) {
     return false;
   }
   return true;
@@ -107,6 +111,8 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 
 export default function AccionesPage() {
   const { acciones, addAccion, updateAccion, deleteAccion, isLoadingAcciones } = useAcciones();
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { puestos, isLoadingPuestos } = usePuestos();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccionEstado | 'all'>('all');
@@ -124,6 +130,8 @@ export default function AccionesPage() {
       nombre: '',
       descripcion: '',
       responsable: '',
+      area: '',
+      puesto: '',
       estado: 'Pendiente',
       fechaObjetivo: undefined,
       fechaFinalizacion: undefined,
@@ -134,12 +142,25 @@ export default function AccionesPage() {
       origenMejora: '',
     },
   });
+  
+  const watchedArea = accionForm.watch('area');
+  const availablePuestos = useMemo(() => {
+    if (!watchedArea || isLoadingPuestos || isLoadingAreas) {
+        return puestos;
+    }
+    const areaId = areas.find(a => a.nombre === watchedArea)?.id;
+    if (!areaId) return puestos;
+    return puestos.filter(p => p.areaId === areaId);
+  }, [watchedArea, areas, puestos, isLoadingPuestos, isLoadingAreas]);
+
 
   useEffect(() => {
     if (isAccionDialogOpen) {
       if (editingAccion) {
         accionForm.reset({
           ...editingAccion,
+          area: editingAccion.area || '',
+          puesto: editingAccion.puesto || '',
           fechaObjetivo: editingAccion.fechaObjetivo ? parseISO(editingAccion.fechaObjetivo) : undefined,
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
         });
@@ -148,6 +169,8 @@ export default function AccionesPage() {
           nombre: '',
           descripcion: '',
           responsable: '',
+          area: '',
+          puesto: '',
           estado: 'Pendiente',
           fechaObjetivo: undefined,
           fechaFinalizacion: undefined,
@@ -164,6 +187,8 @@ export default function AccionesPage() {
   function handleAccionSubmit(data: AccionFormData) {
     const dataToSave = {
         ...data,
+        area: data.area || undefined,
+        puesto: data.puesto || undefined,
         fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
     };
@@ -205,7 +230,9 @@ export default function AccionesPage() {
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.responsable.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (accion.origenMejora && accion.origenMejora.toLowerCase().includes(searchTerm.toLowerCase()));
+        (accion.origenMejora && accion.origenMejora.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (accion.area && accion.area.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (accion.puesto && accion.puesto.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'all' || accion.estado === statusFilter;
       return matchesSearchTerm && matchesStatus;
     }).sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
@@ -234,7 +261,7 @@ export default function AccionesPage() {
     }
 
     const headers = [
-      "ID", "Nombre de la Acción", "Descripción", "Responsable", "Estado", 
+      "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", "Estado", 
       "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
       "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
@@ -247,6 +274,8 @@ export default function AccionesPage() {
         escapeCsvCell(acc.nombre),
         escapeCsvCell(acc.descripcion),
         escapeCsvCell(acc.responsable),
+        escapeCsvCell(acc.area),
+        escapeCsvCell(acc.puesto),
         escapeCsvCell(acc.estado),
         escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
         escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
@@ -308,7 +337,7 @@ export default function AccionesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Buscar por nombre, descripción, responsable..."
+                placeholder="Buscar por nombre, descripción, responsable, área, puesto..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10"
@@ -404,6 +433,43 @@ export default function AccionesPage() {
                           )}
                         />
                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField
+                          control={accionForm.control}
+                          name="area"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Área (Opcional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ''} disabled={isLoadingAreas}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  <SelectItem value="">Ninguna</SelectItem>
+                                  {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={accionForm.control}
+                          name="puesto"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Puesto (Opcional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ''} disabled={isLoadingPuestos}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="">Ninguno</SelectItem>
+                                    {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription className="text-xs">Puestos filtrados por el área seleccionada.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={accionForm.control}
@@ -543,11 +609,13 @@ export default function AccionesPage() {
 
           {paginatedAcciones.length > 0 ? (
             <>
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre de la Acción</TableHead>
+                    <TableHead className="min-w-[250px]">Nombre de la Acción</TableHead>
+                    <TableHead>Área</TableHead>
+                    <TableHead>Puesto</TableHead>
                     <TableHead>Responsable</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-center">Fecha Objetivo</TableHead>
@@ -561,6 +629,8 @@ export default function AccionesPage() {
                   {paginatedAcciones.map((accion, index) => (
                     <TableRow key={`${accion.id}-${index}`}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
+                      <TableCell>{accion.area || '-'}</TableCell>
+                      <TableCell>{accion.puesto || '-'}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
                         <Badge 

@@ -29,6 +29,8 @@ export interface Accion {
   ahorroTiempoEstimado?: number;
   unidadTiempoAhorro?: TiempoUnidad;
   origenMejora?: string;
+  area?: string;
+  puesto?: string;
   updatedAt: number; // timestamp
 }
 

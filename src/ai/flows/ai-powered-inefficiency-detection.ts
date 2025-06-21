@@ -25,6 +25,8 @@ export type AnalyzeProcessesInput = z.infer<typeof AnalyzeProcessesInputSchema>;
 
 const EfficiencyGapSchema = z.object({
   processName: z.string().describe('El nombre del proceso con la brecha de eficiencia.'),
+  area: z.string().optional().describe('El área organizacional donde ocurre el proceso.'),
+  puesto: z.string().optional().describe('El puesto responsable del proceso.'),
   activityName: z.string().optional().describe('La actividad específica con la brecha, si aplica.'),
   description: z.string().describe('Una breve explicación de la ineficiencia u oportunidad de mejora.'),
   potentialTimeSaving: z.number().optional().describe('El ahorro de tiempo estimado en minutos por instancia/ejecución.'),
@@ -35,6 +37,8 @@ const EfficiencyGapSchema = z.object({
 
 const RedundantSystemSchema = z.object({
   systemName: z.string().describe('El nombre del sistema potencialmente redundante.'),
+  area: z.string().optional().describe('El área donde se detectó el uso principal del sistema redundante.'),
+  puesto: z.string().optional().describe('El puesto donde se detectó el uso principal del sistema redundante.'),
   annualCost: z.number().optional().describe('El costo anual estimado del sistema.'),
   currency: z.string().optional().describe('La moneda del costo.'),
   reason: z.string().describe('La razón por la que el sistema se considera redundante.'),
@@ -42,7 +46,11 @@ const RedundantSystemSchema = z.object({
 
 const DuplicateProcessSchema = z.object({
     processA: z.string().describe('Nombre del primer proceso en el par duplicado.'),
+    areaA: z.string().optional().describe('Área del primer proceso.'),
+    puestoA: z.string().optional().describe('Puesto del primer proceso.'),
     processB: z.string().describe('Nombre del segundo proceso en el par duplicado.'),
+    areaB: z.string().optional().describe('Área del segundo proceso.'),
+    puestoB: z.string().optional().describe('Puesto del segundo proceso.'),
     reason: z.string().describe('La razón para sospechar la duplicación.'),
 });
 
@@ -70,17 +78,17 @@ Se te proporcionan descripciones detalladas de procesos, incluyendo tiempos y co
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
-Tu análisis debe centrarse en TRES áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado:
+Tu análisis debe centrarse en TRES áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto de 'área' y 'puesto' del proceso principal relacionado.
 
-1.  **Brechas de Eficiencia (efficiencyGaps)**: Identifica los procesos y actividades con las mayores discrepancias entre los valores "Estimados" y los "Ideales" (tanto en tiempo como en costo). Para cada brecha significativa, calcula el 'potentialTimeSaving' (Estimado - Ideal) y 'potentialCostSaving' (Estimado - Ideal) por instancia de ejecución. Debes poblar el array 'efficiencyGaps' con esta información.
+1.  **Brechas de Eficiencia (efficiencyGaps)**: Identifica los procesos y actividades con las mayores discrepancias entre los valores "Estimados" y los "Ideales" (tanto en tiempo como en costo). Para cada brecha significativa, calcula el 'potentialTimeSaving' (Estimado - Ideal) y 'potentialCostSaving' (Estimado - Ideal) por instancia de ejecución. Debes poblar el array 'efficiencyGaps' con esta información, incluyendo el 'area' y 'puesto' del proceso afectado.
 
-2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes.
+2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'puestoA', 'areaB' y 'puestoB'.
 
-3.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada.
+3.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area' y 'puesto' del proceso principal donde se detectó.
 
 **Datos de Entrada:**
 
-**Descripciones de Procesos (con métricas de tiempo y costo):**
+**Descripciones de Procesos (con métricas de tiempo, costo, área y puesto):**
 {{{processDescriptions}}}
 
 **Uso General de Sistemas:**

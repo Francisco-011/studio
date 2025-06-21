@@ -208,7 +208,7 @@ export default function MejorasPage() {
     let actionsGeneratedCount = 0;
     
     // 1. Consolidate efficiency gaps by process
-    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda }>();
+    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda, area?: string, puesto?: string }>();
 
     analysisResult.efficiencyGaps?.forEach(gap => {
       if (!processImprovements.has(gap.processName)) {
@@ -221,6 +221,8 @@ export default function MejorasPage() {
       if (gap.currency && !processGroup.currency) {
         processGroup.currency = gap.currency as Moneda;
       }
+      if (gap.area && !processGroup.area) processGroup.area = gap.area;
+      if (gap.puesto && !processGroup.puesto) processGroup.puesto = gap.puesto;
     });
 
     // 2. Create one consolidated action per process with efficiency gaps
@@ -236,6 +238,8 @@ export default function MejorasPage() {
         responsable: 'Por definir',
         estado: 'En Revisión' as AccionEstado,
         origenMejora: 'Análisis IA - Mejoras',
+        area: group.area,
+        puesto: group.puesto,
         ahorroTiempoEstimado: group.totalTime > 0 ? group.totalTime : undefined,
         unidadTiempoAhorro: group.totalTime > 0 ? 'Minutos/Instancia' : undefined,
         ahorroEstimado: group.totalCost > 0 ? group.totalCost : undefined,
@@ -255,6 +259,8 @@ export default function MejorasPage() {
           responsable: 'Por definir',
           estado: 'En Revisión' as AccionEstado,
           origenMejora: 'Análisis IA - Mejoras',
+          area: sys.area,
+          puesto: sys.puesto,
           ahorroEstimado: sys.annualCost,
           monedaAhorro: sys.currency as Moneda,
       });
@@ -272,6 +278,8 @@ export default function MejorasPage() {
           responsable: 'Por definir',
           estado: 'En Revisión' as AccionEstado,
           origenMejora: 'Análisis IA - Mejoras',
+          area: dup.areaA,
+          puesto: dup.puestoA
       });
       actionsGeneratedCount++;
     });
