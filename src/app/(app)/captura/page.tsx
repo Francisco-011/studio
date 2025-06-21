@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock } from "lucide-react";
+import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -124,6 +124,8 @@ export default function CapturaPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
+
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
@@ -132,6 +134,8 @@ export default function CapturaPage() {
   
   const watchedAreaName = form.watch('area');
   const watchedPuestoName = form.watch('puesto');
+  const watchedProcessName = form.watch('proceso');
+
 
   const availableSistemasForForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) return [];
@@ -215,6 +219,28 @@ export default function CapturaPage() {
       }
     }
   }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId, allProcesses]);
+  
+  useEffect(() => {
+    if (watchedProcessName && allProcesses.length > 0) {
+      const trimmedLowerName = watchedProcessName.trim().toLowerCase();
+      if (!trimmedLowerName) {
+        setSimilarProcessWarning(null);
+        return;
+      }
+      
+      const existingProcess = allProcesses.find(
+        p => p.id !== editingId && p.proceso.trim().toLowerCase() === trimmedLowerName && !p.deletedAt
+      );
+      
+      if (existingProcess) {
+        setSimilarProcessWarning(`Advertencia: ya existe un proceso con un nombre idéntico: "${existingProcess.proceso}" en el área de "${existingProcess.area}".`);
+      } else {
+        setSimilarProcessWarning(null);
+      }
+    } else {
+      setSimilarProcessWarning(null);
+    }
+  }, [watchedProcessName, allProcesses, editingId]);
 
 
   function onSubmit(values: CapturaFormData) {
@@ -532,9 +558,15 @@ export default function CapturaPage() {
                         {...field} 
                       />
                     </FormControl>
-                    <FormDescription>
-                      Ingrese el nombre descriptivo del proceso que está capturando.
-                    </FormDescription>
+                     {similarProcessWarning ? (
+                        <FormDescription className="text-amber-600 flex items-center gap-1 pt-1">
+                          <AlertTriangle className="h-4 w-4" /> {similarProcessWarning}
+                        </FormDescription>
+                      ) : (
+                        <FormDescription>
+                          Ingrese el nombre descriptivo del proceso que está capturando.
+                        </FormDescription>
+                      )}
                     <FormMessage />
                   </FormItem>
                 )}

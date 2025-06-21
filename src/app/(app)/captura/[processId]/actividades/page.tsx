@@ -100,6 +100,8 @@ export default function DefinirActividadesProcesoPage() {
   const [editingActivity, setEditingActivity] = useState<(LocalActivityDefinition & { index: number }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [similarActivityWarning, setSimilarActivityWarning] = useState<string | null>(null);
+
 
   const activityForm = useForm<ActivityCaptureFormData>({
     resolver: zodResolver(activityCaptureFormSchema),
@@ -115,6 +117,8 @@ export default function DefinirActividadesProcesoPage() {
       frecuenciaActividad: undefined, 
     },
   });
+
+  const watchedActivityName = activityForm.watch('nombre');
 
   useEffect(() => {
     if (processId) {
@@ -214,6 +218,40 @@ export default function DefinirActividadesProcesoPage() {
     setEditingActivity({ ...activity, index });
     setIsActivityFormOpen(true);
   };
+
+   useEffect(() => {
+    if (watchedActivityName && globalActivities.length > 0) {
+        const trimmedLowerName = watchedActivityName.trim().toLowerCase();
+        if (!trimmedLowerName) {
+          setSimilarActivityWarning(null);
+          return;
+        }
+
+        const existingActivity = globalActivities.find(act => {
+            if (editingActivity && act.id === editingActivity.tempId) {
+                return false;
+            }
+            return act.nombre.trim().toLowerCase() === trimmedLowerName;
+        });
+
+        if (existingActivity) {
+            const processContext = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+            const allProcesses: CapturedProcess[] = processContext ? JSON.parse(processContext) : [];
+            const associatedProcess = allProcesses.find(p => existingActivity.procesosAsociadosIds?.includes(p.id));
+            
+            let contextMessage = "en otro proceso.";
+            if (associatedProcess) {
+                contextMessage = `en el proceso "${associatedProcess.proceso}".`;
+            }
+
+            setSimilarActivityWarning(`Advertencia: ya existe una actividad con un nombre idéntico ${contextMessage}`);
+        } else {
+            setSimilarActivityWarning(null);
+        }
+    } else {
+        setSimilarActivityWarning(null);
+    }
+  }, [watchedActivityName, globalActivities, editingActivity]);
 
   const handleActivityFormSubmit = (data: ActivityCaptureFormData) => {
     const activityDataForStorage: Omit<LocalActivityDefinition, 'tempId'> = {
@@ -487,6 +525,11 @@ export default function DefinirActividadesProcesoPage() {
                   <FormItem>
                     <FormLabel>Nombre de la Actividad</FormLabel>
                     <FormControl><Input placeholder="Ej: Recibir Documentación, Validar Información" {...field} /></FormControl>
+                    {similarActivityWarning && (
+                      <FormDescription className="text-amber-600 flex items-center gap-1 pt-1">
+                          <AlertTriangle className="h-4 w-4" /> {similarActivityWarning}
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
