@@ -4,6 +4,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
+import type { Actividad } from './ActividadesContext';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+
 
 export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada", "En Revisión"] as const;
 export type AccionEstado = typeof accionEstados[number];
@@ -13,6 +16,13 @@ export type Moneda = typeof monedaOptions[number];
 
 export const tiempoUnidadOptions = ["Minutos/Instancia", "Minutos/Día", "Horas/Día", "Horas/Semana", "Horas/Mes"] as const;
 export type TiempoUnidad = typeof tiempoUnidadOptions[number];
+
+export interface CambioHistorial {
+  timestamp: string;
+  field: string;
+  before: any;
+  after: any;
+}
 
 
 export interface Accion {
@@ -34,6 +44,7 @@ export interface Accion {
   procesoId?: string;
   actividadId?: string;
   updatedAt: number; // timestamp
+  historialDeCambios?: CambioHistorial[];
 }
 
 interface AccionesContextType {
@@ -47,6 +58,9 @@ interface AccionesContextType {
 const AccionesContext = createContext<AccionesContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
+const LOCAL_STORAGE_ACTIVIDADES_KEY = 'proceza-actividades';
+const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
+
 
 export function AccionesProvider({ children }: { children: ReactNode }) {
   const [acciones, setAcciones] = useState<Accion[]>([]);
@@ -89,18 +103,108 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
           id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           fechaCreacion: new Date().toISOString(),
           updatedAt: Date.now(),
+          historialDeCambios: [],
         };
         return [...prevAcciones, newAccion];
     });
   }, []);
 
   const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>) => {
-    setAcciones(prevAcciones =>
-      prevAcciones.map((accion) =>
-        accion.id === id ? { ...accion, ...data, updatedAt: Date.now() } : accion
-      )
-    );
+    setAcciones(prevAcciones => {
+      const newAcciones = [...prevAcciones];
+      const accionIndex = newAcciones.findIndex(a => a.id === id);
+      if (accionIndex === -1) return prevAcciones;
+
+      const originalAccion = newAcciones[accionIndex];
+      const updatedAccionData = { ...originalAccion, ...data, updatedAt: Date.now() };
+
+      if (updatedAccionData.estado === 'Completada' && originalAccion.estado !== 'Completada') {
+        const cambios: CambioHistorial[] = [];
+        
+        try {
+          // Logic for Activities
+          if (updatedAccionData.actividadId) {
+            const storedActivities = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
+            let allActivities: Actividad[] = storedActivities ? JSON.parse(storedActivities) : [];
+            const activityIndex = allActivities.findIndex(a => a.id === updatedAccionData.actividadId);
+
+            if (activityIndex !== -1) {
+              const targetActivity = { ...allActivities[activityIndex] };
+              
+              if (updatedAccionData.ahorroTiempoEstimado !== undefined && targetActivity.tiempoEstimadoActividad !== undefined) {
+                const antes = targetActivity.tiempoEstimadoActividad;
+                const despues = Math.max(0, antes - updatedAccionData.ahorroTiempoEstimado);
+                cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Actividad', before: antes, after: despues });
+                targetActivity.tiempoEstimadoActividad = despues;
+              }
+              if (updatedAccionData.ahorroEstimado !== undefined && targetActivity.costoEstimadoActividad !== undefined) {
+                const antes = targetActivity.costoEstimadoActividad;
+                const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
+                cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Actividad', before: antes, after: despues });
+                targetActivity.costoEstimadoActividad = despues;
+              }
+
+              if (cambios.length > 0) {
+                targetActivity.updatedAt = Date.now();
+                allActivities[activityIndex] = targetActivity;
+                localStorage.setItem(LOCAL_STORAGE_ACTIVIDADES_KEY, JSON.stringify(allActivities));
+              }
+            }
+          } 
+          // Logic for Processes
+          else if (updatedAccionData.procesoId) {
+            const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+            let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
+            const processIndex = allProcesses.findIndex(p => p.id === updatedAccionData.procesoId);
+
+            if (processIndex !== -1) {
+              const targetProcess = {...allProcesses[processIndex]};
+              
+              if (updatedAccionData.ahorroTiempoEstimado !== undefined && targetProcess.tiempoEstimado !== undefined) {
+                const antes = targetProcess.tiempoEstimado;
+                const despues = Math.max(0, antes - updatedAccionData.ahorroTiempoEstimado);
+                cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: antes, after: despues });
+                targetProcess.tiempoEstimado = despues;
+              }
+              if (updatedAccionData.ahorroEstimado !== undefined && targetProcess.costoEstimado !== undefined) {
+                const antes = targetProcess.costoEstimado;
+                const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
+                cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
+                targetProcess.costoEstimado = despues;
+              }
+              
+              if(cambios.length > 0) {
+                targetProcess.updatedAt = Date.now();
+                allProcesses[processIndex] = targetProcess;
+                localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
+              }
+            }
+          }
+
+          updatedAccionData.historialDeCambios = [...(updatedAccionData.historialDeCambios || []), ...cambios];
+          
+          if(cambios.length > 0) {
+            toast({
+              title: "Mejora Aplicada",
+              description: `Se aplicaron ${cambios.length} cambio(s) al elemento asociado.`,
+            });
+          }
+
+        } catch (e) {
+          console.error("Error al aplicar cambios de la acción completada:", e);
+          toast({
+            title: "Error al aplicar mejora",
+            description: "No se pudieron actualizar los datos del proceso/actividad asociado.",
+            variant: "destructive",
+          });
+        }
+      }
+      
+      newAcciones[accionIndex] = updatedAccionData;
+      return newAcciones;
+    });
   }, []);
+
 
   const deleteAccion = useCallback((id: string) => {
     setAcciones(prevAcciones => prevAcciones.filter((accion) => accion.id !== id));

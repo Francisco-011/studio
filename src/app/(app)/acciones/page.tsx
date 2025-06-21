@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad } from '@/contexts/AccionesContext';
+import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad, type CambioHistorial } from '@/contexts/AccionesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History } from "lucide-react";
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
@@ -63,6 +63,7 @@ const accionFormSchema = z.object({
   ),
   unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   origenMejora: z.string().optional(),
+  historialDeCambios: z.array(z.any()).optional(),
 }).refine(data => {
   if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && !data.monedaAhorro) {
     return false;
@@ -138,6 +139,10 @@ export default function AccionesPage() {
   const [accionToDelete, setAccionToDelete] = useState<Accion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [actionForHistory, setActionForHistory] = useState<Accion | null>(null);
+
+
   useEffect(() => {
     setIsLoadingProcesses(true);
     try {
@@ -170,6 +175,7 @@ export default function AccionesPage() {
       ahorroTiempoEstimado: undefined,
       unidadTiempoAhorro: undefined,
       origenMejora: '',
+      historialDeCambios: [],
     },
   });
   
@@ -233,6 +239,7 @@ export default function AccionesPage() {
           ahorroTiempoEstimado: undefined,
           unidadTiempoAhorro: undefined,
           origenMejora: '',
+          historialDeCambios: [],
         });
       }
     }
@@ -265,6 +272,12 @@ export default function AccionesPage() {
     setEditingAccion(accion);
     setIsAccionDialogOpen(true);
   }
+
+  function handleViewHistory(accion: Accion) {
+    setActionForHistory(accion);
+    setIsHistoryDialogOpen(true);
+  }
+
 
   function promptDeleteAccion(accion: Accion) {
     setAccionToDelete(accion);
@@ -731,7 +744,7 @@ export default function AccionesPage() {
                     <TableHead className="text-right">Ahorro Costo</TableHead>
                     <TableHead className="text-right">Ahorro Tiempo</TableHead>
                     <TableHead className="text-center">Últ. Modif.</TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                    <TableHead className="text-right w-[160px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -758,9 +771,12 @@ export default function AccionesPage() {
                         <Badge 
                           variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
                           className={cn(
-                            accion.estado === "En Progreso" && "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-300",
-                            accion.estado === "Pendiente" && "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300",
-                            accion.estado === "En Revisión" && "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-300"
+                            "text-white",
+                            accion.estado === "En Progreso" && "bg-blue-500",
+                            accion.estado === "Pendiente" && "bg-yellow-500",
+                            accion.estado === "En Revisión" && "bg-purple-500",
+                            accion.estado === "Completada" && "bg-green-500",
+                            accion.estado === "Cancelada" && "bg-red-500",
                           )}
                         >
                           {accion.estado}
@@ -775,6 +791,9 @@ export default function AccionesPage() {
                         {isValid(new Date(accion.updatedAt)) ? format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
                        <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleViewHistory(accion)} className="mr-1" disabled={!accion.historialDeCambios || accion.historialDeCambios.length === 0}>
+                          <History className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditAccion(accion)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -843,6 +862,48 @@ export default function AccionesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Cambios para: {actionForHistory?.nombre}</DialogTitle>
+            <DialogDescription>
+              Registro de las mejoras aplicadas al completar esta acción.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {actionForHistory?.historialDeCambios && actionForHistory.historialDeCambios.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Campo Modificado</TableHead>
+                    <TableHead className="text-right">Valor Anterior</TableHead>
+                    <TableHead className="text-right">Valor Nuevo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {actionForHistory.historialDeCambios.map((cambio, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                      <TableCell>{cambio.field}</TableCell>
+                      <TableCell className="text-right">{cambio.before}</TableCell>
+                      <TableCell className="text-right font-semibold">{cambio.after}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-center">No hay historial de cambios registrado para esta acción.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cerrar</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
