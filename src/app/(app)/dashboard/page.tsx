@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2 } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -45,6 +45,8 @@ import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 import { useAreas, type Area as AreaType } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto as PuestoType } from '@/contexts/PuestosContext';
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -548,6 +550,55 @@ export default function DashboardPage() {
 
   const isLoadingAll = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
 
+  const staffSummary = useMemo(() => {
+    if (isLoadingAreas || isLoadingPuestos) {
+        return { total: 0, breakdown: [] };
+    }
+
+    const total = puestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
+
+    const breakdownByArea: Map<string, { areaName: string; totalInArea: number; puestos: { puestoName: string; puestoId: string; count: number }[] }> = new Map();
+
+    areas.forEach(area => {
+        breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, puestos: [] });
+    });
+
+    puestos.forEach(puesto => {
+        const areaId = puesto.areaId || 'unassigned';
+        if (areaId === 'unassigned' && !breakdownByArea.has('unassigned')) {
+            breakdownByArea.set('unassigned', { areaName: "Sin Área Asignada", totalInArea: 0, puestos: [] });
+        }
+        const areaData = breakdownByArea.get(areaId);
+        if (areaData) {
+            const count = puesto.numeroPersonas || 0;
+            areaData.totalInArea += count;
+            if (count > 0) { // Only add puestos with staff
+                areaData.puestos.push({
+                    puestoName: puesto.nombre,
+                    puestoId: puesto.id,
+                    count: count,
+                });
+            }
+        }
+    });
+
+    const finalBreakdown = Array.from(breakdownByArea.entries())
+        .map(([areaId, data]) => ({ ...data, areaId }))
+        .filter(area => area.totalInArea > 0)
+        .sort((a,b) => b.totalInArea - a.totalInArea);
+
+    finalBreakdown.forEach(area => {
+        area.puestos.sort((a,b) => b.count - a.count);
+    });
+
+    return {
+        total,
+        breakdown: finalBreakdown,
+    };
+
+  }, [areas, puestos, isLoadingAreas, isLoadingPuestos]);
+
+
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
     if (loading) {
       return <Loader2 className={`h-5 w-5 animate-spin ${icon ? 'mr-2' : ''}`} />;
@@ -861,6 +912,67 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 gap-6 mb-8">
+        <Card className="shadow-lg">
+          <CardHeader className="flex flex-row items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <CardTitle>Distribución de Personal</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+                Resumen del personal total y desglose por área y puesto. La información se basa en el campo "Número de Personas" de la configuración de Puestos.
+            </CardDescription>
+            <div className="text-2xl font-bold mb-4">
+                Total General: {renderMetric(staffSummary.total, isLoadingAreas || isLoadingPuestos)} personas
+            </div>
+            {isLoadingAll ? (
+                <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando distribución...
+                </div>
+            ) : staffSummary.breakdown.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No hay datos de personal para mostrar. Verifique la configuración de Puestos.</p>
+            ) : (
+                <Accordion type="single" collapsible className="w-full">
+                {staffSummary.breakdown.map(areaData => (
+                    <AccordionItem value={areaData.areaId} key={areaData.areaId}>
+                        <AccordionTrigger>
+                            <div className="flex justify-between w-full pr-4 items-center">
+                                <span className="font-semibold">{areaData.areaName}</span>
+                                <Badge>{areaData.totalInArea} personas</Badge>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Puesto</TableHead>
+                                        <TableHead className="text-right w-[150px]">Nº Personas</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {areaData.puestos.map(puesto => (
+                                        <TableRow key={puesto.puestoId}>
+                                            <TableCell>{puesto.puestoName}</TableCell>
+                                            <TableCell className="text-right">{puesto.count}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {areaData.puestos.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="text-center text-muted-foreground">No hay puestos con personal asignado en esta área.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+                </Accordion>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <Card className="lg:col-span-2 shadow-lg">
