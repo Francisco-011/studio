@@ -142,6 +142,17 @@ export default function AccionesPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [actionForHistory, setActionForHistory] = useState<Accion | null>(null);
 
+  function formatHistoryValue(field: string, value: any, moneda?: Moneda): string {
+    if (value === undefined || value === null) return "-";
+    if (String(field).toLowerCase().includes('costo')) {
+      return formatCurrencyDisplay(Number(value), moneda);
+    }
+    if (String(field).toLowerCase().includes('tiempo')) {
+      return `${value} min`;
+    }
+    return String(value);
+  }
+
 
   useEffect(() => {
     setIsLoadingProcesses(true);
@@ -556,7 +567,7 @@ export default function AccionesPage() {
                               <Select
                                 onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
                                 value={field.value || NO_AREA_SELECTED}
-                                disabled={isLoadingAreas || !!watchedProcesoId}
+                                disabled={isLoadingAreas}
                               >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -577,7 +588,7 @@ export default function AccionesPage() {
                               <Select
                                 onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
                                 value={field.value || NO_PUESTO_SELECTED}
-                                disabled={isLoadingPuestos || !!watchedProcesoId}
+                                disabled={isLoadingPuestos}
                               >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -887,8 +898,8 @@ export default function AccionesPage() {
                     <TableRow key={index}>
                       <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
                       <TableCell>{cambio.field}</TableCell>
-                      <TableCell className="text-right">{cambio.before}</TableCell>
-                      <TableCell className="text-right font-semibold">{cambio.after}</TableCell>
+                      <TableCell className="text-right">{formatHistoryValue(cambio.field, cambio.before, actionForHistory?.monedaAhorro)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatHistoryValue(cambio.field, cambio.after, actionForHistory?.monedaAhorro)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
