@@ -17,7 +17,7 @@ import {
   Database,
   TrendingUp,
   Target,
-  History,
+  ClipboardCheck,
   FolderTree, 
   type LucideIcon,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
   { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database },
   { href: '/mejoras', label: 'Mejoras', icon: TrendingUp },
   { href: '/acciones', label: 'Acciones', icon: Target },
-  { href: '/auditoria', label: 'Auditoría', icon: History },
+  { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
 ];
 
 export function SidebarNav() {
