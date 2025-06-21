@@ -159,6 +159,22 @@ export default function MejorasPage() {
       const systemUsageText = `Sistemas informáticos utilizados en los procesos documentados: ${
         allSystemsUsedInProcesses.size > 0 ? Array.from(allSystemsUsedInProcesses).join(', ') : 'No se especificaron sistemas en los procesos.'
       }`;
+
+      const allActivitiesText = actividades
+        .map(act => {
+          const associatedContexts = new Set<string>();
+          act.procesosAsociadosIds?.forEach(procId => {
+            const proc = activeProcessesForAnalysis.find(p => p.id === procId);
+            if (proc) {
+              associatedContexts.add(`Proceso: "${proc.proceso}" (Área: ${proc.area}, Puesto: ${proc.puesto})`);
+            }
+          });
+
+          return `Actividad (ID: ${act.id}): "${act.nombre}"\n` +
+                 `  Descripción: ${act.descripcionBreve || 'No disponible'}\n` +
+                 `  Contexto de Uso:\n    - ${associatedContexts.size > 0 ? Array.from(associatedContexts).join('\n    - ') : 'No asociada a procesos activos o ninguno especificado.'}`;
+        })
+        .join('\n\n---\n\n');
       
       let systemCostInformationText = "";
       if (sistemas.length > 0) {
@@ -180,6 +196,7 @@ export default function MejorasPage() {
       const result = await analyzeProcesses({
         processDescriptions: processDescriptionsText,
         systemUsage: systemUsageText,
+        allActivities: allActivitiesText,
         systemCostInformation: systemCostInformationText,
         existingActions: existingActionsText,
       });
@@ -292,7 +309,26 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    // 5. Final Toast
+    // 5. Handle duplicate activities
+    analysisResult.duplicateActivities?.forEach(dup => {
+      const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
+      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA}/${dup.puestoA}, B: ${dup.areaB}/${dup.puestoB}).`;
+      
+      addAccion({
+          nombre: title,
+          descripcion: description,
+          responsable: 'Por definir',
+          estado: 'En Revisión' as AccionEstado,
+          origenMejora: 'Análisis IA - Mejoras',
+          // We can link it to the first activity found as a reference point
+          actividadId: dup.activityA_Id,
+          area: dup.areaA,
+          puesto: dup.puestoA,
+      });
+      actionsGeneratedCount++;
+    });
+
+    // 6. Final Toast
     if (actionsGeneratedCount > 0) {
       toast({
         title: "Acciones Propuestas Generadas",
@@ -395,6 +431,25 @@ export default function MejorasPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {analysisResult.duplicateActivities && analysisResult.duplicateActivities.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Actividades Duplicadas Potenciales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-sm">
+                        {analysisResult.duplicateActivities.map((dup, index) => (
+                          <li key={index}>
+                            <strong>Actividad A:</strong> {dup.activityA} (en {dup.areaA || 'N/A'} / {dup.puestoA || 'N/A'})<br />
+                            <strong>Actividad B:</strong> {dup.activityB} (en {dup.areaB || 'N/A'} / {dup.puestoB || 'N/A'})<br />
+                            <strong>Razón:</strong> {dup.reason}
+                          </li>
+                        ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              )}
               
               {analysisResult.redundantSystems && analysisResult.redundantSystems.length > 0 && (
                 <Card>
@@ -433,5 +488,3 @@ export default function MejorasPage() {
     </div>
   );
 }
-
-    

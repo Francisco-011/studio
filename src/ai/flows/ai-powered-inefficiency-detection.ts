@@ -17,6 +17,7 @@ const AnalyzeProcessesInputSchema = z.object({
     .string()
     .describe('Una lista de descripciones de procesos para analizar, incluyendo IDs, tiempos y costos estimados vs. ideales para el proceso y sus actividades.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
+  allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y los procesos, áreas y puestos a los que están asociadas.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
   existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
 });
@@ -59,11 +60,24 @@ const DuplicateProcessSchema = z.object({
     reason: z.string().describe('La razón para sospechar la duplicación.'),
 });
 
+const DuplicateActivitySchema = z.object({
+    activityA: z.string().describe('Nombre de la primera actividad en el par duplicado.'),
+    activityA_Id: z.string().optional().describe('ID de la primera actividad.'),
+    areaA: z.string().optional().describe('Área donde se ejecuta la primera actividad.'),
+    puestoA: z.string().optional().describe('Puesto que ejecuta la primera actividad.'),
+    activityB: z.string().describe('Nombre de la segunda actividad en el par duplicado.'),
+    activityB_Id: z.string().optional().describe('ID de la segunda actividad.'),
+    areaB: z.string().optional().describe('Área donde se ejecuta la segunda actividad.'),
+    puestoB: z.string().optional().describe('Puesto que ejecuta la segunda actividad.'),
+    reason: z.string().describe('La razón para sospechar la duplicación (ej: nombres similares, misma descripción).'),
+});
+
 
 const AnalyzeProcessesOutputSchema = z.object({
   efficiencyGaps: z.array(EfficiencyGapSchema).describe('Una lista de ineficiencias identificadas basadas en las brechas de tiempo/costo entre los valores estimados e ideales.'),
   redundantSystems: z.array(RedundantSystemSchema).describe('Una lista de sistemas identificados como potencialmente redundantes, incluyendo su costo anual.'),
   duplicateProcesses: z.array(DuplicateProcessSchema).describe('Una lista de pares de procesos que son potencialmente duplicados.'),
+  duplicateActivities: z.array(DuplicateActivitySchema).describe('Una lista de pares de actividades que son potencialmente duplicadas en diferentes áreas o puestos.'),
   summary: z.string().describe('Un resumen de alto nivel de los hallazgos más críticos y las oportunidades de mejora generales.'),
 });
 export type AnalyzeProcessesOutput = z.infer<typeof AnalyzeProcessesOutputSchema>;
@@ -79,11 +93,11 @@ const analyzeProcessesPrompt = ai.definePrompt({
   output: {schema: AnalyzeProcessesOutputSchema},
   prompt: `Eres un analista de negocios experto en optimización de procesos, impulsado por IA. Tu misión es identificar ineficiencias, duplicidades y oportunidades de ahorro cuantificables.
 
-Se te proporcionan descripciones detalladas de procesos (incluyendo sus IDs), incluyendo tiempos y costos estimados versus ideales, uso de sistemas y, opcionalmente, costos detallados de esos sistemas y una lista de acciones de mejora ya en curso.
+Se te proporcionan descripciones detalladas de procesos (incluyendo sus IDs), una lista de todas las actividades, uso de sistemas y, opcionalmente, costos detallados de esos sistemas y una lista de acciones de mejora ya en curso.
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
-Tu análisis debe centrarse en TRES áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto de 'área' y 'puesto' del proceso principal relacionado. También DEBES devolver el ID del proceso/actividad asociado ('processId', 'activityId', etc.).
+Tu análisis debe centrarse en CUATRO áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto de 'área' y 'puesto' del proceso principal relacionado. También DEBES devolver el ID del proceso/actividad asociado ('processId', 'activityId', etc.).
 
 1.  **Brechas de Eficiencia (efficiencyGaps)**: Identifica los procesos y actividades con las mayores discrepancias entre los valores "Estimados" y los "Ideales" (tanto en tiempo como en costo). Para cada brecha significativa, calcula el 'potentialTimeSaving' (Estimado - Ideal) y 'potentialCostSaving' (Estimado - Ideal) por instancia de ejecución. Debes poblar el array 'efficiencyGaps' con esta información, incluyendo el 'area', 'puesto', y los IDs ('processId', 'activityId') del elemento afectado.
 
@@ -91,10 +105,15 @@ Tu análisis debe centrarse en TRES áreas clave (evitando los temas ya cubierto
 
 3.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'puesto' y 'processId' del proceso principal donde se detectó.
 
+4.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades para encontrar tareas que son funcionalmente idénticas pero pueden tener nombres ligeramente diferentes o existen en distintas áreas/puestos. Compara sus descripciones y nombres. Pobla el array 'duplicateActivities' con los pares de actividades que sospechas son redundantes, incluyendo su ID, área y puesto para contextualizar dónde ocurre la duplicidad.
+
 **Datos de Entrada:**
 
 **Descripciones de Procesos (con métricas de tiempo, costo, área, puesto e IDs):**
 {{{processDescriptions}}}
+
+**Lista Completa de Actividades y su Contexto (Área/Puesto):**
+{{{allActivities}}}
 
 **Uso General de Sistemas:**
 {{{systemUsage}}}
