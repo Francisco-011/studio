@@ -555,24 +555,48 @@ export default function DashboardPage() {
         return { total: 0, breakdown: [] };
     }
 
-    const total = puestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
+    let filteredPuestos = puestos;
+    if (selectedArea !== 'all') {
+        const areaId = areas.find(a => a.nombre === selectedArea)?.id;
+        if (areaId) {
+            filteredPuestos = filteredPuestos.filter(p => p.areaId === areaId);
+        }
+    }
+    if (selectedPuesto !== 'all') {
+        filteredPuestos = filteredPuestos.filter(p => p.nombre === selectedPuesto);
+    }
+
+    let filteredAreas = areas;
+    if (selectedArea !== 'all') {
+        filteredAreas = filteredAreas.filter(a => a.nombre === selectedArea);
+    } else if (selectedPuesto !== 'all') {
+        const puestoAreaId = filteredPuestos[0]?.areaId;
+        if (puestoAreaId) {
+            filteredAreas = areas.filter(a => a.id === puestoAreaId);
+        } else {
+             filteredAreas = [];
+        }
+    }
+    
+    const total = filteredPuestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
 
     const breakdownByArea: Map<string, { areaName: string; totalInArea: number; puestos: { puestoName: string; puestoId: string; count: number }[] }> = new Map();
 
-    areas.forEach(area => {
+    filteredAreas.forEach(area => {
         breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, puestos: [] });
     });
+     // Handle unassigned puestos only if no specific area/puesto is selected
+    if (selectedArea === 'all' && selectedPuesto === 'all') {
+        breakdownByArea.set('unassigned', { areaName: "Sin Área Asignada", totalInArea: 0, puestos: [] });
+    }
 
-    puestos.forEach(puesto => {
+    filteredPuestos.forEach(puesto => {
         const areaId = puesto.areaId || 'unassigned';
-        if (areaId === 'unassigned' && !breakdownByArea.has('unassigned')) {
-            breakdownByArea.set('unassigned', { areaName: "Sin Área Asignada", totalInArea: 0, puestos: [] });
-        }
         const areaData = breakdownByArea.get(areaId);
         if (areaData) {
             const count = puesto.numeroPersonas || 0;
             areaData.totalInArea += count;
-            if (count > 0) { // Only add puestos with staff
+            if (count > 0) {
                 areaData.puestos.push({
                     puestoName: puesto.nombre,
                     puestoId: puesto.id,
@@ -582,8 +606,7 @@ export default function DashboardPage() {
         }
     });
 
-    const finalBreakdown = Array.from(breakdownByArea.entries())
-        .map(([areaId, data]) => ({ ...data, areaId }))
+    const finalBreakdown = Array.from(breakdownByArea.values())
         .filter(area => area.totalInArea > 0)
         .sort((a,b) => b.totalInArea - a.totalInArea);
 
@@ -591,12 +614,8 @@ export default function DashboardPage() {
         area.puestos.sort((a,b) => b.count - a.count);
     });
 
-    return {
-        total,
-        breakdown: finalBreakdown,
-    };
-
-  }, [areas, puestos, isLoadingAreas, isLoadingPuestos]);
+    return { total, breakdown: finalBreakdown };
+  }, [areas, puestos, isLoadingAreas, isLoadingPuestos, selectedArea, selectedPuesto]);
 
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
@@ -934,21 +953,21 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4">
-                Resumen del personal total y desglose por área y puesto. La información se basa en el campo "Número de Personas" de la configuración de Puestos.
+                Resumen del personal total y desglose por área y puesto, según filtros. La información se basa en el campo "Número de Personas" de la configuración de Puestos.
             </CardDescription>
             <div className="text-2xl font-bold mb-4">
-                Total General: {renderMetric(staffSummary.total, isLoadingAreas || isLoadingPuestos)} personas
+                Total (filtrado): {renderMetric(staffSummary.total, isLoadingAreas || isLoadingPuestos)} personas
             </div>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Cargando distribución...
                 </div>
             ) : staffSummary.breakdown.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No hay datos de personal para mostrar. Verifique la configuración de Puestos.</p>
+                <p className="text-muted-foreground text-sm">No hay datos de personal para mostrar según los filtros seleccionados. Verifique la configuración de Puestos.</p>
             ) : (
                 <Accordion type="single" collapsible className="w-full">
                 {staffSummary.breakdown.map(areaData => (
-                    <AccordionItem value={areaData.areaId} key={areaData.areaId}>
+                    <AccordionItem value={areaData.areaName} key={areaData.areaName}>
                         <AccordionTrigger>
                             <div className="flex justify-between w-full pr-4 items-center">
                                 <span className="font-semibold">{areaData.areaName}</span>

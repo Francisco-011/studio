@@ -34,7 +34,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
@@ -96,6 +96,15 @@ type AccionFormData = z.infer<typeof accionFormSchema>;
 
 const ITEMS_PER_PAGE = 10;
 
+type SortableAccionKeys = keyof Omit<Accion, 'historialDeCambios' | 'descripcion'> | 'elementoAsociado';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig {
+  key: SortableAccionKeys;
+  direction: SortDirection;
+}
+
+
 function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
   if (amount === undefined || amount === null || currency === undefined) return "-";
   try {
@@ -150,6 +159,9 @@ export default function AccionesPage() {
     applyTimeSaving: true,
     applyCostSaving: true,
   });
+
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
 
   function formatHistoryValue(field: string, value: any, moneda?: Moneda): string {
     if (value === undefined || value === null) return "-";
@@ -347,9 +359,9 @@ export default function AccionesPage() {
     setIsConfirmDeleteDialogOpen(false);
   }
   
-  const filteredAcciones = useMemo(() => {
+  const sortedAndFilteredAcciones = useMemo(() => {
     setCurrentPage(1); // Reset page on filter change
-    return acciones.filter(accion => {
+    let filtered = acciones.filter(accion => {
       const matchesSearchTerm = 
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -359,27 +371,89 @@ export default function AccionesPage() {
         (accion.puesto && accion.puesto.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'all' || accion.estado === statusFilter;
       return matchesSearchTerm && matchesStatus;
-    }).sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
-  }, [acciones, searchTerm, statusFilter]);
+    });
 
-  const totalPages = Math.ceil(filteredAcciones.length / ITEMS_PER_PAGE);
+    if (sortConfig !== null) {
+      filtered.sort((a, b) => {
+        let valA: any;
+        let valB: any;
+
+        if (sortConfig.key === 'elementoAsociado') {
+            const getElementName = (acc: Accion) => {
+                if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
+                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === acc.actividadId)?.nombre || ''}`;
+                return '';
+            };
+            valA = getElementName(a);
+            valB = getElementName(b);
+        } else {
+            valA = a[sortConfig.key as keyof Accion];
+            valB = b[sortConfig.key as keyof Accion];
+        }
+
+        if (['fechaObjetivo', 'updatedAt'].includes(sortConfig.key)) {
+            valA = valA ? (isValid(parseISO(valA)) ? parseISO(valA).getTime() : 0) : 0;
+            valB = valB ? (isValid(parseISO(valB)) ? parseISO(valB).getTime() : 0) : 0;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        
+        if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
+
+        if (valA < valB) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (valA > valB) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    } else {
+        filtered.sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
+    }
+    return filtered;
+
+  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, actividades]);
+
+  const requestSort = (key: SortableAccionKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortableAccionKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    }
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+
+  const totalPages = Math.ceil(sortedAndFilteredAcciones.length / ITEMS_PER_PAGE);
   const paginatedAcciones = useMemo(() => {
-     return filteredAcciones.slice(
+     return sortedAndFilteredAcciones.slice(
       (currentPage - 1) * ITEMS_PER_PAGE,
       currentPage * ITEMS_PER_PAGE
     );
-  }, [filteredAcciones, currentPage]);
+  }, [sortedAndFilteredAcciones, currentPage]);
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
-    } else if (currentPage !== 1 && totalPages === 0 && filteredAcciones.length > 0) {
+    } else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredAcciones.length > 0) {
        setCurrentPage(1);
     }
-  }, [currentPage, totalPages, filteredAcciones.length]);
+  }, [currentPage, totalPages, sortedAndFilteredAcciones.length]);
 
   const handleExport = () => {
-    if (filteredAcciones.length === 0) {
+    if (sortedAndFilteredAcciones.length === 0) {
       toast({ title: "Nada que exportar", description: "No hay acciones que coincidan con los filtros actuales.", variant: "default" });
       return;
     }
@@ -394,7 +468,7 @@ export default function AccionesPage() {
 
     const csvRows = [
       headers.join(','),
-      ...filteredAcciones.map(acc => {
+      ...sortedAndFilteredAcciones.map(acc => {
         const procName = acc.procesoId ? capturedProcesses.find(p => p.id === acc.procesoId)?.proceso : '';
         const actName = acc.actividadId ? actividades.find(a => a.id === acc.actividadId)?.nombre : '';
         return [
@@ -490,7 +564,7 @@ export default function AccionesPage() {
                 </SelectContent>
               </Select>
                <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
-                  <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredAcciones.length})
+                  <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredAcciones.length})
               </Button>
               <Dialog open={isAccionDialogOpen} onOpenChange={(isOpen) => {
                 setIsAccionDialogOpen(isOpen);
@@ -789,16 +863,30 @@ export default function AccionesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[250px]">Nombre de la Acción</TableHead>
-                    <TableHead>Elemento Asociado</TableHead>
-                    <TableHead>Área</TableHead>
-                    <TableHead>Puesto</TableHead>
-                    <TableHead>Responsable</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-center">Fecha Objetivo</TableHead>
-                    <TableHead className="text-right">Ahorro Costo</TableHead>
-                    <TableHead className="text-right">Ahorro Tiempo</TableHead>
-                    <TableHead className="text-center">Últ. Modif.</TableHead>
+                    <TableHead className="min-w-[250px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
+                      <div className="flex items-center">Nombre de la Acción {getSortIcon('nombre')}</div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('elementoAsociado')}>
+                      <div className="flex items-center">Elemento Asociado {getSortIcon('elementoAsociado')}</div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('responsable')}>
+                      <div className="flex items-center">Responsable {getSortIcon('responsable')}</div>
+                    </TableHead>
+                    <TableHead className="text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('estado')}>
+                      <div className="flex items-center justify-center">Estado {getSortIcon('estado')}</div>
+                    </TableHead>
+                    <TableHead className="text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('fechaObjetivo')}>
+                      <div className="flex items-center justify-center">Fecha Objetivo {getSortIcon('fechaObjetivo')}</div>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('ahorroEstimado')}>
+                      <div className="flex items-center justify-end">Ahorro Costo {getSortIcon('ahorroEstimado')}</div>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('ahorroTiempoEstimado')}>
+                      <div className="flex items-center justify-end">Ahorro Tiempo {getSortIcon('ahorroTiempoEstimado')}</div>
+                    </TableHead>
+                    <TableHead className="text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}>
+                      <div className="flex items-center justify-center">Últ. Modif. {getSortIcon('updatedAt')}</div>
+                    </TableHead>
                     <TableHead className="text-right w-[160px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -819,8 +907,6 @@ export default function AccionesPage() {
                               '-'
                           )}
                       </TableCell>
-                      <TableCell>{accion.area || '-'}</TableCell>
-                      <TableCell>{accion.puesto || '-'}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
                         <Badge 
@@ -863,7 +949,7 @@ export default function AccionesPage() {
             </div>
             <div className="flex items-center justify-between space-x-2 py-4">
               <span className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} (Total: {filteredAcciones.length} acciones)
+                Página {currentPage} de {totalPages} (Total: {sortedAndFilteredAcciones.length} acciones)
               </span>
               <div className="space-x-2">
                 <Button
