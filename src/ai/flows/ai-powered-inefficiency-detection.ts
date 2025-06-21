@@ -97,13 +97,20 @@ Se te proporcionan descripciones detalladas de procesos (incluyendo sus IDs), un
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
-Tu análisis debe centrarse en CUATRO áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto de 'área' y 'puesto' del proceso principal relacionado. También DEBES devolver el ID del proceso/actividad asociado ('processId', 'activityId', etc.).
+Tu análisis debe centrarse en CUATRO áreas clave y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto de 'área' y 'puesto' del proceso principal relacionado. También DEBES devolver el ID del proceso/actividad asociado ('processId', 'activityId', etc.).
 
 1.  **Brechas de Eficiencia (efficiencyGaps)**: Identifica los procesos y actividades con las mayores discrepancias entre los valores "Estimados" y los "Ideales" (tanto en tiempo como en costo). Para cada brecha significativa, calcula el 'potentialTimeSaving' (Estimado - Ideal) y 'potentialCostSaving' (Estimado - Ideal) por instancia de ejecución. Debes poblar el array 'efficiencyGaps' con esta información, incluyendo el 'area', 'puesto', y los IDs ('processId', 'activityId') del elemento afectado.
 
-2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'puestoA', 'areaB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
+2.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'puesto' y 'processId' del proceso principal donde se detectó.
 
-3.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'puesto' y 'processId' del proceso principal donde se detectó.
+**Análisis de Duplicados (CRÍTICO):**
+Tu tarea más importante es diferenciar entre **variaciones legítimas** y **duplicaciones reales**.
+- Una **variación** es cuando dos procesos o actividades tienen nombres similares pero descripciones, sistemas o sub-actividades diferentes. Esto es normal en una organización (ej: 'Elaborar Reporte' en Ventas vs. en Finanzas). **NO reportes las variaciones como duplicados.**
+- Una **duplicación real** es cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el mismo trabajo, usan los mismos sistemas y producen el mismo resultado. Esto representa un esfuerzo redundante.
+
+Para los arrays a continuación (`duplicateProcesses` y `duplicateActivities`), solo incluye las **duplicaciones reales**. En el campo 'reason', explica claramente por qué crees que son funcionalmente idénticos y no solo una variación contextual.
+
+3.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'puestoA', 'areaB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
 
 4.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades para encontrar tareas que son funcionalmente idénticas pero pueden tener nombres ligeramente diferentes o existen en distintas áreas/puestos. Compara sus descripciones y nombres. Pobla el array 'duplicateActivities' con los pares de actividades que sospechas son redundantes, incluyendo su ID, área y puesto para contextualizar dónde ocurre la duplicidad.
 
@@ -129,7 +136,7 @@ Tu análisis debe centrarse en CUATRO áreas clave (evitando los temas ya cubier
 {{/if}}
 
 
-**Instrucciones de Análisis:**
+**Instrucciones Adicionales de Análisis:**
 - Prioriza las oportunidades de mejora que presenten el mayor impacto potencial (brechas grandes de tiempo/costo, costos de sistema elevados).
 - Al listar sistemas redundantes, DEBES incluir su costo anual estimado ('annualCost') y su moneda ('currency') si se proporcionó en la entrada.
 - En tu resumen general ('summary'), destaca las principales oportunidades de optimización, cuantificando el ahorro potencial anual cuando sea posible.
