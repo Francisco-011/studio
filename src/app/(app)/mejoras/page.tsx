@@ -12,6 +12,7 @@ import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { usePuestos } from '@/contexts/PuestosContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -79,6 +80,7 @@ export default function MejorasPage() {
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
+  const { puestos, isLoadingPuestos } = usePuestos();
 
 
   const handleAnalyzeInefficiencies = async () => {
@@ -86,10 +88,10 @@ export default function MejorasPage() {
     setError(null);
     setAnalysisResult(null);
 
-    if (isLoadingSistemasCostos || isLoadingActividades) {
+    if (isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos) {
         toast({
             title: "Cargando datos de configuración",
-            description: "Espere un momento mientras se cargan los datos de sistemas y costos.",
+            description: "Espere un momento mientras se cargan los datos de sistemas, puestos y costos.",
             variant: "default",
         });
         setIsLoading(false);
@@ -123,6 +125,9 @@ export default function MejorasPage() {
 
       const processDescriptionsText = activeProcessesForAnalysis
         .map(p => {
+          const puestoData = puestos.find(pst => pst.nombre === p.puesto);
+          const puestoInfo = puestoData ? `${p.puesto} (Número de Personas: ${puestoData.numeroPersonas || 'No especificado'})` : p.puesto;
+
           const associatedActivitiesText = p.activityOrder?.map(actId => {
             const act = actividades.find(a => a.id === actId);
             if (!act) return null;
@@ -133,7 +138,7 @@ export default function MejorasPage() {
           
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
-                 `Puesto Principal: ${p.puesto}\n` +
+                 `Puesto Principal: ${puestoInfo}\n` +
                  `Descripción: ${p.descripcion}\n` +
                  `Frecuencia: ${p.frecuencia}\n` +
                  `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n` +
@@ -317,13 +322,13 @@ export default function MejorasPage() {
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades} size="lg">
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades ? (
+            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos} size="lg">
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <Sparkles className="mr-2 h-5 w-5" />
               )}
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades ? "Analizando..." : "Analizar Ineficiencias con IA"}
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos ? "Analizando..." : "Analizar Ineficiencias con IA"}
             </Button>
             {analysisResult && !isLoading && (
                  <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
@@ -428,3 +433,5 @@ export default function MejorasPage() {
     </div>
   );
 }
+
+    

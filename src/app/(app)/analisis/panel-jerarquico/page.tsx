@@ -304,7 +304,12 @@ export default function PanelJerarquicoPage() {
         }
         
         const targetPuestoIdKey = procPuestoObject?.id || `puesto-unassigned-in-${targetAreaId}`;
-        const targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
+        let targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
+        
+        if (procPuestoObject?.numeroPersonas && procPuestoObject.numeroPersonas > 0) {
+            targetPuestoName = `${targetPuestoName} (${procPuestoObject.numeroPersonas})`;
+        }
+        
         const puestoNodeId = `puesto-${currentAreaNode.id}-${procPuestoObject?.id || targetPuestoName.replace(/\s+/g, '-')}`;
 
 
@@ -1237,5 +1242,7 @@ export default function PanelJerarquicoPage() {
   );
 }
 
+
+    
 
     

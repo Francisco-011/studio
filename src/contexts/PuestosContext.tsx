@@ -14,6 +14,7 @@ export interface Puesto {
   areaId?: string;
   jefeInmediato?: string; 
   nivelOrganizacional: NivelOrganizacional;
+  numeroPersonas?: number;
 }
 
 export type PuestoCreationData = Omit<Puesto, 'id'>;
@@ -90,3 +91,5 @@ export function usePuestos(): PuestosContextType {
   }
   return context;
 }
+
+    
