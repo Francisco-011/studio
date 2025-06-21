@@ -122,6 +122,20 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
         const cambios: CambioHistorial[] = [];
         
         try {
+          let timeSavingInMinutes = 0;
+          if (updatedAccionData.ahorroTiempoEstimado && updatedAccionData.ahorroTiempoEstimado > 0) {
+            if (updatedAccionData.unidadTiempoAhorro === 'Minutos/Instancia') {
+              timeSavingInMinutes = updatedAccionData.ahorroTiempoEstimado;
+            } else {
+               toast({
+                title: "Mejora de tiempo no aplicada",
+                description: `La unidad de tiempo (${updatedAccionData.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar al tiempo estimado del elemento.`,
+                variant: "default",
+                duration: 7000
+              });
+            }
+          }
+
           // Logic for Activities
           if (updatedAccionData.actividadId) {
             const storedActivities = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
@@ -130,21 +144,24 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
 
             if (activityIndex !== -1) {
               const targetActivity = { ...allActivities[activityIndex] };
-              
-              if (updatedAccionData.ahorroTiempoEstimado !== undefined && targetActivity.tiempoEstimadoActividad !== undefined) {
+              let activityWasUpdated = false;
+
+              if (timeSavingInMinutes > 0 && targetActivity.tiempoEstimadoActividad !== undefined) {
                 const antes = targetActivity.tiempoEstimadoActividad;
-                const despues = Math.max(0, antes - updatedAccionData.ahorroTiempoEstimado);
+                const despues = Math.max(0, antes - timeSavingInMinutes);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Actividad', before: antes, after: despues });
                 targetActivity.tiempoEstimadoActividad = despues;
+                activityWasUpdated = true;
               }
               if (updatedAccionData.ahorroEstimado !== undefined && targetActivity.costoEstimadoActividad !== undefined) {
                 const antes = targetActivity.costoEstimadoActividad;
                 const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Actividad', before: antes, after: despues });
                 targetActivity.costoEstimadoActividad = despues;
+                activityWasUpdated = true;
               }
 
-              if (cambios.length > 0) {
+              if (activityWasUpdated) {
                 targetActivity.updatedAt = Date.now();
                 allActivities[activityIndex] = targetActivity;
                 localStorage.setItem(LOCAL_STORAGE_ACTIVIDADES_KEY, JSON.stringify(allActivities));
@@ -159,21 +176,24 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
 
             if (processIndex !== -1) {
               const targetProcess = {...allProcesses[processIndex]};
+              let processWasUpdated = false;
               
-              if (updatedAccionData.ahorroTiempoEstimado !== undefined && targetProcess.tiempoEstimado !== undefined) {
+              if (timeSavingInMinutes > 0 && targetProcess.tiempoEstimado !== undefined) {
                 const antes = targetProcess.tiempoEstimado;
-                const despues = Math.max(0, antes - updatedAccionData.ahorroTiempoEstimado);
+                const despues = Math.max(0, antes - timeSavingInMinutes);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: antes, after: despues });
                 targetProcess.tiempoEstimado = despues;
+                processWasUpdated = true;
               }
               if (updatedAccionData.ahorroEstimado !== undefined && targetProcess.costoEstimado !== undefined) {
                 const antes = targetProcess.costoEstimado;
                 const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
                 targetProcess.costoEstimado = despues;
+                processWasUpdated = true;
               }
               
-              if(cambios.length > 0) {
+              if(processWasUpdated) {
                 targetProcess.updatedAt = Date.now();
                 allProcesses[processIndex] = targetProcess;
                 localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
