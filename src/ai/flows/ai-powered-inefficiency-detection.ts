@@ -108,7 +108,7 @@ Tu tarea más importante es diferenciar entre **variaciones legítimas** y **dup
 - Una **variación** es cuando dos procesos o actividades tienen nombres similares pero descripciones, sistemas o sub-actividades diferentes. Esto es normal en una organización (ej: 'Elaborar Reporte' en Ventas vs. en Finanzas). **NO reportes las variaciones como duplicados.**
 - Una **duplicación real** es cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el mismo trabajo, usan los mismos sistemas y producen el mismo resultado. Esto representa un esfuerzo redundante.
 
-Para los arrays a continuación (`duplicateProcesses` y `duplicateActivities`), solo incluye las **duplicaciones reales**. En el campo 'reason', explica claramente por qué crees que son funcionalmente idénticos y no solo una variación contextual.
+Para los arrays a continuación ('duplicateProcesses' y 'duplicateActivities'), solo incluye las **duplicaciones reales**. En el campo 'reason', explica claramente por qué crees que son funcionalmente idénticos y no solo una variación contextual.
 
 3.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'puestoA', 'areaB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
 
