@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Label } from '@/components/ui/label';
 
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -410,5 +411,3 @@ export default function AuditoriaDeProcesosPage() {
     </div>
   );
 }
-
-    
