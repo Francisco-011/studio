@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -31,6 +30,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from '@/hooks/use-toast';
 import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock } from "lucide-react";
+
+const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
+const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
 
 const accionFormSchema = z.object({
   id: z.string().optional(),
@@ -130,8 +132,8 @@ export default function AccionesPage() {
       nombre: '',
       descripcion: '',
       responsable: '',
-      area: '',
-      puesto: '',
+      area: undefined,
+      puesto: undefined,
       estado: 'Pendiente',
       fechaObjetivo: undefined,
       fechaFinalizacion: undefined,
@@ -159,8 +161,8 @@ export default function AccionesPage() {
       if (editingAccion) {
         accionForm.reset({
           ...editingAccion,
-          area: editingAccion.area || '',
-          puesto: editingAccion.puesto || '',
+          area: editingAccion.area || undefined,
+          puesto: editingAccion.puesto || undefined,
           fechaObjetivo: editingAccion.fechaObjetivo ? parseISO(editingAccion.fechaObjetivo) : undefined,
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
         });
@@ -169,8 +171,8 @@ export default function AccionesPage() {
           nombre: '',
           descripcion: '',
           responsable: '',
-          area: '',
-          puesto: '',
+          area: undefined,
+          puesto: undefined,
           estado: 'Pendiente',
           fechaObjetivo: undefined,
           fechaFinalizacion: undefined,
@@ -440,10 +442,14 @@ export default function AccionesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Área (Opcional)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || ''} disabled={isLoadingAreas}>
+                              <Select
+                                onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
+                                value={field.value || NO_AREA_SELECTED}
+                                disabled={isLoadingAreas}
+                              >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
                                 <SelectContent>
-                                  <SelectItem value="">Ninguna</SelectItem>
+                                  <SelectItem value={NO_AREA_SELECTED}>Ninguna</SelectItem>
                                   {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
                                 </SelectContent>
                               </Select>
@@ -457,10 +463,14 @@ export default function AccionesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Puesto (Opcional)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || ''} disabled={isLoadingPuestos}>
+                              <Select
+                                onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
+                                value={field.value || NO_PUESTO_SELECTED}
+                                disabled={isLoadingPuestos}
+                              >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
                                 <SelectContent>
-                                    <SelectItem value="">Ninguno</SelectItem>
+                                    <SelectItem value={NO_PUESTO_SELECTED}>Ninguno</SelectItem>
                                     {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
                                 </SelectContent>
                               </Select>
