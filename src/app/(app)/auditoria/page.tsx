@@ -1,39 +1,67 @@
+
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { format, parseISO, isSameDay, startOfDay, endOfDay, isAfter, isBefore, isValid } from 'date-fns';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { History, Loader2, CalendarIcon, Users, Layers, Filter, ListOrdered, FileText } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { cn } from '@/lib/utils';
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
+import { useAcciones } from '@/contexts/AccionesContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
-import type { Actividad as ActividadContextType } from '@/contexts/ActividadesContext';
-import type { Accion as AccionContextType } from '@/contexts/AccionesContext';
+import { toast } from "@/hooks/use-toast";
+import { ClipboardCheck, Search, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2 } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
-const DELETED_ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-deleted-actividades';
-const ACCIONES_LOCAL_STORAGE_KEY = 'proceza-acciones';
 
+const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
+type FindingType = typeof findingTypes[number];
 
-interface SimulatedAuditEntry {
+const auditFindingSchema = z.object({
+  type: z.enum(findingTypes, { errorMap: () => ({ message: "Seleccione un tipo válido."})}),
+  description: z.string().min(10, 'La descripción del hallazgo es requerida (mínimo 10 caracteres).'),
+  proposedAction: z.string().optional(),
+}).refine(data => {
+    if (data.type === 'No Conforme' && (!data.proposedAction || data.proposedAction.length < 10)) {
+        return false;
+    }
+    return true;
+}, {
+    message: "El plan de acción propuesto es requerido para hallazgos 'No Conforme' (mínimo 10 caracteres).",
+    path: ["proposedAction"],
+});
+type AuditFindingFormData = z.infer<typeof auditFindingSchema>;
+
+interface AuditFinding extends AuditFindingFormData {
   id: string;
-  timestamp: string;
-  user: string;
-  module: string;
-  action: string;
-  details: string;
+  isActionCreated: boolean;
 }
-
-const ITEMS_PER_PAGE = 15;
 
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
   if (cellData === undefined || cellData === null) {
@@ -47,437 +75,336 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 };
 
 
-export default function AuditoriaPage() {
-  const [dynamicSimulatedLog, setDynamicSimulatedLog] = useState<SimulatedAuditEntry[]>([]);
-  const [isLoadingLog, setIsLoadingLog] = useState(true);
+export default function AuditoriaDeProcesosPage() {
+  const router = useRouter();
+  const { actividades, isLoadingActividades } = useActividades();
+  const { addAccion } = useAcciones();
 
-  const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
-  const [userFilter, setUserFilter] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
-  const [currentPage, setCurrentPage] = useState(1);
+  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
+  const [auditFindings, setAuditFindings] = useState<AuditFinding[]>([]);
+  const [auditorName, setAuditorName] = useState<string>('Auditor Principal');
+  const [auditDate, setAuditDate] = useState<Date>(new Date());
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const findingForm = useForm<AuditFindingFormData>({
+    resolver: zodResolver(auditFindingSchema),
+    defaultValues: {
+      type: undefined,
+      description: '',
+      proposedAction: '',
+    },
+  });
 
   useEffect(() => {
-    setIsLoadingLog(true);
-    const generatedLog: SimulatedAuditEntry[] = [];
-    const user = "Sistema"; 
-    let auditLogIndex = 0; // Counter for unique IDs
-
+    setIsLoadingData(true);
     try {
-      const storedCapturedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      const capturedProcesses: CapturedProcess[] = storedCapturedProcesses ? JSON.parse(storedCapturedProcesses) : [];
-
-      capturedProcesses.forEach(proc => {
-        if (proc.capturedAt && isValid(parseISO(proc.capturedAt))) {
-          generatedLog.push({
-            id: `log_${auditLogIndex++}_proc_create_${proc.id}_${parseISO(proc.capturedAt).getTime()}`,
-            timestamp: proc.capturedAt,
-            user,
-            module: "Procesos y Flujos",
-            action: "Creación",
-            details: `Proceso '${proc.proceso}' (ID: ${proc.id}) registrado.`
-          });
-        }
-        if (proc.deletedAt && isValid(parseISO(proc.deletedAt))) {
-           generatedLog.push({
-            id: `log_${auditLogIndex++}_proc_delete_${proc.id}_${parseISO(proc.deletedAt).getTime()}`,
-            timestamp: proc.deletedAt,
-            user,
-            module: "Procesos y Flujos",
-            action: "Eliminación",
-            details: `Proceso '${proc.proceso}' (ID: ${proc.id}) eliminado.`
-          });
-        }
-        // Ensure proc.updatedAt is a number and different enough from capturedAt to be considered a distinct update
-        const capturedTime = proc.capturedAt ? parseISO(proc.capturedAt).getTime() : 0;
-        if (proc.updatedAt && typeof proc.updatedAt === 'number' && isValid(new Date(proc.updatedAt)) && proc.updatedAt > (capturedTime + 60000) && !proc.deletedAt) {
-          generatedLog.push({
-            id: `log_${auditLogIndex++}_proc_update_${proc.id}_${proc.updatedAt}`,
-            timestamp: new Date(proc.updatedAt).toISOString(),
-            user,
-            module: "Procesos y Flujos",
-            action: "Actualización",
-            details: `Proceso '${proc.proceso}' (ID: ${proc.id}) actualizado. Estado: ${proc.activo !== false ? 'Activo' : 'Inactivo'}.`
-          });
-        }
-      });
-
-      const storedActividades = localStorage.getItem(ACTIVIDADES_LOCAL_STORAGE_KEY);
-      const activeActividades: ActividadContextType[] = storedActividades ? JSON.parse(storedActividades) : [];
-      const storedDeletedActividades = localStorage.getItem(DELETED_ACTIVIDADES_LOCAL_STORAGE_KEY);
-      const deletedActividadesData: ActividadContextType[] = storedDeletedActividades ? JSON.parse(storedDeletedActividades) : [];
-      
-      const allActividades = [...activeActividades, ...deletedActividadesData];
-
-      allActividades.forEach(act => {
-        // Ensure act.id is a string for key generation consistency
-        const activityIdStr = String(act.id);
-        const creationTime = act.createdAt || parseInt(activityIdStr, 10) || Date.now();
-        const isEffectivelyCreated = !deletedActividadesData.some(da => da.id === act.id) || (act.deletedAt && creationTime < act.deletedAt);
-
-        if (isValid(new Date(creationTime)) && isEffectivelyCreated) {
-             generatedLog.push({
-                id: `log_${auditLogIndex++}_act_create_${activityIdStr}_${creationTime}`,
-                timestamp: new Date(creationTime).toISOString(),
-                user,
-                module: "Actividades",
-                action: "Creación",
-                details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) creada. Estado inicial: ${act.activa ? 'Activa' : 'Inactiva'}.`
-              });
-        }
-        
-        if (act.updatedAt && typeof act.updatedAt === 'number' && act.updatedAt > (creationTime + 1000) && !act.deletedAt && isValid(new Date(act.updatedAt))) {
-             generatedLog.push({
-                id: `log_${auditLogIndex++}_act_update_${activityIdStr}_${act.updatedAt}`,
-                timestamp: new Date(act.updatedAt).toISOString(),
-                user,
-                module: "Actividades",
-                action: "Actualización",
-                details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) actualizada. Estado: ${act.activa ? 'Activa' : 'Inactiva'}.`
-              });
-        }
-
-        if (act.deletedAt && typeof act.deletedAt === 'number' && isValid(new Date(act.deletedAt))) {
-          generatedLog.push({
-            id: `log_${auditLogIndex++}_act_delete_${activityIdStr}_${act.deletedAt}`,
-            timestamp: new Date(act.deletedAt).toISOString(),
-            user,
-            module: "Actividades",
-            action: "Eliminación",
-            details: `Actividad '${act.nombre}' (ID: ${activityIdStr}) eliminada.`
-          });
-        }
-      });
-      
-      const storedAcciones = localStorage.getItem(ACCIONES_LOCAL_STORAGE_KEY);
-      const acciones: AccionContextType[] = storedAcciones ? JSON.parse(storedAcciones) : [];
-
-      acciones.forEach(acc => {
-        // Ensure acc.id is a string
-        const accionIdStr = String(acc.id);
-        if (acc.fechaCreacion && isValid(parseISO(acc.fechaCreacion))) {
-          generatedLog.push({
-            id: `log_${auditLogIndex++}_accion_create_${accionIdStr}_${parseISO(acc.fechaCreacion).getTime()}`,
-            timestamp: acc.fechaCreacion,
-            user,
-            module: "Acciones",
-            action: "Creación",
-            details: `Acción de mejora '${acc.nombre}' (ID: ${accionIdStr}) creada.`
-          });
-        }
-        // Ensure acc.updatedAt is a number and different enough from fechaCreacion
-        const creacionTimeAccion = acc.fechaCreacion ? parseISO(acc.fechaCreacion).getTime() : 0;
-        if (acc.updatedAt && typeof acc.updatedAt === 'number' && isValid(new Date(acc.updatedAt)) && (acc.updatedAt > (creacionTimeAccion + 60000))) {
-           generatedLog.push({
-            id: `log_${auditLogIndex++}_accion_update_${accionIdStr}_${acc.updatedAt}`,
-            timestamp: new Date(acc.updatedAt).toISOString(),
-            user,
-            module: "Acciones",
-            action: "Actualización",
-            details: `Acción de mejora '${acc.nombre}' (ID: ${accionIdStr}) actualizada. Estado: ${acc.estado}.`
-          });
-        }
-      });
-
+      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedData) {
+        setAllProcesses(JSON.parse(storedData).filter((p: any) => !p.deletedAt && p.activo !== false));
+      }
     } catch (e) {
-      console.error("Error generating dynamic audit log:", e);
-      toast({title: "Error al cargar log", description: "No se pudo generar el registro de actividad dinámico.", variant: "destructive"});
+      console.error("Error loading processes for audit:", e);
+      toast({ title: "Error al cargar procesos", variant: "destructive" });
     } finally {
-      generatedLog.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setDynamicSimulatedLog(generatedLog);
-      setIsLoadingLog(false);
+      setIsLoadingData(false);
     }
   }, []);
 
-
-  const uniqueUsers = useMemo(() => {
-    const users = new Set(dynamicSimulatedLog.map(entry => entry.user));
-    return Array.from(users).sort();
-  }, [dynamicSimulatedLog]);
-
-  const uniqueActionTypes = useMemo(() => {
-    const actions = new Set(dynamicSimulatedLog.map(entry => entry.action));
-    return Array.from(actions).sort();
-  }, [dynamicSimulatedLog]);
-
-  const filteredSimulatedLog = useMemo(() => {
-    setCurrentPage(1); 
-    return dynamicSimulatedLog
-      .filter(entry => {
-        if (actionTypeFilter !== 'all' && entry.action !== actionTypeFilter) {
-          return false;
-        }
-        if (userFilter !== 'all' && entry.user !== userFilter) {
-          return false;
-        }
-        const entryDate = parseISO(entry.timestamp);
-        if (!isValid(entryDate)) return false;
-
-        if (dateRange.from && isValid(dateRange.from) && isBefore(entryDate, startOfDay(dateRange.from))) {
-          return false;
-        }
-        if (dateRange.to && isValid(dateRange.to) && isAfter(entryDate, endOfDay(dateRange.to))) {
-          return false;
-        }
-        return true;
-      });
-  }, [dynamicSimulatedLog, actionTypeFilter, userFilter, dateRange]);
-
-  const totalPages = Math.ceil(filteredSimulatedLog.length / ITEMS_PER_PAGE);
-  const paginatedLog = useMemo(() => {
-    return filteredSimulatedLog.slice(
-      (currentPage - 1) * ITEMS_PER_PAGE,
-      currentPage * ITEMS_PER_PAGE
-    );
-  }, [filteredSimulatedLog, currentPage]);
-
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    } else if (currentPage !== 1 && totalPages === 0 && filteredSimulatedLog.length > 0) {
-       setCurrentPage(1);
-    }
-  }, [currentPage, totalPages, filteredSimulatedLog.length]);
-
-  const totalCambiosFiltrados = useMemo(() => filteredSimulatedLog.length, [filteredSimulatedLog]);
-
-  const cambiosHoyCount = useMemo(() => {
-    const today = new Date();
-    return filteredSimulatedLog.filter(entry => {
-       const entryDate = parseISO(entry.timestamp);
-       return isValid(entryDate) && isSameDay(entryDate, today);
-    }).length;
-  }, [filteredSimulatedLog]);
-
-  const usuariosUnicosEnLogFiltradoCount = useMemo(() => {
-    const usersInFilteredLog = new Set(filteredSimulatedLog.map(entry => entry.user));
-    return usersInFilteredLog.size;
-  }, [filteredSimulatedLog]);
+  const selectedProcess = useMemo(() => {
+    if (!selectedProcessId) return null;
+    return allProcesses.find(p => p.id === selectedProcessId) || null;
+  }, [selectedProcessId, allProcesses]);
   
-  const clearFilters = () => {
-    setActionTypeFilter('all');
-    setUserFilter('all');
-    setDateRange({ from: undefined, to: undefined });
+  const processActivities = useMemo(() => {
+    if (!selectedProcess || !selectedProcess.activityOrder) return [];
+    return selectedProcess.activityOrder
+        .map(actId => actividades.find(a => a.id === actId))
+        .filter((act): act is Actividad => !!act);
+  }, [selectedProcess, actividades]);
+
+
+  const handleProcessSelect = (processId: string) => {
+    if (auditFindings.length > 0) {
+        if (!window.confirm("Tiene hallazgos sin guardar. ¿Está seguro que desea cambiar de proceso? Se perderán los hallazgos actuales.")) {
+            return;
+        }
+    }
+    setSelectedProcessId(processId);
+    setAuditFindings([]);
+    findingForm.reset();
   };
 
-  const handleExport = () => {
-    if (filteredSimulatedLog.length === 0) {
-      toast({ title: "Nada que exportar", description: "No hay entradas de auditoría que coincidan con los filtros actuales.", variant: "default" });
+  const handleAddFinding = (data: AuditFindingFormData) => {
+    const newFinding: AuditFinding = {
+      ...data,
+      id: `${Date.now()}`,
+      isActionCreated: false,
+    };
+    setAuditFindings(prev => [...prev, newFinding]);
+    findingForm.reset();
+  };
+  
+  const handleDeleteFinding = (findingId: string) => {
+    setAuditFindings(prev => prev.filter(f => f.id !== findingId));
+  };
+  
+  const handleCreateActionPlan = (finding: AuditFinding) => {
+    if (!selectedProcess) return;
+
+    addAccion({
+      nombre: `Hallazgo en Proceso: ${selectedProcess.proceso}`,
+      descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
+      responsable: 'Por Asignar',
+      estado: 'Pendiente',
+      origenMejora: `Auditoría - ${auditorName}`,
+      procesoId: selectedProcess.id,
+      area: selectedProcess.area,
+      puesto: selectedProcess.puesto,
+    });
+    
+    setAuditFindings(prev => prev.map(f => f.id === finding.id ? {...f, isActionCreated: true} : f));
+
+    toast({
+      title: "Plan de Acción Registrado",
+      description: "La acción ha sido creada y puede ser gestionada en el módulo de 'Acciones'.",
+    });
+  };
+
+  const handleExportReport = () => {
+    if (!selectedProcess) {
+      toast({ title: "Seleccione un proceso", description: "Debe seleccionar un proceso para auditar antes de exportar.", variant: "default" });
+      return;
+    }
+    if (auditFindings.length === 0) {
+      toast({ title: "Sin hallazgos", description: "No hay hallazgos para reportar.", variant: "default" });
       return;
     }
 
-    const headers = ["ID Log", "Fecha y Hora", "Usuario", "Módulo", "Acción", "Detalles"];
+    const headers = ["Sección", "Detalle", "Valor"];
     const csvRows = [
-      headers.join(','),
-      ...filteredSimulatedLog.map(entry => [
-        escapeCsvCell(entry.id),
-        escapeCsvCell(isValid(parseISO(entry.timestamp)) ? format(parseISO(entry.timestamp), 'yyyy-MM-dd HH:mm:ss') : 'Fecha inválida'),
-        escapeCsvCell(entry.user),
-        escapeCsvCell(entry.module),
-        escapeCsvCell(entry.action),
-        escapeCsvCell(entry.details)
-      ].join(','))
+      ["Informe de Auditoría de Proceso"],
+      [],
+      ["Información General"],
+      ["Proceso Auditado", selectedProcess.proceso],
+      ["ID del Proceso", selectedProcess.id],
+      ["Área", selectedProcess.area],
+      ["Puesto", selectedProcess.puesto],
+      ["Auditor", auditorName],
+      ["Fecha de Auditoría", format(auditDate, 'yyyy-MM-dd')],
+      [],
+      ["Hallazgos de la Auditoría"],
+      ["ID Hallazgo", "Tipo", "Descripción", "Plan de Acción Propuesto", "Plan de Acción Creado"],
+      ...auditFindings.map(f => [
+        escapeCsvCell(f.id),
+        escapeCsvCell(f.type),
+        escapeCsvCell(f.description),
+        escapeCsvCell(f.proposedAction),
+        escapeCsvCell(f.isActionCreated ? 'Sí' : 'No')
+      ])
     ];
 
-    const csvString = csvRows.join('\n');
+    const csvString = csvRows.map(row => row.join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `auditoria_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
-    } else {
-      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
-    }
+    link.setAttribute('href', URL.createObjectURL(blob));
+    link.setAttribute('download', `auditoria_${selectedProcess.proceso.replace(/\s+/g, '_')}_${format(auditDate, 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast({ title: "Informe Exportado", description: "El informe de auditoría se está descargando." });
   };
+  
+  if (isLoadingData || isLoadingActividades) {
+    return (
+      <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-16 w-16 text-primary animate-spin" />
+        <p className="ml-4 text-lg text-muted-foreground">Cargando datos para auditoría...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-center gap-2">
-          <History className="h-6 w-6 text-primary" />
-          <CardTitle className="text-2xl font-headline">Módulo de Auditoría</CardTitle>
+          <ClipboardCheck className="h-6 w-6 text-primary" />
+          <CardTitle className="text-2xl font-headline">Auditoría de Procesos</CardTitle>
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Registro de actividad del sistema con cambios y eventos inferidos de los datos almacenados en Procesos Capturados, Actividades y Acciones de Mejora.
+            Realice auditorías de cumplimiento y calidad a los procesos registrados. Seleccione un proceso, revise sus detalles y registre hallazgos. Genere planes de acción para las no conformidades.
           </CardDescription>
-          
-          {isLoadingLog ? (
-             <div className="flex items-center justify-center min-h-[200px]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-3 text-muted-foreground">Cargando registro de actividad...</p>
-             </div>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-3 mb-6">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total de Cambios Registrados</CardTitle>
-                    <Layers className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{totalCambiosFiltrados}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Cambios Hoy</CardTitle>
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{cambiosHoyCount}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Usuarios Únicos (en log filtrado)</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{usuariosUnicosEnLogFiltradoCount}</div>
-                  </CardContent>
-                </Card>
-              </div>
 
-              <div className="mb-6 p-4 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2 mb-3">
-                    <Filter className="h-5 w-5 text-primary"/>
-                    <h4 className="text-md font-semibold">Filtros de Auditoría</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          {/* Sección de Selección y Detalles del Proceso */}
+          <Card className="mb-6 bg-muted/30">
+            <CardHeader>
+              <CardTitle className="text-lg">1. Selección del Proceso a Auditar</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-1">
+                <div className="space-y-2">
                   <div>
-                    <Label htmlFor="actionTypeFilter" className="text-xs">Tipo de Acción</Label>
-                    <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
-                      <SelectTrigger id="actionTypeFilter"><SelectValue /></SelectTrigger>
+                    <Label htmlFor="auditorName">Nombre del Auditor</Label>
+                    <Input id="auditorName" value={auditorName} onChange={(e) => setAuditorName(e.target.value)} />
+                  </div>
+                   <div>
+                    <Label htmlFor="processSelect">Proceso a Auditar</Label>
+                    <Select onValueChange={handleProcessSelect} value={selectedProcessId || ""}>
+                      <SelectTrigger id="processSelect">
+                        <SelectValue placeholder="Seleccione un proceso..." />
+                      </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos los Tipos</SelectItem>
-                        {uniqueActionTypes.map(action => <SelectItem key={action} value={action}>{action}</SelectItem>)}
+                        {allProcesses.length === 0 ? (
+                           <SelectItem value="no-proc" disabled>No hay procesos activos para auditar</SelectItem>
+                        ): allProcesses.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="userFilter" className="text-xs">Usuario</Label>
-                    <Select value={userFilter} onValueChange={setUserFilter}>
-                      <SelectTrigger id="userFilter"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los Usuarios</SelectItem>
-                        {uniqueUsers.map(user => <SelectItem key={user} value={user}>{user}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="dateFrom" className="text-xs">Fecha Desde</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button id="dateFrom" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange.from && "text-muted-foreground")}>
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateRange.from && isValid(dateRange.from) ? format(dateRange.from, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={dateRange.from} onSelect={(date) => setDateRange(prev => ({ ...prev, from: date ?? undefined }))} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div>
-                    <Label htmlFor="dateTo" className="text-xs">Fecha Hasta</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button id="dateTo" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange.to && "text-muted-foreground")}>
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateRange.to && isValid(dateRange.to) ? format(dateRange.to, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={dateRange.to} onSelect={(date) => setDateRange(prev => ({ ...prev, to: date ?? undefined }))} initialFocus disabled={(date) => dateRange.from && isValid(dateRange.from) ? date < dateRange.from : false }/>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <Button onClick={handleExport} variant="outline" className="w-full self-end">
-                    <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({filteredSimulatedLog.length})
-                  </Button>
                 </div>
-                <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Filtros</Button>
               </div>
-
-              {paginatedLog.length > 0 ? (
-                <>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[180px]">Fecha y Hora</TableHead>
-                        <TableHead>Usuario</TableHead>
-                        <TableHead>Módulo</TableHead>
-                        <TableHead>Acción</TableHead>
-                        <TableHead>Detalles</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedLog.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {isValid(parseISO(entry.timestamp)) ? format(parseISO(entry.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es }) : 'Fecha inválida'}
-                          </TableCell>
-                          <TableCell>{entry.user}</TableCell>
-                          <TableCell>{entry.module}</TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              entry.action === 'Creación' ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300' :
-                              entry.action === 'Actualización' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-300' :
-                              entry.action === 'Eliminación' ? 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-300' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                            }`}>
-                              {entry.action}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-sm">{entry.details}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <div className="flex items-center justify-between space-x-2 py-4">
-                  <span className="text-sm text-muted-foreground">
-                    Página {currentPage} de {totalPages} (Total: {filteredSimulatedLog.length} entradas)
-                  </span>
-                  <div className="space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages || totalPages === 0}
-                    >
-                      Siguiente
-                    </Button>
+              <div className="md:col-span-2">
+                {selectedProcess ? (
+                  <div className="space-y-4 p-4 border rounded-md bg-background">
+                    <h4 className="font-semibold">{selectedProcess.proceso}</h4>
+                    <p className="text-sm text-muted-foreground">{selectedProcess.descripcion}</p>
+                    <div className="text-xs">
+                        <strong>Área:</strong> {selectedProcess.area} &nbsp;|&nbsp; <strong>Puesto:</strong> {selectedProcess.puesto}
+                    </div>
+                     <div>
+                        <h5 className="font-semibold text-sm mb-2">Actividades del Proceso:</h5>
+                        {processActivities.length > 0 ? (
+                             <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                                {processActivities.map(act => <li key={act.id}>{act.nombre}</li>)}
+                            </ol>
+                        ) : (
+                            <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades detalladas.</p>
+                        )}
+                    </div>
                   </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full p-4 border rounded-md border-dashed">
+                    <p className="text-muted-foreground">Seleccione un proceso para ver sus detalles.</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sección de Hallazgos */}
+          {selectedProcess && (
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg">2. Registro de Hallazgos</CardTitle>
+                    <Button onClick={handleExportReport} variant="outline" disabled={auditFindings.length === 0}>
+                        <FileText className="mr-2 h-4 w-4" /> Exportar Informe
+                    </Button>
                 </div>
-                </>
-              ) : (
-                <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
-                    <ListOrdered className="h-16 w-16 text-muted-foreground mb-4" />
-                    <p className="text-lg font-semibold text-foreground">No hay entradas de auditoría</p>
-                    <p className="text-sm text-muted-foreground text-center">
-                        { dynamicSimulatedLog.length === 0 ? "No hay actividad registrada en los módulos monitorizados (Procesos, Actividades, Acciones)." : "Ajuste los filtros para ver resultados."}
-                    </p>
+              </CardHeader>
+              <CardContent>
+                {/* Formulario para agregar hallazgo */}
+                <Form {...findingForm}>
+                  <form onSubmit={findingForm.handleSubmit(handleAddFinding)} className="p-4 border rounded-md space-y-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <FormField
+                        control={findingForm.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-1">
+                            <FormLabel>Tipo de Hallazgo</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                {findingTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={findingForm.control}
+                        name="description"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-3">
+                            <FormLabel>Descripción del Hallazgo</FormLabel>
+                            <FormControl><Textarea placeholder="Describa la evidencia encontrada durante la auditoría..." {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    {findingForm.watch('type') === 'No Conforme' && (
+                        <FormField
+                            control={findingForm.control}
+                            name="proposedAction"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Plan de Acción Propuesto</FormLabel>
+                                <FormControl><Textarea placeholder="Describa la acción correctiva o de mejora que se debe tomar..." {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    )}
+                    <div className="flex justify-end">
+                      <Button type="submit">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+                
+                <Separator className="my-6" />
+
+                {/* Lista de Hallazgos */}
+                <h4 className="text-md font-semibold mb-4">Hallazgos Registrados en esta Sesión ({auditFindings.length})</h4>
+                <div className="space-y-4">
+                  {auditFindings.length > 0 ? auditFindings.map((finding) => (
+                    <Card key={finding.id} className="bg-muted/20">
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                           <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'secondary' : 'default')}>
+                            {finding.type}
+                          </Badge>
+                          Hallazgo #{finding.id.slice(-4)}
+                        </CardTitle>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7">
+                            <Trash2 className="h-4 w-4"/>
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm mb-2 whitespace-pre-wrap"><strong>Descripción:</strong> {finding.description}</p>
+                        {finding.type === 'No Conforme' && (
+                           <div className="p-3 border rounded-md bg-background space-y-2">
+                                <p className="text-sm font-semibold">Plan de Acción Propuesto:</p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
+                                <div className="flex justify-end pt-2">
+                                <Button 
+                                    size="sm" 
+                                    onClick={() => handleCreateActionPlan(finding)}
+                                    disabled={finding.isActionCreated}
+                                >
+                                    <Send className="mr-2 h-4 w-4" />
+                                    {finding.isActionCreated ? 'Plan de Acción Creado' : 'Registrar Plan de Acción'}
+                                </Button>
+                                </div>
+                           </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )) : (
+                     <div className="text-center text-muted-foreground py-6">No hay hallazgos registrados para esta auditoría.</div>
+                  )}
                 </div>
-              )}
-            </>
+              </CardContent>
+            </Card>
           )}
+
         </CardContent>
       </Card>
     </div>
