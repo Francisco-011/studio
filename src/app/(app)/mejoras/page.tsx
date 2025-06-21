@@ -126,12 +126,12 @@ export default function MejorasPage() {
           const associatedActivitiesText = p.activityOrder?.map(actId => {
             const act = actividades.find(a => a.id === actId);
             if (!act) return null;
-            return `    - Actividad: ${act.nombre}\n` +
+            return `    - Actividad (ID: ${act.id}): ${act.nombre}\n` +
                    `      Tiempo Est.: ${act.tiempoEstimadoActividad ?? 'N/A'} min, Tiempo Ideal: ${act.tiempoIdealActividad ?? 'N/A'} min\n`+
                    `      Costo Est.: ${act.costoEstimadoActividad ?? 'N/A'}, Costo Ideal: ${act.costoIdealActividad ?? 'N/A'} (${act.monedaCostoActividad || 'N/A'})\n`;
           }).filter(Boolean).join('');
           
-          return `Proceso: ${p.proceso}\n` +
+          return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
                  `Puesto Principal: ${p.puesto}\n` +
                  `Descripción: ${p.descripcion}\n` +
@@ -208,11 +208,11 @@ export default function MejorasPage() {
     let actionsGeneratedCount = 0;
     
     // 1. Consolidate efficiency gaps by process
-    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda, area?: string, puesto?: string }>();
+    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda, area?: string, puesto?: string, processId?: string }>();
 
     analysisResult.efficiencyGaps?.forEach(gap => {
       if (!processImprovements.has(gap.processName)) {
-        processImprovements.set(gap.processName, { gaps: [], totalTime: 0, totalCost: 0 });
+        processImprovements.set(gap.processName, { gaps: [], totalTime: 0, totalCost: 0, processId: gap.processId });
       }
       const processGroup = processImprovements.get(gap.processName)!;
       processGroup.gaps.push(gap);
@@ -240,6 +240,7 @@ export default function MejorasPage() {
         origenMejora: 'Análisis IA - Mejoras',
         area: group.area,
         puesto: group.puesto,
+        procesoId: group.processId,
         ahorroTiempoEstimado: group.totalTime > 0 ? group.totalTime : undefined,
         unidadTiempoAhorro: group.totalTime > 0 ? 'Minutos/Instancia' : undefined,
         ahorroEstimado: group.totalCost > 0 ? group.totalCost : undefined,
@@ -261,6 +262,7 @@ export default function MejorasPage() {
           origenMejora: 'Análisis IA - Mejoras',
           area: sys.area,
           puesto: sys.puesto,
+          procesoId: sys.processId,
           ahorroEstimado: sys.annualCost,
           monedaAhorro: sys.currency as Moneda,
       });
@@ -279,7 +281,8 @@ export default function MejorasPage() {
           estado: 'En Revisión' as AccionEstado,
           origenMejora: 'Análisis IA - Mejoras',
           area: dup.areaA,
-          puesto: dup.puestoA
+          puesto: dup.puestoA,
+          procesoId: dup.processA_Id
       });
       actionsGeneratedCount++;
     });

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -9,6 +10,8 @@ import { es } from 'date-fns/locale';
 import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -33,12 +36,17 @@ import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon,
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
+const NO_ELEMENTO_SELECTED = "__NO_ELEMENTO_SELECTED__";
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+
 
 const accionFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(3, 'El nombre de la acción es requerido (mínimo 3 caracteres).'),
   descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
   responsable: z.string().min(1, 'El responsable es requerido.'),
+  procesoId: z.string().optional(),
+  actividadId: z.string().optional(),
   area: z.string().optional(),
   puesto: z.string().optional(),
   estado: z.enum(accionEstados, { errorMap: () => ({ message: "Seleccione un estado válido."})}),
@@ -115,6 +123,10 @@ export default function AccionesPage() {
   const { acciones, addAccion, updateAccion, deleteAccion, isLoadingAcciones } = useAcciones();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { actividades, isLoadingActividades } = useActividades();
+  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
+
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccionEstado | 'all'>('all');
@@ -126,6 +138,20 @@ export default function AccionesPage() {
   const [accionToDelete, setAccionToDelete] = useState<Accion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
+  useEffect(() => {
+    setIsLoadingProcesses(true);
+    try {
+      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedData) {
+        setCapturedProcesses(JSON.parse(storedData).filter((p: any) => !p.deletedAt && p.activo !== false));
+      }
+    } catch (e) {
+      console.error("Error loading processes for dropdown:", e);
+    } finally {
+      setIsLoadingProcesses(false);
+    }
+  }, []);
+
   const accionForm = useForm<AccionFormData>({
     resolver: zodResolver(accionFormSchema),
     defaultValues: {
@@ -134,6 +160,8 @@ export default function AccionesPage() {
       responsable: '',
       area: undefined,
       puesto: undefined,
+      procesoId: undefined,
+      actividadId: undefined,
       estado: 'Pendiente',
       fechaObjetivo: undefined,
       fechaFinalizacion: undefined,
@@ -155,6 +183,26 @@ export default function AccionesPage() {
     return puestos.filter(p => p.areaId === areaId);
   }, [watchedArea, areas, puestos, isLoadingPuestos, isLoadingAreas]);
 
+  const watchedProcesoId = accionForm.watch('procesoId');
+  const watchedActividadId = accionForm.watch('actividadId');
+
+  useEffect(() => {
+    if (watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) {
+        accionForm.setValue('actividadId', undefined);
+        const process = capturedProcesses.find(p => p.id === watchedProcesoId);
+        if (process) {
+            accionForm.setValue('area', process.area);
+            accionForm.setValue('puesto', process.puesto);
+        }
+    }
+  }, [watchedProcesoId, accionForm, capturedProcesses]);
+  
+  useEffect(() => {
+     if (watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED) {
+        accionForm.setValue('procesoId', undefined);
+     }
+  }, [watchedActividadId, accionForm]);
+
 
   useEffect(() => {
     if (isAccionDialogOpen) {
@@ -163,6 +211,8 @@ export default function AccionesPage() {
           ...editingAccion,
           area: editingAccion.area || undefined,
           puesto: editingAccion.puesto || undefined,
+          procesoId: editingAccion.procesoId || undefined,
+          actividadId: editingAccion.actividadId || undefined,
           fechaObjetivo: editingAccion.fechaObjetivo ? parseISO(editingAccion.fechaObjetivo) : undefined,
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
         });
@@ -173,6 +223,8 @@ export default function AccionesPage() {
           responsable: '',
           area: undefined,
           puesto: undefined,
+          procesoId: undefined,
+          actividadId: undefined,
           estado: 'Pendiente',
           fechaObjetivo: undefined,
           fechaFinalizacion: undefined,
@@ -191,6 +243,8 @@ export default function AccionesPage() {
         ...data,
         area: data.area || undefined,
         puesto: data.puesto || undefined,
+        procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
+        actividadId: data.actividadId === NO_ELEMENTO_SELECTED ? undefined : data.actividadId,
         fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
     };
@@ -263,32 +317,39 @@ export default function AccionesPage() {
     }
 
     const headers = [
-      "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", "Estado", 
-      "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
+      "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", 
+      "Proceso Asociado", "Actividad Asociada",
+      "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
       "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
     ];
 
     const csvRows = [
       headers.join(','),
-      ...filteredAcciones.map(acc => [
-        escapeCsvCell(acc.id),
-        escapeCsvCell(acc.nombre),
-        escapeCsvCell(acc.descripcion),
-        escapeCsvCell(acc.responsable),
-        escapeCsvCell(acc.area),
-        escapeCsvCell(acc.puesto),
-        escapeCsvCell(acc.estado),
-        escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
-        escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
-        escapeCsvCell(acc.ahorroEstimado),
-        escapeCsvCell(acc.monedaAhorro),
-        escapeCsvCell(acc.ahorroTiempoEstimado),
-        escapeCsvCell(acc.unidadTiempoAhorro),
-        escapeCsvCell(acc.origenMejora),
-        escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
-        escapeCsvCell(isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
-      ].join(','))
+      ...filteredAcciones.map(acc => {
+        const procName = acc.procesoId ? capturedProcesses.find(p => p.id === acc.procesoId)?.proceso : '';
+        const actName = acc.actividadId ? actividades.find(a => a.id === acc.actividadId)?.nombre : '';
+        return [
+          escapeCsvCell(acc.id),
+          escapeCsvCell(acc.nombre),
+          escapeCsvCell(acc.descripcion),
+          escapeCsvCell(acc.responsable),
+          escapeCsvCell(acc.area),
+          escapeCsvCell(acc.puesto),
+          escapeCsvCell(procName),
+          escapeCsvCell(actName),
+          escapeCsvCell(acc.estado),
+          escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
+          escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
+          escapeCsvCell(acc.ahorroEstimado),
+          escapeCsvCell(acc.monedaAhorro),
+          escapeCsvCell(acc.ahorroTiempoEstimado),
+          escapeCsvCell(acc.unidadTiempoAhorro),
+          escapeCsvCell(acc.origenMejora),
+          escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
+          escapeCsvCell(isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
+        ].join(',');
+      })
     ];
 
     const csvString = csvRows.join('\n');
@@ -310,12 +371,12 @@ export default function AccionesPage() {
   };
 
 
-  if (isLoadingAcciones) {
+  if (isLoadingAcciones || isLoadingProcesses || isLoadingActividades) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="h-16 w-16 text-primary animate-spin" />
-          <p className="ml-4 text-lg text-muted-foreground">Cargando acciones...</p>
+          <p className="ml-4 text-lg text-muted-foreground">Cargando datos...</p>
         </div>
       </div>
     );
@@ -406,6 +467,43 @@ export default function AccionesPage() {
                           </FormItem>
                         )}
                       />
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="procesoId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Proceso Asociado (Opcional)</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
+                                    {capturedProcesses.map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="actividadId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Actividad Asociada (Opcional)</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una actividad" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguna</SelectItem>
+                                    {actividades.filter(a => a.activa).map(act => (<SelectItem key={act.id} value={act.id}>{act.nombre}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                       </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={accionForm.control}
@@ -445,7 +543,7 @@ export default function AccionesPage() {
                               <Select
                                 onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
                                 value={field.value || NO_AREA_SELECTED}
-                                disabled={isLoadingAreas}
+                                disabled={isLoadingAreas || !!watchedProcesoId}
                               >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -466,7 +564,7 @@ export default function AccionesPage() {
                               <Select
                                 onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
                                 value={field.value || NO_PUESTO_SELECTED}
-                                disabled={isLoadingPuestos}
+                                disabled={isLoadingPuestos || !!watchedProcesoId}
                               >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -624,6 +722,7 @@ export default function AccionesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[250px]">Nombre de la Acción</TableHead>
+                    <TableHead>Elemento Asociado</TableHead>
                     <TableHead>Área</TableHead>
                     <TableHead>Puesto</TableHead>
                     <TableHead>Responsable</TableHead>
@@ -636,9 +735,22 @@ export default function AccionesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedAcciones.map((accion, index) => (
+                  {paginatedAcciones.map((accion, index) => {
+                    const linkedProcess = accion.procesoId ? capturedProcesses.find(p => p.id === accion.procesoId) : null;
+                    const linkedActivity = accion.actividadId ? actividades.find(a => a.id === accion.actividadId) : null;
+                    
+                    return (
                     <TableRow key={`${accion.id}-${index}`}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
+                       <TableCell className="text-xs">
+                          {linkedProcess ? (
+                              <Badge variant="outline">P: {linkedProcess.proceso}</Badge>
+                          ) : linkedActivity ? (
+                              <Badge variant="secondary">A: {linkedActivity.nombre}</Badge>
+                          ) : (
+                              '-'
+                          )}
+                      </TableCell>
                       <TableCell>{accion.area || '-'}</TableCell>
                       <TableCell>{accion.puesto || '-'}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
@@ -671,7 +783,7 @@ export default function AccionesPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>

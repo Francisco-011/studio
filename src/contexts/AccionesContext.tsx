@@ -31,6 +31,8 @@ export interface Accion {
   origenMejora?: string;
   area?: string;
   puesto?: string;
+  procesoId?: string;
+  actividadId?: string;
   updatedAt: number; // timestamp
 }
 
