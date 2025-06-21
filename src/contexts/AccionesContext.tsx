@@ -11,6 +11,10 @@ export type AccionEstado = typeof accionEstados[number];
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
 export type Moneda = typeof monedaOptions[number];
 
+export const tiempoUnidadOptions = ["Minutos/Instancia", "Minutos/Día", "Horas/Día", "Horas/Semana", "Horas/Mes"] as const;
+export type TiempoUnidad = typeof tiempoUnidadOptions[number];
+
+
 export interface Accion {
   id: string;
   nombre: string;
@@ -22,6 +26,8 @@ export interface Accion {
   fechaFinalizacion?: string; // ISO string
   ahorroEstimado?: number;
   monedaAhorro?: Moneda;
+  ahorroTiempoEstimado?: number;
+  unidadTiempoAhorro?: TiempoUnidad;
   origenMejora?: string;
   updatedAt: number; // timestamp
 }

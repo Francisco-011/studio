@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado } from '@/contexts/AccionesContext';
+import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock } from "lucide-react";
 
 const accionFormSchema = z.object({
   id: z.string().optional(),
@@ -43,6 +43,11 @@ const accionFormSchema = z.object({
     z.number().nonnegative("El ahorro debe ser un número positivo o cero.").optional()
   ),
   monedaAhorro: z.enum(monedaOptions).optional(),
+  ahorroTiempoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
+  ),
+  unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   origenMejora: z.string().optional(),
 }).refine(data => {
   if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && data.monedaAhorro === undefined) {
@@ -60,6 +65,14 @@ const accionFormSchema = z.object({
 }, {
     message: "La fecha de finalización no puede ser anterior a la fecha objetivo.",
     path: ["fechaFinalizacion"],
+}).refine(data => {
+  if (data.ahorroTiempoEstimado !== undefined && data.ahorroTiempoEstimado > 0 && data.unidadTiempoAhorro === undefined) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Debe seleccionar una unidad de tiempo si especifica un ahorro de tiempo.",
+  path: ["unidadTiempoAhorro"],
 });
 
 type AccionFormData = z.infer<typeof accionFormSchema>;
@@ -74,6 +87,12 @@ function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
     return `${amount.toFixed(2)} ${currency}`;
   }
 }
+
+function formatTimeSavingDisplay(amount?: number, unit?: TiempoUnidad) {
+  if (amount === undefined || amount === null || !unit) return "-";
+  return `${amount} ${unit.split('/')[0]}`;
+}
+
 
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
   if (cellData === undefined || cellData === null) {
@@ -110,6 +129,8 @@ export default function AccionesPage() {
       fechaFinalizacion: undefined,
       ahorroEstimado: undefined,
       monedaAhorro: undefined,
+      ahorroTiempoEstimado: undefined,
+      unidadTiempoAhorro: undefined,
       origenMejora: '',
     },
   });
@@ -132,6 +153,8 @@ export default function AccionesPage() {
           fechaFinalizacion: undefined,
           ahorroEstimado: undefined,
           monedaAhorro: undefined,
+          ahorroTiempoEstimado: undefined,
+          unidadTiempoAhorro: undefined,
           origenMejora: '',
         });
       }
@@ -213,6 +236,7 @@ export default function AccionesPage() {
     const headers = [
       "ID", "Nombre de la Acción", "Descripción", "Responsable", "Estado", 
       "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
+      "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
     ];
 
@@ -228,6 +252,8 @@ export default function AccionesPage() {
         escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
         escapeCsvCell(acc.ahorroEstimado),
         escapeCsvCell(acc.monedaAhorro),
+        escapeCsvCell(acc.ahorroTiempoEstimado),
+        escapeCsvCell(acc.unidadTiempoAhorro),
         escapeCsvCell(acc.origenMejora),
         escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
         escapeCsvCell(isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
@@ -458,6 +484,38 @@ export default function AccionesPage() {
                           )}
                         />
                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={accionForm.control}
+                          name="ahorroTiempoEstimado"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
+                              <div className="relative">
+                                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" /></FormControl>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={accionForm.control}
+                          name="unidadTiempoAhorro"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Unidad de Tiempo</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                       <FormField
                         control={accionForm.control}
                         name="origenMejora"
@@ -493,7 +551,8 @@ export default function AccionesPage() {
                     <TableHead>Responsable</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-center">Fecha Objetivo</TableHead>
-                    <TableHead className="text-right">Ahorro Estimado</TableHead>
+                    <TableHead className="text-right">Ahorro Costo</TableHead>
+                    <TableHead className="text-right">Ahorro Tiempo</TableHead>
                     <TableHead className="text-center">Últ. Modif.</TableHead>
                     <TableHead className="text-right w-[120px]">Acciones</TableHead>
                   </TableRow>
@@ -519,6 +578,7 @@ export default function AccionesPage() {
                         {accion.fechaObjetivo && isValid(parseISO(accion.fechaObjetivo)) ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
                       </TableCell>
                       <TableCell className="text-right">{formatCurrencyDisplay(accion.ahorroEstimado, accion.monedaAhorro)}</TableCell>
+                      <TableCell className="text-right">{formatTimeSavingDisplay(accion.ahorroTiempoEstimado, accion.unidadTiempoAhorro)}</TableCell>
                        <TableCell className="text-center text-xs text-muted-foreground">
                         {isValid(new Date(accion.updatedAt)) ? format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
