@@ -95,9 +95,9 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
 
-const defaultFormValues: CapturaFormData = {
-  area: "",
-  puesto: "",
+const defaultFormValues: Partial<CapturaFormData> = {
+  area: undefined,
+  puesto: undefined,
   proceso: "",
   descripcion: "",
   frecuencia: undefined,
@@ -127,7 +127,7 @@ export default function CapturaPage() {
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
-    defaultValues: defaultFormValues,
+    defaultValues: defaultFormValues as CapturaFormData,
   });
   
   const watchedAreaName = form.watch('area');
@@ -161,6 +161,10 @@ export default function CapturaPage() {
             activityOrder: p.activityOrder || [],
             updatedAt: p.updatedAt || (p.capturedAt && isValid(parseISO(p.capturedAt)) ? parseISO(p.capturedAt).getTime() : Date.now()),
             sistemas: p.sistemas || [],
+            tiempoIdeal: p.tiempoIdeal,
+            costoEstimado: p.costoEstimado,
+            costoIdeal: p.costoIdeal,
+            monedaCosto: p.monedaCosto,
           };
           if (!newP.procesosEntrada && p.formatosRecibe) {
             newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe];
@@ -194,7 +198,7 @@ export default function CapturaPage() {
         if (processToEdit) {
           // Merge with defaults to ensure all fields are present on the form
           const formValues = {
-            ...defaultFormValues,
+            ...(defaultFormValues as CapturaFormData),
             ...processToEdit,
           };
           form.reset(formValues);
@@ -207,7 +211,7 @@ export default function CapturaPage() {
     } else {
       if (editingId !== null) { 
           setEditingId(null);
-          form.reset(defaultFormValues);
+          form.reset(defaultFormValues as CapturaFormData);
       }
     }
   }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId, allProcesses]);
