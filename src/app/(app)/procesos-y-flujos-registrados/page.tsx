@@ -45,8 +45,8 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import type { Actividad } from '@/contexts/ActividadesContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 export interface CapturedProcess extends CapturaFormData {
@@ -59,7 +59,6 @@ export interface CapturedProcess extends CapturaFormData {
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-const ACTIVIDADES_LOCAL_STORAGE_KEY = 'proceza-actividades';
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
 type SortableProcessKeys = keyof CapturedProcess | 'numActividades';
@@ -113,9 +112,9 @@ export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { actividades: allActivities } = useActividades();
 
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
-  const [allActivities, setAllActivities] = useState<Actividad[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
@@ -173,19 +172,10 @@ export default function ProcesosYFlujosRegistradosPage() {
       } else {
         setAllCapturedData([]);
       }
-
-      const storedActivities = localStorage.getItem(ACTIVIDADES_LOCAL_STORAGE_KEY);
-      if (storedActivities) {
-        setAllActivities(JSON.parse(storedActivities));
-      } else {
-        setAllActivities([]);
-      }
-
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
       toast({ title: "Error al cargar datos", description: "No se pudieron cargar los procesos y flujos registrados.", variant: "destructive" });
       setAllCapturedData([]);
-      setAllActivities([]);
     } finally {
       setIsLoading(false);
     }
@@ -481,14 +471,15 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   };
 
-  const renderTruncatedText = (text: string | undefined, maxLength: number = 50) => {
-    if (!text) return '-';
-    if (text.length <= maxLength) return text;
-    return (
-      <span title={text}>
-        {text.substring(0, maxLength)}...
-      </span>
-    );
+  const getEffectiveCost = (proc: CapturedProcess) => {
+    if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) {
+      return { value: proc.costoEstimado, isDerived: false };
+    }
+    const derivedCost = (proc.activityOrder || []).reduce((sum, actId) => {
+      const activity = allActivities.find(a => a.id === actId);
+      return sum + (activity?.costoEstimadoActividad || 0);
+    }, 0);
+    return { value: derivedCost, isDerived: true };
   };
 
   const clearFilters = () => {
@@ -694,6 +685,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                         ?.map(actId => allActivities.find(a => a.id === actId)?.nombre)
                         .filter(Boolean)
                         .join(', ') || "Ninguna actividad asociada";
+                    const effectiveCost = getEffectiveCost(proc);
                     return (
                     <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
                       <TableCell className="font-medium">{proc.proceso}</TableCell>
@@ -706,7 +698,23 @@ export default function ProcesosYFlujosRegistradosPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
-                      <TableCell className="text-center text-xs">{proc.costoEstimado ?? '-'} / {proc.costoIdeal ?? '-'} {proc.monedaCosto ?? ''}</TableCell>
+                      <TableCell className="text-center text-xs">
+                        <div className="flex items-center justify-center">
+                            <span>{effectiveCost.value > 0 ? effectiveCost.value.toFixed(2) : '-'} / {proc.costoIdeal ?? '-'} {proc.monedaCosto ?? ''}</span>
+                            {effectiveCost.isDerived && effectiveCost.value > 0 && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Info className="h-3 w-3 ml-1.5 text-muted-foreground cursor-help"/>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Costo derivado de la suma de actividades.</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {proc.sistemas && proc.sistemas.length > 0 ? (
@@ -866,4 +874,3 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
-

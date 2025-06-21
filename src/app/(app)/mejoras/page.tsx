@@ -136,6 +136,19 @@ export default function MejorasPage() {
                    `      Costo Est.: ${act.costoEstimadoActividad ?? 'N/A'}, Costo Ideal: ${act.costoIdealActividad ?? 'N/A'} (${act.monedaCostoActividad || 'N/A'})\n`;
           }).filter(Boolean).join('');
           
+          // New cost logic
+          const effectiveCost = p.costoEstimado !== undefined && p.costoEstimado !== null
+            ? `${p.costoEstimado} ${p.monedaCosto || ''}`
+            : (() => {
+                const activityCostSum = (p.activityOrder || [])
+                  .reduce((sum, actId) => {
+                    const act = actividades.find(a => a.id === actId);
+                    return sum + (act?.costoEstimadoActividad || 0);
+                  }, 0);
+                return activityCostSum > 0 ? `${activityCostSum} ${p.monedaCosto || ''} (calculado de actividades)` : 'No especificado';
+              })();
+
+
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
                  `Puesto Principal: ${puestoInfo}\n` +
@@ -143,7 +156,7 @@ export default function MejorasPage() {
                  `Frecuencia: ${p.frecuencia}\n` +
                  `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n` +
                  `Tiempo Ideal: ${p.tiempoIdeal !== undefined ? p.tiempoIdeal + ' minutos' : 'No especificado'}\n` +
-                 `Costo Estimado: ${p.costoEstimado !== undefined ? `${p.costoEstimado} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
+                 `Costo Estimado: ${effectiveCost}\n` +
                  `Costo Ideal: ${p.costoIdeal !== undefined ? `${p.costoIdeal} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
                  `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}\n` +
                  (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');

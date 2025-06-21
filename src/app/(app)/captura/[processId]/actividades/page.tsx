@@ -28,8 +28,10 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2, DollarSign, Clock } from "lucide-react";
+import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2, DollarSign, Clock, Info } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -68,6 +70,15 @@ type LocalActivityDefinition = Omit<ActivityCaptureFormData, 'sistemaUtilizado' 
   sistemaUtilizado?: string; 
   frecuenciaActividad?: typeof frecuenciaOptions[number];
   monedaCostoActividad?: Moneda;
+};
+
+const formatActivityCurrency = (amount?: number, currency?: string) => {
+  if (amount === undefined || amount === null || !currency) return "-";
+  try {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
+  } catch (e) {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
 };
 
 
@@ -168,6 +179,9 @@ export default function DefinirActividadesProcesoPage() {
     }).sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [allConfiguredSistemas, parentProcess, areas, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos]);
 
+  const accumulatedActivitiesCost = useMemo(() => {
+    return definedActivities.reduce((sum, act) => sum + (act.costoEstimadoActividad || 0), 0);
+  }, [definedActivities]);
 
   const openAddActivityDialog = () => {
     activityForm.reset({ 
@@ -178,7 +192,7 @@ export default function DefinirActividadesProcesoPage() {
         tiempoIdealActividad: undefined,
         costoEstimadoActividad: undefined,
         costoIdealActividad: undefined,
-        monedaCostoActividad: undefined,
+        monedaCostoActividad: parentProcess?.monedaCosto,
         frecuenciaActividad: undefined,
     });
     setEditingActivity(null);
@@ -194,7 +208,7 @@ export default function DefinirActividadesProcesoPage() {
         tiempoIdealActividad: activity.tiempoIdealActividad,
         costoEstimadoActividad: activity.costoEstimadoActividad,
         costoIdealActividad: activity.costoIdealActividad,
-        monedaCostoActividad: activity.monedaCostoActividad || NO_MONEDA_SELECTED_VALUE,
+        monedaCostoActividad: activity.monedaCostoActividad || parentProcess?.monedaCosto || NO_MONEDA_SELECTED_VALUE,
         frecuenciaActividad: activity.frecuenciaActividad || NO_FRECUENCIA_SELECTED_VALUE,
     });
     setEditingActivity({ ...activity, index });
@@ -210,6 +224,20 @@ export default function DefinirActividadesProcesoPage() {
         ? undefined 
         : data.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
     };
+
+    if (parentProcess?.costoEstimado !== undefined) {
+        const currentCost = accumulatedActivitiesCost - (editingActivity?.costoEstimadoActividad || 0);
+        const newTotalCost = currentCost + (activityDataForStorage.costoEstimadoActividad || 0);
+        if (newTotalCost > parentProcess.costoEstimado) {
+            toast({
+                title: "Advertencia de Costo",
+                description: `El costo acumulado de las actividades (${formatActivityCurrency(newTotalCost, parentProcess.monedaCosto)}) supera el costo total del proceso (${formatActivityCurrency(parentProcess.costoEstimado, parentProcess.monedaCosto)}).`,
+                variant: "default",
+                duration: 7000,
+            });
+        }
+    }
+
 
     if (editingActivity) {
       setDefinedActivities(prev => prev.map((act, idx) => 
@@ -346,6 +374,24 @@ export default function DefinirActividadesProcesoPage() {
           <CardDescription>
             Agregue, ordene y detalle las actividades que componen este proceso. Las actividades se guardarán en el orden definido en la tabla.
           </CardDescription>
+           {parentProcess.costoEstimado !== undefined && (
+            <div className="mt-4 p-3 border rounded-lg bg-muted/50 flex flex-col sm:flex-row justify-between items-center gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                    <Info className="h-5 w-5 text-primary"/>
+                    <span className="font-semibold">Control de Costos del Proceso:</span>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-center">
+                        <div className="font-bold text-base">{formatActivityCurrency(parentProcess.costoEstimado, parentProcess.monedaCosto)}</div>
+                        <div className="text-xs text-muted-foreground">Costo Total del Proceso</div>
+                    </div>
+                     <div className={cn("text-center", accumulatedActivitiesCost > parentProcess.costoEstimado ? "text-destructive" : "text-green-600")}>
+                        <div className="font-bold text-base">{formatActivityCurrency(accumulatedActivitiesCost, parentProcess.monedaCosto)}</div>
+                        <div className="text-xs">Costo Acumulado de Actividades</div>
+                    </div>
+                </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex justify-end">
@@ -608,4 +654,3 @@ export default function DefinirActividadesProcesoPage() {
     </div>
   );
 }
-
