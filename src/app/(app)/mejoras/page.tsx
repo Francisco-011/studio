@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
-import { useAcciones, type AccionEstado } from '@/contexts/AccionesContext';
+import { useAcciones, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -198,52 +198,61 @@ export default function MejorasPage() {
     }
 
     let actionsGeneratedCount = 0;
-
-    const processAIOutputList = (outputText: string): string[] => {
-      if (!outputText || outputText.trim() === "") return [];
-      const cleanedText = outputText
-        .replace(/Procesos Duplicados Potenciales:/gi, '')
-        .replace(/Sistemas Redundantes Potenciales \(considerando costos\):/gi, '')
-        .replace(/Posibles procesos duplicados identificados por la IA:/gi, '')
-        .replace(/Posibles sistemas redundantes identificados por la IA, considerando su costo si se proporciona.:/gi, '')
-        .replace(/Lista de posibles procesos duplicados identificados por la IA./gi, '')
-        .replace(/Lista de posibles sistemas redundantes identificados por la IA, considerando su costo si se proporciona./gi, '')
-        .trim();
+    
+    analysisResult.efficiencyGaps?.forEach(gap => {
+      const title = `Optimizar: ${gap.processName}` + (gap.activityName ? ` - ${gap.activityName}` : '');
+      const description = `Sugerencia de IA: ${gap.description}. Ahorro potencial por instancia: ${gap.potentialTimeSaving || 0} min, ${gap.potentialCostSaving || 0} ${gap.currency || ''}. Frecuencia del proceso: ${gap.frequency}.`;
       
-      return cleanedText.split('\n')
-        .map(line => line.replace(/^-\s*/, '').trim()) // Remove leading hyphens and trim
-        .filter(line => line !== "" && line.length > 3); // Basic filter
-    };
-
-    const duplicateProcessItems = processAIOutputList(analysisResult.duplicateProcesses);
-    const redundantSystemItems = processAIOutputList(analysisResult.redundantSystems);
-
-    duplicateProcessItems.forEach(item => {
       addAccion({
-        nombre: `Revisar Proceso Duplicado: ${item.substring(0, 50)}${item.length > 50 ? '...' : ''}`,
-        descripcion: `Sugerencia de IA: Identificado posible proceso duplicado o superpuesto: "${item}". Se requiere análisis detallado para confirmar y definir acciones correctivas.`,
-        responsable: "Por definir",
-        estado: "En Revisión" as AccionEstado,
-        origenMejora: "Análisis IA - Mejoras",
+        nombre: title,
+        descripcion: description,
+        responsable: 'Por definir',
+        estado: 'En Revisión' as AccionEstado,
+        origenMejora: 'Análisis IA - Mejoras',
+        ahorroTiempoEstimado: gap.potentialTimeSaving,
+        unidadTiempoAhorro: 'Minutos/Instancia' as TiempoUnidad,
+        ahorroEstimado: gap.potentialCostSaving,
+        monedaAhorro: gap.currency as Moneda,
       });
       actionsGeneratedCount++;
     });
 
-    redundantSystemItems.forEach(item => {
+    analysisResult.redundantSystems?.forEach(sys => {
+      const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
+      const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${sys.annualCost} ${sys.currency}.`;
+
       addAccion({
-        nombre: `Evaluar Sistema Redundante: ${item.substring(0, 50)}${item.length > 50 ? '...' : ''}`,
-        descripcion: `Sugerencia de IA: Identificado posible sistema redundante o subutilizado: "${item}". Evaluar funcionalidad, costos y alternativas.`,
-        responsable: "Por definir",
-        estado: "En Revisión" as AccionEstado,
-        origenMejora: "Análisis IA - Mejoras",
+          nombre: title,
+          descripcion: description,
+          responsable: 'Por definir',
+          estado: 'En Revisión' as AccionEstado,
+          origenMejora: 'Análisis IA - Mejoras',
+          ahorroEstimado: sys.annualCost,
+          monedaAhorro: sys.currency as Moneda,
       });
       actionsGeneratedCount++;
     });
+
+    analysisResult.duplicateProcesses?.forEach(dup => {
+      const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
+      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
+      
+      addAccion({
+          nombre: title,
+          descripcion: description,
+          responsable: 'Por definir',
+          estado: 'En Revisión' as AccionEstado,
+          origenMejora: 'Análisis IA - Mejoras',
+      });
+      actionsGeneratedCount++;
+    });
+
 
     if (actionsGeneratedCount > 0) {
       toast({
         title: "Acciones Propuestas Generadas",
         description: `${actionsGeneratedCount} acciones han sido creadas con estado "En Revisión". Revíselas en el módulo de Acciones.`,
+        duration: 6000,
       });
     } else {
       toast({
@@ -303,31 +312,67 @@ export default function MejorasPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Procesos Duplicados Potenciales</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {analysisResult.duplicateProcesses && analysisResult.duplicateProcesses.trim() !== "" ? (
-                    <p className="text-sm whitespace-pre-wrap">{analysisResult.duplicateProcesses}</p>
-                  ): (
-                    <p className="text-sm text-muted-foreground">No se identificaron procesos duplicados potenciales claros.</p>
-                  )}
-                </CardContent>
-              </Card>
+              {analysisResult.efficiencyGaps && analysisResult.efficiencyGaps.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Brechas de Eficiencia Identificadas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-5 space-y-2 text-sm">
+                      {analysisResult.efficiencyGaps.map((gap, index) => (
+                        <li key={index}>
+                          <strong>{gap.processName}{gap.activityName ? ` (${gap.activityName})` : ''}:</strong> {gap.description}
+                          {(gap.potentialTimeSaving || gap.potentialCostSaving) && (
+                            <span className="text-muted-foreground text-xs block">
+                              Ahorro Potencial/Instancia: {gap.potentialTimeSaving ? `${gap.potentialTimeSaving} min` : ''} {gap.potentialCostSaving ? ` / ${gap.potentialCostSaving} ${gap.currency}` : ''}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Sistemas Redundantes Potenciales (considerando costos)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                 {analysisResult.redundantSystems && analysisResult.redundantSystems.trim() !== "" ? (
-                    <p className="text-sm whitespace-pre-wrap">{analysisResult.redundantSystems}</p>
-                  ): (
-                    <p className="text-sm text-muted-foreground">No se identificaron sistemas redundantes potenciales claros.</p>
-                  )}
-                </CardContent>
-              </Card>
+              {analysisResult.duplicateProcesses && analysisResult.duplicateProcesses.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Procesos Duplicados Potenciales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-sm">
+                        {analysisResult.duplicateProcesses.map((dup, index) => (
+                          <li key={index}>
+                            <strong>{dup.processA} y {dup.processB}:</strong> {dup.reason}
+                          </li>
+                        ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {analysisResult.redundantSystems && analysisResult.redundantSystems.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Sistemas Redundantes Potenciales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="list-disc pl-5 space-y-2 text-sm">
+                      {analysisResult.redundantSystems.map((sys, index) => (
+                        <li key={index}>
+                          <strong>{sys.systemName}:</strong> {sys.reason}
+                           {sys.annualCost && (
+                            <span className="text-muted-foreground text-xs block">
+                              Costo Anual Estimado: {formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
             </div>
           )}
 
@@ -343,5 +388,3 @@ export default function MejorasPage() {
     </div>
   );
 }
-
-    
