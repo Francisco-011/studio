@@ -58,6 +58,7 @@ Información de Costos de Sistemas:
 
 Analiza las descripciones de los procesos, el uso de los sistemas, y la información de costos (si está disponible). Identifica cualquier posible proceso duplicado o sistema redundante. 
 Si se proporcionaron datos de costos, considera activamente estos costos en tu análisis para identificar sistemas que son particularmente caros y podrían ser redundantes o subutilizados.
+Si identificas un sistema como redundante y se proporcionaron sus datos de costos, DEBES incluir su costo anual estimado en el análisis para resaltar el impacto financiero.
 En tu resumen, destaca las oportunidades de optimización que podrían llevar a ahorros de costos.
 TODA TU RESPUESTA Y EL ANÁLISIS DEBEN ESTAR EN ESPAÑOL.
 
@@ -80,3 +81,5 @@ const analyzeProcessesFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
