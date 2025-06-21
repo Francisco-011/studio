@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { parseISO } from 'date-fns';
+import { parseISO, isValid } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +95,26 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
 
+const defaultFormValues: CapturaFormData = {
+  area: "",
+  puesto: "",
+  proceso: "",
+  descripcion: "",
+  frecuencia: undefined,
+  tiempoEstimado: undefined,
+  tiempoIdeal: undefined,
+  costoEstimado: undefined,
+  costoIdeal: undefined,
+  monedaCosto: undefined,
+  sistemas: [],
+  informacionRecibe: "",
+  procesosEntrada: [],
+  informacionEntrega: "",
+  procesosSalida: [],
+  activityOrder: [],
+};
+
+
 export default function CapturaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -107,24 +127,7 @@ export default function CapturaPage() {
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
-    defaultValues: {
-      area: "",
-      puesto: "",
-      proceso: "",
-      descripcion: "",
-      tiempoEstimado: undefined,
-      tiempoIdeal: undefined,
-      costoEstimado: undefined,
-      costoIdeal: undefined,
-      monedaCosto: undefined,
-      frecuencia: undefined,
-      sistemas: [],
-      informacionRecibe: "",
-      procesosEntrada: [],
-      informacionEntrega: "",
-      procesosSalida: [],
-      activityOrder: [],
-    },
+    defaultValues: defaultFormValues,
   });
   
   const watchedAreaName = form.watch('area');
@@ -149,7 +152,27 @@ export default function CapturaPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        setAllProcesses(JSON.parse(storedData));
+        const parsedData: any[] = JSON.parse(storedData);
+        // Data migration for older records
+        const migratedData: CapturedProcess[] = parsedData.map(p => {
+          const newP: any = {
+            ...p,
+            activo: p.activo === undefined ? true : p.activo,
+            activityOrder: p.activityOrder || [],
+            updatedAt: p.updatedAt || (p.capturedAt && isValid(parseISO(p.capturedAt)) ? parseISO(p.capturedAt).getTime() : Date.now()),
+            sistemas: p.sistemas || [],
+          };
+          if (!newP.procesosEntrada && p.formatosRecibe) {
+            newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe];
+          }
+          if (!newP.procesosSalida && p.formatosEntrega) {
+            newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega];
+          }
+          delete newP.formatosRecibe;
+          delete newP.formatosEntrega;
+          return newP;
+        });
+        setAllProcesses(migratedData);
       }
     } catch (error) {
       console.error("Error loading all processes from localStorage for dropdowns:", error);
@@ -166,51 +189,17 @@ export default function CapturaPage() {
       }
   
       if (!isLoadingAreas && !isLoadingPuestos && allProcesses.length > 0) {
-        try {
-          const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-          const existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
-          const processToEdit = existingData.find(p => p.id === editIdFromQuery);
-          
-          if (processToEdit) {
-            const processToEditAny: any = processToEdit;
-            const formDataToReset: Partial<CapturaFormData> & { id?: string, capturedAt?: string, activo?: boolean, updatedAt?: number } = { 
-              ...processToEditAny 
-            };
-            
-            if (processToEditAny.procesosEntrada) {
-              formDataToReset.procesosEntrada = processToEditAny.procesosEntrada;
-            } else if (typeof processToEditAny.formatosRecibe === 'string') {
-              formDataToReset.procesosEntrada = [processToEditAny.formatosRecibe];
-            } else if (Array.isArray(processToEditAny.formatosRecibe)) {
-               formDataToReset.procesosEntrada = processToEditAny.formatosRecibe;
-            } else {
-              formDataToReset.procesosEntrada = [];
-            }
-
-            if (processToEditAny.procesosSalida) {
-              formDataToReset.procesosSalida = processToEditAny.procesosSalida;
-            } else if (typeof processToEditAny.formatosEntrega === 'string') {
-              formDataToReset.procesosSalida = [processToEditAny.formatosEntrega];
-            } else if (Array.isArray(processToEditAny.formatosEntrega)) {
-              formDataToReset.procesosSalida = processToEditAny.formatosEntrega;
-            } else {
-              formDataToReset.procesosSalida = [];
-            }
-            
-            const finalFormDataToReset = { ...formDataToReset };
-            delete (finalFormDataToReset as any).formatosRecibe;
-            delete (finalFormDataToReset as any).formatosEntrega;
-            
-            form.reset(finalFormDataToReset as CapturaFormData);
-
-          } else {
-            toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
-            if (editingId !== null) setEditingId(null); 
-            router.push('/procesos-y-flujos-registrados');
-          }
-        } catch (error) {
-          console.error("Error loading process for editing:", error);
-          toast({ title: "Error al Cargar", description: "No se pudo cargar el proceso para editar.", variant: "destructive" });
+        const processToEdit = allProcesses.find(p => p.id === editIdFromQuery);
+        
+        if (processToEdit) {
+          // Merge with defaults to ensure all fields are present on the form
+          const formValues = {
+            ...defaultFormValues,
+            ...processToEdit,
+          };
+          form.reset(formValues);
+        } else {
+          toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
           if (editingId !== null) setEditingId(null); 
           router.push('/procesos-y-flujos-registrados');
         }
@@ -218,25 +207,8 @@ export default function CapturaPage() {
     } else {
       if (editingId !== null) { 
           setEditingId(null);
+          form.reset(defaultFormValues);
       }
-      form.reset({ 
-        area: "",
-        puesto: "",
-        proceso: "",
-        descripcion: "",
-        tiempoEstimado: undefined,
-        tiempoIdeal: undefined,
-        costoEstimado: undefined,
-        costoIdeal: undefined,
-        monedaCosto: undefined,
-        frecuencia: undefined,
-        sistemas: [],
-        informacionRecibe: "",
-        procesosEntrada: [],
-        informacionEntrega: "",
-        procesosSalida: [],
-        activityOrder: [],
-      }); 
     }
   }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId, allProcesses]);
 
