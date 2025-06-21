@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardEdit, Save, ChevronDown } from "lucide-react";
+import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -46,24 +46,48 @@ import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
+export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
+export type Moneda = typeof monedaOptions[number];
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   tiempoEstimado: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
   ),
-  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
+  tiempoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
+  ),
+  costoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
+  ),
+  costoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
+  ),
+  monedaCosto: z.enum(monedaOptions).optional(),
   sistemas: z.array(z.string()).optional().default([]),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
   procesosEntrada: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   procesosSalida: z.array(z.string()).optional().default([]),
   activityOrder: z.array(z.string()).optional().default([]),
+}).refine(data => {
+  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Debe seleccionar una moneda si especifica un costo.",
+  path: ["monedaCosto"],
 });
+
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
@@ -89,6 +113,10 @@ export default function CapturaPage() {
       proceso: "",
       descripcion: "",
       tiempoEstimado: undefined,
+      tiempoIdeal: undefined,
+      costoEstimado: undefined,
+      costoIdeal: undefined,
+      monedaCosto: undefined,
       frecuencia: undefined,
       sistemas: [],
       informacionRecibe: "",
@@ -197,6 +225,10 @@ export default function CapturaPage() {
         proceso: "",
         descripcion: "",
         tiempoEstimado: undefined,
+        tiempoIdeal: undefined,
+        costoEstimado: undefined,
+        costoIdeal: undefined,
+        monedaCosto: undefined,
         frecuencia: undefined,
         sistemas: [],
         informacionRecibe: "",
@@ -405,9 +437,6 @@ export default function CapturaPage() {
                       <Select
                         onValueChange={(value) => {
                             field.onChange(value);
-                            // Optionally clear 'puesto' if area changes and current puesto is tied to old area
-                            // For now, let user manually adjust puesto.
-                            // Also, clear selected systems if they are no longer valid for the new area/puesto
                             const currentSelectedSystems = form.getValues('sistemas') || [];
                             if (currentSelectedSystems.length > 0) {
                                 const selectedAreaObj = areas.find(a => a.nombre === value);
@@ -465,7 +494,6 @@ export default function CapturaPage() {
                        <Select
                         onValueChange={(value) => {
                             field.onChange(value);
-                            // Clear selected systems if they are no longer valid for the new puesto
                             const currentSelectedSystems = form.getValues('sistemas') || [];
                              if (currentSelectedSystems.length > 0) {
                                 const selectedAreaObj = areas.find(a => a.nombre === form.getValues('area'));
@@ -557,23 +585,12 @@ export default function CapturaPage() {
                 )}
               />
               
+              <div className="space-y-2">
+                 <h3 className="text-lg font-medium">Métricas del Proceso</h3>
+                 <p className="text-sm text-muted-foreground">Establezca los tiempos y costos estimados vs. ideales para este proceso.</p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="tiempoEstimado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tiempo Estimado (minutos)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" />
-                      </FormControl>
-                      <FormDescription>
-                        Tiempo aproximado en minutos para completar el proceso.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="frecuencia"
@@ -595,8 +612,83 @@ export default function CapturaPage() {
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        Con qué periodicidad se realiza este proceso.
+                        Periodicidad con la que se realiza este proceso.
                       </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="monedaCosto"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Moneda de Costos</FormLabel>
+                         <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                            </SelectContent>
+                         </Select>
+                         <FormDescription>Moneda para los costos del proceso.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <FormField
+                  control={form.control}
+                  name="tiempoEstimado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tiempo Estimado (min)</FormLabel>
+                       <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="tiempoIdeal"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tiempo Ideal (min)</FormLabel>
+                       <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 45" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="costoEstimado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Costo Estimado</FormLabel>
+                       <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="costoIdeal"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Costo Ideal</FormLabel>
+                       <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 80" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

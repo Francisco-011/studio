@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
-import { frecuenciaOptions } from '@/app/(app)/captura/page'; 
+import { frecuenciaOptions, monedaOptions, type Moneda } from '@/app/(app)/captura/page'; 
 import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext'; 
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
@@ -28,30 +28,46 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2 } from "lucide-react";
+import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2, DollarSign, Clock } from "lucide-react";
 import { cn } from '@/lib/utils';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
 const NO_FRECUENCIA_SELECTED_VALUE = "__NO_FRECUENCIA_SELECTED__";
+const NO_MONEDA_SELECTED_VALUE = "__NO_MONEDA_SELECTED__";
+
 
 const activityCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre de la actividad es requerido (mínimo 3 caracteres).'),
   descripcionBreve: z.string().optional(),
   sistemaUtilizado: z.string().optional(), 
+  frecuenciaActividad: z.string().optional(), 
   tiempoEstimadoActividad: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
-  frecuenciaActividad: z.string().optional(), 
+  tiempoIdealActividad: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
+  ),
+  costoEstimadoActividad: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo debe ser un número positivo.").optional()
+  ),
+  costoIdealActividad: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo debe ser un número positivo.").optional()
+  ),
+  monedaCostoActividad: z.string().optional(),
 });
 type ActivityCaptureFormData = z.infer<typeof activityCaptureFormSchema>;
 
-type LocalActivityDefinition = Omit<ActivityCaptureFormData, 'sistemaUtilizado' | 'frecuenciaActividad'> & {
+type LocalActivityDefinition = Omit<ActivityCaptureFormData, 'sistemaUtilizado' | 'frecuenciaActividad' | 'monedaCostoActividad'> & {
   tempId: string;
   sistemaUtilizado?: string; 
-  frecuenciaActividad?: typeof frecuenciaOptions[number]; 
+  frecuenciaActividad?: typeof frecuenciaOptions[number];
+  monedaCostoActividad?: Moneda;
 };
 
 
@@ -81,6 +97,10 @@ export default function DefinirActividadesProcesoPage() {
       descripcionBreve: '',
       sistemaUtilizado: undefined, 
       tiempoEstimadoActividad: undefined,
+      tiempoIdealActividad: undefined,
+      costoEstimadoActividad: undefined,
+      costoIdealActividad: undefined,
+      monedaCostoActividad: undefined,
       frecuenciaActividad: undefined, 
     },
   });
@@ -106,6 +126,10 @@ export default function DefinirActividadesProcesoPage() {
                                 descripcionBreve: globalAct.descripcionBreve,
                                 sistemaUtilizado: globalAct.sistemaUtilizado,
                                 tiempoEstimadoActividad: globalAct.tiempoEstimadoActividad,
+                                tiempoIdealActividad: globalAct.tiempoIdealActividad,
+                                costoEstimadoActividad: globalAct.costoEstimadoActividad,
+                                costoIdealActividad: globalAct.costoIdealActividad,
+                                monedaCostoActividad: globalAct.monedaCostoActividad,
                                 frecuenciaActividad: globalAct.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
                             };
                         }
@@ -151,6 +175,10 @@ export default function DefinirActividadesProcesoPage() {
         descripcionBreve: '',
         sistemaUtilizado: undefined,
         tiempoEstimadoActividad: undefined,
+        tiempoIdealActividad: undefined,
+        costoEstimadoActividad: undefined,
+        costoIdealActividad: undefined,
+        monedaCostoActividad: undefined,
         frecuenciaActividad: undefined,
     });
     setEditingActivity(null);
@@ -163,6 +191,10 @@ export default function DefinirActividadesProcesoPage() {
         descripcionBreve: activity.descripcionBreve,
         sistemaUtilizado: activity.sistemaUtilizado || NO_SYSTEM_SELECTED_VALUE,
         tiempoEstimadoActividad: activity.tiempoEstimadoActividad,
+        tiempoIdealActividad: activity.tiempoIdealActividad,
+        costoEstimadoActividad: activity.costoEstimadoActividad,
+        costoIdealActividad: activity.costoIdealActividad,
+        monedaCostoActividad: activity.monedaCostoActividad || NO_MONEDA_SELECTED_VALUE,
         frecuenciaActividad: activity.frecuenciaActividad || NO_FRECUENCIA_SELECTED_VALUE,
     });
     setEditingActivity({ ...activity, index });
@@ -173,6 +205,7 @@ export default function DefinirActividadesProcesoPage() {
     const activityDataForStorage: Omit<LocalActivityDefinition, 'tempId'> = {
       ...data,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
+      monedaCostoActividad: data.monedaCostoActividad === NO_MONEDA_SELECTED_VALUE ? undefined : data.monedaCostoActividad as Moneda,
       frecuenciaActividad: data.frecuenciaActividad === NO_FRECUENCIA_SELECTED_VALUE 
         ? undefined 
         : data.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
@@ -226,10 +259,8 @@ export default function DefinirActividadesProcesoPage() {
       for (const localAct of definedActivities) {
         let activityIdToLink: string;
         
-        // Check if an activity with this name already exists globally.
-        // If editing, localAct.tempId might be the actual global ID if it was preloaded.
         const existingGlobalActivityByName = currentGlobalActivities.find(ga => ga.nombre.toLowerCase() === localAct.nombre.toLowerCase());
-        const existingGlobalActivityById = currentGlobalActivities.find(ga => ga.id === localAct.tempId); // If preloaded, tempId IS the global ID.
+        const existingGlobalActivityById = currentGlobalActivities.find(ga => ga.id === localAct.tempId); 
         const existingGlobalActivity = existingGlobalActivityById || existingGlobalActivityByName;
 
 
@@ -238,6 +269,10 @@ export default function DefinirActividadesProcesoPage() {
           descripcionBreve: localAct.descripcionBreve,
           sistemaUtilizado: localAct.sistemaUtilizado,
           tiempoEstimadoActividad: localAct.tiempoEstimadoActividad,
+          tiempoIdealActividad: localAct.tiempoIdealActividad,
+          costoEstimadoActividad: localAct.costoEstimadoActividad,
+          costoIdealActividad: localAct.costoIdealActividad,
+          monedaCostoActividad: localAct.monedaCostoActividad,
           frecuenciaActividad: localAct.frecuenciaActividad,
         };
 
@@ -326,9 +361,9 @@ export default function DefinirActividadesProcesoPage() {
                   <TableRow>
                     <TableHead className="w-[50px]">Orden</TableHead>
                     <TableHead>Nombre Actividad</TableHead>
-                    <TableHead>Descripción Breve</TableHead>
+                    <TableHead>Tiempo Est./Ideal</TableHead>
+                    <TableHead>Costo Est./Ideal</TableHead>
                     <TableHead>Sistema</TableHead>
-                    <TableHead className="text-center">Tiempo (min)</TableHead>
                     <TableHead>Frecuencia</TableHead>
                     <TableHead className="text-right w-[200px]">Acciones</TableHead>
                   </TableRow>
@@ -338,9 +373,13 @@ export default function DefinirActividadesProcesoPage() {
                     <TableRow key={act.tempId}>
                       <TableCell className="text-center font-medium">{index + 1}</TableCell>
                       <TableCell>{act.nombre}</TableCell>
-                      <TableCell className="truncate max-w-xs">{act.descripcionBreve || '-'}</TableCell>
+                      <TableCell className="text-xs">
+                        {act.tiempoEstimadoActividad ?? '-'} min / {act.tiempoIdealActividad ?? '-'} min
+                      </TableCell>
+                       <TableCell className="text-xs">
+                         {act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad.toFixed(2)}` : '-'} / {act.costoIdealActividad !== undefined ? `${act.costoIdealActividad.toFixed(2)}` : '-'}{act.monedaCostoActividad ? ` ${act.monedaCostoActividad}`: ''}
+                      </TableCell>
                       <TableCell>{act.sistemaUtilizado || '-'}</TableCell>
-                      <TableCell className="text-center">{act.tiempoEstimadoActividad ?? '-'}</TableCell>
                       <TableCell>{act.frecuenciaActividad || '-'}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => handleMoveActivity(index, 'up')} disabled={index === 0} title="Mover Arriba">
@@ -394,7 +433,7 @@ export default function DefinirActividadesProcesoPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...activityForm}>
-            <form onSubmit={activityForm.handleSubmit(handleActivityFormSubmit)} className="space-y-4 py-4">
+            <form onSubmit={activityForm.handleSubmit(handleActivityFormSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
               <FormField
                 control={activityForm.control}
                 name="nombre"
@@ -454,43 +493,108 @@ export default function DefinirActividadesProcesoPage() {
                   </FormItem>
                 )}
               />
+               <FormField
+                control={activityForm.control}
+                name="frecuenciaActividad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Frecuencia de la Actividad</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
+                    >
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_FRECUENCIA_SELECTED_VALUE}>No aplica / Por instancia</SelectItem>
+                        {frecuenciaOptions.map((opt) => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
+                 <FormField
                   control={activityForm.control}
                   name="tiempoEstimadoActividad"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Tiempo Estimado (min)</FormLabel>
-                      <FormControl><Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} min="0" /></FormControl>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField
+                 <FormField
                   control={activityForm.control}
-                  name="frecuenciaActividad"
+                  name="tiempoIdealActividad"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Frecuencia de la Actividad</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
-                      >
-                        <FormControl>
-                          <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value={NO_FRECUENCIA_SELECTED_VALUE}>No aplica / Por instancia</SelectItem>
-                          {frecuenciaOptions.map((opt) => (
-                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Tiempo Ideal (min)</FormLabel>
+                       <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 10" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <FormField
+                  control={activityForm.control}
+                  name="costoEstimadoActividad"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Costo Estimado</FormLabel>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 5.00" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9" /></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={activityForm.control}
+                  name="costoIdealActividad"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Costo Ideal</FormLabel>
+                       <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormControl><Input type="number" placeholder="Ej: 2.50" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9" /></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+               <FormField
+                  control={activityForm.control}
+                  name="monedaCostoActividad"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Moneda de Costos</FormLabel>
+                       <Select onValueChange={field.onChange} value={field.value || NO_MONEDA_SELECTED_VALUE}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value={NO_MONEDA_SELECTED_VALUE}>No especificar moneda</SelectItem>
+                            {monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                          </SelectContent>
+                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
               <DialogFooter>
                 <DialogClose asChild>
                   <Button type="button" variant="outline">Cancelar</Button>

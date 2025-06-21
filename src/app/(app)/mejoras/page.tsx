@@ -11,6 +11,7 @@ import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-pow
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type AccionEstado } from '@/contexts/AccionesContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -77,13 +78,15 @@ export default function MejorasPage() {
   const [error, setError] = useState<string | null>(null);
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addAccion } = useAcciones();
+  const { actividades, isLoadingActividades } = useActividades();
+
 
   const handleAnalyzeInefficiencies = async () => {
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
 
-    if (isLoadingSistemasCostos) {
+    if (isLoadingSistemasCostos || isLoadingActividades) {
         toast({
             title: "Cargando datos de configuración",
             description: "Espere un momento mientras se cargan los datos de sistemas y costos.",
@@ -112,15 +115,27 @@ export default function MejorasPage() {
       }
 
       const processDescriptionsText = activeProcessesForAnalysis
-        .map(p =>
-          `Proceso: ${p.proceso}\n` +
-          `Área: ${p.area}\n` +
-          `Puesto Principal: ${p.puesto}\n` +
-          `Descripción: ${p.descripcion}\n` +
-          `Frecuencia: ${p.frecuencia}\n` +
-          `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n`+
-          `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}`
-        )
+        .map(p => {
+          const associatedActivitiesText = p.activityOrder?.map(actId => {
+            const act = actividades.find(a => a.id === actId);
+            if (!act) return null;
+            return `    - Actividad: ${act.nombre}\n` +
+                   `      Tiempo Est.: ${act.tiempoEstimadoActividad ?? 'N/A'} min, Tiempo Ideal: ${act.tiempoIdealActividad ?? 'N/A'} min\n`+
+                   `      Costo Est.: ${act.costoEstimadoActividad ?? 'N/A'}, Costo Ideal: ${act.costoIdealActividad ?? 'N/A'} (${act.monedaCostoActividad || 'N/A'})\n`;
+          }).filter(Boolean).join('');
+          
+          return `Proceso: ${p.proceso}\n` +
+                 `Área: ${p.area}\n` +
+                 `Puesto Principal: ${p.puesto}\n` +
+                 `Descripción: ${p.descripcion}\n` +
+                 `Frecuencia: ${p.frecuencia}\n` +
+                 `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n` +
+                 `Tiempo Ideal: ${p.tiempoIdeal !== undefined ? p.tiempoIdeal + ' minutos' : 'No especificado'}\n` +
+                 `Costo Estimado: ${p.costoEstimado !== undefined ? `${p.costoEstimado} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
+                 `Costo Ideal: ${p.costoIdeal !== undefined ? `${p.costoIdeal} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
+                 `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}\n` +
+                 (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
+        })
         .join('\n\n---\n\n');
 
       const allSystemsUsedInProcesses = new Set<string>();
@@ -249,17 +264,17 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos, para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos.
+            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos y tiempos (estimados vs. ideales), para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos.
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos} size="lg">
-              {isLoading || isLoadingSistemasCostos ? (
+            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades} size="lg">
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <Sparkles className="mr-2 h-5 w-5" />
               )}
-              {isLoading || isLoadingSistemasCostos ? "Analizando..." : "Analizar Ineficiencias con IA"}
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades ? "Analizando..." : "Analizar Ineficiencias con IA"}
             </Button>
             {analysisResult && !isLoading && (
                  <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">

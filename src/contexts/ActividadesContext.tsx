@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { Moneda } from '@/app/(app)/captura/page';
 
 export interface Actividad {
   id: string;
@@ -18,6 +19,10 @@ export interface Actividad {
   descripcionBreve?: string;
   sistemaUtilizado?: string;
   tiempoEstimadoActividad?: number; // in minutes
+  tiempoIdealActividad?: number; // in minutes
+  costoEstimadoActividad?: number;
+  costoIdealActividad?: number;
+  monedaCostoActividad?: Moneda;
   frecuenciaActividad?: string; 
 }
 

@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter, ArrowUpZA, ArrowDownAZ, ChevronsUpDown, ArrowDown, ArrowUp } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter, ArrowUpZA, ArrowDownAZ, ChevronsUpDown, ArrowDown, ArrowUp, DollarSign } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -431,7 +431,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
     const headers = [
       "ID", "Proceso", "Area", "Puesto", "Descripción",
-      "Tiempo Estimado (min)", "Frecuencia", "Sistemas",
+      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda", "Frecuencia", "Sistemas",
       "Información Recibe", "Procesos Entradas",
       "Información Entrega", "Procesos Salidas",
       "Fecha Captura", "Últ. Modif.", "Estado Activo", "Num. Actividades"
@@ -446,6 +446,10 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.puesto),
         escapeCsvCell(proc.descripcion),
         escapeCsvCell(proc.tiempoEstimado),
+        escapeCsvCell(proc.tiempoIdeal),
+        escapeCsvCell(proc.costoEstimado),
+        escapeCsvCell(proc.costoIdeal),
+        escapeCsvCell(proc.monedaCosto),
         escapeCsvCell(proc.frecuencia),
         escapeCsvCell(proc.sistemas),
         escapeCsvCell(proc.informacionRecibe),
@@ -651,11 +655,11 @@ export default function ProcesosYFlujosRegistradosPage() {
 
           {paginatedData.length > 0 ? (
             <>
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}>
+                    <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}>
                       <div className="flex items-center">Proceso {getSortIcon('proceso')}</div>
                     </TableHead>
                     <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}>
@@ -667,22 +671,16 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}>
                       <div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div>
                     </TableHead>
-                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado (minutos)">
-                        <div className="flex items-center justify-center"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo {getSortIcon('tiempoEstimado')}</div>
+                    <TableHead className="text-center w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado / Ideal (min)">
+                        <div className="flex items-center justify-center"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div>
                     </TableHead>
-                    <TableHead className="text-center w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('frecuencia')} title="Frecuencia">
-                        <div className="flex items-center justify-center"><Repeat className="inline-block h-4 w-4 mr-1" />Frec. {getSortIcon('frecuencia')}</div>
+                    <TableHead className="text-center w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')} title="Costo Estimado / Ideal">
+                        <div className="flex items-center justify-center"><DollarSign className="inline-block h-4 w-4 mr-1" />Costo Est./Ideal {getSortIcon('costoEstimado')}</div>
                     </TableHead>
                     <TableHead className="w-[120px]" title="Sistemas Utilizados"><div className="flex items-center"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</div></TableHead>
                     <TableHead className="w-[120px]" title="Procesos de Entradas"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1 transform rotate-180" />Ent. Procesos</div></TableHead>
-                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Recibe"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Recibe</div></TableHead>
-                    <TableHead className="w-[120px]" title="Procesos de Salida"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1" />Sal. Procesos</div></TableHead>
-                    <TableHead className="min-w-[150px] max-w-[200px]" title="Información que Entrega"><div className="flex items-center"><Info className="inline-block h-4 w-4 mr-1" />Info. Entrega</div></TableHead>
                     <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')} title="Número de Actividades">
                         <div className="flex items-center justify-center"><ListTree className="inline-block h-4 w-4 mr-1" />Activ. {getSortIcon('numActividades')}</div>
-                    </TableHead>
-                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('capturedAt')} title="Fecha de Captura">
-                        <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />F. Captura {getSortIcon('capturedAt')}</div>
                     </TableHead>
                     <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')} title="Última Modificación">
                         <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif. {getSortIcon('updatedAt')}</div>
@@ -707,8 +705,8 @@ export default function ProcesosYFlujosRegistradosPage() {
                           {proc.activo !== false ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-center">{proc.tiempoEstimado ?? '-'}</TableCell>
-                      <TableCell className="text-center">{proc.frecuencia}</TableCell>
+                      <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
+                      <TableCell className="text-center text-xs">{proc.costoEstimado ?? '-'} / {proc.costoIdeal ?? '-'} {proc.monedaCosto ?? ''}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {proc.sistemas && proc.sistemas.length > 0 ? (
@@ -731,19 +729,6 @@ export default function ProcesosYFlujosRegistradosPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-pre-wrap max-w-[200px] overflow-hidden text-ellipsis">{renderTruncatedText(proc.informacionRecibe)}</TableCell>
-                       <TableCell>
-                         <div className="flex flex-wrap gap-1">
-                          {proc.procesosSalida && proc.procesosSalida.length > 0 ? (
-                            proc.procesosSalida.map((ps, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">{ps}</Badge>
-                            ))
-                          ) : (
-                             <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-pre-wrap max-w-[200px] overflow-hidden text-ellipsis">{renderTruncatedText(proc.informacionEntrega)}</TableCell>
                       <TableCell className="text-center">
                          <TooltipProvider>
                           <Tooltip>
@@ -757,9 +742,6 @@ export default function ProcesosYFlujosRegistradosPage() {
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {isValid(parseISO(proc.capturedAt)) ? format(parseISO(proc.capturedAt), 'dd/MM/yy HH:mm', { locale: es }) : 'Fecha inválida'}
                       </TableCell>
                        <TableCell className="text-xs">
                         {proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
@@ -814,11 +796,11 @@ export default function ProcesosYFlujosRegistradosPage() {
             <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
               <FileX className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold text-foreground">
-                {allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay procesos/flujos activos registrados" : "No se encontraron resultados"}
+                {allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados activos" : "No se encontraron resultados"}
               </p>
               <p className="text-sm text-muted-foreground text-center">
-                {allCapturedData.filter(p => !p.deletedAt).length === 0
-                  ? 'Comience registrando procesos y flujos en el módulo de "Captura" o revise la papelera de recuperación.'
+                {allCapturedData.filter(p => !p.deletedAt).length === 0 
+                  ? 'Comience registrando procesos en el módulo de "Captura" o revise la papelera de recuperación.'
                   : 'Intente ajustar su término de búsqueda o filtros.'
                 }
               </p>
@@ -844,6 +826,9 @@ export default function ProcesosYFlujosRegistradosPage() {
               <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
               <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} isTextarea />
               <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
+              <DetailSection title="Tiempo Ideal" value={selectedProcess.tiempoIdeal !== undefined ? `${selectedProcess.tiempoIdeal} minutos` : undefined} />
+              <DetailSection title="Costo Estimado" value={selectedProcess.costoEstimado !== undefined ? `${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto || ''}` : undefined} />
+              <DetailSection title="Costo Ideal" value={selectedProcess.costoIdeal !== undefined ? `${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto || ''}` : undefined} />
               <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
               <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
               <DetailSection title="Información que Recibe (Descripción)" value={selectedProcess.informacionRecibe} isTextarea />
