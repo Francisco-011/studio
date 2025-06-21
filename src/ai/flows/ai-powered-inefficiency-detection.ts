@@ -18,6 +18,7 @@ const AnalyzeProcessesInputSchema = z.object({
     .describe('Una lista de descripciones de procesos para analizar, incluyendo tiempos y costos estimados vs. ideales para el proceso y sus actividades.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
+  existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
 });
 export type AnalyzeProcessesInput = z.infer<typeof AnalyzeProcessesInputSchema>;
 
@@ -65,9 +66,11 @@ const analyzeProcessesPrompt = ai.definePrompt({
   output: {schema: AnalyzeProcessesOutputSchema},
   prompt: `Eres un analista de negocios experto en optimización de procesos, impulsado por IA. Tu misión es identificar ineficiencias, duplicidades y oportunidades de ahorro cuantificables.
 
-Se te proporcionan descripciones detalladas de procesos, incluyendo tiempos y costos estimados versus ideales, uso de sistemas y, opcionalmente, costos detallados de esos sistemas.
+Se te proporcionan descripciones detalladas de procesos, incluyendo tiempos y costos estimados versus ideales, uso de sistemas y, opcionalmente, costos detallados de esos sistemas y una lista de acciones de mejora ya en curso.
 
-Tu análisis debe centrarse en TRES áreas clave y debes devolver la salida en el formato JSON estructurado solicitado:
+**Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
+
+Tu análisis debe centrarse en TRES áreas clave (evitando los temas ya cubiertos) y debes devolver la salida en el formato JSON estructurado solicitado:
 
 1.  **Brechas de Eficiencia (efficiencyGaps)**: Identifica los procesos y actividades con las mayores discrepancias entre los valores "Estimados" y los "Ideales" (tanto en tiempo como en costo). Para cada brecha significativa, calcula el 'potentialTimeSaving' (Estimado - Ideal) y 'potentialCostSaving' (Estimado - Ideal) por instancia de ejecución. Debes poblar el array 'efficiencyGaps' con esta información.
 
@@ -87,6 +90,12 @@ Tu análisis debe centrarse en TRES áreas clave y debes devolver la salida en e
 **Información de Costos de Sistemas:**
 {{{systemCostInformation}}}
 {{/if}}
+
+{{#if existingActions}}
+**Acciones de Mejora Existentes (Ignorar estos temas):**
+{{{existingActions}}}
+{{/if}}
+
 
 **Instrucciones de Análisis:**
 - Prioriza las oportunidades de mejora que presenten el mayor impacto potencial (brechas grandes de tiempo/costo, costos de sistema elevados).

@@ -10,14 +10,14 @@ import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
-import { useAcciones, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
+import { useAcciones, type Accion, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 
 // Helper function to format currency (simplified for this context)
-function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda = "USD"): string {
+function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda | string = "USD"): string {
   if (amount === undefined || isNaN(amount)) return "N/A";
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
@@ -77,7 +77,7 @@ export default function MejorasPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
-  const { addAccion } = useAcciones();
+  const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
 
 
@@ -113,6 +113,13 @@ export default function MejorasPage() {
         setIsLoading(false);
         return;
       }
+      
+      const relevantActions = allAcciones.filter(a => 
+        ['Pendiente', 'En Progreso', 'En Revisión'].includes(a.estado)
+      );
+      const existingActionsText = relevantActions.length > 0
+          ? relevantActions.map(a => `- Acción: "${a.nombre}". Descripción: ${a.descripcion}`).join('\n')
+          : undefined;
 
       const processDescriptionsText = activeProcessesForAnalysis
         .map(p => {
@@ -169,12 +176,13 @@ export default function MejorasPage() {
         processDescriptions: processDescriptionsText,
         systemUsage: systemUsageText,
         systemCostInformation: systemCostInformationText,
+        existingActions: existingActionsText,
       });
 
       setAnalysisResult(result);
       toast({
         title: "Análisis Completado",
-        description: "Se han identificado posibles mejoras y redundancias, considerando la información de costos.",
+        description: "Se han identificado posibles mejoras y redundancias, considerando la información de costos y acciones existentes.",
       });
 
     } catch (err) {
@@ -199,27 +207,47 @@ export default function MejorasPage() {
 
     let actionsGeneratedCount = 0;
     
+    // 1. Consolidate efficiency gaps by process
+    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda }>();
+
     analysisResult.efficiencyGaps?.forEach(gap => {
-      const title = `Optimizar: ${gap.processName}` + (gap.activityName ? ` - ${gap.activityName}` : '');
-      const description = `Sugerencia de IA: ${gap.description}. Ahorro potencial por instancia: ${gap.potentialTimeSaving || 0} min, ${gap.potentialCostSaving || 0} ${gap.currency || ''}. Frecuencia del proceso: ${gap.frequency}.`;
-      
+      if (!processImprovements.has(gap.processName)) {
+        processImprovements.set(gap.processName, { gaps: [], totalTime: 0, totalCost: 0 });
+      }
+      const processGroup = processImprovements.get(gap.processName)!;
+      processGroup.gaps.push(gap);
+      processGroup.totalTime += gap.potentialTimeSaving || 0;
+      processGroup.totalCost += gap.potentialCostSaving || 0;
+      if (gap.currency && !processGroup.currency) {
+        processGroup.currency = gap.currency as Moneda;
+      }
+    });
+
+    // 2. Create one consolidated action per process with efficiency gaps
+    processImprovements.forEach((group, processName) => {
+      const descriptionItems = group.gaps.map(g => 
+        `- ${g.description} (Ahorro potencial/instancia: ${g.potentialTimeSaving || 0} min, ${formatMejorasCurrency(g.potentialCostSaving, g.currency as TipoMoneda)})`
+      );
+      const consolidatedDescription = `Se han identificado las siguientes oportunidades de mejora para el proceso "${processName}":\n${descriptionItems.join('\n')}`;
+
       addAccion({
-        nombre: title,
-        descripcion: description,
+        nombre: `Optimizar Proceso: ${processName}`,
+        descripcion: consolidatedDescription,
         responsable: 'Por definir',
         estado: 'En Revisión' as AccionEstado,
         origenMejora: 'Análisis IA - Mejoras',
-        ahorroTiempoEstimado: gap.potentialTimeSaving,
-        unidadTiempoAhorro: 'Minutos/Instancia' as TiempoUnidad,
-        ahorroEstimado: gap.potentialCostSaving,
-        monedaAhorro: gap.currency as Moneda,
+        ahorroTiempoEstimado: group.totalTime > 0 ? group.totalTime : undefined,
+        unidadTiempoAhorro: group.totalTime > 0 ? 'Minutos/Instancia' : undefined,
+        ahorroEstimado: group.totalCost > 0 ? group.totalCost : undefined,
+        monedaAhorro: group.totalCost > 0 ? group.currency : undefined,
       });
       actionsGeneratedCount++;
     });
 
+    // 3. Handle redundant systems (no consolidation)
     analysisResult.redundantSystems?.forEach(sys => {
       const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
-      const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${sys.annualCost} ${sys.currency}.`;
+      const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}.`;
 
       addAccion({
           nombre: title,
@@ -233,6 +261,7 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
+    // 4. Handle duplicate processes (no consolidation)
     analysisResult.duplicateProcesses?.forEach(dup => {
       const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
       const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
@@ -247,7 +276,7 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-
+    // 5. Final Toast
     if (actionsGeneratedCount > 0) {
       toast({
         title: "Acciones Propuestas Generadas",
@@ -257,7 +286,7 @@ export default function MejorasPage() {
     } else {
       toast({
         title: "No se generaron nuevas acciones",
-        description: "El análisis de IA no arrojó elementos claros para crear acciones automáticas o ya fueron procesados.",
+        description: "El análisis de IA no arrojó elementos claros o no cubiertos por acciones existentes.",
         variant: "default"
       });
     }
@@ -273,7 +302,7 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos y tiempos (estimados vs. ideales), para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos.
+            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos y tiempos (estimados vs. ideales), para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos y se ignorarán temas ya cubiertos por acciones en revisión/progreso.
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
@@ -324,7 +353,7 @@ export default function MejorasPage() {
                           <strong>{gap.processName}{gap.activityName ? ` (${gap.activityName})` : ''}:</strong> {gap.description}
                           {(gap.potentialTimeSaving || gap.potentialCostSaving) && (
                             <span className="text-muted-foreground text-xs block">
-                              Ahorro Potencial/Instancia: {gap.potentialTimeSaving ? `${gap.potentialTimeSaving} min` : ''} {gap.potentialCostSaving ? ` / ${gap.potentialCostSaving} ${gap.currency}` : ''}
+                              Ahorro Potencial/Instancia: {gap.potentialTimeSaving ? `${gap.potentialTimeSaving} min` : ''} {gap.potentialCostSaving ? ` / ${formatMejorasCurrency(gap.potentialCostSaving, gap.currency as TipoMoneda)}` : ''}
                             </span>
                           )}
                         </li>
