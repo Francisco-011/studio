@@ -50,7 +50,7 @@ export interface Accion {
 interface AccionesContextType {
   acciones: Accion[];
   addAccion: (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => void;
-  updateAccion: (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>) => void;
+  updateAccion: (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => void;
   deleteAccion: (id: string) => void;
   isLoadingAcciones: boolean;
 }
@@ -109,7 +109,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>) => {
+  const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => {
     setAcciones(prevAcciones => {
       const newAcciones = [...prevAcciones];
       const accionIndex = newAcciones.findIndex(a => a.id === id);
@@ -122,21 +122,14 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
         const cambios: CambioHistorial[] = [];
         
         try {
-          let timeSavingInMinutes = 0;
-          if (updatedAccionData.ahorroTiempoEstimado && updatedAccionData.ahorroTiempoEstimado > 0) {
-            if (updatedAccionData.unidadTiempoAhorro === 'Minutos/Instancia') {
-              timeSavingInMinutes = updatedAccionData.ahorroTiempoEstimado;
-            } else {
-               toast({
-                title: "Mejora de tiempo no aplicada",
-                description: `La unidad de tiempo (${updatedAccionData.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar al tiempo estimado del elemento.`,
-                variant: "default",
-                duration: 7000
-              });
-            }
-          }
+          const timeSavingInMinutes = (options?.applyTimeSaving && updatedAccionData.ahorroTiempoEstimado && updatedAccionData.unidadTiempoAhorro === 'Minutos/Instancia')
+            ? updatedAccionData.ahorroTiempoEstimado
+            : 0;
 
-          // Logic for Activities
+          const costSaving = (options?.applyCostSaving && updatedAccionData.ahorroEstimado !== undefined)
+            ? updatedAccionData.ahorroEstimado
+            : 0;
+
           if (updatedAccionData.actividadId) {
             const storedActivities = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
             let allActivities: Actividad[] = storedActivities ? JSON.parse(storedActivities) : [];
@@ -153,9 +146,9 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
                 targetActivity.tiempoEstimadoActividad = despues;
                 activityWasUpdated = true;
               }
-              if (updatedAccionData.ahorroEstimado !== undefined && targetActivity.costoEstimadoActividad !== undefined) {
+              if (costSaving > 0 && targetActivity.costoEstimadoActividad !== undefined) {
                 const antes = targetActivity.costoEstimadoActividad;
-                const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
+                const despues = Math.max(0, antes - costSaving);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Actividad', before: antes, after: despues });
                 targetActivity.costoEstimadoActividad = despues;
                 activityWasUpdated = true;
@@ -168,7 +161,6 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
               }
             }
           } 
-          // Logic for Processes
           else if (updatedAccionData.procesoId) {
             const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
             let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
@@ -185,9 +177,9 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
                 targetProcess.tiempoEstimado = despues;
                 processWasUpdated = true;
               }
-              if (updatedAccionData.ahorroEstimado !== undefined && targetProcess.costoEstimado !== undefined) {
+              if (costSaving > 0 && targetProcess.costoEstimado !== undefined) {
                 const antes = targetProcess.costoEstimado;
-                const despues = Math.max(0, antes - updatedAccionData.ahorroEstimado);
+                const despues = Math.max(0, antes - costSaving);
                 cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
                 targetProcess.costoEstimado = despues;
                 processWasUpdated = true;
@@ -199,6 +191,15 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
               }
             }
+          }
+
+          if(updatedAccionData.unidadTiempoAhorro && updatedAccionData.unidadTiempoAhorro !== 'Minutos/Instancia' && options?.applyTimeSaving){
+            toast({
+                title: "Mejora de tiempo no aplicada",
+                description: `La unidad (${updatedAccionData.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar.`,
+                variant: "default",
+                duration: 7000
+            });
           }
 
           updatedAccionData.historialDeCambios = [...(updatedAccionData.historialDeCambios || []), ...cambios];

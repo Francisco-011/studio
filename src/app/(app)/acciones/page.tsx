@@ -31,8 +31,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare } from "lucide-react";
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
@@ -141,6 +143,13 @@ export default function AccionesPage() {
 
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [actionForHistory, setActionForHistory] = useState<Accion | null>(null);
+
+  const [isCompleteConfirmDialogOpen, setIsCompleteConfirmDialogOpen] = useState(false);
+  const [actionToComplete, setActionToComplete] = useState<{ id: string; data: AccionFormData } | null>(null);
+  const [completionOptions, setCompletionOptions] = useState({
+    applyTimeSaving: true,
+    applyCostSaving: true,
+  });
 
   function formatHistoryValue(field: string, value: any, moneda?: Moneda): string {
     if (value === undefined || value === null) return "-";
@@ -257,6 +266,17 @@ export default function AccionesPage() {
   }, [editingAccion, isAccionDialogOpen, accionForm]);
 
   function handleAccionSubmit(data: AccionFormData) {
+    const isCompleting = editingAccion && data.estado === 'Completada' && editingAccion.estado !== 'Completada';
+    const hasSavings = data.ahorroEstimado || data.ahorroTiempoEstimado;
+
+    if (isCompleting && hasSavings) {
+      setActionToComplete({ id: editingAccion.id, data });
+      setCompletionOptions({ applyTimeSaving: true, applyCostSaving: true });
+      setIsCompleteConfirmDialogOpen(true);
+      setIsAccionDialogOpen(false);
+      return;
+    }
+
     const dataToSave = {
         ...data,
         area: data.area || undefined,
@@ -276,6 +296,30 @@ export default function AccionesPage() {
     }
     setEditingAccion(null);
     setIsAccionDialogOpen(false);
+    accionForm.reset();
+  }
+
+  function handleConfirmCompletion() {
+    if (!actionToComplete) return;
+
+    const { id, data } = actionToComplete;
+    const dataToSave = {
+        ...data,
+        area: data.area || undefined,
+        puesto: data.puesto || undefined,
+        procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
+        actividadId: data.actividadId === NO_ELEMENTO_SELECTED ? undefined : data.actividadId,
+        fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
+        fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
+    };
+    
+    updateAccion(id, dataToSave, completionOptions);
+
+    toast({ title: 'Acción Completada', description: 'La acción y sus mejoras asociadas han sido aplicadas según selección.' });
+
+    setIsCompleteConfirmDialogOpen(false);
+    setActionToComplete(null);
+    setEditingAccion(null);
     accionForm.reset();
   }
 
@@ -498,7 +542,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Proceso Asociado (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId}>
+                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
@@ -515,7 +559,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Actividad Asociada (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId}>
+                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una actividad" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguna</SelectItem>
@@ -912,6 +956,50 @@ export default function AccionesPage() {
             <DialogClose asChild>
               <Button type="button" variant="outline">Cerrar</Button>
             </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCompleteConfirmDialogOpen} onOpenChange={setIsCompleteConfirmDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="h-5 w-5 text-primary"/>
+              Confirmar Finalización de Acción
+            </DialogTitle>
+            <DialogDescription>
+              La acción "{actionToComplete?.data.nombre}" se marcará como 'Completada'. Seleccione qué mejoras automáticas desea aplicar al elemento asociado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {actionToComplete?.data.ahorroTiempoEstimado && (
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="applyTimeSaving" 
+                  checked={completionOptions.applyTimeSaving}
+                  onCheckedChange={(checked) => setCompletionOptions(prev => ({...prev, applyTimeSaving: !!checked}))}
+                />
+                <Label htmlFor="applyTimeSaving" className="text-sm font-normal cursor-pointer">
+                  Aplicar ahorro de tiempo de {actionToComplete.data.ahorroTiempoEstimado} {actionToComplete.data.unidadTiempoAhorro?.split('/')[0]}
+                </Label>
+              </div>
+            )}
+             {actionToComplete?.data.ahorroEstimado && (
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="applyCostSaving" 
+                  checked={completionOptions.applyCostSaving}
+                  onCheckedChange={(checked) => setCompletionOptions(prev => ({...prev, applyCostSaving: !!checked}))}
+                />
+                <Label htmlFor="applyCostSaving" className="text-sm font-normal cursor-pointer">
+                  Aplicar ahorro de costo de {formatCurrencyDisplay(actionToComplete.data.ahorroEstimado, actionToComplete.data.monedaAhorro)}
+                </Label>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsCompleteConfirmDialogOpen(false); setActionToComplete(null);}}>Cancelar</Button>
+            <Button onClick={handleConfirmCompletion}>Confirmar y Completar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
