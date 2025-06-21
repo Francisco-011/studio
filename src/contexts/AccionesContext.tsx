@@ -89,20 +89,20 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
       fechaCreacion: new Date().toISOString(),
       updatedAt: Date.now(),
     };
-    setAcciones((prev) => [...prev, newAccion]);
-  }, []);
+    setAcciones([...acciones, newAccion]);
+  }, [acciones]);
 
   const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>) => {
-    setAcciones((prev) =>
-      prev.map((accion) =>
+    setAcciones(
+      acciones.map((accion) =>
         accion.id === id ? { ...accion, ...data, updatedAt: Date.now() } : accion
       )
     );
-  }, []);
+  }, [acciones]);
 
   const deleteAccion = useCallback((id: string) => {
-    setAcciones((prev) => prev.filter((accion) => accion.id !== id));
-  }, []);
+    setAcciones(acciones.filter((accion) => accion.id !== id));
+  }, [acciones]);
 
   return (
     <AccionesContext.Provider value={{
