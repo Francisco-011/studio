@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -61,7 +61,7 @@ export interface CapturedProcess extends CapturaFormData {
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
-type SortableProcessKeys = keyof CapturedProcess | 'numActividades';
+type SortableProcessKeys = 'proceso' | 'area' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -112,14 +112,12 @@ export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
-  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities } = useActividades();
 
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
-  const [selectedDeptoFilter, setSelectedDeptoFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
@@ -182,13 +180,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   }, [allCapturedData, isLoading]);
 
-  const filteredDeptosForFilter = useMemo(() => {
-    if (selectedAreaFilter === 'all') return departamentos;
-    const areaId = areas.find(a => a.nombre === selectedAreaFilter)?.id;
-    if (!areaId) return [];
-    return departamentos.filter(d => d.areaId === areaId);
-  }, [selectedAreaFilter, areas, departamentos]);
-
   const sortedAndFilteredData = useMemo(() => {
     setCurrentPage(1);
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
@@ -205,18 +196,20 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     if (selectedAreaFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.area === selectedAreaFilter);
-    if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
     if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
     if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.activityOrder?.length || 0) === 0 : (proc.activityOrder?.length || 0) > 0));
     
     if (sortConfig !== null) {
       dataToFilter.sort((a, b) => {
-        let valA: any = a[sortConfig.key as keyof CapturedProcess];
-        let valB: any = b[sortConfig.key as keyof CapturedProcess];
+        let valA: any;
+        let valB: any;
+
         if (sortConfig.key === 'numActividades') { valA = a.activityOrder?.length || 0; valB = b.activityOrder?.length || 0; }
-        else if (sortConfig.key === 'capturedAt' || sortConfig.key === 'updatedAt') { valA = valA ? new Date(valA).getTime() : 0; valB = valB ? new Date(valB).getTime() : 0; }
+        else if (sortConfig.key === 'updatedAt') { valA = a.updatedAt || 0; valB = b.updatedAt || 0; }
         else if (sortConfig.key === 'activo') { valA = a.activo !== false; valB = b.activo !== false; }
+        else { valA = a[sortConfig.key as keyof CapturedProcess]; valB = b[sortConfig.key as keyof CapturedProcess]; }
+        
         if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
         if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
         if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
@@ -228,7 +221,7 @@ export default function ProcesosYFlujosRegistradosPage() {
        dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -308,7 +301,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     const derivedCost = (proc.activityOrder || []).reduce((sum, actId) => sum + (allActivities.find(a => a.id === actId)?.costoEstimadoActividad || 0), 0);
     return { value: derivedCost, isDerived: true };
   };
-  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
+  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
   if (isLoading) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
@@ -321,8 +314,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             <div className="flex items-center gap-2 mb-3"><Filter className="h-5 w-5 text-primary"/><h4 className="text-md font-semibold">Filtros de Búsqueda</h4></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
               <div className="relative xl:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
-              <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
-              <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={setSelectedDeptoFilter} disabled={isLoadingDepartamentos || filteredDeptosForFilter.length === 0}><SelectTrigger id="depto-filter"><SelectValue placeholder={isLoadingDepartamentos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos</SelectItem>{filteredDeptosForFilter.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
@@ -339,23 +331,50 @@ export default function ProcesosYFlujosRegistradosPage() {
             <><div className="rounded-md border overflow-x-auto"><Table><TableHeader><TableRow>
               <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
-              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
-              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est. {getSortIcon('costoEstimado')}</div></TableHead>
-              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est. {getSortIcon('tiempoEstimado')}</div></TableHead>
-              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
+              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est./Ideal {getSortIcon('costoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[100px]">Sistemas</TableHead>
+              <TableHead className="text-center w-[100px]">Ent. Procesos</TableHead>
+              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
               <TableHead className="text-right w-[160px]">Acciones</TableHead>
-            </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => { const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna"; const { value: effectiveCost, isDerived } = getEffectiveCost(proc); return (
-            <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}><TableCell className="font-medium">{proc.proceso}</TableCell><TableCell>{proc.area}</TableCell><TableCell>{proc.departamento || '-'}</TableCell>
-            <TableCell className="text-center text-xs"><TooltipProvider><Tooltip><TooltipTrigger asChild>
-                <span>{effectiveCost.toFixed(2)} {proc.monedaCosto || ''} {isDerived && <Info className="h-3 w-3 inline ml-1 text-muted-foreground"/>}</span>
-            </TooltipTrigger><TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
-            <TableCell className="text-center text-xs">{proc.tiempoEstimado !== undefined ? `${proc.tiempoEstimado} min` : '-'}</TableCell>
-            <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
-            <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
-            <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
-            <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1"/><Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></div>
+            </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
+                const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna";
+                const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
+                const formatListTooltip = (items: string[] | undefined, noneText: string) => (items && items.length > 0 ? items.join(', ') : noneText);
+
+                return (
+                <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
+                    <TableCell className="font-medium">{proc.proceso}</TableCell>
+                    <TableCell>{proc.area}</TableCell>
+                    <TableCell>{proc.puesto}</TableCell>
+                    <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
+                    <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
+                    <TableCell className="text-center text-xs">
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                            <span>
+                                {effectiveCost.toFixed(2)} / {proc.costoIdeal?.toFixed(2) ?? '-'} {proc.monedaCosto || ''}
+                                {isDerived && <Info className="h-3 w-3 inline ml-1 text-muted-foreground" />}
+                            </span>
+                        </TooltipTrigger>{isDerived && <TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent>}</Tooltip></TooltipProvider>
+                    </TableCell>
+                    <TableCell className="text-center">
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                            <Badge variant="secondary" className="cursor-default">{proc.sistemas?.length || 0}</Badge>
+                        </TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{formatListTooltip(proc.sistemas, 'Ningún sistema asociado')}</p></TooltipContent></Tooltip></TooltipProvider>
+                    </TableCell>
+                    <TableCell className="text-center">
+                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                            <Badge variant="secondary" className="cursor-default">{proc.procesosEntrada?.length || 0}</Badge>
+                        </TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{formatListTooltip(proc.procesosEntrada, 'Ningún proceso de entrada')}</p></TooltipContent></Tooltip></TooltipProvider>
+                    </TableCell>
+                    <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+                    <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
+                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                </TableRow>);
+            })}</TableBody></Table></div>
             <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredData.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Siguiente</Button></div></div></>
           ) : (<div className="mt-6 p-8 border-dashed rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20"><FileX className="h-16 w-16 text-muted-foreground mb-4" /><p className="text-lg font-semibold">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados" : "No se encontraron resultados"}</p><p className="text-sm text-muted-foreground">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? 'Comience registrando procesos en "Captura".' : 'Intente ajustar su búsqueda o filtros.'}</p></div>)}
         </CardContent>
