@@ -6,7 +6,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -32,6 +32,17 @@ import {
   DialogClose,
   DialogTrigger
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -138,6 +149,10 @@ export default function AuditoriaPage() {
 
   const [isFindingDialogOpen, setIsFindingDialogOpen] = useState(false);
   const [editingFinding, setEditingFinding] = useState<AuditFinding | null>(null);
+  
+  const [isConfirmDeleteFindingOpen, setIsConfirmDeleteFindingOpen] = useState(false);
+  const [findingToDelete, setFindingToDelete] = useState<AuditFinding | null>(null);
+
 
   const findingForm = useForm<AuditFindingFormData>({
     resolver: zodResolver(auditFindingSchema),
@@ -287,11 +302,22 @@ export default function AuditoriaPage() {
     findingForm.reset();
   };
   
-  const handleDeleteFinding = (findingId: string) => {
-    if (!currentAuditSession) return;
-    setCurrentAuditSession(prev => prev ? { ...prev, findings: prev.findings.filter(f => f.id !== findingId) } : null);
-  };
-  
+  function promptDeleteFinding(finding: AuditFinding) {
+    setFindingToDelete(finding);
+    setIsConfirmDeleteFindingOpen(true);
+  }
+
+  function executeDeleteFinding() {
+    if (!currentAuditSession || !findingToDelete) return;
+    
+    setCurrentAuditSession(prev => prev ? { ...prev, findings: prev.findings.filter(f => f.id !== findingToDelete.id) } : null);
+
+    toast({ title: "Hallazgo Eliminado", description: "El hallazgo ha sido eliminado de la auditoría.", variant: "destructive" });
+    
+    setFindingToDelete(null);
+    setIsConfirmDeleteFindingOpen(false);
+  }
+
   const handleCreateActionPlan = (finding: AuditFinding) => {
     if (!currentAuditSession) return;
     const target = currentAuditSession.auditType === 'proceso'
@@ -430,7 +456,7 @@ export default function AuditoriaPage() {
                                     </CardTitle>
                                     <div>
                                       <Button variant="ghost" size="icon" onClick={() => { setEditingFinding(finding); setIsFindingDialogOpen(true); }} className="text-muted-foreground hover:text-foreground h-7 w-7"><Edit className="h-4 w-4"/></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => promptDeleteFinding(finding)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -495,6 +521,25 @@ export default function AuditoriaPage() {
               </DialogContent>
             </Dialog>
 
+            <AlertDialog open={isConfirmDeleteFindingOpen} onOpenChange={setIsConfirmDeleteFindingOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                      <div className="flex items-center">
+                          <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                          Confirmar Eliminación
+                      </div>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Está seguro de que desea eliminar este hallazgo? Esta acción no se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setFindingToDelete(null)}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={executeDeleteFinding} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
   }
