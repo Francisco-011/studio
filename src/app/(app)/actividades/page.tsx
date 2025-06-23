@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -143,6 +144,7 @@ export default function ActividadesPage() {
   } = useActividades();
   const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
 
+  const searchParams = useSearchParams();
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingCapturedProcesses, setIsLoadingCapturedProcesses] = useState(true);
 
@@ -175,6 +177,13 @@ export default function ActividadesPage() {
         setIsLoadingCapturedProcesses(false);
     }
   }, []);
+
+  useEffect(() => {
+    const searchQuery = searchParams.get('search');
+    if (searchQuery) {
+        setSearchTerm(searchQuery);
+    }
+  }, [searchParams]);
 
   const actividadForm = useForm<ActividadFormData>({
     resolver: zodResolver(actividadFormSchema),
