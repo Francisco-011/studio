@@ -77,9 +77,9 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 };
 
 
-export default function AuditoriaGeneralPage() {
+export default function AuditoriaPage() {
   const { actividades, isLoadingActividades } = useActividades();
-  const { addAccion } = useAcciones();
+  const { addAccion, isLoadingAcciones } = useAcciones();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
@@ -200,7 +200,7 @@ export default function AuditoriaGeneralPage() {
         escapeCsvCell(f.id),
         escapeCsvCell(f.type),
         escapeCsvCell(f.description),
-        escapeCsvCell(f.proposedAction),
+        escapeCsvCell(f.proposedAction || ''),
         escapeCsvCell(f.isActionCreated ? 'Sí' : 'No')
       ])
     ];
@@ -217,7 +217,7 @@ export default function AuditoriaGeneralPage() {
     toast({ title: "Informe Exportado", description: "El informe de auditoría se está descargando." });
   };
 
-  if (isLoading || isLoadingActividades) {
+  if (isLoading || isLoadingActividades || isLoadingAcciones) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />
