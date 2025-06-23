@@ -266,7 +266,7 @@ export default function MatrizManualesPage() {
                                 const act = actividades.find(a => a.id === actId);
                                 if (!act) return <div key={actId} className="p-2 border rounded text-sm text-destructive">Actividad con ID {actId} no encontrada.</div>;
                                 return (
-                                  <Card key={act.id} className="bg-background">
+                                  <Card key={`${act.id}-${index}`} className="bg-background">
                                     <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
                                       <CardTitle className="text-base">{act.nombre}</CardTitle>
