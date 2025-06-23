@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useActivityLog } from './ActivityLogContext';
 
 // Define NivelOrganizacional and Puesto interface here for context-wide use
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Apoyo"] as const;
@@ -34,6 +35,7 @@ const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
 export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [isLoadingPuestos, setIsLoadingPuestos] = useState(true);
+  const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -64,18 +66,28 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   }, [puestos, isLoadingPuestos]);
 
   const addPuesto = useCallback((data: PuestoCreationData) => {
-    setPuestos((prevPuestos) => [...prevPuestos, { ...data, id: Date.now().toString() }]);
-  }, []);
+    const newPuesto = { ...data, id: Date.now().toString() };
+    setPuestos((prevPuestos) => [...prevPuestos, newPuesto]);
+    addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
+  }, [addLogEntry]);
 
   const updatePuesto = useCallback((id: string, data: PuestoCreationData) => {
+    const originalPuesto = puestos.find(p => p.id === id);
     setPuestos((prevPuestos) =>
       prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto))
     );
-  }, []);
+     if (originalPuesto) {
+      addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
+    }
+  }, [addLogEntry, puestos]);
 
   const deletePuesto = useCallback((id: string) => {
+    const puestoToDelete = puestos.find(p => p.id === id);
     setPuestos((prevPuestos) => prevPuestos.filter((puesto) => puesto.id !== id));
-  }, []);
+    if(puestoToDelete) {
+        addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
+    }
+  }, [addLogEntry, puestos]);
 
   return (
     <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos }}>
@@ -91,5 +103,3 @@ export function usePuestos(): PuestosContextType {
   }
   return context;
 }
-
-    

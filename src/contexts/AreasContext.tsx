@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useActivityLog } from './ActivityLogContext';
 
 export interface Area {
   id: string;
@@ -24,6 +25,7 @@ const LOCAL_STORAGE_AREAS_KEY = 'proceza-areas';
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<Area[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -54,18 +56,28 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   }, [areas, isLoading]);
 
   const addArea = useCallback((nombre: string) => {
-    setAreas((prevAreas) => [...prevAreas, { id: Date.now().toString(), nombre }]);
-  }, []);
+    const newArea = { id: Date.now().toString(), nombre };
+    setAreas((prevAreas) => [...prevAreas, newArea]);
+    addLogEntry({ action: 'create', entityType: 'Área', entityName: nombre, details: `Se creó el área "${nombre}".` });
+  }, [addLogEntry]);
 
   const updateArea = useCallback((id: string, nombre: string) => {
+    const originalArea = areas.find(a => a.id === id);
     setAreas((prevAreas) =>
       prevAreas.map((area) => (area.id === id ? { ...area, nombre } : area))
     );
-  }, []);
+    if(originalArea) {
+      addLogEntry({ action: 'update', entityType: 'Área', entityName: nombre, details: `Se actualizó el área de "${originalArea.nombre}" a "${nombre}".` });
+    }
+  }, [addLogEntry, areas]);
 
   const deleteArea = useCallback((id: string) => {
+    const areaToDelete = areas.find(a => a.id === id);
     setAreas((prevAreas) => prevAreas.filter((area) => area.id !== id));
-  }, []);
+    if (areaToDelete) {
+       addLogEntry({ action: 'delete', entityType: 'Área', entityName: areaToDelete.nombre, details: `Se eliminó el área "${areaToDelete.nombre}".` });
+    }
+  }, [addLogEntry, areas]);
 
   return (
     <AreasContext.Provider value={{ areas, addArea, updateArea, deleteArea, isLoading }}>

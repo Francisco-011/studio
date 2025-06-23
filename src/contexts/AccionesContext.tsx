@@ -6,6 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import type { Actividad } from './ActividadesContext';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import { useActivityLog } from './ActivityLogContext';
 
 
 export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada", "En Revisión"] as const;
@@ -65,6 +66,7 @@ const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 export function AccionesProvider({ children }: { children: ReactNode }) {
   const [acciones, setAcciones] = useState<Accion[]>([]);
   const [isLoadingAcciones, setIsLoadingAcciones] = useState(true);
+  const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -97,17 +99,16 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
   }, [acciones, isLoadingAcciones]);
 
   const addAccion = useCallback((data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => {
-    setAcciones(prevAcciones => {
-        const newAccion: Accion = {
-          ...data,
-          id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          fechaCreacion: new Date().toISOString(),
-          updatedAt: Date.now(),
-          historialDeCambios: [],
-        };
-        return [...prevAcciones, newAccion];
-    });
-  }, []);
+    const newAccion: Accion = {
+      ...data,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      fechaCreacion: new Date().toISOString(),
+      updatedAt: Date.now(),
+      historialDeCambios: [],
+    };
+    setAcciones(prevAcciones => [...prevAcciones, newAccion]);
+    addLogEntry({ action: 'create', entityType: 'Acción de Mejora', entityName: newAccion.nombre, details: `Se creó la acción de mejora "${newAccion.nombre}".` });
+  }, [addLogEntry]);
 
   const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => {
     setAcciones(prevAcciones => {
@@ -117,6 +118,8 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
 
       const originalAccion = newAcciones[accionIndex];
       const updatedAccionData = { ...originalAccion, ...data, updatedAt: Date.now() };
+
+      addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se actualizó la acción "${updatedAccionData.nombre}".` });
 
       if (updatedAccionData.estado === 'Completada' && originalAccion.estado !== 'Completada') {
         const cambios: CambioHistorial[] = [];
@@ -209,6 +212,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
               title: "Mejora Aplicada",
               description: `Se aplicaron ${cambios.length} cambio(s) al elemento asociado.`,
             });
+             addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se completó la acción "${updatedAccionData.nombre}" y se aplicaron mejoras automáticas.` });
           }
 
         } catch (e) {
@@ -224,12 +228,16 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
       newAcciones[accionIndex] = updatedAccionData;
       return newAcciones;
     });
-  }, []);
+  }, [addLogEntry]);
 
 
   const deleteAccion = useCallback((id: string) => {
+    const accionToDelete = acciones.find(a => a.id === id);
     setAcciones(prevAcciones => prevAcciones.filter((accion) => accion.id !== id));
-  }, []);
+    if (accionToDelete) {
+        addLogEntry({ action: 'delete', entityType: 'Acción de Mejora', entityName: accionToDelete.nombre, details: `Se eliminó la acción de mejora "${accionToDelete.nombre}".` });
+    }
+  }, [acciones, addLogEntry]);
 
   return (
     <AccionesContext.Provider value={{

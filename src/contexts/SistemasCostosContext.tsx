@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { useActivityLog } from './ActivityLogContext';
 
 // Types for Systems and Costs
 export const tiposDeCostoOptions = ["Por Uso del Sistema", "Por Licencias"] as const;
@@ -68,6 +69,7 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
   const [sistemas, setSistemas] = useState<Sistema[]>([]);
   const [costosSistemas, setCostosSistemas] = useState<SistemaCosto[]>([]);
   const [isLoadingSistemasCostos, setIsLoadingSistemasCostos] = useState(true);
+  const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -127,10 +129,12 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
         scopeId: data.scope === "Empresa" ? undefined : data.scopeId,
     };
     setSistemas((prev) => [...prev, newSistema]);
+    addLogEntry({ action: 'create', entityType: 'Sistema', entityName: data.nombre, details: `Se creó el sistema "${data.nombre}".` });
     return newSistema;
-  }, []);
+  }, [addLogEntry]);
 
   const updateSistema = useCallback((id: string, data: SistemaUpdateData) => {
+    const originalSistema = sistemas.find(s => s.id === id);
     setSistemas((prev) =>
       prev.map((sistema) => (sistema.id === id ? { 
         ...sistema, 
@@ -138,27 +142,52 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
         scopeId: data.scope === "Empresa" ? undefined : (data.scopeId !== undefined ? data.scopeId : sistema.scopeId)
       } : sistema))
     );
-  }, []);
+    if(originalSistema) {
+       addLogEntry({ action: 'update', entityType: 'Sistema', entityName: data.nombre || originalSistema.nombre, details: `Se actualizó el sistema "${originalSistema.nombre}".` });
+    }
+  }, [addLogEntry, sistemas]);
 
   const deleteSistema = useCallback((id: string) => {
+    const sistemaToDelete = sistemas.find(s => s.id === id);
     setCostosSistemas((prevCostos) => prevCostos.filter(costo => costo.sistemaId !== id));
     setSistemas((prevSistemas) => prevSistemas.filter((sistema) => sistema.id !== id));
-  }, []);
+    if(sistemaToDelete){
+        addLogEntry({ action: 'delete', entityType: 'Sistema', entityName: sistemaToDelete.nombre, details: `Se eliminó el sistema "${sistemaToDelete.nombre}" y sus costos asociados.` });
+    }
+  }, [addLogEntry, sistemas]);
 
   const addCostoSistema = useCallback((costoData: Omit<SistemaCosto, 'id'>) => {
     const newCosto: SistemaCosto = { ...costoData, id: Date.now().toString() };
+    const sistema = sistemas.find(s => s.id === costoData.sistemaId);
     setCostosSistemas((prev) => [...prev, newCosto]);
-  }, []);
+    if(sistema) {
+      addLogEntry({ action: 'create', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se agregó un costo al sistema "${sistema.nombre}".` });
+    }
+  }, [addLogEntry, sistemas]);
 
   const updateCostoSistema = useCallback((id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => {
+    const originalCosto = costosSistemas.find(c => c.id === id);
     setCostosSistemas((prev) =>
       prev.map((costo) => (costo.id === id ? { ...costo, ...costoData } : costo))
     );
-  }, []);
+     if(originalCosto) {
+        const sistema = sistemas.find(s => s.id === originalCosto.sistemaId);
+        if(sistema) {
+          addLogEntry({ action: 'update', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se actualizó un costo del sistema "${sistema.nombre}".` });
+        }
+    }
+  }, [addLogEntry, costosSistemas, sistemas]);
 
   const deleteCostoSistema = useCallback((id: string) => {
+    const costoToDelete = costosSistemas.find(c => c.id === id);
     setCostosSistemas((prev) => prev.filter((costo) => costo.id !== id));
-  }, []);
+    if(costoToDelete){
+       const sistema = sistemas.find(s => s.id === costoToDelete.sistemaId);
+       if(sistema){
+           addLogEntry({ action: 'delete', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se eliminó un costo del sistema "${sistema.nombre}".` });
+       }
+    }
+  }, [addLogEntry, costosSistemas, sistemas]);
 
   const getCostsForSystem = useCallback((sistemaId: string) => {
     return costosSistemas.filter(costo => costo.sistemaId === sistemaId);

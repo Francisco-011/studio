@@ -56,6 +56,7 @@ import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAcciones } from '@/contexts/AccionesContext';
+import { useActivityLog } from '@/contexts/ActivityLogContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -130,6 +131,7 @@ export default function AuditoriaPage() {
   const { addAccion, isLoadingAcciones } = useAcciones();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { areas } = useAreas();
+  const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
@@ -268,6 +270,7 @@ export default function AuditoriaPage() {
       findings: [],
     };
     setCurrentAuditSession(newAudit);
+    addLogEntry({ action: 'create', entityType: 'Auditoría', entityName: targetName, details: `Se inició una nueva auditoría para ${newAuditType}: "${targetName}".` });
     setIsStartAuditDialogOpen(false);
     setNewAuditType('');
     setNewAuditTargetId('');
@@ -356,6 +359,7 @@ export default function AuditoriaPage() {
         }
         return [...prev, finalAudit];
     });
+    addLogEntry({ action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
   };
@@ -376,6 +380,7 @@ export default function AuditoriaPage() {
         }
         return [...prev, cancelledAudit];
     });
+    addLogEntry({ action: 'status_change', entityType: 'Auditoría', entityName: cancelledAudit.targetName, details: `Se canceló la auditoría para "${cancelledAudit.targetName}".` });
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Cancelada", description: "La auditoría ha sido guardada en estado 'Cancelada'." });
     setIsConfirmCancelDialogOpen(false);
@@ -776,14 +781,44 @@ export default function AuditoriaPage() {
                 )}
             </TabsContent>
             <TabsContent value="actividad" className="mt-4">
-              <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
-                    <History className="h-16 w-16 text-muted-foreground mb-4" />
-                    <p className="text-lg font-semibold text-foreground">Registro de Actividad del Sistema (Conceptual)</p>
-                    <p className="text-sm text-muted-foreground text-center max-w-md">
-                        Esta sección está diseñada para mostrar un registro detallado de las acciones importantes realizadas en el sistema.
-                        La implementación de un registro de eventos completo requiere una arquitectura más compleja y está fuera del alcance actual.
-                    </p>
+             {isLoadingLog ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
+              ) : logEntries.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha y Hora</TableHead>
+                      <TableHead>Tipo de Entidad</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Acción</TableHead>
+                      <TableHead>Detalles</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logEntries.map(log => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs">{format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
+                        <TableCell>{log.entityType}</TableCell>
+                        <TableCell>{log.entityName}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{log.action}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{log.details}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
+                      <History className="h-16 w-16 text-muted-foreground mb-4" />
+                      <p className="text-lg font-semibold text-foreground">Sin Actividad Registrada</p>
+                      <p className="text-sm text-muted-foreground text-center max-w-md">
+                          No se ha registrado ninguna actividad en el sistema todavía.
+                      </p>
+                  </div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>

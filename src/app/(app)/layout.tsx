@@ -7,6 +7,7 @@ import { PuestosProvider } from '@/contexts/PuestosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
 import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
+import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -14,18 +15,20 @@ export default function AuthenticatedAppLayout({
   children: ReactNode;
 }) {
   return (
-    <AreasProvider>
-      <PuestosProvider>
-        {/* <FuentesDestinosProvider> */}
-        <SistemasCostosProvider>
-          <ActividadesProvider>
-            <AccionesProvider>
-              <AppLayout>{children}</AppLayout>
-            </AccionesProvider>
-          </ActividadesProvider>
-        </SistemasCostosProvider>
-        {/* </FuentesDestinosProvider> */}
-      </PuestosProvider>
-    </AreasProvider>
+    <ActivityLogProvider>
+      <AreasProvider>
+        <PuestosProvider>
+          {/* <FuentesDestinosProvider> */}
+          <SistemasCostosProvider>
+            <ActividadesProvider>
+              <AccionesProvider>
+                <AppLayout>{children}</AppLayout>
+              </AccionesProvider>
+            </ActividadesProvider>
+          </SistemasCostosProvider>
+          {/* </FuentesDestinosProvider> */}
+        </PuestosProvider>
+      </AreasProvider>
+    </ActivityLogProvider>
   );
 }

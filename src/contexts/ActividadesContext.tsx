@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Moneda } from '@/app/(app)/captura/page';
+import { useActivityLog } from './ActivityLogContext';
 
 export interface Actividad {
   id: string;
@@ -46,6 +47,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [isLoadingActividades, setIsLoadingActividades] = useState(true);
+  const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -101,10 +103,12 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       activa: data.activa === undefined ? true : data.activa, // Default to active if not specified
     };
     setActividades((prev) => [...prev, newActividad]);
+    addLogEntry({ action: 'create', entityType: 'Actividad', entityName: newActividad.nombre, details: `Se creó la actividad "${newActividad.nombre}".` });
     return newActividad;
-  }, []);
+  }, [addLogEntry]);
 
   const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    const originalActividad = actividades.find(a => a.id === id);
     setActividades((prev) =>
       prev.map((act) =>
         act.id === id ? { 
@@ -115,7 +119,10 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         } : act
       )
     );
-  }, []);
+     if (originalActividad) {
+      addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
+    }
+  }, [addLogEntry, actividades]);
 
   const softDeleteActividad = useCallback((id: string) => {
     const activityToMove = actividades.find(act => act.id === id);
@@ -123,8 +130,9 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       const currentTime = Date.now();
       setDeletedActividades(prev => [...prev, { ...activityToMove, deletedAt: currentTime, updatedAt: currentTime }]);
       setActividades(prev => prev.filter(act => act.id !== id));
+      addLogEntry({ action: 'delete', entityType: 'Actividad', entityName: activityToMove.nombre, details: `Se eliminó la actividad "${activityToMove.nombre}".` });
     }
-  }, [actividades]);
+  }, [actividades, addLogEntry]);
 
   const restoreActividad = useCallback((id: string) => {
     const activityToRestore = deletedActividades.find(act => act.id === id);
@@ -134,16 +142,21 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() };
       setActividades(prev => [...prev, restoredActivity]);
       setDeletedActividades(prev => prev.filter(act => act.id !== id));
+       addLogEntry({ action: 'restore', entityType: 'Actividad', entityName: restoredActivity.nombre, details: `Se restauró la actividad "${restoredActivity.nombre}".` });
     }
-  }, [deletedActividades]);
+  }, [deletedActividades, addLogEntry]);
 
   const toggleActividadStatus = useCallback((id: string) => {
+     const activity = actividades.find(a => a.id === id);
     setActividades((prev) =>
       prev.map((act) =>
         act.id === id ? { ...act, activa: !act.activa, updatedAt: Date.now() } : act
       )
     );
-  }, []);
+    if (activity) {
+      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activity.nombre, details: `El estado de la actividad "${activity.nombre}" cambió a ${!activity.activa ? 'Activa' : 'Inactiva'}.` });
+    }
+  }, [actividades, addLogEntry]);
 
 
   return (
