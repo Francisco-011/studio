@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   FolderTree, 
   UploadCloud,
+  ActivitySquare,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,15 +34,16 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/captura', label: 'Captura', icon: ClipboardEdit },
-  { href: '/configuracion', label: 'Configuración', icon: Settings },
-  { href: '/configuracion/carga-masiva', label: 'Carga Masiva', icon: UploadCloud },
-  { href: '/usuarios', label: 'Usuarios', icon: Users },
-  { href: '/actividades', label: 'Actividades', icon: ListChecks },
-  { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree },
   { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database },
+  { href: '/actividades', label: 'Actividades', icon: ListChecks },
+  { href: '/analisis', label: 'Matriz de Análisis', icon: ActivitySquare },
+  { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree },
   { href: '/mejoras', label: 'Mejoras', icon: TrendingUp },
   { href: '/acciones', label: 'Acciones', icon: Target },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
+  { href: '/configuracion', label: 'Configuración', icon: Settings },
+  { href: '/configuracion/carga-masiva', label: 'Carga Masiva', icon: UploadCloud },
+  { href: '/usuarios', label: 'Usuarios', icon: Users },
 ];
 
 export function SidebarNav() {
@@ -53,10 +55,10 @@ export function SidebarNav() {
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
-            isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href.split('/').length === pathname.split('/').length || (pathname.startsWith(item.href) && item.href !== '/analisis/panel-jerarquico' && item.href !== '/configuracion/carga-masiva' && item.href.split('/').length < pathname.split('/').length) )}
+            isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href.split('/').length === pathname.split('/').length || (pathname.startsWith(item.href) && item.href !== '/analisis' && item.href !== '/analisis/panel-jerarquico' && item.href !== '/configuracion/carga-masiva' && item.href.split('/').length < pathname.split('/').length) )}
             className={cn(
               'w-full justify-start',
-               (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href.split('/').length === pathname.split('/').length || (pathname.startsWith(item.href) && item.href !== '/analisis/panel-jerarquico' && item.href !== '/configuracion/carga-masiva' && item.href.split('/').length < pathname.split('/').length) )) ? 'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90' : ''
+               (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href.split('/').length === pathname.split('/').length || (pathname.startsWith(item.href) && item.href !== '/analisis' && item.href !== '/analisis/panel-jerarquico' && item.href !== '/configuracion/carga-masiva' && item.href.split('/').length < pathname.split('/').length) )) ? 'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90' : ''
             )}
             tooltip={{ children: item.label, side: "right", align: "center" }}
           >
