@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useActivityLog } from './ActivityLogContext';
 
 // Define NivelOrganizacional and Puesto interface here for context-wide use
-export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Apoyo"] as const;
+export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
 
 export interface Puesto {
