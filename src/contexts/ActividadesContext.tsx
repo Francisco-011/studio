@@ -148,7 +148,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
 
   const toggleActividadStatus = useCallback((id: string) => {
     const activity = actividades.find(a => a.id === id);
-    let hasUpdated = false;
+    let hasUpdated = false; // Flag to ensure we only update once
     setActividades((prev) =>
       prev.map((act) => {
         if (act.id === id && !hasUpdated) {
