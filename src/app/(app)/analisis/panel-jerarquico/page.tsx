@@ -769,7 +769,7 @@ export default function PanelJerarquicoPage() {
                   const activityInTreeId = `tree-activity-${act.id}-proc-${node.originalId!}`;
                   return (
                   <div 
-                    key={activityInTreeId} 
+                    key={`${activityInTreeId}-${index}`}
                     id={activityInTreeId}
                     draggable={act.activa && node.activo !== false}
                     onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, 'activityInProcess', { processId: node.originalId, indexInProcess: index }) : e.preventDefault()}
