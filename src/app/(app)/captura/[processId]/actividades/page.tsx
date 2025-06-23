@@ -283,7 +283,7 @@ export default function DefinirActividadesProcesoPage() {
       ));
       toast({ title: "Actividad Actualizada en Lista" });
     } else {
-      setDefinedActivities(prev => [...prev, { ...activityDataForStorage, tempId: Date.now().toString() }]);
+      setDefinedActivities(prev => [...prev, { ...activityDataForStorage, tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}` }]);
       toast({ title: "Actividad Agregada a la Lista" });
     }
     setIsActivityFormOpen(false);
