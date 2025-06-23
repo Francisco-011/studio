@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, CheckSquare, XSquare, ListTree, Clock, Repeat, LayersIcon, ArrowRightLeft, Info, CalendarClock, Filter, ArrowUpZA, ArrowDownAZ, ChevronsUpDown, ArrowDown, ArrowUp, DollarSign } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -73,7 +73,7 @@ const ITEMS_PER_PAGE = 10;
 
 const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
 
-  if (value === undefined || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea)) {
+  if (value === undefined || value === null || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea)) {
     return (
       <div>
         <h4 className="font-semibold text-sm">{title}:</h4>
@@ -244,8 +244,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     setSortConfig({ key, direction });
   };
   const getSortIcon = (key: SortableProcessKeys) => {
-    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-3 w-3 opacity-40" />;
-    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3" /> : <ArrowDown className="ml-2 h-3 w-3" />;
+    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
   const recoverableProcesses = useMemo(() => {
@@ -319,14 +319,17 @@ export default function ProcesosYFlujosRegistradosPage() {
         <CardContent>
           <div className="mb-4 p-4 border rounded-lg bg-muted/30">
             <div className="flex items-center gap-2 mb-3"><Filter className="h-5 w-5 text-primary"/><h4 className="text-md font-semibold">Filtros de Búsqueda</h4></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
-              <div className="relative lg:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+              <div className="relative xl:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
               <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={setSelectedDeptoFilter} disabled={isLoadingDepartamentos || filteredDeptosForFilter.length === 0}><SelectTrigger id="depto-filter"><SelectValue placeholder={isLoadingDepartamentos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos</SelectItem>{filteredDeptosForFilter.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
-              <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
             </div>
-            <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Todos los Filtros</Button>
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
+               <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
+                <div className="w-full"><Label htmlFor="activity-filter" className="text-xs font-medium text-muted-foreground ml-1">Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
+                <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm self-end">Limpiar Todos los Filtros</Button>
+            </div>
           </div>
           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
             <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto"><FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredData.length})</Button>
@@ -337,22 +340,43 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
-              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est. {getSortIcon('costoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est. {getSortIcon('tiempoEstimado')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
+              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
-              <TableHead className="text-right w-[120px]">Acciones</TableHead>
-            </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => { const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna"; return (
-            <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}><TableCell className="font-medium">{proc.proceso}</TableCell><TableCell>{proc.area}</TableCell><TableCell>{proc.departamento}</TableCell>
-            <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive")}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
-            <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+              <TableHead className="text-right w-[160px]">Acciones</TableHead>
+            </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => { const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna"; const { value: effectiveCost, isDerived } = getEffectiveCost(proc); return (
+            <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}><TableCell className="font-medium">{proc.proceso}</TableCell><TableCell>{proc.area}</TableCell><TableCell>{proc.departamento || '-'}</TableCell>
+            <TableCell className="text-center text-xs"><TooltipProvider><Tooltip><TooltipTrigger asChild>
+                <span>{effectiveCost.toFixed(2)} {proc.monedaCosto || ''} {isDerived && <Info className="h-3 w-3 inline ml-1 text-muted-foreground"/>}</span>
+            </TooltipTrigger><TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+            <TableCell className="text-center text-xs">{proc.tiempoEstimado !== undefined ? `${proc.tiempoEstimado} min` : '-'}</TableCell>
+            <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+            <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
             <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
             <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1"/><Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></div>
-            <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Siguiente</Button></div></div></>
+            <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredData.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Siguiente</Button></div></div></>
           ) : (<div className="mt-6 p-8 border-dashed rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20"><FileX className="h-16 w-16 text-muted-foreground mb-4" /><p className="text-lg font-semibold">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados" : "No se encontraron resultados"}</p><p className="text-sm text-muted-foreground">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? 'Comience registrando procesos en "Captura".' : 'Intente ajustar su búsqueda o filtros.'}</p></div>)}
         </CardContent>
       </Card>
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Detalles: {selectedProcess?.proceso}</DialogTitle><DialogDescription>Información completa del proceso y flujo.</DialogDescription></DialogHeader>{selectedProcess && (<div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2"><DetailSection title="Área" value={selectedProcess.area} /><DetailSection title="Departamento" value={selectedProcess.departamento} /><DetailSection title="Puesto" value={selectedProcess.puesto} /><DetailSection title="Descripción" value={selectedProcess.descripcion} isTextarea /><DetailSection title="Tiempo Estimado" value={`${selectedProcess.tiempoEstimado} min`} /><DetailSection title="Tiempo Ideal" value={`${selectedProcess.tiempoIdeal} min`} /><DetailSection title="Costo Estimado" value={`${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto}`} /><DetailSection title="Costo Ideal" value={`${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto}`} /><DetailSection title="Frecuencia" value={selectedProcess.frecuencia} /><DetailSection title="Sistemas" value={selectedProcess.sistemas} isList /><DetailSection title="Entradas" value={selectedProcess.informacionRecibe} isTextarea /><DetailSection title="Procesos de Entrada" value={selectedProcess.procesosEntrada} isList /><DetailSection title="Salidas" value={selectedProcess.informacionEntrega} isTextarea /><DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList /></div>)}<DialogClose asChild><Button type="button" variant="outline" className="w-full">Cerrar</Button></DialogClose></DialogContent></Dialog>
-      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Detalles: {selectedProcess?.proceso}</DialogTitle><DialogDescription>Información completa del proceso y flujo.</DialogDescription></DialogHeader>{selectedProcess && (<div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+            <DetailSection title="Área" value={selectedProcess.area} />
+            <DetailSection title="Departamento" value={selectedProcess.departamento} />
+            <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
+            <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} isTextarea />
+            <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} min` : undefined} />
+            <DetailSection title="Tiempo Ideal" value={selectedProcess.tiempoIdeal !== undefined ? `${selectedProcess.tiempoIdeal} min` : undefined} />
+            <DetailSection title="Costo Estimado" value={selectedProcess.costoEstimado !== undefined ? `${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto}` : undefined} />
+            <DetailSection title="Costo Ideal" value={selectedProcess.costoIdeal !== undefined ? `${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto}` : undefined} />
+            <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
+            <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
+            <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
+            <DetailSection title="Procesos de Entrada" value={selectedProcess.procesosEntrada} isList />
+            <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />
+            <DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList />
+      </div>)}<DialogClose asChild><Button type="button" variant="outline" className="w-full">Cerrar</Button></DialogClose></DialogContent></Dialog>
+      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
