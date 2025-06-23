@@ -454,7 +454,7 @@ export default function DefinirActividadesProcesoPage() {
                 </TableHeader>
                 <TableBody>
                   {definedActivities.map((act, index) => (
-                    <TableRow key={act.tempId}>
+                    <TableRow key={`${act.tempId}-${index}`}>
                       <TableCell className="text-center font-medium">{index + 1}</TableCell>
                       <TableCell>{act.nombre}</TableCell>
                       <TableCell className="text-xs">
