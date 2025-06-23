@@ -221,36 +221,34 @@ export default function CapturaPage() {
   }, []);
 
   useEffect(() => {
-    const editIdFromQuery = searchParams.get('editId');
-  
-    if (editIdFromQuery) {
-      if (editingId !== editIdFromQuery) {
-        setEditingId(editIdFromQuery);
+    const editId = searchParams.get('editId');
+    setEditingId(editId);
+
+    if (editId) {
+      // Edit mode: Wait for all data dependencies to load.
+      if (isLoadingAreas || isLoadingPuestos || allProcesses.length === 0) {
+        return; 
       }
-  
-      if (!isLoadingAreas && !isLoadingPuestos && allProcesses.length > 0) {
-        const processToEdit = allProcesses.find(p => p.id === editIdFromQuery);
-        
-        if (processToEdit) {
-          // Merge with defaults to ensure all fields are present on the form
-          const formValues = {
-            ...(defaultFormValues as CapturaFormData),
-            ...processToEdit,
-          };
-          form.reset(formValues);
-        } else {
-          toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
-          if (editingId !== null) setEditingId(null); 
-          router.push('/procesos-y-flujos-registrados');
-        }
+      
+      const processToEdit = allProcesses.find(p => p.id === editId);
+      
+      if (processToEdit) {
+        // Populate the form with the process data.
+        // Merging with defaults ensures all fields are accounted for.
+        form.reset({
+          ...defaultFormValues,
+          ...processToEdit,
+        });
+      } else {
+        // If the process isn't found, show an error and redirect.
+        toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
+        router.push('/procesos-y-flujos-registrados');
       }
     } else {
-      if (editingId !== null) { 
-          setEditingId(null);
-          form.reset(defaultFormValues as CapturaFormData);
-      }
+      // Create mode: Reset the form to its default empty state.
+      form.reset(defaultFormValues as CapturaFormData);
     }
-  }, [searchParams, form, router, isLoadingAreas, isLoadingPuestos, editingId, allProcesses]);
+  }, [searchParams, allProcesses, isLoadingAreas, isLoadingPuestos, form, router]);
   
   useEffect(() => {
     if (watchedProcessName && allProcesses.length > 0) {
