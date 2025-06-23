@@ -60,13 +60,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
 type FindingType = typeof findingTypes[number];
+
+const auditStatuses = ["En Progreso", "Completada", "Cancelada", "Pendiente"] as const;
+type AuditStatus = typeof auditStatuses[number];
+
 
 const auditFindingSchema = z.object({
   type: z.enum(findingTypes, { errorMap: () => ({ message: "Seleccione un tipo válido."})}),
@@ -95,7 +99,7 @@ interface Audit {
   targetName: string;
   auditorName: string;
   auditDate: string; // ISO string
-  status: 'En Progreso' | 'Completada';
+  status: AuditStatus;
   findings: AuditFinding[];
 }
 
@@ -152,6 +156,7 @@ export default function AuditoriaPage() {
   
   const [isConfirmDeleteFindingOpen, setIsConfirmDeleteFindingOpen] = useState(false);
   const [findingToDelete, setFindingToDelete] = useState<AuditFinding | null>(null);
+  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
 
 
   const findingForm = useForm<AuditFindingFormData>({
@@ -368,6 +373,27 @@ export default function AuditoriaPage() {
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
   };
+
+  const promptCancelAudit = () => {
+    setIsConfirmCancelDialogOpen(true);
+  };
+  
+  const handleCancelAudit = () => {
+    if (!currentAuditSession) return;
+    const cancelledAudit = { ...currentAuditSession, status: 'Cancelada' as const };
+    setPastAudits(prev => {
+        const existingIndex = prev.findIndex(a => a.id === cancelledAudit.id);
+        if (existingIndex > -1) {
+            const newAudits = [...prev];
+            newAudits[existingIndex] = cancelledAudit;
+            return newAudits;
+        }
+        return [...prev, cancelledAudit];
+    });
+    setCurrentAuditSession(null);
+    toast({ title: "Auditoría Cancelada", description: "La auditoría ha sido guardada en estado 'Cancelada'." });
+    setIsConfirmCancelDialogOpen(false);
+  };
   
   const handleEditAudit = (audit: Audit) => {
     setCurrentAuditSession({ ...audit, status: 'En Progreso' });
@@ -477,7 +503,8 @@ export default function AuditoriaPage() {
                             )) : (<div className="text-center text-muted-foreground py-6">No hay hallazgos registrados.</div>)}
                         </div>
                     </div>
-                    <div className="flex justify-end pt-4">
+                    <div className="flex justify-end pt-4 space-x-2">
+                        <Button variant="destructive" onClick={promptCancelAudit}> <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría</Button>
                         <Button size="lg" onClick={handleFinalizeAudit}> <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría</Button>
                     </div>
                 </CardContent>
@@ -537,6 +564,25 @@ export default function AuditoriaPage() {
                 <AlertDialogFooter>
                   <AlertDialogCancel onClick={() => setFindingToDelete(null)}>Cancelar</AlertDialogCancel>
                   <AlertDialogAction onClick={executeDeleteFinding} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={isConfirmCancelDialogOpen} onOpenChange={setIsConfirmCancelDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                      <div className="flex items-center">
+                          <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
+                          Confirmar Cancelación de Auditoría
+                      </div>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿Está seguro de que desea cancelar esta auditoría? El progreso se guardará con el estado "Cancelada" y podrá consultarla más tarde.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Volver</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCancelAudit} className={buttonVariants({variant: "destructive"})}>Sí, Cancelar Auditoría</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -633,7 +679,12 @@ export default function AuditoriaPage() {
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
                                  <TableCell>
-                                  <Badge variant={audit.status === "Completada" ? "default" : "secondary"}>{audit.status}</Badge>
+                                  <Badge variant={
+                                      audit.status === "Completada" ? "default" :
+                                      audit.status === "Cancelada" ? "destructive" :
+                                      audit.status === "Pendiente" ? "outline" :
+                                      "secondary" // En Progreso
+                                  }>{audit.status}</Badge>
                                 </TableCell>
                                 <TableCell>{audit.findings.length}</TableCell>
                                 <TableCell className="text-right">
