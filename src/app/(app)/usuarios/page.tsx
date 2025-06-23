@@ -54,6 +54,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from '@/components/ui/separator';
+import { Label } from "@/components/ui/label";
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -519,9 +520,9 @@ export default function UsuariosPage() {
               </CardDescription>
               <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
                 <div className="flex-grow">
-                  <FormLabel>Seleccionar Rol a Editar</FormLabel>
+                  <Label htmlFor="role-select">Seleccionar Rol a Editar</Label>
                   <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
-                    <SelectTrigger>
+                    <SelectTrigger id="role-select">
                       <SelectValue placeholder="Seleccione un rol..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -590,5 +591,3 @@ export default function UsuariosPage() {
     </div>
   );
 }
-
-    
