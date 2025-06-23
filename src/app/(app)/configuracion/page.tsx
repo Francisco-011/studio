@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { useRouter } from 'next/navigation';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { usePuestos, type Puesto, type NivelOrganizacional, nivelesOrganizacionales, type PuestoCreationData } from '@/contexts/PuestosContext';
 import { 
@@ -73,7 +74,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2 } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2, UploadCloud } from 'lucide-react';
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
@@ -223,6 +224,7 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
 
 
 export default function ConfiguracionPage() {
+  const router = useRouter();
   const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
   const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
   const { 
@@ -1427,6 +1429,20 @@ export default function ConfiguracionPage() {
         </div>
       ),
     },
+    {
+        value: 'masiva',
+        label: 'Carga Masiva',
+        icon: <UploadCloud className="h-5 w-5 mr-2" />,
+        fullDescription: 'Importar datos de forma masiva utilizando archivos CSV. Descargue las plantillas, llénelas y cárguelas para poblar el sistema rápidamente.',
+        content: (
+            <div className="text-center">
+                <p className="mb-4">La funcionalidad de carga masiva está disponible en una página dedicada para una mejor experiencia.</p>
+                <Button onClick={() => router.push('/configuracion/carga-masiva')}>
+                    Ir a Carga Masiva
+                </Button>
+            </div>
+        )
+    }
   ];
 
 
@@ -1442,7 +1458,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-3 mb-4">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-4 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
@@ -1472,6 +1488,3 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-    
-
-    
