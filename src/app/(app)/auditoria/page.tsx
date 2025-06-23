@@ -151,6 +151,9 @@ export default function AuditoriaPage() {
   const [findingToDelete, setFindingToDelete] = useState<AuditFinding | null>(null);
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
 
+  const [isConfirmDeleteAuditOpen, setIsConfirmDeleteAuditOpen] = useState(false);
+  const [auditToDelete, setAuditToDelete] = useState<Audit | null>(null);
+
 
   const findingForm = useForm<AuditFindingFormData>({
     resolver: zodResolver(auditFindingSchema),
@@ -388,6 +391,20 @@ export default function AuditoriaPage() {
   
   const handleEditAudit = (audit: Audit) => {
     setCurrentAuditSession({ ...audit, status: 'En Progreso' });
+  };
+
+  const promptDeleteAudit = (audit: Audit) => {
+    setAuditToDelete(audit);
+    setIsConfirmDeleteAuditOpen(true);
+  };
+
+  const executeDeleteAudit = () => {
+    if (!auditToDelete) return;
+    setPastAudits(prev => prev.filter(a => a.id !== auditToDelete.id));
+    addLogEntry({ action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría para "${auditToDelete.targetName}".` });
+    toast({ title: 'Auditoría Eliminada', description: `La auditoría para "${auditToDelete.targetName}" ha sido eliminada permanentemente.`, variant: 'destructive' });
+    setAuditToDelete(null);
+    setIsConfirmDeleteAuditOpen(false);
   };
 
   if (isLoading || isLoadingActividades || isLoadingPuestos) {
@@ -768,8 +785,11 @@ export default function AuditoriaPage() {
                                 </TableCell>
                                 <TableCell>{audit.findings.length}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="outline" size="sm" onClick={() => handleEditAudit(audit)}>
+                                    <Button variant="outline" size="sm" onClick={() => handleEditAudit(audit)} className="mr-2">
                                         <Edit className="mr-2 h-4 w-4" /> Ver / Editar
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} className="text-destructive hover:text-destructive">
+                                      <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -823,6 +843,27 @@ export default function AuditoriaPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* DIALOGS */}
+      <AlertDialog open={isConfirmDeleteAuditOpen} onOpenChange={setIsConfirmDeleteAuditOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>
+                    <div className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                        Confirmar Eliminación Permanente
+                    </div>
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    ¿Está seguro de que desea eliminar la auditoría para "{auditToDelete?.targetName}"? Esta acción no se puede deshacer y se borrarán todos sus hallazgos.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuditToDelete(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={executeDeleteAudit} className={buttonVariants({variant: "destructive"})}>Eliminar Permanentemente</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
