@@ -4,14 +4,16 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { useDepartamentos } from './DepartamentosContext';
 
-// Define NivelOrganizacional and Puesto interface here for context-wide use
+
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
 
 export interface Puesto {
   id: string;
   nombre: string;
+  areaId: string;
   departamentoId?: string;
   jefeInmediato?: string; 
   nivelOrganizacional: NivelOrganizacional;
@@ -36,20 +38,23 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [isLoadingPuestos, setIsLoadingPuestos] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const { departamentos } = useDepartamentos();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const savedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
         if (savedPuestos) {
-          // Migration logic to handle old data with areaId
           const parsedPuestos = JSON.parse(savedPuestos).map((p: any) => {
-            if (p.areaId && !p.departamentoId) {
-                delete p.areaId;
+            if (!p.areaId && p.departamentoId) {
+                const depto = departamentos.find(d => d.id === p.departamentoId);
+                if (depto) {
+                    p.areaId = depto.areaId;
+                }
             }
             return p;
           });
-          setPuestos(parsedPuestos);
+          setPuestos(parsedPuestos.filter((p: any) => p.areaId)); // Ensure all puestos have an area
         }
       } catch (error) {
         console.error("Failed to load puestos from localStorage", error);
@@ -60,7 +65,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     } else {
       setIsLoadingPuestos(false);
     }
-  }, []);
+  }, [departamentos]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !isLoadingPuestos) {

@@ -52,7 +52,7 @@ export type Moneda = typeof monedaOptions[number];
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
-  departamento: z.string().min(1, "El departamento es requerido."),
+  departamento: z.string().optional(),
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
@@ -141,18 +141,30 @@ export default function CapturaPage() {
   const watchedProcessName = form.watch('proceso');
   
   const filteredDepartamentos = useMemo(() => {
-    if (!watchedAreaName || isLoadingDepartamentos) return [];
+    if (!watchedAreaName || isLoadingDepartamentos || isLoadingAreas) return [];
     const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
     if (!areaId) return [];
     return departamentos.filter(d => d.areaId === areaId);
-  }, [watchedAreaName, areas, departamentos, isLoadingDepartamentos]);
+  }, [watchedAreaName, areas, departamentos, isLoadingDepartamentos, isLoadingAreas]);
 
   const filteredPuestos = useMemo(() => {
-    if (!watchedDepartamentoName || isLoadingPuestos) return [];
-    const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areas.find(a => a.nombre === watchedAreaName)?.id)?.id;
-    if (!deptoId) return [];
-    return puestos.filter(p => p.departamentoId === deptoId);
-  }, [watchedDepartamentoName, watchedAreaName, departamentos, puestos, areas, isLoadingPuestos]);
+    if (!watchedAreaName || isLoadingPuestos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
+    if (!areaId) return [];
+    
+    // Filter by area first
+    const puestosInArea = puestos.filter(p => p.areaId === areaId);
+
+    // If a department is selected, filter further
+    if (watchedDepartamentoName) {
+      const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areaId)?.id;
+      if (deptoId) {
+        return puestosInArea.filter(p => p.departamentoId === deptoId);
+      }
+    }
+    // If no department is selected, return all positions for the area
+    return puestosInArea;
+  }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
 
 
   const availableSistemasForForm = useMemo(() => {
@@ -160,7 +172,7 @@ export default function CapturaPage() {
 
     const selectedAreaObj = areas.find(a => a.nombre === watchedAreaName);
     const selectedDeptoObj = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === selectedAreaObj?.id);
-    const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto') && p.departamentoId === selectedDeptoObj?.id);
+    const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto') && (p.areaId === selectedAreaObj?.id));
 
     return allConfiguredSistemas.filter(sistema => {
       if (sistema.scope === "Empresa") return true;
@@ -271,6 +283,7 @@ export default function CapturaPage() {
 
       const dataToSave: CapturaFormData = {
         ...values,
+        departamento: values.departamento || undefined,
         procesosEntrada: values.procesosEntrada || [],
         procesosSalida: values.procesosSalida || [],
         activityOrder: values.activityOrder || [],
@@ -473,7 +486,7 @@ export default function CapturaPage() {
                   name="departamento"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Departamento</FormLabel>
+                      <FormLabel>Departamento (Opcional)</FormLabel>
                        <Select
                         onValueChange={(value) => { field.onChange(value); form.setValue('puesto', ''); }}
                         value={field.value}
@@ -495,11 +508,12 @@ export default function CapturaPage() {
                        <Select
                         onValueChange={field.onChange}
                         value={field.value}
-                        disabled={!watchedDepartamentoName || isLoadingPuestos || filteredPuestos.length === 0}
+                        disabled={!watchedAreaName || isLoadingPuestos || filteredPuestos.length === 0}
                       >
-                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedDepartamentoName ? "Seleccione un depto. primero" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
                         <SelectContent>{filteredPuestos.map((puesto) => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent>
                       </Select>
+                      <FormDescription>Puestos disponibles para el área/depto. seleccionado.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

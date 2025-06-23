@@ -281,7 +281,7 @@ export default function PanelJerarquicoPage() {
         if (!currentAreaNode) return; 
 
 
-        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && ((p.areaId === procAreaObject?.id) || (!p.areaId && !procAreaObject)));
+        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && p.areaId === (procAreaObject?.id));
         
         if (!filterByActivityId && selectedPuestoFilter !== 'all') {
             if (selectedPuestoFilter === 'puesto-unassigned') {

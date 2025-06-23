@@ -101,6 +101,7 @@ type DepartamentoFormData = z.infer<typeof departamentoFormSchema>;
 const puestoFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre del puesto es requerido.'),
+  areaId: z.string().min(1, 'El área es requerida.'),
   departamentoId: z.string().optional().or(z.literal(NO_DEPARTAMENTO_VALUE).transform(() => undefined)),
   jefeInmediato: z.string().optional().or(z.literal(NO_JEFE_VALUE).transform(() => undefined)),
   nivelOrganizacional: z.enum(nivelesOrganizacionales, {
@@ -259,7 +260,6 @@ export default function ConfiguracionPage() {
   
   const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
-  const [selectedAreaForPuestoFilter, setSelectedAreaForPuestoFilter] = useState<string | null>(null);
 
   const [isSistemaDialogOpen, setIsSistemaDialogOpen] = useState(false);
   const [editingSistema, setEditingSistema] = useState<Sistema | null>(null);
@@ -290,6 +290,7 @@ export default function ConfiguracionPage() {
     resolver: zodResolver(puestoFormSchema),
     defaultValues: {
       nombre: '',
+      areaId: '',
       departamentoId: undefined,
       jefeInmediato: undefined,
       nivelOrganizacional: undefined,
@@ -330,20 +331,19 @@ export default function ConfiguracionPage() {
 
   useEffect(() => {
     if (editingPuesto) {
-      const depto = departamentos.find(d => d.id === editingPuesto.departamentoId);
-      setSelectedAreaForPuestoFilter(depto?.areaId || null);
       puestoForm.reset({
         id: editingPuesto.id,
         nombre: editingPuesto.nombre,
+        areaId: editingPuesto.areaId,
         departamentoId: editingPuesto.departamentoId || NO_DEPARTAMENTO_VALUE,
         jefeInmediato: editingPuesto.jefeInmediato || NO_JEFE_VALUE,
         nivelOrganizacional: editingPuesto.nivelOrganizacional,
         numeroPersonas: editingPuesto.numeroPersonas,
       });
     } else {
-      setSelectedAreaForPuestoFilter(null);
       puestoForm.reset({
         nombre: '',
+        areaId: '',
         departamentoId: NO_DEPARTAMENTO_VALUE,
         jefeInmediato: NO_JEFE_VALUE,
         nivelOrganizacional: undefined,
@@ -416,12 +416,14 @@ export default function ConfiguracionPage() {
   }
   function handleDeleteArea(areaId: string) {
     const isAreaInUseByDepto = departamentos.some(depto => depto.areaId === areaId);
+    const isAreaInUseByPuesto = puestos.some(puesto => puesto.areaId === areaId);
     const isAreaInUseBySistema = sistemas.some(sistema => sistema.scope === "Área" && sistema.scopeId === areaId);
-    if (isAreaInUseByDepto || isAreaInUseBySistema) {
+    
+    if (isAreaInUseByDepto || isAreaInUseBySistema || isAreaInUseByPuesto) {
       let message = 'El área no puede ser eliminada porque está asignada a:';
       if (isAreaInUseByDepto) message += ' uno o más departamentos';
-      if (isAreaInUseByDepto && isAreaInUseBySistema) message += ' y';
-      if (isAreaInUseBySistema) message += ' uno o más sistemas';
+      if (isAreaInUseByPuesto) message += `${isAreaInUseByDepto ? ', ' : ''} uno o más puestos`;
+      if (isAreaInUseBySistema) message += `${(isAreaInUseByDepto || isAreaInUseByPuesto) ? ' y' : ''} uno o más sistemas`;
       message += '.';
       toast({ title: 'Error al eliminar', description: message, variant: 'destructive' });
       return;
@@ -460,6 +462,7 @@ export default function ConfiguracionPage() {
   function handlePuestoSubmit(data: PuestoFormData) {
     const puestoDataToSave: PuestoCreationData = {
       nombre: data.nombre,
+      areaId: data.areaId,
       departamentoId: data.departamentoId === NO_DEPARTAMENTO_VALUE ? undefined : data.departamentoId,
       jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato,
       nivelOrganizacional: data.nivelOrganizacional,
@@ -586,7 +589,8 @@ export default function ConfiguracionPage() {
   const totalCostosDialogPages = Math.ceil(costsForSelectedSystem.length / ITEMS_PER_PAGE_CONFIG);
   
   const watchedSistemaScope = sistemaForm.watch('scope');
-  const filteredDepartamentosForPuestoForm = useMemo(() => selectedAreaForPuestoFilter ? departamentos.filter(d => d.areaId === selectedAreaForPuestoFilter) : [], [selectedAreaForPuestoFilter, departamentos]);
+  const watchedPuestoAreaId = puestoForm.watch('areaId');
+  const filteredDepartamentosForPuestoForm = useMemo(() => watchedPuestoAreaId ? departamentos.filter(d => d.areaId === watchedPuestoAreaId) : [], [watchedPuestoAreaId, departamentos]);
   
 
   const configSections: Array<{ value: string; label: string; icon: ReactNode; fullDescription: string; content: ReactNode; }> = [
@@ -694,8 +698,8 @@ export default function ConfiguracionPage() {
                           <DialogHeader><DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Nuevo Puesto'}</DialogTitle></DialogHeader>
                           <Form {...puestoForm}><form onSubmit={puestoForm.handleSubmit(handlePuestoSubmit)} className="space-y-4 py-4">
                             <FormField control={puestoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre del Puesto</FormLabel><FormControl><Input placeholder="Ej: Analista Financiero" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                            <FormItem><FormLabel>Área (para filtrar departamentos)</FormLabel><Select onValueChange={(v) => { setSelectedAreaForPuestoFilter(v); puestoForm.setValue('departamentoId', NO_DEPARTAMENTO_VALUE); }} value={selectedAreaForPuestoFilter || ""} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select></FormItem>
-                            <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento al que pertenece</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_DEPARTAMENTO_VALUE} disabled={!selectedAreaForPuestoFilter || isLoadingDepartamentos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un departamento" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_VALUE}>Sin Departamento Asignado</SelectItem>{filteredDepartamentosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={puestoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={(value) => { field.onChange(value); puestoForm.setValue('departamentoId', NO_DEPARTAMENTO_VALUE); }} value={field.value} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_DEPARTAMENTO_VALUE} disabled={!watchedPuestoAreaId || isLoadingDepartamentos}><FormControl><SelectTrigger><SelectValue placeholder={!watchedPuestoAreaId ? "Seleccione un área primero" : "Seleccione depto..."} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_VALUE}>Nivel de Área / Sin Depto.</SelectItem>{filteredDepartamentosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_JEFE_VALUE} disabled={isLoadingPuestos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un jefe" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_JEFE_VALUE}>Sin Jefe</SelectItem>{puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <div className="grid grid-cols-2 gap-4"><FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel>Nº Personas</FormLabel><FormControl><Input type="number" placeholder="Ej: 5" {...field} value={field.value ?? ''} min="0" /></FormControl><FormMessage /></FormItem>)} /></div>
                             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingPuesto ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
@@ -704,7 +708,7 @@ export default function ConfiguracionPage() {
                       </Dialog>
                     </div>
                     {isLoadingPuestos ? (<PlaceholderContent title="Cargando puestos..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />) : puestos.length === 0 ? (<PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />) : (
-                      <><Card><Table><TableHeader><TableRow><TableHead>Nombre del Puesto</TableHead><TableHead>Departamento</TableHead><TableHead>Área</TableHead><TableHead>Jefe Inmediato</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedPuestos.map((puesto) => {const depto = departamentos.find(d => d.id === puesto.departamentoId); const area = depto ? areas.find(a => a.id === depto.areaId) : null; const jefe = puestos.find(p => p.id === puesto.jefeInmediato); return (<TableRow key={puesto.id}><TableCell>{puesto.nombre}</TableCell><TableCell>{depto?.nombre || '-'}</TableCell><TableCell>{area?.nombre || '-'}</TableCell><TableCell>{jefe?.nombre || '-'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeletePuesto(puesto.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></Card>
+                      <><Card><Table><TableHeader><TableRow><TableHead>Nombre del Puesto</TableHead><TableHead>Departamento</TableHead><TableHead>Área</TableHead><TableHead>Jefe Inmediato</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedPuestos.map((puesto) => {const depto = departamentos.find(d => d.id === puesto.departamentoId); const area = areas.find(a => a.id === puesto.areaId); const jefe = puestos.find(p => p.id === puesto.jefeInmediato); return (<TableRow key={puesto.id}><TableCell>{puesto.nombre}</TableCell><TableCell>{depto?.nombre || '-'}</TableCell><TableCell>{area?.nombre || 'N/A'}</TableCell><TableCell>{jefe?.nombre || '-'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeletePuesto(puesto.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></Card>
                       {totalPuestosPages > 1 && (<div className="flex items-center justify-end space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {puestosCurrentPage} de {totalPuestosPages}</span><Button variant="outline" size="sm" onClick={() => setPuestosCurrentPage(p => Math.max(1, p - 1))} disabled={puestosCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setPuestosCurrentPage(p => Math.min(totalPuestosPages, p + 1))} disabled={puestosCurrentPage === totalPuestosPages}>Siguiente</Button></div>)}</>
                     )}
                   </div>
