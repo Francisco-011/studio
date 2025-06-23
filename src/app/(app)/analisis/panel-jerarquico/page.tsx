@@ -706,8 +706,12 @@ export default function PanelJerarquicoPage() {
     setIsDetailDialogOpen(true);
   };
 
-  const handleEditProcess = (processId: string) => {
-    router.push(`/captura?editId=${processId}`);
+  const handleEditProcess = (processName: string) => {
+    router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(processName)}`);
+  };
+
+  const handleEditActivity = (activityName: string) => {
+    router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
   };
 
   const renderTree = (nodes: TreeNode[], parentPuestoNodeId?: string): JSX.Element[] => {
@@ -747,7 +751,7 @@ export default function PanelJerarquicoPage() {
           </span>
           {node.type === 'proceso' && node.originalId && (
             <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditProcess(node.originalId!)} title="Editar proceso">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditProcess(node.name)} title="Editar proceso">
                     <Edit2 className="h-4 w-4 text-muted-foreground" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(capturedProcesses.find(p => p.id === node.originalId!)!, 'process')} title="Ver detalles del proceso">
@@ -784,9 +788,14 @@ export default function PanelJerarquicoPage() {
                     <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
                     <span className="flex-grow">{act.nombre}</span>
                     {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
-                     <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
-                        <Eye className="h-3 w-3 text-muted-foreground" />
-                    </Button>
+                     <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad en su módulo">
+                            <Edit2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                    </div>
                   </div>
                 )})}
                  {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
@@ -1239,14 +1248,6 @@ export default function PanelJerarquicoPage() {
             })()}
           </div>
           <DialogFooter>
-            {detailItemType === 'activity' && selectedItemForDetail && (
-                <Button 
-                    type="button" 
-                    onClick={() => router.push(`/actividades?search=${encodeURIComponent(selectedItemForDetail.nombre)}`)}
-                >
-                    <Edit2 className="mr-2 h-4 w-4" /> Editar en Módulo de Actividades
-                </Button>
-            )}
             <DialogClose asChild>
               <Button type="button" variant="outline">Cerrar</Button>
             </DialogClose>

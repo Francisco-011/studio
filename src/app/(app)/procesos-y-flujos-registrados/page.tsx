@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -110,6 +110,7 @@ const DetailSection = ({ title, value, isList = false, isTextarea = false }: { t
 
 export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities } = useActividades();
@@ -180,6 +181,13 @@ export default function ProcesosYFlujosRegistradosPage() {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const searchQuery = searchParams.get('search');
+    if (searchQuery) {
+        setSearchTerm(searchQuery);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -539,7 +547,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     </SelectTrigger>
                     <SelectContent>
                     <SelectItem value="all">Todas las Áreas</SelectItem>
-                    {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem>
+                    {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem> 
                     : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
                     : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
                     </SelectContent>
@@ -553,7 +561,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     </SelectTrigger>
                     <SelectContent>
                     <SelectItem value="all">Todos los Puestos</SelectItem>
-                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
+                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
                    : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
                    : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
                     </SelectContent>
