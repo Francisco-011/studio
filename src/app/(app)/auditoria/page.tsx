@@ -59,6 +59,7 @@ import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { cn } from '@/lib/utils';
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle } from "lucide-react";
 
@@ -103,33 +104,22 @@ interface Audit {
   findings: AuditFinding[];
 }
 
-const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList && !isTextarea)) {
-    return (
-      <div className="text-sm">
-        <strong className="font-semibold">{title}:</strong>
-        <span className="text-muted-foreground ml-1">No especificado.</span>
-      </div>
-    );
+const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
+  if (value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea && !isList)) {
+    return null;
   }
-
-  if (isList && Array.isArray(value)) {
-    return (
-      <div className="text-sm">
-        <strong className="font-semibold">{title}:</strong>
+  return (
+    <div className="text-sm">
+      <strong className="font-semibold text-foreground/90">{title}:</strong>
+      {isList && Array.isArray(value) ? (
         <div className="flex flex-wrap gap-1 mt-1">
           {value.map((item, idx) => (
             <Badge key={idx} variant="secondary">{item}</Badge>
           ))}
         </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="text-sm">
-      <strong className="font-semibold">{title}:</strong>
-      <span className="text-muted-foreground ml-1">{typeof value === 'number' ? value.toString() : value}</span>
+      ) : (
+        <p className={cn("text-muted-foreground", isTextarea && "whitespace-pre-wrap mt-1")}>{typeof value === 'number' ? value.toString() : value}</p>
+      )}
     </div>
   );
 };
@@ -207,41 +197,29 @@ export default function AuditoriaPage() {
 
     if (currentAuditSession.auditType === 'proceso') {
       const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
-      if (!process) return { name: "Proceso no encontrado", details: [], activities: [] };
+      if (!process) return { name: "Proceso no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
       const processActivities = (process.activityOrder || [])
         .map(actId => actividades.find(a => a.id === actId))
         .filter((act): act is Actividad => !!act);
 
       return {
         name: process.proceso,
-        details: [
-          { title: "Área", value: process.area },
-          { title: "Puesto", value: process.puesto },
-          { title: "Frecuencia", value: process.frecuencia },
-          { title: "Tiempo Estimado (min)", value: process.tiempoEstimado },
-          { title: "Costo Estimado", value: process.costoEstimado ? `${process.costoEstimado} ${process.monedaCosto}` : undefined },
-          { title: "Sistemas", value: process.sistemas, isList: true },
-          { title: "Descripción", value: process.descripcion, isTextarea: true },
-          { title: "Entradas", value: process.informacionRecibe, isTextarea: true },
-          { title: "Procesos de Entrada", value: process.procesosEntrada, isList: true },
-          { title: "Salidas", value: process.informacionEntrega, isTextarea: true },
-          { title: "Procesos de Salida", value: process.procesosSalida, isList: true },
-        ],
+        process,
         activities: processActivities,
+        puesto: null,
+        relatedProcesses: [],
       };
     } else { // Puesto
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
-      if (!puesto) return { name: "Puesto no encontrado", details: [], processes: [] };
+      if (!puesto) return { name: "Puesto no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
       const relatedProcesses = allProcesses.filter(proc => proc.puesto === puesto.nombre);
-      const areaName = areas.find(a => a.id === puesto.areaId)?.nombre;
+      
       return {
         name: puesto.nombre,
-        details: [
-          { title: "Área", value: areaName || 'No asignada'},
-          { title: "Nivel", value: puesto.nivelOrganizacional },
-          { title: "Personas", value: puesto.numeroPersonas || 'N/A' }
-        ],
-        processes: relatedProcesses,
+        process: null,
+        activities: [],
+        puesto,
+        relatedProcesses,
       };
     }
   }, [currentAuditSession, allProcesses, actividades, puestos, areas]);
@@ -429,39 +407,77 @@ export default function AuditoriaPage() {
                         <CardHeader>
                             <CardTitle className="text-lg">Objetivo de la Auditoría: {auditTargetDetails?.name}</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            {auditTargetDetails?.details && auditTargetDetails.details.length > 0 &&
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mb-4">
-                                    {auditTargetDetails.details.map((detail, i) => <DetailSection key={i} {...detail} />)}
+                         <CardContent className="space-y-4">
+                            {auditTargetDetails?.process && (
+                                <>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
+                                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <DetailDisplay title="Descripción" value={auditTargetDetails.process.descripcion} isTextarea />
+                                        <DetailDisplay title="Área" value={auditTargetDetails.process.area} />
+                                        <DetailDisplay title="Puesto" value={auditTargetDetails.process.puesto} />
+                                        <DetailDisplay title="Frecuencia" value={auditTargetDetails.process.frecuencia} />
+                                        <DetailDisplay title="Tiempo Estimado" value={auditTargetDetails.process.tiempoEstimado !== undefined ? `${auditTargetDetails.process.tiempoEstimado} min` : null} />
+                                        <DetailDisplay title="Tiempo Ideal" value={auditTargetDetails.process.tiempoIdeal !== undefined ? `${auditTargetDetails.process.tiempoIdeal} min` : null} />
+                                        <DetailDisplay title="Costo Estimado" value={auditTargetDetails.process.costoEstimado !== undefined ? `${auditTargetDetails.process.costoEstimado} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
+                                        <DetailDisplay title="Costo Ideal" value={auditTargetDetails.process.costoIdeal !== undefined ? `${auditTargetDetails.process.costoIdeal} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
+                                        <DetailDisplay title="Sistemas" value={auditTargetDetails.process.sistemas} isList />
+                                        <DetailDisplay title="Entradas" value={auditTargetDetails.process.informacionRecibe} isTextarea />
+                                        <DetailDisplay title="Salidas" value={auditTargetDetails.process.informacionEntrega} isTextarea />
+                                        <DetailDisplay title="Procesos de Entrada" value={auditTargetDetails.process.procesosEntrada} isList />
+                                        <DetailDisplay title="Procesos de Salida" value={auditTargetDetails.process.procesosSalida} isList />
+                                    </CardContent>
+                                </Card>
+                                
+                                <div>
+                                    <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
+                                        {(auditTargetDetails.activities && auditTargetDetails.activities.length > 0) ? (
+                                        <div className="space-y-3">
+                                            {auditTargetDetails.activities.map((act, index) => (
+                                            <Card key={act.id} className="bg-background">
+                                                <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
+                                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                                <CardTitle className="text-base">{act.nombre}</CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
+                                                <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
+                                                <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
+                                                <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                                <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
+                                                </CardContent>
+                                            </Card>
+                                            ))}
+                                        </div>
+                                        ) : (
+                                        <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
+                                        )}
                                 </div>
-                            }
-                            {auditTargetDetails?.activities && auditTargetDetails.activities.length > 0 &&
-                                <>
-                                    <Separator className="my-4" />
-                                    <h4 className="font-semibold text-md mb-2">Actividades del Proceso</h4>
-                                    <div className="max-h-64 overflow-y-auto space-y-2 p-1">
-                                      {auditTargetDetails.activities.map(act => (
-                                      <div key={act.id} className="p-2 border rounded-md bg-background text-sm">
-                                          <p><strong>{act.nombre}</strong></p>
-                                          <p className="text-xs text-muted-foreground pl-2">{act.descripcionBreve || 'Sin descripción.'}</p>
-                                          <div className="text-xs text-muted-foreground pl-2 grid grid-cols-2 gap-x-2">
-                                              <span>Tiempo Est: {act.tiempoEstimadoActividad ?? '-'} min</span>
-                                              <span>Costo Est: {act.costoEstimadoActividad ?? '-'} {act.monedaCostoActividad || ''}</span>
-                                          </div>
-                                      </div>
-                                      ))}
-                                    </div>
                                 </>
-                            }
-                             {auditTargetDetails?.processes && auditTargetDetails.processes.length > 0 &&
-                                <>
-                                    <Separator className="my-4" />
-                                    <h4 className="font-semibold text-md mb-2">Procesos Asociados al Puesto</h4>
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                                        {auditTargetDetails.processes.map(proc => <li key={proc.id}>{proc.proceso}</li>)}
-                                    </ul>
-                                </>
-                            }
+                            )}
+                            {auditTargetDetails?.puesto && (
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Detalles del Puesto</CardTitle></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <DetailDisplay title="Área" value={areas.find(a => a.id === auditTargetDetails.puesto?.areaId)?.nombre || 'No asignada'} />
+                                            <DetailDisplay title="Nivel Organizacional" value={auditTargetDetails.puesto.nivelOrganizacional} />
+                                            <DetailDisplay title="Número de Personas" value={auditTargetDetails.puesto.numeroPersonas} />
+                                        </div>
+                                        {auditTargetDetails.relatedProcesses && auditTargetDetails.relatedProcesses.length > 0 && (
+                                            <div>
+                                                <Separator className="my-4" />
+                                                <h4 className="font-semibold text-md mb-2">Procesos Asociados al Puesto</h4>
+                                                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                                                    {auditTargetDetails.relatedProcesses.map(proc => <li key={proc.id}>{proc.proceso}</li>)}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
                         </CardContent>
                     </Card>
 
