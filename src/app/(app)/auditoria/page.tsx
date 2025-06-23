@@ -42,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -212,14 +213,21 @@ export default function AuditoriaPage() {
     } else { // Puesto
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
       if (!puesto) return { name: "Puesto no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
-      const relatedProcesses = allProcesses.filter(proc => proc.puesto === puesto.nombre);
+      const relatedProcessesData = allProcesses
+        .filter(proc => proc.puesto === puesto.nombre)
+        .map(proc => {
+            const processActivities = (proc.activityOrder || [])
+                .map(actId => actividades.find(a => a.id === actId))
+                .filter((act): act is Actividad => !!act);
+            return { process: proc, activities: processActivities };
+        });
       
       return {
         name: puesto.nombre,
         process: null,
         activities: [],
         puesto,
-        relatedProcesses,
+        relatedProcesses: relatedProcessesData,
       };
     }
   }, [currentAuditSession, allProcesses, actividades, puestos, areas]);
@@ -470,9 +478,43 @@ export default function AuditoriaPage() {
                                             <div>
                                                 <Separator className="my-4" />
                                                 <h4 className="font-semibold text-md mb-2">Procesos Asociados al Puesto</h4>
-                                                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                                                    {auditTargetDetails.relatedProcesses.map(proc => <li key={proc.id}>{proc.proceso}</li>)}
-                                                </ul>
+                                                <Accordion type="multiple" className="w-full">
+                                                    {auditTargetDetails.relatedProcesses.map(({ process, activities }) => (
+                                                        <AccordionItem value={process.id} key={process.id}>
+                                                            <AccordionTrigger>{process.proceso}</AccordionTrigger>
+                                                            <AccordionContent className="space-y-4 p-2 bg-background">
+                                                                <Card>
+                                                                    <CardHeader className="pb-2"><CardTitle className="text-base">Detalles del Proceso</CardTitle></CardHeader>
+                                                                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                                                        <DetailDisplay title="Descripción" value={process.descripcion} isTextarea />
+                                                                        <DetailDisplay title="Frecuencia" value={process.frecuencia} />
+                                                                        <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado ?? '-'} / ${process.tiempoIdeal ?? '-'} min`} />
+                                                                        <DetailDisplay title="Costo Est./Ideal" value={`${process.costoEstimado ?? '-'} / ${process.costoIdeal ?? '-'} ${process.monedaCosto || ''}`} />
+                                                                        <DetailDisplay title="Sistemas" value={process.sistemas} isList />
+                                                                    </CardContent>
+                                                                </Card>
+                                                                
+                                                                <div>
+                                                                    <h4 className="font-semibold text-base mb-2">Actividades</h4>
+                                                                    {activities && activities.length > 0 ? (
+                                                                        <div className="space-y-2">
+                                                                            {activities.map((act, index) => (
+                                                                            <Card key={act.id} className="bg-muted/50">
+                                                                                <CardHeader className="flex-row items-center gap-3 space-y-0 p-3">
+                                                                                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold text-xs">{index + 1}</span>
+                                                                                    <CardTitle className="text-sm">{act.nombre}</CardTitle>
+                                                                                </CardHeader>
+                                                                            </Card>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene actividades definidas.</p>
+                                                                    )}
+                                                                </div>
+                                                            </AccordionContent>
+                                                        </AccordionItem>
+                                                    ))}
+                                                </Accordion>
                                             </div>
                                         )}
                                     </CardContent>
