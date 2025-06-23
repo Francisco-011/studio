@@ -29,7 +29,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose
+  DialogClose,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,6 +44,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
+import { useAreas } from '@/contexts/AreasContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -91,6 +93,7 @@ export default function AuditoriaPage() {
   const { actividades, isLoadingActividades } = useActividades();
   const { addAccion, isLoadingAcciones } = useAcciones();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { areas } = useAreas();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
@@ -511,5 +514,3 @@ export default function AuditoriaPage() {
     </div>
   );
 }
-
-    
