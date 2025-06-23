@@ -147,11 +147,16 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   }, [deletedActividades, addLogEntry]);
 
   const toggleActividadStatus = useCallback((id: string) => {
-     const activity = actividades.find(a => a.id === id);
+    const activity = actividades.find(a => a.id === id);
+    let hasUpdated = false;
     setActividades((prev) =>
-      prev.map((act) =>
-        act.id === id ? { ...act, activa: !act.activa, updatedAt: Date.now() } : act
-      )
+      prev.map((act) => {
+        if (act.id === id && !hasUpdated) {
+          hasUpdated = true;
+          return { ...act, activa: !act.activa, updatedAt: Date.now() };
+        }
+        return act;
+      })
     );
     if (activity) {
       addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activity.nombre, details: `El estado de la actividad "${activity.nombre}" cambió a ${!activity.activa ? 'Activa' : 'Inactiva'}.` });
