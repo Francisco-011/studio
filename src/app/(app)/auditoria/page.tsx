@@ -264,7 +264,7 @@ export default function AuditoriaPage() {
       targetName: targetName,
       auditorName: newAuditorName,
       auditDate: new Date().toISOString(),
-      status: 'En Progreso',
+      status: 'Pendiente',
       findings: [],
     };
     setCurrentAuditSession(newAudit);
@@ -497,13 +497,22 @@ export default function AuditoriaPage() {
                                                                 <div>
                                                                     <h4 className="font-semibold text-base mb-2">Actividades</h4>
                                                                     {activities && activities.length > 0 ? (
-                                                                        <div className="space-y-2">
+                                                                        <div className="space-y-3">
                                                                             {activities.map((act, index) => (
-                                                                            <Card key={act.id} className="bg-muted/50">
-                                                                                <CardHeader className="flex-row items-center gap-3 space-y-0 p-3">
-                                                                                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold text-xs">{index + 1}</span>
-                                                                                    <CardTitle className="text-sm">{act.nombre}</CardTitle>
+                                                                            <Card key={act.id} className="bg-background">
+                                                                                <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
+                                                                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                                                                <CardTitle className="text-base">{act.nombre}</CardTitle>
                                                                                 </CardHeader>
+                                                                                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
+                                                                                    <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                                                    <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
+                                                                                    <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
+                                                                                    <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                                                    <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                                                    <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                                                                    <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
+                                                                                </CardContent>
                                                                             </Card>
                                                                             ))}
                                                                         </div>
