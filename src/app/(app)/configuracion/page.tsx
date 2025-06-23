@@ -1429,20 +1429,6 @@ export default function ConfiguracionPage() {
         </div>
       ),
     },
-    {
-        value: 'masiva',
-        label: 'Carga Masiva',
-        icon: <UploadCloud className="h-5 w-5 mr-2" />,
-        fullDescription: 'Importar datos de forma masiva utilizando archivos CSV. Descargue las plantillas, llénelas y cárguelas para poblar el sistema rápidamente.',
-        content: (
-            <div className="text-center">
-                <p className="mb-4">La funcionalidad de carga masiva está disponible en una página dedicada para una mejor experiencia.</p>
-                <Button onClick={() => router.push('/configuracion/carga-masiva')}>
-                    Ir a Carga Masiva
-                </Button>
-            </div>
-        )
-    }
   ];
 
 
@@ -1458,7 +1444,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-4 mb-4">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-3 mb-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
