@@ -299,7 +299,7 @@ export default function ActividadesPage() {
   }
 
   function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
+    const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
     if (activityToRestore) {
         restoreActividad(actividadId);
         toast({ title: 'Actividad Restaurada', description: `"${activityToRestore.nombre}" ha sido restaurada y activada.`});
@@ -308,7 +308,7 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividadId: string) {
     toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id === actividadId) || deletedActividades.find(act => act.id === actividadId);
+    const actividadActual = actividades.find(act => act.id ===ividadId) || deletedActividades.find(act => act.id ===ividadId);
     if (actividadActual) {
       toast({
         title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
@@ -868,13 +868,13 @@ export default function ActividadesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedActividades.map((actividad) => {
+                  {paginatedActividades.map((actividad, index) => {
                     const associatedProcessNames = actividad.procesosAsociadosIds
                         ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
                         .filter(Boolean)
                         .join(', ') || "No asociada a procesos.";
                     return (
-                    <TableRow key={actividad.id}>
+                    <TableRow key={`${actividad.id}-${index}`}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.tiempoEstimadoActividad ?? '-'} / {actividad.tiempoIdealActividad ?? '-'}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.costoEstimadoActividad ?? '-'} / {actividad.costoIdealActividad ?? '-'} {actividad.monedaCostoActividad ?? ''}</TableCell>
