@@ -40,17 +40,16 @@ import { Separator } from "@/components/ui/separator";
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-
-import { useAcciones } from '@/contexts/AccionesContext';
-import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useAreas } from '@/contexts/AreasContext';
+import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { useAcciones } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -89,6 +88,37 @@ interface Audit {
   findings: AuditFinding[];
 }
 
+const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
+  if (value === undefined || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isList && !isTextarea)) {
+    return (
+      <div className="text-sm">
+        <strong className="font-semibold">{title}:</strong>
+        <span className="text-muted-foreground ml-1">No especificado.</span>
+      </div>
+    );
+  }
+
+  if (isList && Array.isArray(value)) {
+    return (
+      <div className="text-sm">
+        <strong className="font-semibold">{title}:</strong>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {value.map((item, idx) => (
+            <Badge key={idx} variant="secondary">{item}</Badge>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="text-sm">
+      <strong className="font-semibold">{title}:</strong>
+      <span className="text-muted-foreground ml-1">{typeof value === 'number' ? value.toString() : value}</span>
+    </div>
+  );
+};
+
 export default function AuditoriaPage() {
   const { actividades, isLoadingActividades } = useActividades();
   const { addAccion, isLoadingAcciones } = useAcciones();
@@ -105,6 +135,9 @@ export default function AuditoriaPage() {
   const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | ''>('');
   const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
   const [newAuditorName, setNewAuditorName] = useState<string>('Auditor Principal');
+
+  const [isFindingDialogOpen, setIsFindingDialogOpen] = useState(false);
+  const [editingFinding, setEditingFinding] = useState<AuditFinding | null>(null);
 
   const findingForm = useForm<AuditFindingFormData>({
     resolver: zodResolver(auditFindingSchema),
@@ -135,13 +168,26 @@ export default function AuditoriaPage() {
       localStorage.setItem(LOCAL_STORAGE_AUDITS_KEY, JSON.stringify(pastAudits));
     }
   }, [pastAudits, isLoading]);
+
+  useEffect(() => {
+    if (currentAuditSession && !isLoading) {
+        const existingIndex = pastAudits.findIndex(a => a.id === currentAuditSession.id);
+        if (existingIndex !== -1) {
+            const updatedAudits = [...pastAudits];
+            updatedAudits[existingIndex] = currentAuditSession;
+            setPastAudits(updatedAudits);
+        } else if (currentAuditSession.findings.length > 0 || currentAuditSession.status === 'En Progreso') {
+            setPastAudits(prev => [...prev, currentAuditSession]);
+        }
+    }
+  }, [currentAuditSession, isLoading]);
   
   const auditTargetDetails = useMemo(() => {
     if (!currentAuditSession) return null;
 
     if (currentAuditSession.auditType === 'proceso') {
       const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
-      if (!process) return { name: "Proceso no encontrado", details: [] };
+      if (!process) return { name: "Proceso no encontrado", details: [], activities: [] };
       const processActivities = (process.activityOrder || [])
         .map(actId => actividades.find(a => a.id === actId))
         .filter((act): act is Actividad => !!act);
@@ -149,26 +195,46 @@ export default function AuditoriaPage() {
       return {
         name: process.proceso,
         details: [
-          `Área: ${process.area}`,
-          `Puesto: ${process.puesto}`,
-          `Descripción: ${process.descripcion}`,
+          { title: "Área", value: process.area },
+          { title: "Puesto", value: process.puesto },
+          { title: "Frecuencia", value: process.frecuencia },
+          { title: "Tiempo Estimado (min)", value: process.tiempoEstimado },
+          { title: "Costo Estimado", value: process.costoEstimado ? `${process.costoEstimado} ${process.monedaCosto}` : undefined },
+          { title: "Sistemas", value: process.sistemas, isList: true },
+          { title: "Descripción", value: process.descripcion, isTextarea: true },
+          { title: "Entradas", value: process.informacionRecibe, isTextarea: true },
+          { title: "Procesos de Entrada", value: process.procesosEntrada, isList: true },
+          { title: "Salidas", value: process.informacionEntrega, isTextarea: true },
+          { title: "Procesos de Salida", value: process.procesosSalida, isList: true },
         ],
         activities: processActivities,
       };
     } else { // Puesto
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
-      if (!puesto) return { name: "Puesto no encontrado", details: [] };
+      if (!puesto) return { name: "Puesto no encontrado", details: [], processes: [] };
       const relatedProcesses = allProcesses.filter(proc => proc.puesto === puesto.nombre);
+      const areaName = areas.find(a => a.id === puesto.areaId)?.nombre;
       return {
         name: puesto.nombre,
         details: [
-          `Nivel: ${puesto.nivelOrganizacional}`,
-          `Personas: ${puesto.numeroPersonas || 'N/A'}`
+          { title: "Área", value: areaName || 'No asignada'},
+          { title: "Nivel", value: puesto.nivelOrganizacional },
+          { title: "Personas", value: puesto.numeroPersonas || 'N/A' }
         ],
         processes: relatedProcesses,
       };
     }
-  }, [currentAuditSession, allProcesses, actividades, puestos]);
+  }, [currentAuditSession, allProcesses, actividades, puestos, areas]);
+
+  useEffect(() => {
+    if (isFindingDialogOpen) {
+        if (editingFinding) {
+            findingForm.reset(editingFinding);
+        } else {
+            findingForm.reset({ type: undefined, description: '', proposedAction: '' });
+        }
+    }
+  }, [isFindingDialogOpen, editingFinding, findingForm]);
 
 
   const handleStartNewAudit = () => {
@@ -201,10 +267,23 @@ export default function AuditoriaPage() {
     setNewAuditTargetId('');
   };
   
-  const handleAddFinding = (data: AuditFindingFormData) => {
+  const handleFindingSubmit = (data: AuditFindingFormData) => {
     if (!currentAuditSession) return;
-    const newFinding: AuditFinding = { ...data, id: Date.now().toString(), isActionCreated: false };
-    setCurrentAuditSession(prev => prev ? { ...prev, findings: [...prev.findings, newFinding] } : null);
+    
+    if (editingFinding) {
+      // Update existing finding
+      const updatedFindings = currentAuditSession.findings.map(f =>
+        f.id === editingFinding.id ? { ...f, ...data } : f
+      );
+      setCurrentAuditSession(prev => prev ? { ...prev, findings: updatedFindings } : null);
+    } else {
+      // Add new finding
+      const newFinding: AuditFinding = { ...data, id: Date.now().toString(), isActionCreated: false };
+      setCurrentAuditSession(prev => prev ? { ...prev, findings: [...prev.findings, newFinding] } : null);
+    }
+    
+    setIsFindingDialogOpen(false);
+    setEditingFinding(null);
     findingForm.reset();
   };
   
@@ -263,6 +342,10 @@ export default function AuditoriaPage() {
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
   };
+  
+  const handleEditAudit = (audit: Audit) => {
+    setCurrentAuditSession({ ...audit, status: 'En Progreso' });
+  };
 
   if (isLoading || isLoadingActividades || isLoadingPuestos) {
     return (
@@ -286,7 +369,7 @@ export default function AuditoriaPage() {
                                 Auditor: {currentAuditSession.auditorName} | Fecha: {format(parseISO(currentAuditSession.auditDate), 'dd/MM/yyyy')}
                             </CardDescription>
                         </div>
-                        <Button variant="destructive" onClick={() => setCurrentAuditSession(null)}>Cancelar Auditoría</Button>
+                        <Button variant="secondary" onClick={() => setCurrentAuditSession(null)}>Volver a la Lista</Button>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -296,70 +379,47 @@ export default function AuditoriaPage() {
                         </CardHeader>
                         <CardContent>
                             {auditTargetDetails?.details && auditTargetDetails.details.length > 0 &&
-                                <div className="text-sm space-y-1 mb-4">
-                                    {auditTargetDetails.details.map((detail, i) => <p key={i}>{detail}</p>)}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mb-4">
+                                    {auditTargetDetails.details.map((detail, i) => <DetailSection key={i} {...detail} />)}
                                 </div>
                             }
-                            {auditTargetDetails?.activities && (
+                            {auditTargetDetails?.activities && auditTargetDetails.activities.length > 0 &&
                                 <>
+                                    <Separator className="my-4" />
                                     <h4 className="font-semibold text-md mb-2">Actividades del Proceso</h4>
-                                    {auditTargetDetails.activities.length > 0 ? (
-                                    <ul className="list-decimal list-inside space-y-2 text-sm">
-                                        {auditTargetDetails.activities.map(act => (
-                                        <li key={act.id}>
-                                            <strong>{act.nombre}</strong> (Tiempo Est: {act.tiempoEstimadoActividad ?? 'N/A'} min, Costo Est: {act.costoEstimadoActividad ?? 'N/A'} {act.monedaCostoActividad || ''})
-                                            <p className="pl-4 text-xs text-muted-foreground">{act.descripcionBreve || 'Sin descripción.'}</p>
-                                        </li>
-                                        ))}
-                                    </ul>
-                                    ) : <p className="text-sm text-muted-foreground">Sin actividades detalladas.</p>}
+                                    <div className="max-h-64 overflow-y-auto space-y-2 p-1">
+                                      {auditTargetDetails.activities.map(act => (
+                                      <div key={act.id} className="p-2 border rounded-md bg-background text-sm">
+                                          <p><strong>{act.nombre}</strong></p>
+                                          <p className="text-xs text-muted-foreground pl-2">{act.descripcionBreve || 'Sin descripción.'}</p>
+                                          <div className="text-xs text-muted-foreground pl-2 grid grid-cols-2 gap-x-2">
+                                              <span>Tiempo Est: {act.tiempoEstimadoActividad ?? '-'} min</span>
+                                              <span>Costo Est: {act.costoEstimadoActividad ?? '-'} {act.monedaCostoActividad || ''}</span>
+                                          </div>
+                                      </div>
+                                      ))}
+                                    </div>
                                 </>
-                            )}
-                            {auditTargetDetails?.processes && (
+                            }
+                             {auditTargetDetails?.processes && auditTargetDetails.processes.length > 0 &&
                                 <>
-                                    <h4 className="font-semibold text-md mb-2">Procesos del Puesto</h4>
-                                    {auditTargetDetails.processes.length > 0 ? (
-                                    <ul className="list-decimal list-inside space-y-1 text-sm">
+                                    <Separator className="my-4" />
+                                    <h4 className="font-semibold text-md mb-2">Procesos Asociados al Puesto</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                                         {auditTargetDetails.processes.map(proc => <li key={proc.id}>{proc.proceso}</li>)}
                                     </ul>
-                                    ) : <p className="text-sm text-muted-foreground">Sin procesos asociados.</p>}
                                 </>
-                            )}
+                            }
                         </CardContent>
                     </Card>
 
                     <div>
-                        <h3 className="text-xl font-semibold mb-2">Registro de Hallazgos</h3>
-                        <Form {...findingForm}>
-                            <form onSubmit={findingForm.handleSubmit(handleAddFinding)} className="p-4 border rounded-md space-y-4 mb-6">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <FormField control={findingForm.control} name="type" render={({ field }) => (
-                                    <FormItem className="md:col-span-1">
-                                    <FormLabel>Tipo de Hallazgo</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
-                                        <SelectContent>{findingTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
-                                    </Select><FormMessage />
-                                    </FormItem>
-                                )} />
-                                <FormField control={findingForm.control} name="description" render={({ field }) => (
-                                    <FormItem className="md:col-span-3">
-                                    <FormLabel>Descripción del Hallazgo</FormLabel>
-                                    <FormControl><Textarea placeholder="Describa la evidencia encontrada..." {...field} /></FormControl><FormMessage />
-                                    </FormItem>
-                                )} />
-                                </div>
-                                {(findingForm.watch('type') === 'No Conforme' || findingForm.watch('type') === 'Oportunidad de Mejora') && (
-                                <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Plan de Acción Propuesto</FormLabel>
-                                    <FormControl><Textarea placeholder="Describa la acción correctiva o de mejora que se debe tomar..." {...field} value={field.value ?? ''}/></FormControl><FormMessage />
-                                    </FormItem>
-                                )} />
-                                )}
-                                <div className="flex justify-end"><Button type="submit"><PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo</Button></div>
-                            </form>
-                        </Form>
-                        <Separator className="my-6" />
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-xl font-semibold">Registro de Hallazgos</h3>
+                          <Button onClick={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo
+                          </Button>
+                        </div>
                         <div className="space-y-4">
                             {currentAuditSession.findings.length > 0 ? currentAuditSession.findings.map((finding) => (
                                 <Card key={finding.id} className="bg-muted/20">
@@ -368,7 +428,10 @@ export default function AuditoriaPage() {
                                     <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'secondary' : 'default')}>{finding.type}</Badge>
                                     Hallazgo #{finding.id.slice(-4)}
                                     </CardTitle>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
+                                    <div>
+                                      <Button variant="ghost" size="icon" onClick={() => { setEditingFinding(finding); setIsFindingDialogOpen(true); }} className="text-muted-foreground hover:text-foreground h-7 w-7"><Edit className="h-4 w-4"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-sm mb-2 whitespace-pre-wrap"><strong>Descripción:</strong> {finding.description}</p>
@@ -389,10 +452,49 @@ export default function AuditoriaPage() {
                         </div>
                     </div>
                     <div className="flex justify-end pt-4">
-                        <Button size="lg" onClick={handleFinalizeAudit}>Finalizar y Guardar Auditoría</Button>
+                        <Button size="lg" onClick={handleFinalizeAudit}> <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría</Button>
                     </div>
                 </CardContent>
             </Card>
+
+            <Dialog open={isFindingDialogOpen} onOpenChange={setIsFindingDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingFinding ? "Editar Hallazgo" : "Agregar Nuevo Hallazgo"}</DialogTitle>
+                </DialogHeader>
+                 <Form {...findingForm}>
+                    <form onSubmit={findingForm.handleSubmit(handleFindingSubmit)} className="space-y-4 py-4">
+                        <FormField control={findingForm.control} name="type" render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Tipo de Hallazgo</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                                <SelectContent>{findingTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
+                            </Select><FormMessage />
+                            </FormItem>
+                        )} />
+                        <FormField control={findingForm.control} name="description" render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Descripción del Hallazgo</FormLabel>
+                            <FormControl><Textarea placeholder="Describa la evidencia encontrada..." {...field} /></FormControl><FormMessage />
+                            </FormItem>
+                        )} />
+                        {(findingForm.watch('type') === 'No Conforme' || findingForm.watch('type') === 'Oportunidad de Mejora') && (
+                        <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Plan de Acción Propuesto</FormLabel>
+                            <FormControl><Textarea placeholder="Describa la acción correctiva o de mejora que se debe tomar..." {...field} value={field.value ?? ''}/></FormControl><FormMessage />
+                            </FormItem>
+                        )} />
+                        )}
+                        <DialogFooter>
+                            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                            <Button type="submit">{editingFinding ? "Guardar Cambios" : "Agregar Hallazgo"}</Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+
         </div>
     );
   }
@@ -473,20 +575,24 @@ export default function AuditoriaPage() {
                             <TableHead>Tipo</TableHead>
                             <TableHead>Auditor</TableHead>
                             <TableHead>Fecha</TableHead>
+                             <TableHead>Estado</TableHead>
                             <TableHead>Hallazgos</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {pastAudits.map(audit => (
+                        {pastAudits.sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime()).map(audit => (
                             <TableRow key={audit.id}>
                                 <TableCell className="font-medium">{audit.targetName}</TableCell>
                                 <TableCell>{audit.auditType === 'proceso' ? 'Proceso' : 'Puesto'}</TableCell>
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
+                                 <TableCell>
+                                  <Badge variant={audit.status === "Completada" ? "default" : "secondary"}>{audit.status}</Badge>
+                                </TableCell>
                                 <TableCell>{audit.findings.length}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="outline" size="sm" onClick={() => setCurrentAuditSession(audit)}>
+                                    <Button variant="outline" size="sm" onClick={() => handleEditAudit(audit)}>
                                         <Edit className="mr-2 h-4 w-4" /> Ver / Editar
                                     </Button>
                                 </TableCell>

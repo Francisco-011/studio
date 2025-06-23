@@ -789,7 +789,7 @@ export default function PanelJerarquicoPage() {
                     <span className="flex-grow">{act.nombre}</span>
                     {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                      <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad en su módulo">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
                             <Edit2 className="h-4 w-4 text-muted-foreground" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
@@ -1127,7 +1127,7 @@ export default function PanelJerarquicoPage() {
                               <span className="flex-grow">{act.nombre}</span> 
                               {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
                               <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad en su módulo">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
                                     <Edit2 className="h-4 w-4 text-muted-foreground" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
