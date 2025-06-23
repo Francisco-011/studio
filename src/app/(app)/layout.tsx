@@ -2,8 +2,8 @@
 import type { ReactNode } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { AreasProvider } from '@/contexts/AreasContext';
+import { DepartamentosProvider } from '@/contexts/DepartamentosContext';
 import { PuestosProvider } from '@/contexts/PuestosContext';
-// Removed: import { FuentesDestinosProvider } from '@/contexts/FuentesDestinosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
 import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
@@ -17,17 +17,17 @@ export default function AuthenticatedAppLayout({
   return (
     <ActivityLogProvider>
       <AreasProvider>
-        <PuestosProvider>
-          {/* <FuentesDestinosProvider> */}
-          <SistemasCostosProvider>
-            <ActividadesProvider>
-              <AccionesProvider>
-                <AppLayout>{children}</AppLayout>
-              </AccionesProvider>
-            </ActividadesProvider>
-          </SistemasCostosProvider>
-          {/* </FuentesDestinosProvider> */}
-        </PuestosProvider>
+        <DepartamentosProvider>
+          <PuestosProvider>
+            <SistemasCostosProvider>
+              <ActividadesProvider>
+                <AccionesProvider>
+                  <AppLayout>{children}</AppLayout>
+                </AccionesProvider>
+              </ActividadesProvider>
+            </SistemasCostosProvider>
+          </PuestosProvider>
+        </DepartamentosProvider>
       </AreasProvider>
     </ActivityLogProvider>
   );

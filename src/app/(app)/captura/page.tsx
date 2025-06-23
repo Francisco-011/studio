@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
+import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
@@ -51,6 +52,7 @@ export type Moneda = typeof monedaOptions[number];
 
 const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
+  departamento: z.string().min(1, "El departamento es requerido."),
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
@@ -97,6 +99,7 @@ const SPECIAL_SALIDA_OPTION = "Finalizador";
 
 const defaultFormValues: Partial<CapturaFormData> = {
   area: undefined,
+  departamento: undefined,
   puesto: undefined,
   proceso: "",
   descripcion: "",
@@ -119,6 +122,7 @@ export default function CapturaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
@@ -133,23 +137,39 @@ export default function CapturaPage() {
   });
   
   const watchedAreaName = form.watch('area');
-  const watchedPuestoName = form.watch('puesto');
+  const watchedDepartamentoName = form.watch('departamento');
   const watchedProcessName = form.watch('proceso');
+  
+  const filteredDepartamentos = useMemo(() => {
+    if (!watchedAreaName || isLoadingDepartamentos) return [];
+    const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
+    if (!areaId) return [];
+    return departamentos.filter(d => d.areaId === areaId);
+  }, [watchedAreaName, areas, departamentos, isLoadingDepartamentos]);
+
+  const filteredPuestos = useMemo(() => {
+    if (!watchedDepartamentoName || isLoadingPuestos) return [];
+    const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areas.find(a => a.nombre === watchedAreaName)?.id)?.id;
+    if (!deptoId) return [];
+    return puestos.filter(p => p.departamentoId === deptoId);
+  }, [watchedDepartamentoName, watchedAreaName, departamentos, puestos, areas, isLoadingPuestos]);
 
 
   const availableSistemasForForm = useMemo(() => {
-    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) return [];
+    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
 
     const selectedAreaObj = areas.find(a => a.nombre === watchedAreaName);
-    const selectedPuestoObj = puestos.find(p => p.nombre === watchedPuestoName);
+    const selectedDeptoObj = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === selectedAreaObj?.id);
+    const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto') && p.departamentoId === selectedDeptoObj?.id);
 
     return allConfiguredSistemas.filter(sistema => {
       if (sistema.scope === "Empresa") return true;
       if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
+      if (sistema.scope === "Departamento" && selectedDeptoObj && sistema.scopeId === selectedDeptoObj.id) return true;
       if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
       return false;
     });
-  }, [allConfiguredSistemas, watchedAreaName, watchedPuestoName, areas, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos]);
+  }, [allConfiguredSistemas, watchedAreaName, watchedDepartamentoName, form, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
 
 
   useEffect(() => {
@@ -381,7 +401,7 @@ export default function CapturaPage() {
               </div>
             ) : finalOptions.length === 0 && !specialOption && dropdownType === 'sistemas' ? (
                 <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No hay sistemas disponibles para el Área/Puesto actual o no hay sistemas configurados.
+                    No hay sistemas disponibles para el contexto actual.
                 </div>
             ) : (
               finalOptions.map((option) => (
@@ -429,117 +449,57 @@ export default function CapturaPage() {
           </p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   control={form.control}
                   name="area"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Área / Departamento</FormLabel>
+                      <FormLabel>Área / División</FormLabel>
                       <Select
-                        onValueChange={(value) => {
-                            field.onChange(value);
-                            const currentSelectedSystems = form.getValues('sistemas') || [];
-                            if (currentSelectedSystems.length > 0) {
-                                const selectedAreaObj = areas.find(a => a.nombre === value);
-                                const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto'));
-                                
-                                const validSystemsForNewContext = allConfiguredSistemas.filter(sistema => {
-                                    if (sistema.scope === "Empresa") return true;
-                                    if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
-                                    if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
-                                    return false;
-                                }).map(s => s.nombre);
-                                
-                                const newSelectedSystems = currentSelectedSystems.filter(sName => validSystemsForNewContext.includes(sName));
-                                if (newSelectedSystems.length !== currentSelectedSystems.length) {
-                                    form.setValue('sistemas', newSelectedSystems);
-                                    toast({title: "Sistemas Ajustados", description: "Algunos sistemas seleccionados fueron removidos por no aplicar al nuevo contexto de Área/Puesto.", variant:"default"});
-                                }
-                            }
-                        }}
+                        onValueChange={(value) => { field.onChange(value); form.setValue('departamento', ''); form.setValue('puesto', ''); }}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={isLoadingAreas ? "Cargando áreas..." : "Seleccione un área"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {isLoadingAreas ? (
-                            <SelectItem value="loading" disabled>Cargando áreas...</SelectItem>
-                          ) : areas.length === 0 ? (
-                            <SelectItem value="no-areas" disabled>No hay áreas configuradas</SelectItem>
-                          ) : (
-                            areas.map((area) => (
-                              <SelectItem key={area.id} value={area.nombre}>
-                                {area.nombre}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
+                        <FormControl><SelectTrigger><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Seleccione un área"} /></SelectTrigger></FormControl>
+                        <SelectContent>{areas.map((area) => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent>
                       </Select>
-                      <FormDescription>
-                        El área o departamento al que pertenece el proceso.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
                   control={form.control}
+                  name="departamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Departamento</FormLabel>
+                       <Select
+                        onValueChange={(value) => { field.onChange(value); form.setValue('puesto', ''); }}
+                        value={field.value}
+                        disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : "Seleccione un depto."} /></SelectTrigger></FormControl>
+                        <SelectContent>{filteredDepartamentos.map((depto) => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
                   name="puesto"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Puesto / Rol Principal</FormLabel>
                        <Select
-                        onValueChange={(value) => {
-                            field.onChange(value);
-                            const currentSelectedSystems = form.getValues('sistemas') || [];
-                             if (currentSelectedSystems.length > 0) {
-                                const selectedAreaObj = areas.find(a => a.nombre === form.getValues('area'));
-                                const selectedPuestoObj = puestos.find(p => p.nombre === value);
-                                
-                                const validSystemsForNewContext = allConfiguredSistemas.filter(sistema => {
-                                    if (sistema.scope === "Empresa") return true;
-                                    if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
-                                    if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
-                                    return false;
-                                }).map(s => s.nombre);
-                                
-                                const newSelectedSystems = currentSelectedSystems.filter(sName => validSystemsForNewContext.includes(sName));
-                                 if (newSelectedSystems.length !== currentSelectedSystems.length) {
-                                    form.setValue('sistemas', newSelectedSystems);
-                                     toast({title: "Sistemas Ajustados", description: "Algunos sistemas seleccionados fueron removidos por no aplicar al nuevo contexto de Área/Puesto.", variant:"default"});
-                                }
-                            }
-                        }}
+                        onValueChange={field.onChange}
                         value={field.value}
-                        disabled={isLoadingPuestos}
+                        disabled={!watchedDepartamentoName || isLoadingPuestos || filteredPuestos.length === 0}
                       >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={isLoadingPuestos ? "Cargando puestos..." : "Seleccione un puesto"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {isLoadingPuestos ? (
-                            <SelectItem value="loading" disabled>Cargando puestos...</SelectItem>
-                          ) : puestos.length === 0 ? (
-                            <SelectItem value="no-puestos" disabled>No hay puestos configurados</SelectItem>
-                          ) : (
-                            puestos.map((puesto) => (
-                              <SelectItem key={puesto.id} value={puesto.nombre}>
-                                {puesto.nombre}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
+                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedDepartamentoName ? "Seleccione un depto. primero" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
+                        <SelectContent>{filteredPuestos.map((puesto) => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent>
                       </Select>
-                      <FormDescription>
-                        El puesto o rol responsable principal del proceso.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -553,20 +513,9 @@ export default function CapturaPage() {
                   <FormItem>
                     <FormLabel>Nombre del Proceso</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="Ej: Gestión de Pedidos de Clientes, Cierre Contable Mensual" 
-                        {...field} 
-                      />
+                      <Input placeholder="Ej: Gestión de Pedidos de Clientes, Cierre Contable Mensual" {...field} />
                     </FormControl>
-                     {similarProcessWarning ? (
-                        <FormDescription className="text-amber-600 flex items-center gap-1 pt-1">
-                          <AlertTriangle className="h-4 w-4" /> {similarProcessWarning}
-                        </FormDescription>
-                      ) : (
-                        <FormDescription>
-                          Ingrese el nombre descriptivo del proceso que está capturando.
-                        </FormDescription>
-                      )}
+                     {similarProcessWarning ? (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" /> {similarProcessWarning}</FormDescription>) : (<FormDescription>Ingrese el nombre descriptivo del proceso que está capturando.</FormDescription>)}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -578,16 +527,8 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Descripción Detallada del Proceso</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describa el objetivo, alcance, inicio, fin y los pasos principales del proceso."
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Proporcione una explicación clara y concisa del proceso.
-                    </FormDescription>
+                    <FormControl><Textarea placeholder="Describa el objetivo, alcance, inicio, fin y los pasos principales del proceso." className="min-h-[120px]" {...field} /></FormControl>
+                    <FormDescription>Proporcione una explicación clara y concisa del proceso.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -605,102 +546,21 @@ export default function CapturaPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Frecuencia</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccione la frecuencia" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {frecuenciaOptions.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                      <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione la frecuencia" /></SelectTrigger></FormControl>
+                        <SelectContent>{frecuenciaOptions.map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
                       </Select>
-                      <FormDescription>
-                        Periodicidad con la que se realiza este proceso.
-                      </FormDescription>
+                      <FormDescription>Periodicidad con la que se realiza este proceso.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                 <FormField
-                    control={form.control}
-                    name="monedaCosto"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Moneda de Costos</FormLabel>
-                         <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              {monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                            </SelectContent>
-                         </Select>
-                         <FormDescription>Moneda para los costos del proceso.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                 <FormField control={form.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda de Costos</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl><SelectContent>{monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormDescription>Moneda para los costos del proceso.</FormDescription><FormMessage /></FormItem>)} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <FormField
-                  control={form.control}
-                  name="tiempoEstimado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tiempo Estimado (min)</FormLabel>
-                       <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl><Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="tiempoIdeal"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tiempo Ideal (min)</FormLabel>
-                       <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl><Input type="number" placeholder="Ej: 45" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="costoEstimado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Costo Estimado</FormLabel>
-                       <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="costoIdeal"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Costo Ideal</FormLabel>
-                       <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl><Input type="number" placeholder="Ej: 80" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 <FormField control={form.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><div className="relative"><Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl></div><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><div className="relative"><Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 45" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl></div><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Estimado</FormLabel><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl></div><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 80" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl></div><FormMessage /></FormItem>)} />
               </div>
 
               <FormField
@@ -710,9 +570,7 @@ export default function CapturaPage() {
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
                      {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSistemasForForm, isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos, undefined, 'sistemas')}
-                    <FormDescription>
-                      Seleccione los sistemas o software involucrados en la ejecución del proceso. La lista se filtra según el Área y Puesto seleccionados.
-                    </FormDescription>
+                    <FormDescription>Seleccione los sistemas o software involucrados. La lista se filtra según el contexto.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -723,86 +581,14 @@ export default function CapturaPage() {
                  <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información.</p>
               </div>
 
-              <FormField
-                control={form.control}
-                name="informacionRecibe"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Información que Recibe (Entradas)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describa la información o documentos que el proceso recibe como entrada (Ej: Solicitud de compra del cliente, Factura de proveedor, Reporte de ventas anterior)."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Detalle qué información es necesaria para iniciar o ejecutar el proceso.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="procesosEntrada"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Procesos de Entradas (Opcional)</FormLabel>
-                    {renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_ENTRADA_OPTION)}
-                    <FormDescription>
-                      Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="informacionEntrega"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Información que Entrega (Salidas)</FormLabel>
-                     <FormControl>
-                      <Textarea
-                        placeholder="Describa la información o documentos que el proceso genera o entrega como resultado (Ej: Propuesta comercial enviada, Pedido procesado, Reporte financiero mensual)."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Detalle cuál es el producto o resultado informativo del proceso.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="procesosSalida"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Procesos de Salida (Opcional)</FormLabel>
-                    {renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_SALIDA_OPTION)}
-                    <FormDescription>
-                      Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso recibe como entrada..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle qué información es necesaria para iniciar o ejecutar el proceso.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso genera o entrega como resultado..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle cuál es el producto o resultado informativo del proceso.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
-                {editingId && (
-                   <Button type="button" variant="outline" onClick={() => router.push('/procesos-y-flujos-registrados')}>
-                    Cancelar
-                  </Button>
-                )}
-                <Button type="submit" size="lg">
-                  <Save className="mr-2 h-5 w-5" />
-                  {editingId ? "Guardar Cambios" : "Guardar Proceso y Definir Actividades"}
-                </Button>
+                {editingId && (<Button type="button" variant="outline" onClick={() => router.push('/procesos-y-flujos-registrados')}>Cancelar</Button>)}
+                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />{editingId ? "Guardar Cambios" : "Guardar Proceso y Definir Actividades"}</Button>
               </div>
             </form>
           </Form>
@@ -811,4 +597,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-    

@@ -12,7 +12,7 @@ export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
 export interface Puesto {
   id: string;
   nombre: string;
-  areaId?: string;
+  departamentoId?: string;
   jefeInmediato?: string; 
   nivelOrganizacional: NivelOrganizacional;
   numeroPersonas?: number;
@@ -42,7 +42,14 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
       try {
         const savedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
         if (savedPuestos) {
-          setPuestos(JSON.parse(savedPuestos));
+          // Migration logic to handle old data with areaId
+          const parsedPuestos = JSON.parse(savedPuestos).map((p: any) => {
+            if (p.areaId && !p.departamentoId) {
+                delete p.areaId;
+            }
+            return p;
+          });
+          setPuestos(parsedPuestos);
         }
       } catch (error) {
         console.error("Failed to load puestos from localStorage", error);

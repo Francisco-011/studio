@@ -19,15 +19,15 @@ export type FrecuenciaPago = typeof frecuenciasDePagoOptions[number];
 export const tiposDeMonedaOptions = ["MXN", "USD", "EUR", "CAD", "GBP"] as const;
 export type TipoMoneda = typeof tiposDeMonedaOptions[number];
 
-export type SistemaScope = "Empresa" | "Área" | "Puesto";
-export const sistemaScopeOptions: SistemaScope[] = ["Empresa", "Área", "Puesto"];
+export type SistemaScope = "Empresa" | "Área" | "Departamento" | "Puesto";
+export const sistemaScopeOptions: SistemaScope[] = ["Empresa", "Área", "Departamento", "Puesto"];
 
 
 export interface Sistema {
   id: string;
   nombre: string;
   scope: SistemaScope;
-  scopeId?: string; // ID of Area or Puesto if scope is "Área" or "Puesto"
+  scopeId?: string; // ID of Area, Department or Puesto
 }
 
 export interface SistemaCosto {

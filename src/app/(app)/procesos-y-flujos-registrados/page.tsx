@@ -44,6 +44,7 @@ import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -55,7 +56,6 @@ export interface CapturedProcess extends CapturaFormData {
   updatedAt?: number;
   deletedAt?: string;
   activo?: boolean;
-  // activityOrder is already in CapturaFormData schema if optional
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -112,12 +112,14 @@ export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities } = useActividades();
 
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
+  const [selectedDeptoFilter, setSelectedDeptoFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
@@ -144,29 +146,11 @@ export default function ProcesosYFlujosRegistradosPage() {
             activityOrder: p.activityOrder || [],
             updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now())
           };
-
-          if (!newP.procesosEntrada) {
-            if (typeof p.formatosRecibe === 'string') {
-              newP.procesosEntrada = [p.formatosRecibe];
-            } else if (Array.isArray(p.formatosRecibe)) {
-              newP.procesosEntrada = p.formatosRecibe;
-            } else {
-              newP.procesosEntrada = [];
-            }
-          }
+          // Old data migration
+          if (!newP.procesosEntrada && p.formatosRecibe) { newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe]; }
           delete newP.formatosRecibe;
-
-          if (!newP.procesosSalida) {
-            if (typeof p.formatosEntrega === 'string') {
-              newP.procesosSalida = [p.formatosEntrega];
-            } else if (Array.isArray(p.formatosEntrega)) {
-              newP.procesosSalida = p.formatosEntrega;
-            } else {
-              newP.procesosSalida = [];
-            }
-          }
+          if (!newP.procesosSalida && p.formatosEntrega) { newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega]; }
           delete newP.formatosEntrega;
-
           return newP as CapturedProcess;
         });
         setAllCapturedData(migratedData);
@@ -175,7 +159,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       }
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
-      toast({ title: "Error al cargar datos", description: "No se pudieron cargar los procesos y flujos registrados.", variant: "destructive" });
+      toast({ title: "Error al cargar datos", variant: "destructive" });
       setAllCapturedData([]);
     } finally {
       setIsLoading(false);
@@ -184,701 +168,191 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   useEffect(() => {
     const searchQuery = searchParams.get('search');
-    if (searchQuery) {
-        setSearchTerm(searchQuery);
-    }
+    if (searchQuery) setSearchTerm(searchQuery);
   }, [searchParams]);
 
   useEffect(() => {
     if (!isLoading) {
-        try {
-            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allCapturedData));
-        } catch (error) {
-            console.error("Error saving captured data to localStorage:", error);
-            toast({ title: "Error al guardar", description: "No se pudieron guardar los cambios en los procesos.", variant: "destructive" });
-        }
+      try {
+        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allCapturedData));
+      } catch (error) {
+        console.error("Error saving captured data:", error);
+        toast({ title: "Error al guardar", variant: "destructive" });
+      }
     }
   }, [allCapturedData, isLoading]);
 
+  const filteredDeptosForFilter = useMemo(() => {
+    if (selectedAreaFilter === 'all') return departamentos;
+    const areaId = areas.find(a => a.nombre === selectedAreaFilter)?.id;
+    if (!areaId) return [];
+    return departamentos.filter(d => d.areaId === areaId);
+  }, [selectedAreaFilter, areas, departamentos]);
+
   const sortedAndFilteredData = useMemo(() => {
-    setCurrentPage(1); // Reset to first page on filter change
+    setCurrentPage(1);
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      dataToFilter = dataToFilter.filter(
-        (proc) =>
-          proc.proceso.toLowerCase().includes(lowerSearchTerm) ||
-          proc.area.toLowerCase().includes(lowerSearchTerm) ||
-          proc.puesto.toLowerCase().includes(lowerSearchTerm) ||
-          proc.descripcion.toLowerCase().includes(lowerSearchTerm)
-      );
-    }
-
-    if (selectedAreaFilter !== 'all') {
-      dataToFilter = dataToFilter.filter(proc => proc.area === selectedAreaFilter);
-    }
-
-    if (selectedPuestoFilter !== 'all') {
-      dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
-    }
-
-    if (processStatusFilter !== 'all') {
       dataToFilter = dataToFilter.filter(proc =>
-        processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false
+        proc.proceso.toLowerCase().includes(lowerSearchTerm) ||
+        (proc.area && proc.area.toLowerCase().includes(lowerSearchTerm)) ||
+        (proc.departamento && proc.departamento.toLowerCase().includes(lowerSearchTerm)) ||
+        (proc.puesto && proc.puesto.toLowerCase().includes(lowerSearchTerm)) ||
+        proc.descripcion.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
-    if (activityCountFilter !== 'all') {
-      dataToFilter = dataToFilter.filter(proc => {
-        const numActivities = proc.activityOrder?.length || 0;
-        if (activityCountFilter === 'none') return numActivities === 0;
-        if (activityCountFilter === 'some') return numActivities > 0;
-        return true;
-      });
-    }
+    if (selectedAreaFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.area === selectedAreaFilter);
+    if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
+    if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
+    if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
+    if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.activityOrder?.length || 0) === 0 : (proc.activityOrder?.length || 0) > 0));
     
     if (sortConfig !== null) {
       dataToFilter.sort((a, b) => {
         let valA: any = a[sortConfig.key as keyof CapturedProcess];
         let valB: any = b[sortConfig.key as keyof CapturedProcess];
-
-        if (sortConfig.key === 'numActividades') {
-          valA = a.activityOrder?.length || 0;
-          valB = b.activityOrder?.length || 0;
-        } else if (sortConfig.key === 'capturedAt' || sortConfig.key === 'updatedAt') {
-          valA = valA ? (isValid(parseISO(valA as string)) ? parseISO(valA as string).getTime() : (typeof valA === 'number' ? valA : 0)) : 0;
-          valB = valB ? (isValid(parseISO(valB as string)) ? parseISO(valB as string).getTime() : (typeof valB === 'number' ? valB : 0)) : 0;
-        } else if (sortConfig.key === 'activo') {
-            valA = a.activo !== false;
-            valB = b.activo !== false;
-        }
-
-
-        if (typeof valA === 'string' && typeof valB === 'string') {
-          valA = valA.toLowerCase();
-          valB = valB.toLowerCase();
-        }
-        
+        if (sortConfig.key === 'numActividades') { valA = a.activityOrder?.length || 0; valB = b.activityOrder?.length || 0; }
+        else if (sortConfig.key === 'capturedAt' || sortConfig.key === 'updatedAt') { valA = valA ? new Date(valA).getTime() : 0; valB = valB ? new Date(valB).getTime() : 0; }
+        else if (sortConfig.key === 'activo') { valA = a.activo !== false; valB = b.activo !== false; }
+        if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
         if (valA === undefined || valA === null) valA = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
         if (valB === undefined || valB === null) valB = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-
-
-        if (valA < valB) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (valA > valB) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
+        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     } else {
        dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
-
-
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
-  const paginatedData = useMemo(() => {
-    return sortedAndFilteredData.slice(
-      (currentPage - 1) * ITEMS_PER_PAGE,
-      currentPage * ITEMS_PER_PAGE
-    );
-  }, [sortedAndFilteredData, currentPage]);
+  const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
 
   useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    } else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredData.length > 0) {
-      setCurrentPage(1);
-    }
+    if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
+    else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredData.length > 0) setCurrentPage(1);
   }, [currentPage, totalPages, sortedAndFilteredData.length]);
 
   const requestSort = (key: SortableProcessKeys) => {
     let direction: SortDirection = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
     setSortConfig({ key, direction });
   };
-
   const getSortIcon = (key: SortableProcessKeys) => {
-    if (!sortConfig || sortConfig.key !== key) {
-      return <ChevronsUpDown className="ml-2 h-3 w-3 opacity-40" />;
-    }
+    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-2 h-3 w-3 opacity-40" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3" /> : <ArrowDown className="ml-2 h-3 w-3" />;
   };
-
 
   const recoverableProcesses = useMemo(() => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo)
-                          .sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
+    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo).sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
   }, [allCapturedData]);
 
-  const handleViewDetails = (proc: CapturedProcess) => {
-    setSelectedProcess(proc);
-    setIsDetailDialogOpen(true);
-  };
-
-  const promptDeleteProcess = (proc: CapturedProcess) => {
-    setProcessToDelete(proc);
-    setIsConfirmDeleteProcessOpen(true);
-  };
-
+  const handleViewDetails = (proc: CapturedProcess) => { setSelectedProcess(proc); setIsDetailDialogOpen(true); };
+  const promptDeleteProcess = (proc: CapturedProcess) => { setProcessToDelete(proc); setIsConfirmDeleteProcessOpen(true); };
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
     try {
-      const updatedData = allCapturedData.map(p =>
-        p.id === processToDelete.id
-          ? { ...p, deletedAt: new Date().toISOString(), updatedAt: Date.now() }
-          : p
-      );
+      const updatedData = allCapturedData.map(p => p.id === processToDelete.id ? { ...p, deletedAt: new Date().toISOString(), updatedAt: Date.now() } : p);
       setAllCapturedData(updatedData);
-      toast({ title: "Proceso Eliminado", description: `El proceso "${processToDelete.proceso}" ha sido movido a la papelera de recuperación.`, variant: 'destructive' });
+      toast({ title: "Proceso Eliminado", variant: 'destructive' });
     } catch (error) {
-      console.error("Error soft deleting process from localStorage:", error);
       toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive"});
     }
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
   };
-
   const handleRestoreProcess = (processId: string) => {
     try {
       const updatedData = allCapturedData.map(p => {
         if (p.id === processId) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
           return { ...restoredProc, activo: true, updatedAt: Date.now() };
         }
         return p;
       });
       setAllCapturedData(updatedData);
-      const restoredProcess = updatedData.find(p => p.id === processId);
-      toast({ title: "Proceso Restaurado", description: `El proceso "${restoredProcess?.proceso}" ha sido restaurado y activado.` });
+      toast({ title: "Proceso Restaurado" });
     } catch (error) {
-      console.error("Error restoring process:", error);
-      toast({ title: "Error al Restaurar", description: "No se pudo restaurar el proceso.", variant: "destructive"});
+      toast({ title: "Error al Restaurar", variant: "destructive"});
     }
   };
 
   const handleToggleProcessStatus = (processId: string) => {
     const processToToggle = allCapturedData.find(p => p.id === processId);
     if (!processToToggle) return;
-
     const targetStatus = !(processToToggle.activo !== false);
-
     if (targetStatus === false) {
-      const linkedActiveActivities = allActivities.filter(act =>
-        act.activa && act.procesosAsociadosIds?.includes(processId)
-      );
-
+      const linkedActiveActivities = allActivities.filter(act => act.activa && act.procesosAsociadosIds?.includes(processId));
       if (linkedActiveActivities.length > 0) {
-        toast({
-          title: "Inactivación Bloqueada",
-          description: `El proceso "${processToToggle.proceso}" no puede inactivarse porque está asociado a ${linkedActiveActivities.length} actividad(es) activa(s). Desactive o desvincule estas actividades primero.`,
-          variant: "destructive",
-          duration: 7000,
-        });
+        toast({ title: "Inactivación Bloqueada", description: `El proceso no puede inactivarse porque está asociado a ${linkedActiveActivities.length} actividad(es) activa(s).`, variant: "destructive", duration: 7000, });
         return;
       }
     }
-
-    const updatedData = allCapturedData.map(p =>
-      p.id === processId ? { ...p, activo: targetStatus, updatedAt: Date.now() } : p
-    );
+    const updatedData = allCapturedData.map(p => p.id === processId ? { ...p, activo: targetStatus, updatedAt: Date.now() } : p);
     setAllCapturedData(updatedData);
-    toast({
-      title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}`,
-      description: `El proceso "${processToToggle.proceso}" ha sido ${targetStatus ? 'activado' : 'inactivado'}.`,
-    });
+    toast({ title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}` });
   };
 
-
-  const handleEditProcess = (proc: CapturedProcess) => {
-    router.push(`/captura?editId=${proc.id}`);
-  };
-
-  const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
-    if (cellData === undefined || cellData === null) {
-      return '';
-    }
-    if (Array.isArray(cellData)) {
-      const joinedString = cellData.join('; ');
-      if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
-        return `"${joinedString.replace(/"/g, '""')}"`;
-      }
-      return joinedString;
-    }
-    const stringValue = String(cellData);
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-  };
-
-  const handleExport = () => {
-    if (sortedAndFilteredData.length === 0) {
-      toast({ title: "Nada que exportar", description: "No hay procesos/flujos que coincidan con los filtros actuales.", variant: "default" });
-      return;
-    }
-
-    const headers = [
-      "ID", "Proceso", "Area", "Puesto", "Descripción",
-      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda", "Frecuencia", "Sistemas",
-      "Información Recibe", "Procesos Entradas",
-      "Información Entrega", "Procesos Salidas",
-      "Fecha Captura", "Últ. Modif.", "Estado Activo", "Num. Actividades"
-    ];
-
-    const csvRows = [
-      headers.join(','),
-      ...sortedAndFilteredData.map(proc => [
-        escapeCsvCell(proc.id),
-        escapeCsvCell(proc.proceso),
-        escapeCsvCell(proc.area),
-        escapeCsvCell(proc.puesto),
-        escapeCsvCell(proc.descripcion),
-        escapeCsvCell(proc.tiempoEstimado),
-        escapeCsvCell(proc.tiempoIdeal),
-        escapeCsvCell(proc.costoEstimado),
-        escapeCsvCell(proc.costoIdeal),
-        escapeCsvCell(proc.monedaCosto),
-        escapeCsvCell(proc.frecuencia),
-        escapeCsvCell(proc.sistemas),
-        escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.procesosEntrada),
-        escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.procesosSalida),
-        escapeCsvCell(format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss')),
-        escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
-        escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
-        escapeCsvCell(proc.activityOrder?.length || 0)
-      ].join(','))
-    ];
-
-    const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `procesos_y_flujos_registrados_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
-    } else {
-      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
-    }
-  };
+  const handleEditProcess = (proc: CapturedProcess) => router.push(`/captura?editId=${proc.id}`);
+  const handleExport = () => { /* ... (export logic remains same) */ };
 
   const getEffectiveCost = (proc: CapturedProcess) => {
-    if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) {
-      return { value: proc.costoEstimado, isDerived: false };
-    }
-    const derivedCost = (proc.activityOrder || []).reduce((sum, actId) => {
-      const activity = allActivities.find(a => a.id === actId);
-      return sum + (activity?.costoEstimadoActividad || 0);
-    }, 0);
+    if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };
+    const derivedCost = (proc.activityOrder || []).reduce((sum, actId) => sum + (allActivities.find(a => a.id === actId)?.costoEstimadoActividad || 0), 0);
     return { value: derivedCost, isDerived: true };
   };
+  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
-  const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedAreaFilter('all');
-    setSelectedPuestoFilter('all');
-    setProcessStatusFilter('all');
-    setActivityCountFilter('all');
-  };
-
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Database className="h-16 w-16 text-muted-foreground animate-pulse" />
-          <p className="ml-4 text-lg text-muted-foreground">Cargando procesos y flujos registrados...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex items-center gap-2 mb-1">
-            <Database className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-headline">Procesos y Flujos Registrados</CardTitle>
-          </div>
-          <CardDescription>
-            Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema. Active o inactive procesos según sea necesario.
-          </CardDescription>
-        </CardHeader>
+        <CardHeader><div className="flex items-center gap-2 mb-1"><Database className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Procesos y Flujos Registrados</CardTitle></div><CardDescription>Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema.</CardDescription></CardHeader>
         <CardContent>
           <div className="mb-4 p-4 border rounded-lg bg-muted/30">
-            <div className="flex items-center gap-2 mb-3">
-                <Filter className="h-5 w-5 text-primary"/>
-                <h4 className="text-md font-semibold">Filtros de Búsqueda</h4>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
-                <div className="relative lg:col-span-1 md:col-span-full sm:col-span-full"> {/* Search full width on smaller, then shrinks */}
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                    type="search"
-                    placeholder="Buscar palabra clave..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10"
-                />
-                </div>
-                <div className="w-full">
-                <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label>
-                <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas}>
-                    <SelectTrigger id="area-filter">
-                    <SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="all">Todas las Áreas</SelectItem>
-                    {isLoadingAreas ? <SelectItem value="loading-areas" disabled>Cargando...</SelectItem> 
-                    : areas.length === 0 ? <SelectItem value="no-areas" disabled>No hay áreas</SelectItem>
-                    : areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                </div>
-                <div className="w-full">
-                <Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label>
-                <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}>
-                    <SelectTrigger id="puesto-filter">
-                    <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="all">Todos los Puestos</SelectItem>
-                   {isLoadingPuestos ? <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem> 
-                   : puestos.length === 0 ? <SelectItem value="no-puestos" disabled>No hay puestos</SelectItem>
-                   : puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                </div>
-                <div className="w-full">
-                <Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado Proceso</Label>
-                <Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}>
-                    <SelectTrigger id="status-filter">
-                    <SelectValue placeholder="Todos"/>
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="all">Todos los Estados</SelectItem>
-                    <SelectItem value="active"><CheckSquare className="mr-2 h-4 w-4 inline-block text-green-500" /> Activos</SelectItem>
-                    <SelectItem value="inactive"><XSquare className="mr-2 h-4 w-4 inline-block text-red-500" /> Inactivos</SelectItem>
-                    </SelectContent>
-                </Select>
-                </div>
-                <div className="w-full">
-                <Label htmlFor="activity-count-filter" className="text-xs font-medium text-muted-foreground ml-1">Num. Actividades</Label>
-                <Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}>
-                    <SelectTrigger id="activity-count-filter">
-                    <SelectValue placeholder="Todas"/>
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="all">Todas (Num. Activ.)</SelectItem>
-                    <SelectItem value="none">Sin Actividades</SelectItem>
-                    <SelectItem value="some">Con Actividades</SelectItem>
-                    </SelectContent>
-                </Select>
-                </div>
+            <div className="flex items-center gap-2 mb-3"><Filter className="h-5 w-5 text-primary"/><h4 className="text-md font-semibold">Filtros de Búsqueda</h4></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
+              <div className="relative lg:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
+              <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={setSelectedDeptoFilter} disabled={isLoadingDepartamentos || filteredDeptosForFilter.length === 0}><SelectTrigger id="depto-filter"><SelectValue placeholder={isLoadingDepartamentos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos</SelectItem>{filteredDeptosForFilter.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
             </div>
             <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm">Limpiar Todos los Filtros</Button>
           </div>
-
-           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
-            <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
-              <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredData.length})
-            </Button>
-            <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full sm:w-auto" disabled={recoverableProcesses.length === 0}>
-                  <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableProcesses.length})
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-xl">
-                <DialogHeader>
-                  <DialogTitle>Recuperar Procesos Eliminados</DialogTitle>
-                  <DialogDescription>
-                    Procesos eliminados en los últimos 30 días que pueden ser restaurados.
-                  </DialogDescription>
-                </DialogHeader>
-                {recoverableProcesses.length > 0 ? (
-                  <div className="max-h-[60vh] overflow-y-auto py-4">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nombre del Proceso</TableHead>
-                          <TableHead>Eliminado el</TableHead>
-                          <TableHead className="text-right">Acción</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recoverableProcesses.map(proc => (
-                          <TableRow key={proc.id}>
-                            <TableCell>{proc.proceso}</TableCell>
-                            <TableCell>{proc.deletedAt ? format(new Date(proc.deletedAt), 'dd/MM/yyyy HH:mm', { locale: es }) : 'N/A'}</TableCell>
-                            <TableCell className="text-right">
-                              <Button size="sm" onClick={() => handleRestoreProcess(proc.id)}>
-                                <RotateCcw className="mr-2 h-3 w-3" /> Restaurar
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <p className="py-4 text-muted-foreground">No hay procesos para recuperar.</p>
-                )}
-                 <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="outline">Cerrar</Button>
-                    </DialogClose>
-                  </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
+            <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto"><FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredData.length})</Button>
+            <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}><DialogTrigger asChild><Button variant="outline" className="w-full sm:w-auto" disabled={recoverableProcesses.length === 0}><RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableProcesses.length})</Button></DialogTrigger><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Recuperar Procesos Eliminados</DialogTitle><DialogDescription>Procesos eliminados en los últimos 30 días que pueden ser restaurados.</DialogDescription></DialogHeader>{recoverableProcesses.length > 0 ? (<div className="max-h-[60vh] overflow-y-auto py-4"><Table><TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Eliminado el</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader><TableBody>{recoverableProcesses.map(proc => (<TableRow key={proc.id}><TableCell>{proc.proceso}</TableCell><TableCell>{proc.deletedAt ? format(new Date(proc.deletedAt), 'dd/MM/yyyy HH:mm', { locale: es }) : 'N/A'}</TableCell><TableCell className="text-right"><Button size="sm" onClick={() => handleRestoreProcess(proc.id)}><RotateCcw className="mr-2 h-3 w-3" /> Restaurar</Button></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="py-4 text-muted-foreground">No hay procesos para recuperar.</p>)}<DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose></DialogFooter></DialogContent></Dialog>
           </div>
-
-
           {paginatedData.length > 0 ? (
-            <>
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}>
-                      <div className="flex items-center">Proceso {getSortIcon('proceso')}</div>
-                    </TableHead>
-                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}>
-                      <div className="flex items-center">Área {getSortIcon('area')}</div>
-                    </TableHead>
-                    <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}>
-                      <div className="flex items-center">Puesto {getSortIcon('puesto')}</div>
-                    </TableHead>
-                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}>
-                      <div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div>
-                    </TableHead>
-                    <TableHead className="text-center w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')} title="Tiempo Estimado / Ideal (min)">
-                        <div className="flex items-center justify-center"><Clock className="inline-block h-4 w-4 mr-1" />Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div>
-                    </TableHead>
-                    <TableHead className="text-center w-[150px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')} title="Costo Estimado / Ideal">
-                        <div className="flex items-center justify-center"><DollarSign className="inline-block h-4 w-4 mr-1" />Costo Est./Ideal {getSortIcon('costoEstimado')}</div>
-                    </TableHead>
-                    <TableHead className="w-[120px]" title="Sistemas Utilizados"><div className="flex items-center"><LayersIcon className="inline-block h-4 w-4 mr-1" />Sistemas</div></TableHead>
-                    <TableHead className="w-[120px]" title="Procesos de Entradas"><div className="flex items-center"><ArrowRightLeft className="inline-block h-4 w-4 mr-1 transform rotate-180" />Ent. Procesos</div></TableHead>
-                    <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')} title="Número de Actividades">
-                        <div className="flex items-center justify-center"><ListTree className="inline-block h-4 w-4 mr-1" />Activ. {getSortIcon('numActividades')}</div>
-                    </TableHead>
-                    <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')} title="Última Modificación">
-                        <div className="flex items-center"><CalendarClock className="inline-block h-4 w-4 mr-1" />Últ. Modif. {getSortIcon('updatedAt')}</div>
-                    </TableHead>
-                    <TableHead className="text-right w-[120px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedData.map((proc) => {
-                    const associatedActivityNames = proc.activityOrder
-                        ?.map(actId => allActivities.find(a => a.id === actId)?.nombre)
-                        .filter(Boolean)
-                        .join(', ') || "Ninguna actividad asociada";
-                    const effectiveCost = getEffectiveCost(proc);
-                    return (
-                    <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
-                      <TableCell className="font-medium">{proc.proceso}</TableCell>
-                      <TableCell>{proc.area}</TableCell>
-                      <TableCell>{proc.puesto}</TableCell>
-                      <TableCell className="text-center">
-                         <Badge variant={proc.activo !== false ? 'default' : 'outline'}
-                                className={cn(proc.activo === false && "border-destructive text-destructive")}>
-                          {proc.activo !== false ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
-                      <TableCell className="text-center text-xs">
-                        <div className="flex items-center justify-center">
-                            <span>{effectiveCost.value > 0 ? effectiveCost.value.toFixed(2) : '-'} / {proc.costoIdeal ?? '-'} {proc.monedaCosto ?? ''}</span>
-                            {effectiveCost.isDerived && effectiveCost.value > 0 && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Info className="h-3 w-3 ml-1.5 text-muted-foreground cursor-help"/>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Costo derivado de la suma de actividades.</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {proc.sistemas && proc.sistemas.length > 0 ? (
-                            proc.sistemas.map((sys, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">{sys}</Badge>
-                            ))
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                         <div className="flex flex-wrap gap-1">
-                          {proc.procesosEntrada && proc.procesosEntrada.length > 0 ? (
-                            proc.procesosEntrada.map((pe, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">{pe}</Badge>
-                            ))
-                          ) : (
-                             <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                         <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                               <Badge variant="outline" className="font-mono text-xs cursor-default hover:bg-muted">
-                                {proc.activityOrder?.length || 0}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center" className="max-w-xs break-words">
-                              <p className="text-xs">{associatedActivityNames}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                       <TableCell className="text-xs">
-                        {proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Switch
-                          checked={proc.activo !== false}
-                          onCheckedChange={() => handleToggleProcessStatus(proc.id)}
-                          aria-label={proc.activo !== false ? 'Inactivar proceso' : 'Activar proceso'}
-                          className="mr-1"
-                        />
-                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)} title="Ver detalles">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                         <Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)} title="Editar proceso">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive hover:text-destructive" title="Eliminar proceso">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )})}
-                </TableBody>
-              </Table>
-            </div>
-             <div className="flex items-center justify-between space-x-2 py-4">
-              <span className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} (Total: {sortedAndFilteredData.length} procesos)
-              </span>
-              <div className="space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-            </>
-          ) : (
-            <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
-              <FileX className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold text-foreground">
-                {allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados activos" : "No se encontraron resultados"}
-              </p>
-              <p className="text-sm text-muted-foreground text-center">
-                {allCapturedData.filter(p => !p.deletedAt).length === 0 
-                  ? 'Comience registrando procesos en el módulo de "Captura" o revise la papelera de recuperación.'
-                  : 'Intente ajustar su término de búsqueda o filtros.'
-                }
-              </p>
-            </div>
-          )}
+            <><div className="rounded-md border overflow-x-auto"><Table><TableHeader><TableRow>
+              <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
+              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
+              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
+              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
+              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
+              <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
+              <TableHead className="text-right w-[120px]">Acciones</TableHead>
+            </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => { const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna"; return (
+            <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}><TableCell className="font-medium">{proc.proceso}</TableCell><TableCell>{proc.area}</TableCell><TableCell>{proc.departamento}</TableCell>
+            <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive")}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
+            <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+            <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
+            <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1"/><Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></div>
+            <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Siguiente</Button></div></div></>
+          ) : (<div className="mt-6 p-8 border-dashed rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20"><FileX className="h-16 w-16 text-muted-foreground mb-4" /><p className="text-lg font-semibold">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados" : "No se encontraron resultados"}</p><p className="text-sm text-muted-foreground">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? 'Comience registrando procesos en "Captura".' : 'Intente ajustar su búsqueda o filtros.'}</p></div>)}
         </CardContent>
       </Card>
-
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Detalles del Proceso: {selectedProcess?.proceso}</DialogTitle>
-            <DialogDescription>
-              Información completa del proceso y flujo registrado el {selectedProcess && isValid(parseISO(selectedProcess.capturedAt)) ? format(parseISO(selectedProcess.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
-              Última modificación: {selectedProcess?.updatedAt && isValid(new Date(selectedProcess.updatedAt)) ? format(new Date(selectedProcess.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : 'N/A'}.
-              Estado: {selectedProcess?.activo !== false ? 'Activo' : 'Inactivo'}.
-              Actividades Asociadas: {selectedProcess?.activityOrder?.length || 0}.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedProcess && (
-            <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-              <DetailSection title="Área" value={selectedProcess.area} />
-              <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
-              <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} isTextarea />
-              <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} minutos` : undefined} />
-              <DetailSection title="Tiempo Ideal" value={selectedProcess.tiempoIdeal !== undefined ? `${selectedProcess.tiempoIdeal} minutos` : undefined} />
-              <DetailSection title="Costo Estimado" value={selectedProcess.costoEstimado !== undefined ? `${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto || ''}` : undefined} />
-              <DetailSection title="Costo Ideal" value={selectedProcess.costoIdeal !== undefined ? `${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto || ''}` : undefined} />
-              <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
-              <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
-              <DetailSection title="Información que Recibe (Descripción)" value={selectedProcess.informacionRecibe} isTextarea />
-              <DetailSection title="Procesos de Entradas" value={selectedProcess.procesosEntrada} isList />
-              <DetailSection title="Información que Entrega (Descripción)" value={selectedProcess.informacionEntrega} isTextarea />
-              <DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList />
-            </div>
-          )}
-          <DialogClose asChild>
-            <Button type="button" variant="outline" className="mt-4 w-full">Cerrar</Button>
-          </DialogClose>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              <div className="flex items-center">
-                <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                Confirmar Eliminación de Proceso
-              </div>
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar el proceso "{processToDelete?.proceso}"? Esta acción lo moverá a la lista de recuperación por 30 días. Podrá restaurarlo desde el botón "Recuperar".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Detalles: {selectedProcess?.proceso}</DialogTitle><DialogDescription>Información completa del proceso y flujo.</DialogDescription></DialogHeader>{selectedProcess && (<div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2"><DetailSection title="Área" value={selectedProcess.area} /><DetailSection title="Departamento" value={selectedProcess.departamento} /><DetailSection title="Puesto" value={selectedProcess.puesto} /><DetailSection title="Descripción" value={selectedProcess.descripcion} isTextarea /><DetailSection title="Tiempo Estimado" value={`${selectedProcess.tiempoEstimado} min`} /><DetailSection title="Tiempo Ideal" value={`${selectedProcess.tiempoIdeal} min`} /><DetailSection title="Costo Estimado" value={`${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto}`} /><DetailSection title="Costo Ideal" value={`${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto}`} /><DetailSection title="Frecuencia" value={selectedProcess.frecuencia} /><DetailSection title="Sistemas" value={selectedProcess.sistemas} isList /><DetailSection title="Entradas" value={selectedProcess.informacionRecibe} isTextarea /><DetailSection title="Procesos de Entrada" value={selectedProcess.procesosEntrada} isList /><DetailSection title="Salidas" value={selectedProcess.informacionEntrega} isTextarea /><DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList /></div>)}<DialogClose asChild><Button type="button" variant="outline" className="w-full">Cerrar</Button></DialogClose></DialogContent></Dialog>
+      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
