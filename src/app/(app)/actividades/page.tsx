@@ -306,15 +306,12 @@ export default function ActividadesPage() {
     }
   }
 
-  function handleToggleActividadStatus(actividadId: string) {
-    toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id === actividadId) || deletedActividades.find(act => act.id === actividadId);
-    if (actividadActual) {
-      toast({
-        title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
-        description: `La actividad "${actividadActual.nombre}" ha sido ${!actividadActual.activa ? 'activada' : 'desactivada'}.`,
-      });
-    }
+  function handleToggleActividadStatus(actividad: Actividad) {
+    toggleActividadStatus(actividad);
+    toast({
+      title: `Actividad ${!actividad.activa ? 'Activada' : 'Desactivada'}`,
+      description: `La actividad "${actividad.nombre}" ha sido ${!actividad.activa ? 'activada' : 'desactivada'}.`,
+    });
   }
 
   const sortedAndFilteredActividades = useMemo(() => {
@@ -905,7 +902,7 @@ export default function ActividadesPage() {
                        <TableCell className="text-right space-x-1">
                         <Switch
                           checked={actividad.activa}
-                          onCheckedChange={() => handleToggleActividadStatus(actividad.id)}
+                          onCheckedChange={() => handleToggleActividadStatus(actividad)}
                           aria-label={actividad.activa ? 'Desactivar actividad' : 'Activar actividad'}
                           className="mr-2"
                         />

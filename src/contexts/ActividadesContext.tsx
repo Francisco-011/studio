@@ -34,7 +34,7 @@ interface ActividadesContextType {
   updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   softDeleteActividad: (id: string) => void;
   restoreActividad: (id: string) => void;
-  toggleActividadStatus: (id: string) => void;
+  toggleActividadStatus: (actividadToToggle: Actividad) => void;
   isLoadingActividades: boolean;
 }
 
@@ -146,20 +146,24 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [deletedActividades, addLogEntry]);
 
-  const toggleActividadStatus = useCallback((id: string) => {
-    const activity = actividades.find(a => a.id === id);
-    let hasUpdated = false; // Flag to ensure we only update once
-    setActividades((prev) =>
-      prev.map((act) => {
-        if (act.id === id && !hasUpdated) {
-          hasUpdated = true;
-          return { ...act, activa: !act.activa, updatedAt: Date.now() };
-        }
-        return act;
-      })
-    );
-    if (activity) {
-      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activity.nombre, details: `El estado de la actividad "${activity.nombre}" cambió a ${!activity.activa ? 'Activa' : 'Inactiva'}.` });
+  const toggleActividadStatus = useCallback((actividadToToggle: Actividad) => {
+    // A truly unique identifier is the object reference itself from the original array, but we can't pass that.
+    // The next best thing is a combination of properties that are extremely unlikely to collide.
+    // The 'createdAt' timestamp is the most reliable one we have.
+    const findMatch = (act: Actividad) => act.id === actividadToToggle.id && act.createdAt === actividadToToggle.createdAt;
+
+    const activityInState = actividades.find(findMatch);
+
+    if (activityInState) { // Only proceed if we found an exact match
+      setActividades((prev) =>
+        prev.map((act) => {
+          if (findMatch(act)) { // Update only the one exact match
+            return { ...act, activa: !act.activa, updatedAt: Date.now() };
+          }
+          return act;
+        })
+      );
+      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activityInState.nombre, details: `El estado de la actividad "${activityInState.nombre}" cambió a ${!activityInState.activa ? 'Activa' : 'Inactiva'}.` });
     }
   }, [actividades, addLogEntry]);
 
