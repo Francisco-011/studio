@@ -557,8 +557,8 @@ export default function ActividadesPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {recoverableActividades.map((act, index) => (
-                            <TableRow key={`${act.id}-${index}`}>
+                          {recoverableActividades.map((act) => (
+                            <TableRow key={act.id}>
                               <TableCell>{act.nombre}</TableCell>
                               <TableCell>{act.deletedAt && isValid(new Date(act.deletedAt)) ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                               <TableCell className="text-right">
@@ -868,13 +868,13 @@ export default function ActividadesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedActividades.map((actividad, index) => {
+                  {paginatedActividades.map((actividad) => {
                     const associatedProcessNames = actividad.procesosAsociadosIds
                         ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
                         .filter(Boolean)
                         .join(', ') || "No asociada a procesos.";
                     return (
-                    <TableRow key={`${actividad.id}-${index}`}>
+                    <TableRow key={actividad.id}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.tiempoEstimadoActividad ?? '-'} / {actividad.tiempoIdealActividad ?? '-'}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.costoEstimadoActividad ?? '-'} / {actividad.costoIdealActividad ?? '-'} {actividad.monedaCostoActividad ?? ''}</TableCell>

@@ -96,7 +96,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     const currentTime = Date.now();
     const newActividad: Actividad = {
       ...data,
-      id: currentTime.toString(), // Simple ID generation, can be improved
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       createdAt: currentTime,
       procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
       updatedAt: currentTime,
