@@ -439,29 +439,33 @@ export default function AuditoriaPage() {
                                 
                                 <div>
                                     <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
-                                        {(auditTargetDetails.activities && auditTargetDetails.activities.length > 0) ? (
-                                        <div className="space-y-3">
-                                            {auditTargetDetails.activities.map((act, index) => (
-                                            <Card key={act.id} className="bg-background">
-                                                <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
-                                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                                <CardTitle className="text-base">{act.nombre}</CardTitle>
-                                                </CardHeader>
-                                                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
-                                                <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
-                                                <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
-                                                <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
-                                                </CardContent>
-                                            </Card>
-                                            ))}
-                                        </div>
-                                        ) : (
+                                    {(auditTargetDetails.activities && auditTargetDetails.activities.length > 0) ? (
+                                        <Accordion type="multiple" className="w-full space-y-2">
+                                        {auditTargetDetails.activities.map((act, index) => (
+                                            <AccordionItem value={act.id} key={act.id} className="bg-background rounded-md border">
+                                                <AccordionTrigger className="p-4 hover:no-underline">
+                                                    <div className="flex items-center gap-4 text-left">
+                                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                                        <span className="text-base font-medium">{act.nombre}</span>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="p-4 pt-0 pl-16">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
+                                                        <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
+                                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                        <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        ))}
+                                        </Accordion>
+                                    ) : (
                                         <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
-                                        )}
+                                    )}
                                 </div>
                                 </>
                             )}
@@ -497,25 +501,29 @@ export default function AuditoriaPage() {
                                                                 <div>
                                                                     <h4 className="font-semibold text-base mb-2">Actividades</h4>
                                                                     {activities && activities.length > 0 ? (
-                                                                        <div className="space-y-3">
-                                                                            {activities.map((act, index) => (
-                                                                            <Card key={act.id} className="bg-background">
-                                                                                <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
-                                                                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                                                                <CardTitle className="text-base">{act.nombre}</CardTitle>
-                                                                                </CardHeader>
-                                                                                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
-                                                                                    <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                                                    <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
-                                                                                    <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
-                                                                                    <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                                                    <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                                                    <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                                                    <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
-                                                                                </CardContent>
-                                                                            </Card>
-                                                                            ))}
-                                                                        </div>
+                                                                        <Accordion type="multiple" className="w-full space-y-2">
+                                                                        {activities.map((act, index) => (
+                                                                            <AccordionItem value={act.id} key={act.id} className="bg-card rounded-md border">
+                                                                                <AccordionTrigger className="p-4 hover:no-underline">
+                                                                                    <div className="flex items-center gap-4 text-left">
+                                                                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{index + 1}</span>
+                                                                                        <span className="text-base font-medium">{act.nombre}</span>
+                                                                                    </div>
+                                                                                </AccordionTrigger>
+                                                                                <AccordionContent className="p-4 pt-0 pl-16">
+                                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
+                                                                                        <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
+                                                                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                                                        <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                                                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
+                                                                                    </div>
+                                                                                </AccordionContent>
+                                                                            </AccordionItem>
+                                                                        ))}
+                                                                        </Accordion>
                                                                     ) : (
                                                                         <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene actividades definidas.</p>
                                                                     )}
