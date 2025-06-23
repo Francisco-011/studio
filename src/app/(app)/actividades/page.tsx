@@ -299,7 +299,7 @@ export default function ActividadesPage() {
   }
 
   function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id ===ividadId);
+    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
     if (activityToRestore) {
         restoreActividad(actividadId);
         toast({ title: 'Actividad Restaurada', description: `"${activityToRestore.nombre}" ha sido restaurada y activada.`});
@@ -308,7 +308,7 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividadId: string) {
     toggleActividadStatus(actividadId);
-    const actividadActual = actividades.find(act => act.id ===ividadId) || deletedActividades.find(act => act.id ===ividadId);
+    const actividadActual = actividades.find(act => act.id === actividadId) || deletedActividades.find(act => act.id === actividadId);
     if (actividadActual) {
       toast({
         title: `Actividad ${!actividadActual.activa ? 'Activada' : 'Desactivada'}`,
