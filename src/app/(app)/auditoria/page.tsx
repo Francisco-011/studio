@@ -22,8 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -33,14 +42,16 @@ import { toast } from "@/hooks/use-toast";
 
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
 type FindingType = typeof findingTypes[number];
@@ -50,12 +61,12 @@ const auditFindingSchema = z.object({
   description: z.string().min(10, 'La descripción del hallazgo es requerida (mínimo 10 caracteres).'),
   proposedAction: z.string().optional(),
 }).refine(data => {
-    if (data.type === 'No Conforme' && (!data.proposedAction || data.proposedAction.length < 10)) {
+    if ((data.type === 'No Conforme' || data.type === 'Oportunidad de Mejora') && (!data.proposedAction || data.proposedAction.length < 10)) {
         return false;
     }
     return true;
 }, {
-    message: "El plan de acción propuesto es requerido para hallazgos 'No Conforme' (mínimo 10 caracteres).",
+    message: "El plan de acción propuesto es requerido para hallazgos de 'No Conforme' u 'Oportunidad de Mejora' (mínimo 10 caracteres).",
     path: ["proposedAction"],
 });
 type AuditFindingFormData = z.infer<typeof auditFindingSchema>;
@@ -65,365 +76,432 @@ interface AuditFinding extends AuditFindingFormData {
   isActionCreated: boolean;
 }
 
-const escapeCsvCell = (cellData: string | number | undefined | null): string => {
-  if (cellData === undefined || cellData === null) {
-    return '';
-  }
-  const stringValue = String(cellData);
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
-};
-
+interface Audit {
+  id: string;
+  auditType: 'proceso' | 'puesto';
+  targetId: string;
+  targetName: string;
+  auditorName: string;
+  auditDate: string; // ISO string
+  status: 'En Progreso' | 'Completada';
+  findings: AuditFinding[];
+}
 
 export default function AuditoriaPage() {
   const { actividades, isLoadingActividades } = useActividades();
   const { addAccion, isLoadingAcciones } = useAcciones();
+  const { puestos, isLoadingPuestos } = usePuestos();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
-  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
-  const [auditFindings, setAuditFindings] = useState<AuditFinding[]>([]);
-  const [auditorName, setAuditorName] = useState<string>('Auditor Principal');
-  const [auditDate, setAuditDate] = useState<Date>(new Date());
+  const [pastAudits, setPastAudits] = useState<Audit[]>([]);
+  const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [isStartAuditDialogOpen, setIsStartAuditDialogOpen] = useState(false);
+  
+  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | ''>('');
+  const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
+  const [newAuditorName, setNewAuditorName] = useState<string>('Auditor Principal');
 
   const findingForm = useForm<AuditFindingFormData>({
     resolver: zodResolver(auditFindingSchema),
-    defaultValues: {
-      type: undefined,
-      description: '',
-      proposedAction: '',
-    },
+    defaultValues: { type: undefined, description: '', proposedAction: '' },
   });
 
   useEffect(() => {
     setIsLoading(true);
     try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        setAllProcesses(JSON.parse(storedData).filter((p: any) => !p.deletedAt && p.activo !== false));
+      const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedProcesses) {
+        setAllProcesses(JSON.parse(storedProcesses).filter((p: any) => !p.deletedAt && p.activo !== false));
+      }
+      const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
+      if (storedAudits) {
+        setPastAudits(JSON.parse(storedAudits));
       }
     } catch (e) {
-      console.error("Error loading processes for audit:", e);
-      toast({ title: "Error al cargar procesos", variant: "destructive" });
+      console.error("Error loading data for audit:", e);
+      toast({ title: "Error al cargar datos", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const selectedProcess = useMemo(() => {
-    if (!selectedProcessId) return null;
-    return allProcesses.find(p => p.id === selectedProcessId) || null;
-  }, [selectedProcessId, allProcesses]);
+  useEffect(() => {
+    if (!isLoading) {
+      localStorage.setItem(LOCAL_STORAGE_AUDITS_KEY, JSON.stringify(pastAudits));
+    }
+  }, [pastAudits, isLoading]);
   
-  const processActivities = useMemo(() => {
-    if (!selectedProcess || !selectedProcess.activityOrder) return [];
-    return selectedProcess.activityOrder
+  const auditTargetDetails = useMemo(() => {
+    if (!currentAuditSession) return null;
+
+    if (currentAuditSession.auditType === 'proceso') {
+      const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
+      if (!process) return { name: "Proceso no encontrado", details: [] };
+      const processActivities = (process.activityOrder || [])
         .map(actId => actividades.find(a => a.id === actId))
         .filter((act): act is Actividad => !!act);
-  }, [selectedProcess, actividades]);
 
-
-  const handleProcessSelect = (processId: string) => {
-    if (auditFindings.length > 0) {
-        if (!window.confirm("Tiene hallazgos sin guardar. ¿Está seguro que desea cambiar de proceso? Se perderán los hallazgos actuales.")) {
-            return;
-        }
+      return {
+        name: process.proceso,
+        details: [
+          `Área: ${process.area}`,
+          `Puesto: ${process.puesto}`,
+          `Descripción: ${process.descripcion}`,
+        ],
+        activities: processActivities,
+      };
+    } else { // Puesto
+      const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
+      if (!puesto) return { name: "Puesto no encontrado", details: [] };
+      const relatedProcesses = allProcesses.filter(proc => proc.puesto === puesto.nombre);
+      return {
+        name: puesto.nombre,
+        details: [
+          `Nivel: ${puesto.nivelOrganizacional}`,
+          `Personas: ${puesto.numeroPersonas || 'N/A'}`
+        ],
+        processes: relatedProcesses,
+      };
     }
-    setSelectedProcessId(processId);
-    setAuditFindings([]);
-    findingForm.reset();
-  };
+  }, [currentAuditSession, allProcesses, actividades, puestos]);
 
-  const handleAddFinding = (data: AuditFindingFormData) => {
-    const newFinding: AuditFinding = {
-      ...data,
-      id: `${Date.now()}`,
-      isActionCreated: false,
+
+  const handleStartNewAudit = () => {
+    if (!newAuditType || !newAuditTargetId) {
+      toast({ title: "Información incompleta", description: "Debe seleccionar un tipo y un objetivo para la auditoría." });
+      return;
+    }
+    const targetName = newAuditType === 'proceso'
+      ? allProcesses.find(p => p.id === newAuditTargetId)?.proceso
+      : puestos.find(p => p.id === newAuditTargetId)?.nombre;
+
+    if (!targetName) {
+        toast({ title: "Error", description: "No se encontró el nombre del objetivo seleccionado." });
+        return;
+    }
+
+    const newAudit: Audit = {
+      id: Date.now().toString(),
+      auditType: newAuditType,
+      targetId: newAuditTargetId,
+      targetName: targetName,
+      auditorName: newAuditorName,
+      auditDate: new Date().toISOString(),
+      status: 'En Progreso',
+      findings: [],
     };
-    setAuditFindings(prev => [...prev, newFinding]);
+    setCurrentAuditSession(newAudit);
+    setIsStartAuditDialogOpen(false);
+    setNewAuditType('');
+    setNewAuditTargetId('');
+  };
+  
+  const handleAddFinding = (data: AuditFindingFormData) => {
+    if (!currentAuditSession) return;
+    const newFinding: AuditFinding = { ...data, id: Date.now().toString(), isActionCreated: false };
+    setCurrentAuditSession(prev => prev ? { ...prev, findings: [...prev.findings, newFinding] } : null);
     findingForm.reset();
   };
   
   const handleDeleteFinding = (findingId: string) => {
-    setAuditFindings(prev => prev.filter(f => f.id !== findingId));
+    if (!currentAuditSession) return;
+    setCurrentAuditSession(prev => prev ? { ...prev, findings: prev.findings.filter(f => f.id !== findingId) } : null);
   };
   
   const handleCreateActionPlan = (finding: AuditFinding) => {
-    if (!selectedProcess) return;
-
-    addAccion({
-      nombre: `Hallazgo en Proceso: ${selectedProcess.proceso}`,
+    if (!currentAuditSession) return;
+    const target = currentAuditSession.auditType === 'proceso'
+      ? allProcesses.find(p => p.id === currentAuditSession.targetId)
+      : puestos.find(p => p.id === currentAuditSession.targetId);
+    
+    if (!target) return;
+    
+    let actionData: any = {
+      nombre: `Hallazgo en ${currentAuditSession.auditType}: ${currentAuditSession.targetName}`,
       descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
       responsable: 'Por Asignar',
       estado: 'Pendiente',
-      origenMejora: `Auditoría - ${auditorName}`,
-      procesoId: selectedProcess.id,
-      area: selectedProcess.area,
-      puesto: selectedProcess.puesto,
-    });
+      origenMejora: `Auditoría - ${currentAuditSession.auditorName}`,
+    };
+
+    if (currentAuditSession.auditType === 'proceso') {
+      actionData.procesoId = target.id;
+      actionData.area = (target as CapturedProcess).area;
+      actionData.puesto = (target as CapturedProcess).puesto;
+    } else {
+      actionData.puesto = (target as Puesto).nombre;
+      actionData.area = areas.find(a => a.id === (target as Puesto).areaId)?.nombre;
+    }
+
+    addAccion(actionData);
     
-    setAuditFindings(prev => prev.map(f => f.id === finding.id ? {...f, isActionCreated: true} : f));
-
-    toast({
-      title: "Plan de Acción Registrado",
-      description: "La acción ha sido creada y puede ser gestionada en el módulo de 'Acciones'.",
+    if (currentAuditSession) {
+      const updatedFindings = currentAuditSession.findings.map(f => f.id === finding.id ? {...f, isActionCreated: true} : f);
+      setCurrentAuditSession({ ...currentAuditSession, findings: updatedFindings });
+    }
+    
+    toast({ title: "Plan de Acción Registrado", description: "La acción ha sido creada en el módulo de 'Acciones'." });
+  };
+  
+  const handleFinalizeAudit = () => {
+    if (!currentAuditSession) return;
+    const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
+    setPastAudits(prev => {
+        const existingIndex = prev.findIndex(a => a.id === finalAudit.id);
+        if (existingIndex > -1) {
+            const newAudits = [...prev];
+            newAudits[existingIndex] = finalAudit;
+            return newAudits;
+        }
+        return [...prev, finalAudit];
     });
+    setCurrentAuditSession(null);
+    toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
   };
 
-  const handleExportReport = () => {
-    if (!selectedProcess) {
-      toast({ title: "Seleccione un proceso", description: "Debe seleccionar un proceso para auditar antes de exportar.", variant: "default" });
-      return;
-    }
-    if (auditFindings.length === 0) {
-      toast({ title: "Sin hallazgos", description: "No hay hallazgos para reportar.", variant: "default" });
-      return;
-    }
-
-    const headers = ["Sección", "Detalle", "Valor"];
-    const csvRows = [
-      ["Informe de Auditoría de Proceso"],
-      [],
-      ["Información General"],
-      ["Proceso Auditado", selectedProcess.proceso],
-      ["ID del Proceso", selectedProcess.id],
-      ["Área", selectedProcess.area],
-      ["Puesto", selectedProcess.puesto],
-      ["Auditor", auditorName],
-      ["Fecha de Auditoría", format(auditDate, 'yyyy-MM-dd')],
-      [],
-      ["Hallazgos de la Auditoría"],
-      ["ID Hallazgo", "Tipo", "Descripción", "Plan de Acción Propuesto", "Plan de Acción Creado"],
-      ...auditFindings.map(f => [
-        escapeCsvCell(f.id),
-        escapeCsvCell(f.type),
-        escapeCsvCell(f.description),
-        escapeCsvCell(f.proposedAction || ''),
-        escapeCsvCell(f.isActionCreated ? 'Sí' : 'No')
-      ])
-    ];
-
-    const csvString = csvRows.map(row => row.join(',')).join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.setAttribute('href', URL.createObjectURL(blob));
-    link.setAttribute('download', `auditoria_${selectedProcess.proceso.replace(/\s+/g, '_')}_${format(auditDate, 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-    toast({ title: "Informe Exportado", description: "El informe de auditoría se está descargando." });
-  };
-
-  if (isLoading || isLoadingActividades || isLoadingAcciones) {
+  if (isLoading || isLoadingActividades || isLoadingPuestos) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />
-        <p className="ml-4 text-lg text-muted-foreground">Cargando datos para auditoría...</p>
+        <p className="ml-4 text-lg text-muted-foreground">Cargando datos de auditoría...</p>
       </div>
     );
   }
 
+  if (currentAuditSession) {
+    // AUDIT WORKSPACE VIEW
+    return (
+        <div className="container mx-auto py-8">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle className="text-2xl font-headline">Auditoría en Progreso</CardTitle>
+                            <CardDescription>
+                                Auditor: {currentAuditSession.auditorName} | Fecha: {format(parseISO(currentAuditSession.auditDate), 'dd/MM/yyyy')}
+                            </CardDescription>
+                        </div>
+                        <Button variant="destructive" onClick={() => setCurrentAuditSession(null)}>Cancelar Auditoría</Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <Card className="bg-muted/30">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Objetivo de la Auditoría: {auditTargetDetails?.name}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {auditTargetDetails?.details && auditTargetDetails.details.length > 0 &&
+                                <div className="text-sm space-y-1 mb-4">
+                                    {auditTargetDetails.details.map((detail, i) => <p key={i}>{detail}</p>)}
+                                </div>
+                            }
+                            {auditTargetDetails?.activities && (
+                                <>
+                                    <h4 className="font-semibold text-md mb-2">Actividades del Proceso</h4>
+                                    {auditTargetDetails.activities.length > 0 ? (
+                                    <ul className="list-decimal list-inside space-y-2 text-sm">
+                                        {auditTargetDetails.activities.map(act => (
+                                        <li key={act.id}>
+                                            <strong>{act.nombre}</strong> (Tiempo Est: {act.tiempoEstimadoActividad ?? 'N/A'} min, Costo Est: {act.costoEstimadoActividad ?? 'N/A'} {act.monedaCostoActividad || ''})
+                                            <p className="pl-4 text-xs text-muted-foreground">{act.descripcionBreve || 'Sin descripción.'}</p>
+                                        </li>
+                                        ))}
+                                    </ul>
+                                    ) : <p className="text-sm text-muted-foreground">Sin actividades detalladas.</p>}
+                                </>
+                            )}
+                            {auditTargetDetails?.processes && (
+                                <>
+                                    <h4 className="font-semibold text-md mb-2">Procesos del Puesto</h4>
+                                    {auditTargetDetails.processes.length > 0 ? (
+                                    <ul className="list-decimal list-inside space-y-1 text-sm">
+                                        {auditTargetDetails.processes.map(proc => <li key={proc.id}>{proc.proceso}</li>)}
+                                    </ul>
+                                    ) : <p className="text-sm text-muted-foreground">Sin procesos asociados.</p>}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <div>
+                        <h3 className="text-xl font-semibold mb-2">Registro de Hallazgos</h3>
+                        <Form {...findingForm}>
+                            <form onSubmit={findingForm.handleSubmit(handleAddFinding)} className="p-4 border rounded-md space-y-4 mb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <FormField control={findingForm.control} name="type" render={({ field }) => (
+                                    <FormItem className="md:col-span-1">
+                                    <FormLabel>Tipo de Hallazgo</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
+                                        <SelectContent>{findingTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
+                                    </Select><FormMessage />
+                                    </FormItem>
+                                )} />
+                                <FormField control={findingForm.control} name="description" render={({ field }) => (
+                                    <FormItem className="md:col-span-3">
+                                    <FormLabel>Descripción del Hallazgo</FormLabel>
+                                    <FormControl><Textarea placeholder="Describa la evidencia encontrada..." {...field} /></FormControl><FormMessage />
+                                    </FormItem>
+                                )} />
+                                </div>
+                                {(findingForm.watch('type') === 'No Conforme' || findingForm.watch('type') === 'Oportunidad de Mejora') && (
+                                <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Plan de Acción Propuesto</FormLabel>
+                                    <FormControl><Textarea placeholder="Describa la acción correctiva o de mejora que se debe tomar..." {...field} value={field.value ?? ''}/></FormControl><FormMessage />
+                                    </FormItem>
+                                )} />
+                                )}
+                                <div className="flex justify-end"><Button type="submit"><PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo</Button></div>
+                            </form>
+                        </Form>
+                        <Separator className="my-6" />
+                        <div className="space-y-4">
+                            {currentAuditSession.findings.length > 0 ? currentAuditSession.findings.map((finding) => (
+                                <Card key={finding.id} className="bg-muted/20">
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                    <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'secondary' : 'default')}>{finding.type}</Badge>
+                                    Hallazgo #{finding.id.slice(-4)}
+                                    </CardTitle>
+                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm mb-2 whitespace-pre-wrap"><strong>Descripción:</strong> {finding.description}</p>
+                                    {(finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && finding.proposedAction && (
+                                    <div className="p-3 border rounded-md bg-background space-y-2">
+                                        <p className="text-sm font-semibold">Plan de Acción Propuesto:</p>
+                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
+                                        <div className="flex justify-end pt-2">
+                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated}>
+                                            <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Plan de Acción Creado' : 'Registrar Plan de Acción'}
+                                        </Button>
+                                        </div>
+                                    </div>
+                                    )}
+                                </CardContent>
+                                </Card>
+                            )) : (<div className="text-center text-muted-foreground py-6">No hay hallazgos registrados.</div>)}
+                        </div>
+                    </div>
+                    <div className="flex justify-end pt-4">
+                        <Button size="lg" onClick={handleFinalizeAudit}>Finalizar y Guardar Auditoría</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+  }
+
+  // MAIN LIST VIEW
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
-        <CardHeader className="flex flex-row items-center gap-2">
-          <ClipboardCheck className="h-6 w-6 text-primary" />
-          <CardTitle className="text-2xl font-headline">Auditoría y Registro</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="proceso">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="proceso">Auditoría de Procesos</TabsTrigger>
-              <TabsTrigger value="actividad">Registro de Actividad del Sistema</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="proceso" className="mt-4">
-              <CardDescription className="mb-6">
-                Realice auditorías de cumplimiento y calidad a los procesos registrados. Seleccione un proceso, revise sus detalles y registre hallazgos. Genere planes de acción para las no conformidades.
-              </CardDescription>
-
-              <Card className="mb-6 bg-muted/30">
-                <CardHeader>
-                  <CardTitle className="text-lg">1. Selección del Proceso a Auditar</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-1">
-                    <div className="space-y-2">
-                      <div>
-                        <Label htmlFor="auditorName">Nombre del Auditor</Label>
-                        <Input id="auditorName" value={auditorName} onChange={(e) => setAuditorName(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label htmlFor="processSelect">Proceso a Auditar</Label>
-                        <Select onValueChange={handleProcessSelect} value={selectedProcessId || ""}>
-                          <SelectTrigger id="processSelect">
-                            <SelectValue placeholder="Seleccione un proceso..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allProcesses.length === 0 ? (
-                              <SelectItem value="no-proc" disabled>No hay procesos activos para auditar</SelectItem>
-                            ): allProcesses.map(p => (
-                              <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    {selectedProcess ? (
-                      <div className="space-y-4 p-4 border rounded-md bg-background">
-                        <h4 className="font-semibold">{selectedProcess.proceso}</h4>
-                        <p className="text-sm text-muted-foreground">{selectedProcess.descripcion}</p>
-                        <div className="text-xs">
-                            <strong>Área:</strong> {selectedProcess.area} &nbsp;|&nbsp; <strong>Puesto:</strong> {selectedProcess.puesto}
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+                <div className="flex items-center gap-2">
+                    <ClipboardCheck className="h-6 w-6 text-primary" />
+                    <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
+                </div>
+                <CardDescription>
+                    Inicie nuevas auditorías a procesos o puestos, o consulte el historial de auditorías completadas.
+                </CardDescription>
+            </div>
+            <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button size="lg"><PlusCircle className="mr-2 h-4 w-4" /> Iniciar Nueva Auditoría</Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Iniciar Nueva Auditoría</DialogTitle>
+                        <DialogDescription>Seleccione qué desea auditar y quién es el auditor.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div>
+                            <Label htmlFor="auditorNameInput">Nombre del Auditor</Label>
+                            <Input id="auditorNameInput" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} />
                         </div>
                         <div>
-                            <h5 className="font-semibold text-sm mb-2">Actividades del Proceso:</h5>
-                            {processActivities.length > 0 ? (
-                                <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                                    {processActivities.map(act => <li key={act.id}>{act.nombre}</li>)}
-                                </ol>
-                            ) : (
-                                <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades detalladas.</p>
-                            )}
+                            <Label htmlFor="auditTypeSelect">Tipo de Auditoría</Label>
+                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
+                                <SelectTrigger id="auditTypeSelect"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="proceso">Proceso</SelectItem>
+                                    <SelectItem value="puesto">Puesto</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full p-4 border rounded-md border-dashed">
-                        <p className="text-muted-foreground">Seleccione un proceso para ver sus detalles.</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {selectedProcess && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <CardTitle className="text-lg">2. Registro de Hallazgos</CardTitle>
-                        <Button onClick={handleExportReport} variant="outline" disabled={auditFindings.length === 0}>
-                            <FileText className="mr-2 h-4 w-4" /> Exportar Informe
-                        </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Form {...findingForm}>
-                      <form onSubmit={findingForm.handleSubmit(handleAddFinding)} className="p-4 border rounded-md space-y-4 mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <FormField
-                            control={findingForm.control}
-                            name="type"
-                            render={({ field }) => (
-                              <FormItem className="md:col-span-1">
-                                <FormLabel>Tipo de Hallazgo</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    {findingTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={findingForm.control}
-                            name="description"
-                            render={({ field }) => (
-                              <FormItem className="md:col-span-3">
-                                <FormLabel>Descripción del Hallazgo</FormLabel>
-                                <FormControl><Textarea placeholder="Describa la evidencia encontrada durante la auditoría..." {...field} /></FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                        {newAuditType && (
+                        <div>
+                            <Label htmlFor="auditTargetSelect">Objetivo Específico</Label>
+                            <Select value={newAuditTargetId} onValueChange={setNewAuditTargetId}>
+                                <SelectTrigger id="auditTargetSelect"><SelectValue placeholder="Seleccione un objetivo..." /></SelectTrigger>
+                                <SelectContent>
+                                    {newAuditType === 'proceso' ? (
+                                        allProcesses.map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)
+                                    ) : (
+                                        puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
+                                    )}
+                                </SelectContent>
+                            </Select>
                         </div>
-                        {findingForm.watch('type') === 'No Conforme' && (
-                            <FormField
-                                control={findingForm.control}
-                                name="proposedAction"
-                                render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Plan de Acción Propuesto</FormLabel>
-                                    <FormControl><Textarea placeholder="Describa la acción correctiva o de mejora que se debe tomar..." {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                                )}
-                            />
                         )}
-                        <div className="flex justify-end">
-                          <Button type="submit">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                    
-                    <Separator className="my-6" />
-
-                    <h4 className="text-md font-semibold mb-4">Hallazgos Registrados en esta Sesión ({auditFindings.length})</h4>
-                    <div className="space-y-4">
-                      {auditFindings.length > 0 ? auditFindings.map((finding) => (
-                        <Card key={finding.id} className="bg-muted/20">
-                          <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-base flex items-center gap-2">
-                              <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'secondary' : 'default')}>
-                                {finding.type}
-                              </Badge>
-                              Hallazgo #{finding.id.slice(-4)}
-                            </CardTitle>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteFinding(finding.id)} className="text-destructive hover:text-destructive h-7 w-7">
-                                <Trash2 className="h-4 w-4"/>
-                            </Button>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="text-sm mb-2 whitespace-pre-wrap"><strong>Descripción:</strong> {finding.description}</p>
-                            {finding.type === 'No Conforme' && (
-                              <div className="p-3 border rounded-md bg-background space-y-2">
-                                    <p className="text-sm font-semibold">Plan de Acción Propuesto:</p>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
-                                    <div className="flex justify-end pt-2">
-                                    <Button 
-                                        size="sm" 
-                                        onClick={() => handleCreateActionPlan(finding)}
-                                        disabled={finding.isActionCreated}
-                                    >
-                                        <Send className="mr-2 h-4 w-4" />
-                                        {finding.isActionCreated ? 'Plan de Acción Creado' : 'Registrar Plan de Acción'}
-                                    </Button>
-                                    </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      )) : (
-                        <div className="text-center text-muted-foreground py-6">No hay hallazgos registrados para esta auditoría.</div>
-                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                        <Button onClick={handleStartNewAudit} disabled={!newAuditType || !newAuditTargetId}>Iniciar Auditoría <ArrowRight className="ml-2 h-4 w-4"/></Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="historial">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="historial">Historial de Auditorías</TabsTrigger>
+              <TabsTrigger value="actividad">Registro de Actividad del Sistema</TabsTrigger>
+            </TabsList>
+            <TabsContent value="historial" className="mt-4">
+                {pastAudits.length > 0 ? (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Objetivo Auditado</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Auditor</TableHead>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Hallazgos</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {pastAudits.map(audit => (
+                            <TableRow key={audit.id}>
+                                <TableCell className="font-medium">{audit.targetName}</TableCell>
+                                <TableCell>{audit.auditType === 'proceso' ? 'Proceso' : 'Puesto'}</TableCell>
+                                <TableCell>{audit.auditorName}</TableCell>
+                                <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
+                                <TableCell>{audit.findings.length}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="outline" size="sm" onClick={() => setCurrentAuditSession(audit)}>
+                                        <Edit className="mr-2 h-4 w-4" /> Ver / Editar
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                ) : (
+                <div className="text-center p-8 text-muted-foreground">No hay auditorías completadas.</div>
+                )}
             </TabsContent>
-            
             <TabsContent value="actividad" className="mt-4">
-              <CardDescription className="mb-6">
-                Registro histórico de cambios y eventos en el sistema. Esta es una vista de solo lectura de las actividades del sistema.
-              </CardDescription>
-               <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
+              <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
                     <History className="h-16 w-16 text-muted-foreground mb-4" />
                     <p className="text-lg font-semibold text-foreground">Registro de Actividad del Sistema (Conceptual)</p>
                     <p className="text-sm text-muted-foreground text-center max-w-md">
-                        Esta sección está diseñada para mostrar un registro detallado de todas las acciones importantes realizadas en el sistema,
-                        como la creación o modificación de procesos, actividades y acciones de mejora.
-                    </p>
-                     <p className="text-xs text-muted-foreground mt-2">
-                        La implementación de un registro de eventos detallado requiere una arquitectura más compleja que la actual (basada en localStorage)
-                        y está fuera del alcance de las modificaciones actuales.
+                        Esta sección está diseñada para mostrar un registro detallado de las acciones importantes realizadas en el sistema.
+                        La implementación de un registro de eventos completo requiere una arquitectura más compleja y está fuera del alcance actual.
                     </p>
                 </div>
             </TabsContent>
@@ -433,3 +511,5 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
+    

@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users, ClipboardCheck } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -50,6 +50,20 @@ import { Badge } from "@/components/ui/badge";
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
+
+
+// Minimal types needed for dashboard from audit module
+type FindingType = "Conforme" | "No Conforme" | "Oportunidad de Mejora";
+interface AuditFinding {
+  type: FindingType;
+}
+interface Audit {
+  id: string;
+  auditDate: string; // ISO string
+  status: 'En Progreso' | 'Completada';
+  findings: AuditFinding[];
+}
 
 
 function formatDashboardCurrency(amount: number, currency: string) {
@@ -166,7 +180,8 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 
 export default function DashboardPage() {
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingProcessData, setIsLoadingProcessData] = useState(true);
+  const [allAudits, setAllAudits] = useState<Audit[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const { actividades: globalActividades, isLoadingActividades } = useActividades();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
@@ -195,17 +210,21 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    setIsLoadingProcessData(true);
+    setIsLoadingData(true);
     try {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) {
         const parsedProcesses: CapturedProcess[] = JSON.parse(storedProcesses);
         setAllCapturedProcesses(parsedProcesses);
       }
+      const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
+      if (storedAudits) {
+        setAllAudits(JSON.parse(storedAudits));
+      }
     } catch (error) {
-      console.error("Error loading process data from localStorage:", error);
+      console.error("Error loading data from localStorage:", error);
     } finally {
-      setIsLoadingProcessData(false);
+      setIsLoadingData(false);
     }
   }, []);
 
@@ -360,9 +379,18 @@ export default function DashboardPage() {
     });
   }, [globalActividades, dashboardDateRange, filteredCapturedProcesses, selectedArea, selectedPuesto]);
 
+  const filteredAudits = useMemo(() => {
+    if (!dashboardDateRange.from || !dashboardDateRange.to) return allAudits.filter(a => a.status === 'Completada');
+    return allAudits.filter(audit => {
+        if (audit.status !== 'Completada') return false;
+        const auditDate = parseISO(audit.auditDate);
+        return isValid(auditDate) && isWithinInterval(auditDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
+    });
+  }, [allAudits, dashboardDateRange]);
+
 
  useEffect(() => {
-    if (!isLoadingProcessData && !isLoadingAcciones && !isLoadingActividades && dashboardDateRange.from && dashboardDateRange.to) {
+    if (!isLoadingData && !isLoadingAcciones && !isLoadingActividades && dashboardDateRange.from && dashboardDateRange.to) {
       const monthlyData: MonthlyEvolutionData[] = [];
       const monthsInInterval = eachMonthOfInterval({
         start: dashboardDateRange.from,
@@ -482,11 +510,11 @@ export default function DashboardPage() {
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingProcessData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
+  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
 
 
   const dashboardMetrics = useMemo(() => {
-    if (isLoadingProcessData || isLoadingActividades || isLoadingAcciones) {
+    if (isLoadingData || isLoadingActividades || isLoadingAcciones) {
       return {
         procesosMapeadosCount: 0,
         actividadesActivasCount: 0,
@@ -497,6 +525,9 @@ export default function DashboardPage() {
         procesosConVariacionesCount: 0,
         actividadesDuplicadasCount: 0,
         procesosSinActividadesCount: 0,
+        auditoriasCompletadasCount: 0,
+        hallazgosNoConformesCount: 0,
+        hallazgosOportunidadCount: 0,
       };
     }
 
@@ -533,6 +564,11 @@ export default function DashboardPage() {
     });
     const procesosSinActividadesCount = filteredCapturedProcesses.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length;
 
+    // Audit metrics
+    const auditoriasCompletadasCount = filteredAudits.length;
+    const hallazgosNoConformesCount = filteredAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0);
+    const hallazgosOportunidadCount = filteredAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0);
+
 
     return {
       procesosMapeadosCount,
@@ -544,11 +580,14 @@ export default function DashboardPage() {
       procesosConVariacionesCount,
       actividadesDuplicadasCount,
       procesosSinActividadesCount,
+      auditoriasCompletadasCount,
+      hallazgosNoConformesCount,
+      hallazgosOportunidadCount,
     };
-  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, globalActividades, isLoadingProcessData, isLoadingActividades, isLoadingAcciones]);
+  }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, filteredAudits, globalActividades, isLoadingData, isLoadingActividades, isLoadingAcciones]);
 
 
-  const isLoadingAll = isLoadingProcessData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
+  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
 
   const staffSummary = useMemo(() => {
     if (isLoadingAreas || isLoadingPuestos) {
@@ -844,56 +883,16 @@ export default function DashboardPage() {
         </div>
       </div>
       <p className="text-sm text-muted-foreground mb-8">
-        Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados. La tabla de Costos de Sistemas tiene su propia lógica de filtrado basada en Área/Puesto.
+        Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Procesos Activos Mapeados</CardTitle>
+            <CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle>
             <Factory className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle>
-            <Layers className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll)}
-            </div>
-             <p className="text-xs text-muted-foreground">Mismo nombre de proceso en &gt;1 Área/Puesto.</p>
-          </CardContent>
-        </Card>
-         <Card className="shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividades Activas</CardTitle>
-            <ListChecks className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.actividadesActivasCount, isLoadingAll)}
-            </div>
-            <p className="text-xs text-muted-foreground">(Creadas en el periodo, según filtros)</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle>
-            <CopyCheck className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-                 {renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll)}
-            </div>
-            <p className="text-xs text-muted-foreground">Actividades (creadas en periodo, según filtros) en &gt;1 proceso.</p>
-          </CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div></CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -901,46 +900,38 @@ export default function DashboardPage() {
             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAll)}
-            </div>
-             <p className="text-xs text-muted-foreground">(Finalizadas en el periodo)</p>
+            <div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAll)}</div>
+            <p className="text-xs text-muted-foreground">(Finalizadas en el periodo)</p>
           </CardContent>
         </Card>
          <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Acciones en Revisión</CardTitle>
-            <FileSearch2 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Auditorías Completadas</CardTitle>
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}
-            </div>
-             <p className="text-xs text-muted-foreground">(Creadas en el periodo)</p>
+            <div className="text-2xl font-bold">{renderMetric(dashboardMetrics.auditoriasCompletadasCount, isLoadingAll)}</div>
+             <p className="text-xs text-muted-foreground">(En el periodo)</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Acciones en Progreso</CardTitle>
-            <ActivityIcon className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Hallazgos No Conformes</CardTitle>
+            <AlertTriangle className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAll)}
-            </div>
-             <p className="text-xs text-muted-foreground">(Creadas en el periodo)</p>
+            <div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosNoConformesCount, isLoadingAll)}</div>
+             <p className="text-xs text-muted-foreground">(En el periodo)</p>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Procesos Sin Actividades</CardTitle>
-            <PackageX className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Oportunidades de Mejora</CardTitle>
+            <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-               {renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}
-            </div>
-            <p className="text-xs text-muted-foreground">Procesos (capturados en periodo, según filtros) sin actividades detalladas.</p>
+            <div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosOportunidadCount, isLoadingAll)}</div>
+             <p className="text-xs text-muted-foreground">(En el periodo, de auditorías)</p>
           </CardContent>
         </Card>
       </div>
