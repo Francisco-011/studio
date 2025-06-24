@@ -1,12 +1,11 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { parseISO, isValid } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -120,18 +119,15 @@ const defaultFormValues: Partial<CapturaFormData> = {
 
 export default function CapturaPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
   
   const isMounted = useRef(false);
-
 
   const form = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
@@ -187,62 +183,14 @@ export default function CapturaPage() {
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
-        const parsedData: any[] = JSON.parse(storedData);
-        // Data migration for older records
-        const migratedData: CapturedProcess[] = parsedData.map(p => {
-          const newP: any = {
-            ...p,
-            activo: p.activo === undefined ? true : p.activo,
-            activityOrder: p.activityOrder || [],
-            updatedAt: p.updatedAt || (p.capturedAt && isValid(parseISO(p.capturedAt)) ? parseISO(p.capturedAt).getTime() : Date.now()),
-            sistemas: p.sistemas || [],
-            tiempoIdeal: p.tiempoIdeal,
-            costoEstimado: p.costoEstimado,
-            costoIdeal: p.costoIdeal,
-            monedaCosto: p.monedaCosto,
-          };
-          if (!newP.procesosEntrada && p.formatosRecibe) {
-            newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe];
-          }
-          if (!newP.procesosSalida && p.formatosEntrega) {
-            newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega];
-          }
-          delete newP.formatosRecibe;
-          delete newP.formatosEntrega;
-          return newP;
-        });
-        setAllProcesses(migratedData);
+        const parsedData: CapturedProcess[] = JSON.parse(storedData);
+        setAllProcesses(parsedData.filter(p => !p.deletedAt));
       }
     } catch (error) {
       console.error("Error loading all processes from localStorage for dropdowns:", error);
       toast({ title: "Error al Cargar Procesos", description: "No se pudieron cargar los procesos para las listas de selección.", variant: "destructive" });
     }
   }, []);
-
-  useEffect(() => {
-    const editId = searchParams.get('editId');
-    setEditingId(editId);
-
-    if (editId) {
-      if (isLoadingAreas || isLoadingPuestos || allProcesses.length === 0) {
-        return; 
-      }
-      
-      const processToEdit = allProcesses.find(p => p.id === editId);
-      
-      if (processToEdit) {
-        form.reset({
-          ...defaultFormValues,
-          ...processToEdit,
-        });
-      } else {
-        toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
-        router.push('/procesos-y-flujos-registrados');
-      }
-    } else {
-      form.reset(defaultFormValues as CapturaFormData);
-    }
-  }, [searchParams, allProcesses, isLoadingAreas, isLoadingPuestos, form, router]);
   
   useEffect(() => {
     if (watchedProcessName && allProcesses.length > 0) {
@@ -253,7 +201,7 @@ export default function CapturaPage() {
       }
       
       const existingProcess = allProcesses.find(
-        p => p.id !== editingId && p.proceso.trim().toLowerCase() === trimmedLowerName && !p.deletedAt
+        p => p.proceso.trim().toLowerCase() === trimmedLowerName && !p.deletedAt
       );
       
       if (existingProcess) {
@@ -264,15 +212,13 @@ export default function CapturaPage() {
     } else {
       setSimilarProcessWarning(null);
     }
-  }, [watchedProcessName, allProcesses, editingId]);
+  }, [watchedProcessName, allProcesses]);
 
-  // Effect to mark component as mounted
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
 
-  // Effect to reset 'departamento' and 'puesto' when 'area' changes
   useEffect(() => {
     if (isMounted.current) {
         setValue('departamento', undefined);
@@ -280,7 +226,6 @@ export default function CapturaPage() {
     }
   }, [watchedAreaName, setValue]);
 
-  // Effect to reset 'puesto' when 'departamento' changes
   useEffect(() => {
     if (isMounted.current) {
         setValue('puesto', undefined);
@@ -301,45 +246,22 @@ export default function CapturaPage() {
         procesosSalida: values.procesosSalida || [],
         activityOrder: values.activityOrder || [],
       };
+      
+      const newProcess: CapturedProcess = {
+        ...dataToSave,
+        id: Date.now().toString(),
+        capturedAt: new Date().toISOString(),
+        updatedAt: currentTime,
+        activo: true, 
+      };
+      existingData.push(newProcess);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
+      toast({
+        title: "Proceso Registrado",
+        description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
+      });
+      router.push(`/captura/${newProcess.id}/actividades`);
 
-      if (editingId) {
-        const processToUpdate = existingData.find(p => p.id === editingId);
-        if (processToUpdate) {
-            const updatedProcess: CapturedProcess = {
-                ...(processToUpdate as any), 
-                ...dataToSave, 
-                activo: processToUpdate.activo === undefined ? true : processToUpdate.activo,
-                updatedAt: currentTime,
-            };
-            delete (updatedProcess as any).formatosRecibe;
-            delete (updatedProcess as any).formatosEntrega;
-
-            existingData = existingData.map(p => p.id === editingId ? updatedProcess : p);
-            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
-            toast({
-                title: "Proceso Actualizado",
-                description: "La información del proceso ha sido actualizada exitosamente.",
-            });
-            router.push('/procesos-y-flujos-registrados'); 
-        } else {
-             toast({ title: "Error", description: "No se encontró el proceso para actualizar.", variant: "destructive" });
-        }
-      } else { // Creating a new process
-        const newProcess: CapturedProcess = {
-          ...dataToSave,
-          id: Date.now().toString(),
-          capturedAt: new Date().toISOString(),
-          updatedAt: currentTime,
-          activo: true, 
-        };
-        existingData.push(newProcess);
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
-        toast({
-          title: "Proceso Registrado",
-          description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
-        });
-        router.push(`/captura/${newProcess.id}/actividades`);
-      }
     } catch (error) {
       console.error("Error saving to localStorage:", error);
       toast({
@@ -454,7 +376,7 @@ export default function CapturaPage() {
   )};
   
   const availableProcessesForSelection = allProcesses
-    .filter(p => !p.deletedAt && p.id !== editingId) 
+    .filter(p => !p.deletedAt) 
     .map(p => ({ id: p.id, nombre: p.proceso }));
 
   return (
@@ -463,15 +385,12 @@ export default function CapturaPage() {
         <CardHeader className="flex flex-row items-center gap-2">
           <ClipboardEdit className="h-6 w-6 text-primary" />
           <CardTitle className="text-2xl font-headline">
-            {editingId ? "Editar Proceso Capturado" : "Módulo de Captura de Proceso"}
+            Módulo de Captura de Proceso
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground mb-6">
-            {editingId 
-              ? "Modifique los detalles del proceso seleccionado."
-              : "Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus actividades."
-            }
+            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus actividades.
           </p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -609,13 +528,12 @@ export default function CapturaPage() {
               </div>
 
               <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso recibe como entrada..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle qué información es necesaria para iniciar o ejecutar el proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso genera o entrega como resultado..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle cuál es el producto o resultado informativo del proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0 && !editingId, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
-                {editingId && (<Button type="button" variant="outline" onClick={() => router.push('/procesos-y-flujos-registrados')}>Cancelar</Button>)}
-                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />{editingId ? "Guardar Cambios" : "Guardar Proceso y Definir Actividades"}</Button>
+                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Actividades</Button>
               </div>
             </form>
           </Form>

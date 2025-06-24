@@ -1,14 +1,19 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -40,13 +45,33 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock, ChevronRight } from "lucide-react";
-import type { CapturaFormData } from '../captura/page';
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown } from "lucide-react";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
+import type { CapturaFormData, Moneda, frecuenciaOptions as capturaFrecuenciaOptions, monedaOptions as capturaMonedaOptions } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
@@ -59,6 +84,53 @@ export interface CapturedProcess extends CapturaFormData {
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const SPECIAL_ENTRADA_OPTION = "Iniciador";
+const SPECIAL_SALIDA_OPTION = "Finalizador";
+
+const frecuenciaOptions: readonly string[] = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"];
+const monedaOptions: readonly string[] = ["USD", "MXN", "EUR", "CAD", "GBP"];
+
+
+const capturaFormSchema = z.object({
+  area: z.string().min(1, "El área es requerida."),
+  departamento: z.string().optional(),
+  puesto: z.string().min(1, "El puesto es requerido."),
+  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
+  descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  frecuencia: z.enum(frecuenciaOptions as [string, ...string[]], { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
+  tiempoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
+  ),
+  tiempoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
+  ),
+  costoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
+  ),
+  costoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
+  ),
+  monedaCosto: z.enum(monedaOptions as [string, ...string[]]).optional(),
+  sistemas: z.array(z.string()).optional().default([]),
+  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
+  procesosEntrada: z.array(z.string()).optional().default([]),
+  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
+  procesosSalida: z.array(z.string()).optional().default([]),
+  activityOrder: z.array(z.string()).optional().default([]),
+}).refine(data => {
+  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Debe seleccionar una moneda si especifica un costo.",
+  path: ["monedaCosto"],
+});
+
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
 type SortableProcessKeys = 'proceso' | 'area' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';
@@ -96,8 +168,10 @@ export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities, isLoadingActividades } = useActividades();
+  const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,6 +181,10 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [activityStatusFilter, setActivityStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isLoading, setIsLoading] = useState(true);
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<CapturedProcess | null>(null);
+
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
@@ -117,6 +195,54 @@ export default function ProcesosYFlujosRegistradosPage() {
   const handleEditActivity = (activityName: string) => {
     router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
   };
+
+  const editForm = useForm<CapturaFormData>({
+    resolver: zodResolver(capturaFormSchema),
+  });
+
+  const { watch: watchEditForm, setValue: setEditValue } = editForm;
+  const watchedEditAreaName = watchEditForm('area');
+  const watchedEditDepartamentoName = watchEditForm('departamento');
+
+  const filteredEditDepartamentos = useMemo(() => {
+    if (!watchedEditAreaName || isLoadingDepartamentos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedEditAreaName)?.id;
+    if (!areaId) return [];
+    return departamentos.filter(d => d.areaId === areaId);
+  }, [watchedEditAreaName, areas, departamentos, isLoadingDepartamentos, isLoadingAreas]);
+
+  const filteredEditPuestos = useMemo(() => {
+    if (!watchedEditAreaName || isLoadingPuestos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedEditAreaName)?.id;
+    if (!areaId) return [];
+    const puestosInArea = puestos.filter(p => p.areaId === areaId);
+    if (watchedEditDepartamentoName) {
+      const deptoId = departamentos.find(d => d.nombre === watchedEditDepartamentoName && d.areaId === areaId)?.id;
+      if (deptoId) return puestosInArea.filter(p => p.departamentoId === deptoId);
+    }
+    return puestosInArea;
+  }, [watchedEditAreaName, watchedEditDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
+
+  const availableEditSistemas = useMemo(() => {
+    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
+    const selectedAreaObj = areas.find(a => a.nombre === watchedEditAreaName);
+    const selectedDeptoObj = departamentos.find(d => d.nombre === watchedEditDepartamentoName && d.areaId === selectedAreaObj?.id);
+    const selectedPuestoObj = puestos.find(p => p.nombre === editForm.getValues('puesto') && p.areaId === selectedAreaObj?.id);
+    return allConfiguredSistemas.filter(sistema => {
+      if (sistema.scope === "Empresa") return true;
+      if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
+      if (sistema.scope === "Departamento" && selectedDeptoObj && sistema.scopeId === selectedDeptoObj.id) return true;
+      if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
+      return false;
+    });
+  }, [allConfiguredSistemas, watchedEditAreaName, watchedEditDepartamentoName, editForm, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
+
+  useEffect(() => {
+    if (editingProcess) {
+      editForm.reset(editingProcess);
+    }
+  }, [editingProcess, editForm]);
+
 
   useEffect(() => {
     setIsLoading(true);
@@ -131,7 +257,6 @@ export default function ProcesosYFlujosRegistradosPage() {
             activityOrder: p.activityOrder || [],
             updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now())
           };
-          // Old data migration
           if (!newP.procesosEntrada && p.formatosRecibe) { newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe]; }
           delete newP.formatosRecibe;
           if (!newP.procesosSalida && p.formatosEntrega) { newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega]; }
@@ -283,7 +408,27 @@ export default function ProcesosYFlujosRegistradosPage() {
     toast({ title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}` });
   };
 
-  const handleEditProcess = (proc: CapturedProcess) => router.push(`/captura?editId=${proc.id}`);
+  const handleOpenEditDialog = (proc: CapturedProcess) => {
+    setEditingProcess(proc);
+    setIsEditDialogOpen(true);
+  };
+
+  function handleEditSubmit(values: CapturaFormData) {
+    if (!editingProcess) return;
+
+    const updatedData = allCapturedData.map(p => 
+      p.id === editingProcess.id ? { 
+        ...editingProcess, 
+        ...values,
+        updatedAt: Date.now() 
+      } : p
+    );
+    setAllCapturedData(updatedData);
+    toast({ title: "Proceso Actualizado" });
+    setIsEditDialogOpen(false);
+    setEditingProcess(null);
+  }
+
   const handleExport = () => { /* ... (export logic remains same) */ };
 
   const getEffectiveCost = (proc: CapturedProcess) => {
@@ -291,6 +436,92 @@ export default function ProcesosYFlujosRegistradosPage() {
     return { value: 0, isDerived: false }; // Activities no longer have cost
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
+
+  const renderMultiSelectDropdown = (
+    field: any, 
+    label: string,
+    placeholder: string,
+    options: { id: string; nombre: string }[],
+    isLoading: boolean,
+    specialOption?: string
+  ) => {
+    const currentSelectionNames = (field.value || [])
+      .map((val: string) => {
+        if (specialOption && val === specialOption) return specialOption;
+        return options.find(opt => opt.nombre === val)?.nombre || val;
+      })
+      .filter(Boolean);
+
+    return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <FormControl>
+          <Button variant="outline" className="w-full justify-between text-left font-normal h-auto min-h-10">
+            {currentSelectionNames.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {currentSelectionNames.map((itemName: string) => (
+                  <Badge key={itemName} variant="secondary" className="font-normal">
+                    {itemName}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">{isLoading ? "Cargando opciones..." : placeholder}</span>
+            )}
+            <ChevronDown className="ml-auto h-4 w-4 opacity-50 shrink-0" />
+          </Button>
+        </FormControl>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isLoading ? (
+           <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
+        ) : (
+          <>
+            {specialOption && (
+              <DropdownMenuCheckboxItem
+                key={specialOption}
+                checked={field.value?.includes(specialOption)}
+                onCheckedChange={(checked) => {
+                  const currentSelected = field.value || [];
+                  if (checked) {
+                    field.onChange([...currentSelected, specialOption]);
+                  } else {
+                    field.onChange(currentSelected.filter((s: string) => s !== specialOption));
+                  }
+                }}
+              >
+                {specialOption}
+              </DropdownMenuCheckboxItem>
+            )}
+            {options.length === 0 && !specialOption ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                No hay elementos configurados.
+              </div>
+            ) : (
+              options.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.id}
+                  checked={field.value?.includes(option.nombre)}
+                  onCheckedChange={(checked) => {
+                    const currentSelected = field.value || [];
+                    if (checked) {
+                      field.onChange([...currentSelected, option.nombre]);
+                    } else {
+                      field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
+                    }
+                  }}
+                >
+                  {option.nombre}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )};
 
   if (isLoading || isLoadingActividades || isLoadingAreas || isLoadingPuestos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
@@ -362,7 +593,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
-                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
                 {isExpanded && (
                   <TableRow className={cn(proc.activo === false && "bg-muted/40")}>
@@ -424,6 +655,47 @@ export default function ProcesosYFlujosRegistradosPage() {
           ) : (<div className="mt-6 p-8 border-dashed rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20"><FileX className="h-16 w-16 text-muted-foreground mb-4" /><p className="text-lg font-semibold">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados activos" : "No se encontraron resultados"}</p><p className="text-sm text-muted-foreground">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? 'Comience registrando procesos en "Captura".' : 'Intente ajustar su búsqueda o filtros.'}</p></div>)}
         </CardContent>
       </Card>
+      
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editar Proceso: {editingProcess?.proceso}</DialogTitle>
+            <DialogDescription>
+              Modifique los detalles del proceso. Los cambios se guardarán directamente.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-6 py-4 max-h-[75vh] overflow-y-auto pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField control={editForm.control} name="area" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('departamento', undefined); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="departamento" render={({ field }) => (<FormItem><FormLabel>Departamento</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional"/></SelectTrigger></FormControl><SelectContent>{filteredEditDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="puesto" render={({ field }) => (<FormItem><FormLabel>Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{filteredEditPuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+              <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField control={editForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciaOptions as string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <FormField control={editForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Est. (min)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={editForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={editForm.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Est.</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={editForm.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+              </div>
+              <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos, undefined)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Info. Recibida</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", allCapturedData.map(p=>({id:p.id, nombre: p.proceso})), isLoading, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Info. Entregada</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", allCapturedData.map(p=>({id:p.id, nombre: p.proceso})), isLoading, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
       
       <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
