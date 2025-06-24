@@ -36,7 +36,6 @@ const navItems: NavItem[] = [
   { href: '/captura', label: 'Captura', icon: ClipboardEdit },
   { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database },
   { href: '/actividades', label: 'Actividades', icon: ListChecks },
-  { href: '/analisis', label: 'Matriz de Análisis', icon: ActivitySquare },
   { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree },
   { href: '/mejoras', label: 'Mejoras', icon: TrendingUp },
   { href: '/acciones', label: 'Acciones', icon: Target },

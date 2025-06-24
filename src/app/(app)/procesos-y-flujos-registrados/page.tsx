@@ -7,6 +7,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,16 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -39,12 +30,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock } from "lucide-react";
+import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock, ChevronRight } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
-import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -71,38 +61,22 @@ interface SortConfig {
 
 const ITEMS_PER_PAGE = 10;
 
-const DetailSection = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number, isList?: boolean, isTextarea?: boolean }) => {
-
-  if (value === undefined || value === null || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea)) {
-    return (
-      <div>
-        <h4 className="font-semibold text-sm">{title}:</h4>
-        <p className="text-sm text-muted-foreground">No especificado.</p>
-      </div>
-    );
+const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
+  if (value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea && !isList)) {
+    return null;
   }
-
-  if (isList && Array.isArray(value)) {
-    return (
-      <div>
-        <h4 className="font-semibold text-sm">{title}:</h4>
+  return (
+    <div className="text-sm">
+      <strong className="font-semibold text-foreground/90">{title}:</strong>
+      {isList && Array.isArray(value) ? (
         <div className="flex flex-wrap gap-1 mt-1">
           {value.map((item, idx) => (
             <Badge key={idx} variant="secondary">{item}</Badge>
           ))}
         </div>
-      </div>
-    );
-  }
-
-  const displayValue = Array.isArray(value) ? value.join(', ') : value;
-
-  return (
-    <div>
-      <h4 className="font-semibold text-sm">{title}:</h4>
-      <p className={cn("text-sm text-muted-foreground", isTextarea && "whitespace-pre-wrap")}>
-        {typeof displayValue === 'number' ? displayValue.toString() : displayValue}
-      </p>
+      ) : (
+        <p className={cn("text-muted-foreground", isTextarea && "whitespace-pre-wrap mt-1")}>{typeof value === 'number' ? value.toString() : value}</p>
+      )}
     </div>
   );
 };
@@ -113,8 +87,8 @@ export default function ProcesosYFlujosRegistradosPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { actividades: allActivities } = useActividades();
-
+  const { actividades: allActivities, isLoadingActividades } = useActividades();
+  
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
@@ -122,13 +96,12 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedProcess, setSelectedProcess] = useState<CapturedProcess | null>(null);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
 
   useEffect(() => {
@@ -179,6 +152,10 @@ export default function ProcesosYFlujosRegistradosPage() {
       }
     }
   }, [allCapturedData, isLoading]);
+  
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const sortedAndFilteredData = useMemo(() => {
     setCurrentPage(1);
@@ -247,7 +224,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo).sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
   }, [allCapturedData]);
 
-  const handleViewDetails = (proc: CapturedProcess) => { setSelectedProcess(proc); setIsDetailDialogOpen(true); };
   const promptDeleteProcess = (proc: CapturedProcess) => { setProcessToDelete(proc); setIsConfirmDeleteProcessOpen(true); };
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
@@ -303,7 +279,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
-  if (isLoading) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
+  if (isLoading || isLoadingActividades) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
   return (
     <div className="container mx-auto py-8">
@@ -329,24 +305,24 @@ export default function ProcesosYFlujosRegistradosPage() {
           </div>
           {paginatedData.length > 0 ? (
             <><div className="rounded-md border overflow-x-auto"><Table><TableHeader><TableRow>
+              <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
               <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div></TableHead>
               <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est./Ideal {getSortIcon('costoEstimado')}</div></TableHead>
-              <TableHead className="text-center w-[100px]">Sistemas</TableHead>
-              <TableHead className="text-center w-[100px]">Ent. Procesos</TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
-              <TableHead className="text-right w-[160px]">Acciones</TableHead>
+              <TableHead className="text-right w-[140px]">Acciones</TableHead>
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
-                const associatedActivityNames = proc.activityOrder?.map(actId => allActivities.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ') || "Ninguna";
+                const isExpanded = expandedRows[proc.id];
                 const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
-                const formatListTooltip = (items: string[] | undefined, noneText: string) => (items && items.length > 0 ? items.join(', ') : noneText);
 
                 return (
-                <TableRow key={proc.id} className={cn(proc.activo === false && "bg-muted/40")}>
+                <React.Fragment key={proc.id}>
+                <TableRow className={cn(proc.activo === false && "bg-muted/40", isExpanded && "border-b-0")}>
+                    <TableCell className="p-1"><Button variant="ghost" size="icon" onClick={() => toggleRow(proc.id)}><ChevronRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} /></Button></TableCell>
                     <TableCell className="font-medium">{proc.proceso}</TableCell>
                     <TableCell>{proc.area}</TableCell>
                     <TableCell>{proc.puesto}</TableCell>
@@ -360,42 +336,68 @@ export default function ProcesosYFlujosRegistradosPage() {
                             </span>
                         </TooltipTrigger>{isDerived && <TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent>}</Tooltip></TooltipProvider>
                     </TableCell>
-                    <TableCell className="text-center">
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                            <Badge variant="secondary" className="cursor-default">{proc.sistemas?.length || 0}</Badge>
-                        </TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{formatListTooltip(proc.sistemas, 'Ningún sistema asociado')}</p></TooltipContent></Tooltip></TooltipProvider>
-                    </TableCell>
-                    <TableCell className="text-center">
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                            <Badge variant="secondary" className="cursor-default">{proc.procesosEntrada?.length || 0}</Badge>
-                        </TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{formatListTooltip(proc.procesosEntrada, 'Ningún proceso de entrada')}</p></TooltipContent></Tooltip></TooltipProvider>
-                    </TableCell>
-                    <TableCell className="text-center"><TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TooltipTrigger><TooltipContent><p className="text-xs max-w-xs">{associatedActivityNames}</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
-                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleViewDetails(proc)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
-                </TableRow>);
+                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleEditProcess(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                </TableRow>
+                {isExpanded && (
+                  <TableRow className={cn(proc.activo === false && "bg-muted/40")}>
+                    <TableCell colSpan={11} className="p-0">
+                      <div className="p-4 bg-muted/50 space-y-4">
+                        <Card>
+                          <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
+                          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <DetailDisplay title="Descripción" value={proc.descripcion} isTextarea />
+                              <DetailDisplay title="Frecuencia" value={proc.frecuencia} />
+                              <DetailDisplay title="Sistemas" value={proc.sistemas} isList />
+                              <DetailDisplay title="Entradas" value={proc.informacionRecibe} isTextarea />
+                              <DetailDisplay title="Salidas" value={proc.informacionEntrega} isTextarea />
+                              <DetailDisplay title="Procesos de Entrada" value={proc.procesosEntrada} isList />
+                              <DetailDisplay title="Procesos de Salida" value={proc.procesosSalida} isList />
+                          </CardContent>
+                        </Card>
+                        <div>
+                          <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
+                           {(proc.activityOrder && proc.activityOrder.length > 0) ? (
+                              <div className="space-y-3">
+                                {proc.activityOrder.map((actId, index) => {
+                                  const act = allActivities.find(a => a.id === actId);
+                                  if (!act) return <div key={`${proc.id}-act-${actId}`} className="p-2 border rounded text-sm text-destructive">Actividad con ID {actId} no encontrada.</div>;
+                                  return (
+                                    <Card key={`${proc.id}-act-${act.id}-${index}`} className="bg-background">
+                                      <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
+                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                        <CardTitle className="text-base">{act.nombre}</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
+                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
+                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
+                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
+                                      </CardContent>
+                                    </Card>
+                                  );
+                                })}
+                              </div>
+                           ) : (
+                             <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
+                           )}
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+                </React.Fragment>
+                );
             })}</TableBody></Table></div>
             <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredData.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Siguiente</Button></div></div></>
           ) : (<div className="mt-6 p-8 border-dashed rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20"><FileX className="h-16 w-16 text-muted-foreground mb-4" /><p className="text-lg font-semibold">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? "No hay datos capturados" : "No se encontraron resultados"}</p><p className="text-sm text-muted-foreground">{allCapturedData.filter(p => !p.deletedAt).length === 0 ? 'Comience registrando procesos en "Captura".' : 'Intente ajustar su búsqueda o filtros.'}</p></div>)}
         </CardContent>
       </Card>
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Detalles: {selectedProcess?.proceso}</DialogTitle><DialogDescription>Información completa del proceso y flujo.</DialogDescription></DialogHeader>{selectedProcess && (<div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-            <DetailSection title="Área" value={selectedProcess.area} />
-            <DetailSection title="Departamento" value={selectedProcess.departamento} />
-            <DetailSection title="Puesto Principal" value={selectedProcess.puesto} />
-            <DetailSection title="Descripción Detallada" value={selectedProcess.descripcion} isTextarea />
-            <DetailSection title="Tiempo Estimado" value={selectedProcess.tiempoEstimado !== undefined ? `${selectedProcess.tiempoEstimado} min` : undefined} />
-            <DetailSection title="Tiempo Ideal" value={selectedProcess.tiempoIdeal !== undefined ? `${selectedProcess.tiempoIdeal} min` : undefined} />
-            <DetailSection title="Costo Estimado" value={selectedProcess.costoEstimado !== undefined ? `${selectedProcess.costoEstimado} ${selectedProcess.monedaCosto}` : undefined} />
-            <DetailSection title="Costo Ideal" value={selectedProcess.costoIdeal !== undefined ? `${selectedProcess.costoIdeal} ${selectedProcess.monedaCosto}` : undefined} />
-            <DetailSection title="Frecuencia" value={selectedProcess.frecuencia} />
-            <DetailSection title="Sistemas Utilizados" value={selectedProcess.sistemas} isList />
-            <DetailSection title="Información que Recibe (Entradas)" value={selectedProcess.informacionRecibe} isTextarea />
-            <DetailSection title="Procesos de Entrada" value={selectedProcess.procesosEntrada} isList />
-            <DetailSection title="Información que Entrega (Salidas)" value={selectedProcess.informacionEntrega} isTextarea />
-            <DetailSection title="Procesos de Salida" value={selectedProcess.procesosSalida} isList />
-      </div>)}<DialogClose asChild><Button type="button" variant="outline" className="w-full">Cerrar</Button></DialogClose></DialogContent></Dialog>
+      
       <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
+
