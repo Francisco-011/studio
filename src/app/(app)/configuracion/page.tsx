@@ -149,15 +149,27 @@ const costoSistemaFormSchema = z.object({
   sistemaId: z.string().min(1, "Debe seleccionar un sistema."),
   tipoCosto: z.array(z.enum(tiposDeCostoOptions)).min(1, "Debe seleccionar al menos un tipo de costo."),
   montoUso: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    (val) => {
+      if (val === null || val === undefined || String(val).trim() === '') return undefined;
+      const parsed = parseFloat(String(val));
+      return isNaN(parsed) ? undefined : parsed;
+    },
     z.number().nonnegative("El monto por uso debe ser positivo o cero.").optional()
   ),
   numeroLicencias: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    (val) => {
+      if (val === null || val === undefined || String(val).trim() === '') return undefined;
+      const parsed = parseInt(String(val), 10);
+      return isNaN(parsed) ? undefined : parsed;
+    },
     z.number().int("El número de licencias debe ser un entero.").nonnegative("El número de licencias debe ser positivo o cero.").optional()
   ),
   costoPorLicencia: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    (val) => {
+      if (val === null || val === undefined || String(val).trim() === '') return undefined;
+      const parsed = parseFloat(String(val));
+      return isNaN(parsed) ? undefined : parsed;
+    },
     z.number().nonnegative("El costo por licencia debe ser positivo o cero.").optional()
   ),
   formaPago: z.enum(formasDePagoOptions, { errorMap: () => ({ message: "Seleccione una forma de pago válida." })}),
