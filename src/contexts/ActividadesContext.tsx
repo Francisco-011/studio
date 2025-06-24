@@ -5,6 +5,13 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
 
+export interface CambioHistorial {
+  timestamp: string;
+  field: string;
+  before: any;
+  after: any;
+}
+
 export interface Actividad {
   id: string;
   nombre: string;
@@ -16,6 +23,7 @@ export interface Actividad {
   deletedAt?: number;
   descripcionBreve?: string;
   sistemaUtilizado?: string;
+  historialDeCambios?: CambioHistorial[];
 }
 
 interface ActividadesContextType {
@@ -91,6 +99,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
       updatedAt: currentTime,
       activa: data.activa === undefined ? true : data.activa,
+      historialDeCambios: [],
     };
     setActividades((prev) => [...prev, newActividad]);
     addLogEntry({ action: 'create', entityType: 'Actividad', entityName: newActividad.nombre, details: `Se creó la actividad "${newActividad.nombre}".` });
@@ -99,20 +108,46 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
 
   const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
     const originalActividad = actividades.find(a => a.id === id);
+    if (!originalActividad) return;
+    
+    const changes: CambioHistorial[] = [];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado'];
+    
+    fieldsToCompare.forEach(key => {
+        if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {
+             changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: originalActividad[key as keyof Actividad] ?? 'N/A',
+                after: data[key] ?? 'N/A'
+             });
+        }
+    });
+
+    if (data.procesosAsociadosIds && JSON.stringify(originalActividad.procesosAsociadosIds?.sort()) !== JSON.stringify(data.procesosAsociadosIds.sort())) {
+         changes.push({
+            timestamp: new Date().toISOString(),
+            field: 'procesosAsociadosIds',
+            before: originalActividad.procesosAsociadosIds?.join(', ') || 'N/A',
+            after: data.procesosAsociadosIds.join(', ') || 'N/A'
+         });
+    }
+
     setActividades((prev) =>
       prev.map((act) =>
         act.id === id ? { 
           ...act, 
           ...data, 
           procesosAsociadosCount: data.procesosAsociadosIds?.length ?? act.procesosAsociadosCount, 
-          updatedAt: Date.now() 
+          updatedAt: Date.now(),
+          historialDeCambios: [...(act.historialDeCambios || []), ...changes]
         } : act
       )
     );
      if (originalActividad) {
       addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     }
-  }, [addLogEntry, actividades]);
+  }, [actividades, addLogEntry]);
 
   const softDeleteActividad = useCallback((id: string) => {
     const activityToMove = actividades.find(act => act.id === id);
@@ -141,10 +176,16 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     const activityInState = actividades.find(findMatch);
 
     if (activityInState) { 
+       const change: CambioHistorial = {
+          timestamp: new Date().toISOString(),
+          field: 'activo',
+          before: activityInState.activa,
+          after: !activityInState.activa,
+      };
       setActividades((prev) =>
         prev.map((act) => {
           if (findMatch(act)) {
-            return { ...act, activa: !act.activa, updatedAt: Date.now() };
+            return { ...act, activa: !act.activa, updatedAt: Date.now(), historialDeCambios: [...(act.historialDeCambios || []), change] };
           }
           return act;
         })

@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown, FileText, DollarSign } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown, FileText, DollarSign, History } from "lucide-react";
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -139,6 +139,9 @@ export default function ActividadesPage() {
   const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [activityForHistory, setActivityForHistory] = useState<Actividad | null>(null);
 
 
   useEffect(() => {
@@ -221,6 +224,11 @@ export default function ActividadesPage() {
   function handleEditActividad(actividad: Actividad) {
     setEditingActividad(actividad);
     setIsActividadDialogOpen(true);
+  }
+
+  function handleViewHistory(actividad: Actividad) {
+    setActivityForHistory(actividad);
+    setIsHistoryDialogOpen(true);
   }
 
   function promptDeleteActividad(actividad: Actividad) {
@@ -750,6 +758,9 @@ export default function ActividadesPage() {
                           aria-label={actividad.activa ? 'Desactivar actividad' : 'Activar actividad'}
                           className="mr-2"
                         />
+                         <Button variant="ghost" size="icon" onClick={() => handleViewHistory(actividad)} disabled={!actividad.historialDeCambios || actividad.historialDeCambios.length === 0} title="Ver historial">
+                            <History className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -820,6 +831,50 @@ export default function ActividadesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle>
+            <DialogDescription>
+              Registro de las modificaciones realizadas a esta actividad.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {activityForHistory?.historialDeCambios && activityForHistory.historialDeCambios.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Campo Modificado</TableHead>
+                    <TableHead>Valor Anterior</TableHead>
+                    <TableHead>Valor Nuevo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activityForHistory.historialDeCambios
+                    .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .map((cambio, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                      <TableCell>{cambio.field}</TableCell>
+                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
+                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-center">No hay historial de cambios registrado para esta actividad.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cerrar</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

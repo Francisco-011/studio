@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -64,16 +64,23 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-import type { CapturaFormData, Moneda, frecuenciaOptions as capturaFrecuenciaOptions, monedaOptions as capturaMonedaOptions } from '../captura/page';
+import type { CapturaFormData, Moneda as CapturaMoneda } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
+
+export interface CambioHistorial {
+  timestamp: string;
+  field: string;
+  before: any;
+  after: any;
+}
 
 export interface CapturedProcess extends CapturaFormData {
   id: string;
@@ -81,6 +88,7 @@ export interface CapturedProcess extends CapturaFormData {
   updatedAt?: number;
   deletedAt?: string;
   activo?: boolean;
+  historialDeCambios?: CambioHistorial[];
 }
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -191,6 +199,9 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [processForHistory, setProcessForHistory] = useState<CapturedProcess | null>(null);
 
   const handleEditActivity = (activityName: string) => {
     router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
@@ -255,7 +266,8 @@ export default function ProcesosYFlujosRegistradosPage() {
             ...p,
             activo: p.activo === undefined ? true : p.activo,
             activityOrder: p.activityOrder || [],
-            updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now())
+            updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now()),
+            historialDeCambios: p.historialDeCambios || [],
           };
           if (!newP.procesosEntrada && p.formatosRecibe) { newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe]; }
           delete newP.formatosRecibe;
@@ -275,12 +287,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       setIsLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    const searchQuery = searchParams.get('search');
-    if (searchQuery) setSearchTerm(searchQuery);
-  }, [searchParams]);
-
+  
   useEffect(() => {
     if (!isLoading) {
       try {
@@ -380,6 +387,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     try {
       const updatedData = allCapturedData.map(p => {
         if (p.id === id) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
           return { ...restoredProc, activo: true, updatedAt: Date.now() };
         }
@@ -412,19 +420,70 @@ export default function ProcesosYFlujosRegistradosPage() {
     setEditingProcess(proc);
     setIsEditDialogOpen(true);
   };
+  
+  function handleViewHistory(proc: CapturedProcess) {
+    setProcessForHistory(proc);
+    setIsHistoryDialogOpen(true);
+  }
 
   function handleEditSubmit(values: CapturaFormData) {
     if (!editingProcess) return;
 
-    const updatedData = allCapturedData.map(p => 
-      p.id === editingProcess.id ? { 
-        ...editingProcess, 
-        ...values,
-        updatedAt: Date.now() 
-      } : p
-    );
-    setAllCapturedData(updatedData);
-    toast({ title: "Proceso Actualizado" });
+    const originalProcess = allCapturedData.find(p => p.id === editingProcess.id);
+    if (!originalProcess) {
+      toast({ title: "Error", description: "No se encontró el proceso original para comparar cambios.", variant: "destructive" });
+      return;
+    }
+
+    const changes: CambioHistorial[] = [];
+    const fieldsToCompare: (keyof CapturaFormData)[] = [
+      'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'frecuencia', 
+      'tiempoEstimado', 'tiempoIdeal', 'costoEstimado', 'costoIdeal', 'monedaCosto',
+      'informacionRecibe', 'informacionEntrega'
+    ];
+
+    fieldsToCompare.forEach(key => {
+      const originalValue = originalProcess[key as keyof CapturedProcess] ?? '';
+      const newValue = values[key as keyof CapturedProcess] ?? '';
+      if (originalValue !== newValue) {
+        changes.push({
+          timestamp: new Date().toISOString(),
+          field: key,
+          before: originalProcess[key as keyof CapturedProcess] ?? 'No especificado',
+          after: values[key as keyof CapturedProcess] ?? 'No especificado'
+        });
+      }
+    });
+
+    const arrayFields: (keyof CapturaFormData)[] = ['sistemas', 'procesosEntrada', 'procesosSalida'];
+    arrayFields.forEach(key => {
+        const originalValue = JSON.stringify((originalProcess[key as keyof CapturedProcess] as string[] | undefined)?.sort() || []);
+        const newValue = JSON.stringify((values[key as keyof CapturedProcess] as string[] | undefined)?.sort() || []);
+        if (originalValue !== newValue) {
+             changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: (originalProcess[key as keyof CapturedProcess] as string[] | undefined)?.join(', ') || 'Ninguno',
+                after: (values[key as keyof CapturedProcess] as string[] | undefined)?.join(', ') || 'Ninguno'
+             });
+        }
+    });
+
+    if (changes.length > 0) {
+      const updatedData = allCapturedData.map(p =>
+        p.id === editingProcess.id ? {
+          ...editingProcess,
+          ...values,
+          updatedAt: Date.now(),
+          historialDeCambios: [...(p.historialDeCambios || []), ...changes]
+        } : p
+      );
+      setAllCapturedData(updatedData);
+      toast({ title: "Proceso Actualizado", description: `${changes.length} campo(s) fueron modificados.` });
+    } else {
+       toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar." });
+    }
+
     setIsEditDialogOpen(false);
     setEditingProcess(null);
   }
@@ -593,7 +652,12 @@ export default function ProcesosYFlujosRegistradosPage() {
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
-                    <TableCell className="text-right space-x-1"><Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" /><Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(proc)}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" />
+                      <Button variant="ghost" size="icon" onClick={() => handleViewHistory(proc)} disabled={!proc.historialDeCambios || proc.historialDeCambios.length === 0}><History className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(proc)}><Edit2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                    </TableCell>
                 </TableRow>
                 {isExpanded && (
                   <TableRow className={cn(proc.activo === false && "bg-muted/40")}>
@@ -683,7 +747,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                  <FormField control={editForm.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Est.</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={editForm.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
               </div>
-              <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos, undefined)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Info. Recibida</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", allCapturedData.map(p=>({id:p.id, nombre: p.proceso})), isLoading, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Info. Entregada</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -698,6 +762,50 @@ export default function ProcesosYFlujosRegistradosPage() {
       </Dialog>
       
       <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Cambios para: {processForHistory?.proceso}</DialogTitle>
+            <DialogDescription>
+              Registro de las modificaciones realizadas a este proceso.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {processForHistory?.historialDeCambios && processForHistory.historialDeCambios.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Campo Modificado</TableHead>
+                    <TableHead>Valor Anterior</TableHead>
+                    <TableHead>Valor Nuevo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {processForHistory.historialDeCambios
+                    .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .map((cambio, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
+                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-center">No hay historial de cambios registrado para este proceso.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cerrar</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
