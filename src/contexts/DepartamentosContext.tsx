@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -5,6 +6,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useActivityLog } from './ActivityLogContext';
 import { toast } from '@/hooks/use-toast';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import type { Puesto } from './PuestosContext';
+import type { Sistema } from './SistemasCostosContext';
 
 
 export interface Departamento {
@@ -24,6 +27,8 @@ interface DepartamentosContextType {
 const DepartamentosContext = createContext<DepartamentosContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_DEPARTAMENTOS_KEY = 'proceza-departamentos';
+const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
+const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
 const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 export function DepartamentosProvider({ children }: { children: ReactNode }) {
@@ -90,6 +95,24 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
     const toDelete = departamentos.find(d => d.id === id);
     if (!toDelete) return;
 
+    const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
+    if(storedPuestos){
+        const puestos: Puesto[] = JSON.parse(storedPuestos);
+        if(puestos.some(p => p.departamentoId === id)){
+            toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más puestos.`, variant: "destructive"});
+            return;
+        }
+    }
+    
+    const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+    if(storedSistemas){
+        const sistemas: Sistema[] = JSON.parse(storedSistemas);
+        if(sistemas.some(s => s.scope === "Departamento" && s.scopeId === id)){
+            toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
+            return;
+        }
+    }
+    
     const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
     if (storedProcesses) {
         const processes: CapturedProcess[] = JSON.parse(storedProcesses);

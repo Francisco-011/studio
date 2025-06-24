@@ -7,6 +7,9 @@ import { useActivityLog } from './ActivityLogContext';
 import { toast } from '@/hooks/use-toast';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 import type { Accion } from './AccionesContext';
+import type { Departamento } from './DepartamentosContext';
+import type { Puesto } from './PuestosContext';
+import type { Sistema } from './SistemasCostosContext';
 
 export interface Area {
   id: string;
@@ -24,9 +27,11 @@ interface AreasContextType {
 const AreasContext = createContext<AreasContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_AREAS_KEY = 'proceza-areas';
+const LOCAL_STORAGE_DEPARTAMENTOS_KEY = 'proceza-departamentos';
+const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
+const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
 const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
-
 
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<Area[]>([]);
@@ -99,16 +104,49 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     const areaToDelete = areas.find(a => a.id === id);
     if (!areaToDelete) return;
 
+    // Check for dependencies before deleting
+    const storedDepartamentos = localStorage.getItem(LOCAL_STORAGE_DEPARTAMENTOS_KEY);
+    if(storedDepartamentos){
+      const departamentos: Departamento[] = JSON.parse(storedDepartamentos);
+      if(departamentos.some(d => d.areaId === id)){
+        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más departamentos.`, variant: "destructive"});
+        return;
+      }
+    }
+
+    const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
+    if(storedPuestos){
+        const puestos: Puesto[] = JSON.parse(storedPuestos);
+        if(puestos.some(p => p.areaId === id)){
+            toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más puestos.`, variant: "destructive"});
+            return;
+        }
+    }
+    
+    const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+    if(storedSistemas){
+      const sistemas: Sistema[] = JSON.parse(storedSistemas);
+      if(sistemas.some(s => s.scope === "Área" && s.scopeId === id)){
+        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más sistemas.`, variant: "destructive"});
+        return;
+      }
+    }
+    
     const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
     if (storedProcesses) {
       const processes: CapturedProcess[] = JSON.parse(storedProcesses);
       const isAreaInUseByProcess = processes.some(proc => proc.area === areaToDelete.nombre && !proc.deletedAt);
       if (isAreaInUseByProcess) {
-        toast({
-          title: 'Eliminación Bloqueada',
-          description: `El área "${areaToDelete.nombre}" no puede ser eliminada porque está en uso por uno o más procesos.`,
-          variant: 'destructive',
-        });
+        toast({ title: 'Eliminación Bloqueada', description: `El área "${areaToDelete.nombre}" no puede ser eliminada porque está en uso por uno o más procesos.`, variant: 'destructive'});
+        return;
+      }
+    }
+    
+    const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+    if(storedAcciones){
+      const acciones: Accion[] = JSON.parse(storedAcciones);
+      if(acciones.some(a => a.area === areaToDelete.nombre)){
+        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a una o más acciones de mejora.`, variant: "destructive"});
         return;
       }
     }
