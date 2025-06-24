@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react'; 
-import { useState, useEffect, useMemo, type ReactNode, useCallback } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -101,19 +101,6 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
 
 const ITEMS_PER_PAGE_CONFIG = 5; 
-
-// Sorting Types
-type SortableAreaKeys = keyof Area;
-type SortableDeptoKeys = keyof Departamento | 'areaNombre';
-type SortablePuestoKeys = keyof Puesto | 'areaNombre' | 'deptoNombre' | 'jefeNombre';
-type SortableSistemaKeys = keyof Sistema | 'costoAnual';
-type SortDirection = 'ascending' | 'descending';
-
-interface SortConfig<T> {
-  key: T;
-  direction: SortDirection;
-}
-
 
 // Zod schemas
 const areaFormSchema = z.object({
@@ -229,6 +216,20 @@ const costoSistemaFormSchema = z.object({
 type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
 
+// Sorting Types
+type SortableAreaKeys = keyof Area;
+type SortableDeptoKeys = keyof Departamento | 'areaNombre';
+type SortablePuestoKeys = keyof Puesto | 'areaNombre' | 'deptoNombre' | 'jefeNombre';
+type SortableSistemaKeys = keyof Sistema | 'costoAnual';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig<T> {
+  key: T;
+  direction: SortDirection;
+}
+
+
+// Helper components and functions
 const PlaceholderContent = ({ title, description, icon, isLoading }: { title: string, description: string, icon: ReactNode, isLoading?: boolean }) => (
   <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
     {React.cloneElement(icon as React.ReactElement, isLoading ? { className: `${(icon as React.ReactElement).props.className} animate-pulse` } : {})}
@@ -368,7 +369,7 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (isCostoSistemaDialogOpen) { if (editingCostoSistema) { costoSistemaForm.reset({ id: editingCostoSistema.id, sistemaId: editingCostoSistema.sistemaId, tipoCosto: editingCostoSistema.tipoCosto, montoUso: editingCostoSistema.montoUso, numeroLicencias: editingCostoSistema.numeroLicencias, costoPorLicencia: editingCostoSistema.costoPorLicencia, formaPago: editingCostoSistema.formaPago, frecuencia: editingCostoSistema.frecuencia, moneda: editingCostoSistema.moneda, descripcion: editingCostoSistema.descripcion, }); } else if (selectedSystemForCosts) { costoSistemaForm.reset({ sistemaId: selectedSystemForCosts.id, tipoCosto: [], montoUso: undefined, numeroLicencias: undefined, costoPorLicencia: undefined, formaPago: undefined, frecuencia: undefined, moneda: 'USD', descripcion: '' }); } } }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
   
   // Submit handlers
-  const handleAreaSubmit = useCallback((data: AreaFormData) => {
+  const handleAreaSubmit = (data: AreaFormData) => {
     const originalArea = editingArea ? areas.find(a => a.id === editingArea.id) : undefined;
     const hasNameChanged = !!originalArea && originalArea.nombre !== data.nombre;
 
@@ -389,9 +390,9 @@ export default function ConfiguracionPage() {
     setEditingArea(null);
     setIsAreaDialogOpen(false);
     areaForm.reset();
-  }, [editingArea, areas, updateArea, addArea, allCapturedProcesses, allAcciones, areaForm]);
+  };
 
-  const handleDepartamentoSubmit = useCallback((data: DepartamentoFormData) => {
+  const handleDepartamentoSubmit = (data: DepartamentoFormData) => {
     const originalDepto = editingDepartamento ? departamentos.find(d => d.id === editingDepartamento.id) : undefined;
     const hasNameChanged = !!originalDepto && originalDepto.nombre !== data.nombre;
 
@@ -409,9 +410,9 @@ export default function ConfiguracionPage() {
     setEditingDepartamento(null);
     setIsDepartamentoDialogOpen(false);
     departamentoForm.reset();
-  }, [editingDepartamento, departamentos, updateDepartamento, addDepartamento, allCapturedProcesses, departamentoForm]);
+  };
 
-  const handlePuestoSubmit = useCallback((data: PuestoFormData) => {
+  const handlePuestoSubmit = (data: PuestoFormData) => {
     const puestoDataToSave: PuestoCreationData = {
       nombre: data.nombre,
       areaId: data.areaId,
@@ -441,15 +442,15 @@ export default function ConfiguracionPage() {
     setEditingPuesto(null);
     setIsPuestoDialogOpen(false);
     puestoForm.reset();
-  }, [editingPuesto, puestos, updatePuesto, addPuesto, allCapturedProcesses, allAcciones, puestoForm]);
+  };
 
-  const openManageCostsDialog = useCallback((sistema: Sistema) => {
+  const openManageCostsDialog = (sistema: Sistema) => {
     setSelectedSystemForCosts(sistema);
     setCostosDialogCurrentPage(1);
     setIsManageCostsDialogOpen(true);
-  }, []);
+  };
 
-  const handleSistemaSubmit = useCallback((data: SistemaFormData) => {
+  const handleSistemaSubmit = (data: SistemaFormData) => {
     const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), };
     if (editingSistema) {
       updateSistema(editingSistema.id, sistemaData as SistemaUpdateData);
@@ -462,9 +463,9 @@ export default function ConfiguracionPage() {
     setEditingSistema(null);
     setIsSistemaDialogOpen(false);
     sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
-  }, [editingSistema, updateSistema, addSistema, openManageCostsDialog, sistemaForm]);
+  };
 
-  const handleCostoSistemaSubmit = useCallback((data: SistemaCostoFormData) => {
+  const handleCostoSistemaSubmit = (data: SistemaCostoFormData) => {
     const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, };
     if (editingCostoSistema) {
       updateCostoSistema(editingCostoSistema.id, costoDataToSave);
@@ -476,82 +477,77 @@ export default function ConfiguracionPage() {
     setEditingCostoSistema(null);
     setIsCostoSistemaDialogOpen(false);
     costoSistemaForm.reset();
-  }, [editingCostoSistema, updateCostoSistema, addCostoSistema, costoSistemaForm]);
+  };
   
   // Edit handlers
-  const handleEditArea = useCallback((area: Area) => { setEditingArea(area); setIsAreaDialogOpen(true); }, []);
-  const handleEditDepartamento = useCallback((depto: Departamento) => { setEditingDepartamento(depto); setIsDepartamentoDialogOpen(true); }, []);
-  const handleEditPuesto = useCallback((puesto: Puesto) => { setEditingPuesto(puesto); setIsPuestoDialogOpen(true); }, []);
-  const handleEditSistema = useCallback((sistema: Sistema) => { setEditingSistema(sistema); setIsSistemaDialogOpen(true); }, []);
-  const handleEditCostoSistema = useCallback((costo: SistemaCosto) => { 
+  const handleEditArea = (area: Area) => { setEditingArea(area); setIsAreaDialogOpen(true); };
+  const handleEditDepartamento = (depto: Departamento) => { setEditingDepartamento(depto); setIsDepartamentoDialogOpen(true); };
+  const handleEditPuesto = (puesto: Puesto) => { setEditingPuesto(puesto); setIsPuestoDialogOpen(true); };
+  const handleEditSistema = (sistema: Sistema) => { setEditingSistema(sistema); setIsSistemaDialogOpen(true); };
+  const handleEditCostoSistema = (costo: SistemaCosto) => { 
     setEditingCostoSistema(costo); 
     const systemForCost = sistemas.find(s => s.id === costo.sistemaId); 
     if (systemForCost) setSelectedSystemForCosts(systemForCost); 
     setIsCostoSistemaDialogOpen(true); 
-  }, [sistemas]);
+  };
 
   // Delete Handlers
-  const promptDelete = useCallback((id: string, name: string, type: 'area' | 'departamento' | 'puesto') => {
+  const promptDelete = (id: string, name: string, type: 'area' | 'departamento' | 'puesto') => {
     setItemToDelete({ id, name, type });
     setIsConfirmDeleteDialogOpen(true);
-  }, []);
+  };
   
-  const executeDelete = useCallback(() => {
+  const executeDelete = () => {
     if (!itemToDelete) return;
-
     const { id, name, type } = itemToDelete;
-    
-    // Always use the latest state from this component
-    const isBlocked = (() => {
-        switch (type) {
-            case 'area':
-                return departamentos.some(d => d.areaId === id) || 
-                       puestos.some(p => p.areaId === id) || 
-                       sistemas.some(s => s.scope === "Área" && s.scopeId === id) || 
-                       allCapturedProcesses.some(proc => proc.area === name && !proc.deletedAt) || 
-                       allAcciones.some(a => a.area === name);
-            case 'departamento':
-                return puestos.some(p => p.departamentoId === id) || 
-                       sistemas.some(s => s.scope === "Departamento" && s.scopeId === id) || 
-                       allCapturedProcesses.some(proc => proc.departamento === name && !proc.deletedAt);
-            case 'puesto':
-                return puestos.some(p => p.jefeInmediato === id) || 
-                       sistemas.some(s => s.scope === "Puesto" && s.scopeId === id) || 
-                       allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt) || 
-                       allAcciones.some(a => a.puesto === name);
-            default:
-                return false;
-        }
-    })();
+    let dependencies: string[] = [];
 
-    if (isBlocked) {
-        toast({
-            title: "Eliminación Bloqueada",
-            description: `El ${type} "${name}" está en uso por otra entidad (procesos, acciones, etc.) y no puede ser eliminado.`,
-            variant: "destructive",
-            duration: 7000,
-        });
-    } else {
-        const success = (() => {
-            switch(type) {
-                case 'area': deleteArea(id); return true;
-                case 'departamento': deleteDepartamento(id); return true;
-                case 'puesto': deletePuesto(id); return true;
-                default: return false;
-            }
-        })();
-
-        if (success) {
-            toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
-        }
+    if (type === 'area') {
+      if (puestos.some(p => p.areaId === id)) dependencies.push('Puestos');
+      if (departamentos.some(d => d.areaId === id)) dependencies.push('Departamentos');
+      if (sistemas.some(s => s.scope === "Área" && s.scopeId === id)) dependencies.push('Sistemas');
+      if (allCapturedProcesses.some(proc => proc.area === name && !proc.deletedAt)) dependencies.push('Procesos');
+      if (allAcciones.some(a => a.area === name)) dependencies.push('Acciones');
+    } else if (type === 'departamento') {
+      if (puestos.some(p => p.departamentoId === id)) dependencies.push('Puestos');
+      if (sistemas.some(s => s.scope === "Departamento" && s.scopeId === id)) dependencies.push('Sistemas');
+      if (allCapturedProcesses.some(proc => proc.departamento === name && !proc.deletedAt)) dependencies.push('Procesos');
+    } else if (type === 'puesto') {
+      if (puestos.some(p => p.jefeInmediato === id)) dependencies.push('otros Puestos (como jefe)');
+      if (sistemas.some(s => s.scope === "Puesto" && s.scopeId === id)) dependencies.push('Sistemas');
+      if (allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt)) dependencies.push('Procesos');
+      if (allAcciones.some(a => a.puesto === name)) dependencies.push('Acciones');
     }
-    
+
+    if (dependencies.length > 0) {
+      toast({
+        title: "Eliminación Bloqueada",
+        description: `"${name}" está en uso por: ${dependencies.join(', ')} y no puede ser eliminado.`,
+        variant: "destructive",
+        duration: 7000,
+      });
+    } else {
+      let success = false;
+      if (type === 'area') {
+        deleteArea(id);
+        success = true;
+      } else if (type === 'departamento') {
+        deleteDepartamento(id);
+        success = true;
+      } else if (type === 'puesto') {
+        deletePuesto(id);
+        success = true;
+      }
+      if (success) {
+        toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
+      }
+    }
+
     setItemToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
-  }, [itemToDelete, allCapturedProcesses, allAcciones, departamentos, puestos, sistemas, deleteArea, deleteDepartamento, deletePuesto]);
+  };
 
-  const handleDeleteSistema = useCallback((sistemaId: string) => { 
-    // Check for dependencies before deleting
+  const handleDeleteSistema = (sistemaId: string) => { 
     const sistemaToDelete = sistemas.find(s => s.id === sistemaId);
     if (!sistemaToDelete) return;
 
@@ -570,19 +566,19 @@ export default function ConfiguracionPage() {
 
     deleteSistema(sistemaId); 
     toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); 
-  }, [sistemas, allCapturedProcesses, allActivities, deleteSistema]);
+  };
 
-  const handleDeleteCostoSistema = useCallback((costoId: string) => { 
+  const handleDeleteCostoSistema = (costoId: string) => { 
     deleteCostoSistema(costoId); 
     toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); 
-  }, [deleteCostoSistema]);
+  };
   
   // Dialog Openers
-  const openAddCostoDialogForSelectedSystem = useCallback(() => {
+  const openAddCostoDialogForSelectedSystem = () => {
      if (!selectedSystemForCosts) return;
      setEditingCostoSistema(null);
      setIsCostoSistemaDialogOpen(true);
-  }, [selectedSystemForCosts]);
+  };
 
   // Generic Sort Functions
   const createSortHandler = <T,>(setter: React.Dispatch<React.SetStateAction<SortConfig<T> | null>>) => (key: T) => { setter(prev => ({ key, direction: prev?.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending' })) };
