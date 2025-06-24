@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react'; 
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -215,8 +215,6 @@ const costoSistemaFormSchema = z.object({
 
 type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
-
-// Sorting Types
 type SortableAreaKeys = keyof Area;
 type SortableDeptoKeys = keyof Departamento | 'areaNombre';
 type SortablePuestoKeys = keyof Puesto | 'areaNombre' | 'deptoNombre' | 'jefeNombre';
@@ -228,9 +226,7 @@ interface SortConfig<T> {
   direction: SortDirection;
 }
 
-
-// Helper components and functions
-const PlaceholderContent = ({ title, description, icon, isLoading }: { title: string, description: string, icon: ReactNode, isLoading?: boolean }) => (
+const PlaceholderContent = ({ title, description, icon, isLoading }: { title: string, description: string, icon: React.ReactNode, isLoading?: boolean }) => (
   <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
     {React.cloneElement(icon as React.ReactElement, isLoading ? { className: `${(icon as React.ReactElement).props.className} animate-pulse` } : {})}
     <p className="text-lg font-semibold text-foreground mt-4">{title}</p>
@@ -296,6 +292,7 @@ export default function ConfiguracionPage() {
     getCostsForSystem,
   } = useSistemasCostos();
   const { actividades, isLoadingActividades } = useActividades();
+  const { addLogEntry } = useActivityLog();
 
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [allAcciones, setAllAcciones] = useState<Accion[]>([]);
@@ -368,13 +365,12 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (editingSistema) { sistemaForm.reset({ id: editingSistema.id, nombre: editingSistema.nombre, scope: editingSistema.scope, scopeId: editingSistema.scope === "Empresa" ? undefined : editingSistema.scopeId }); } else { sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined }); } }, [editingSistema, sistemaForm]);
   useEffect(() => { if (isCostoSistemaDialogOpen) { if (editingCostoSistema) { costoSistemaForm.reset({ id: editingCostoSistema.id, sistemaId: editingCostoSistema.sistemaId, tipoCosto: editingCostoSistema.tipoCosto, montoUso: editingCostoSistema.montoUso, numeroLicencias: editingCostoSistema.numeroLicencias, costoPorLicencia: editingCostoSistema.costoPorLicencia, formaPago: editingCostoSistema.formaPago, frecuencia: editingCostoSistema.frecuencia, moneda: editingCostoSistema.moneda, descripcion: editingCostoSistema.descripcion, }); } else if (selectedSystemForCosts) { costoSistemaForm.reset({ sistemaId: selectedSystemForCosts.id, tipoCosto: [], montoUso: undefined, numeroLicencias: undefined, costoPorLicencia: undefined, formaPago: undefined, frecuencia: undefined, moneda: 'USD', descripcion: '' }); } } }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
   
-  // Submit handlers
-  const handleAreaSubmit = (data: AreaFormData) => {
-    const originalArea = editingArea ? areas.find(a => a.id === editingArea.id) : undefined;
+  function handleAreaSubmit(data: AreaFormData) {
+    const originalArea = areas.find(a => a.id === data.id);
     const hasNameChanged = !!originalArea && originalArea.nombre !== data.nombre;
 
-    if (editingArea) {
-      updateArea(editingArea.id, data.nombre);
+    if (data.id) {
+      updateArea(data.id, data.nombre);
     } else {
       addArea(data.nombre);
     }
@@ -390,14 +386,14 @@ export default function ConfiguracionPage() {
     setEditingArea(null);
     setIsAreaDialogOpen(false);
     areaForm.reset();
-  };
+  }
 
-  const handleDepartamentoSubmit = (data: DepartamentoFormData) => {
-    const originalDepto = editingDepartamento ? departamentos.find(d => d.id === editingDepartamento.id) : undefined;
+  function handleDepartamentoSubmit(data: DepartamentoFormData) {
+    const originalDepto = departamentos.find(d => d.id === data.id);
     const hasNameChanged = !!originalDepto && originalDepto.nombre !== data.nombre;
 
-    if (editingDepartamento) {
-      updateDepartamento(editingDepartamento.id, data.nombre, data.areaId);
+    if (data.id) {
+      updateDepartamento(data.id, data.nombre, data.areaId);
     } else {
       addDepartamento(data.nombre, data.areaId);
     }
@@ -410,9 +406,9 @@ export default function ConfiguracionPage() {
     setEditingDepartamento(null);
     setIsDepartamentoDialogOpen(false);
     departamentoForm.reset();
-  };
+  }
 
-  const handlePuestoSubmit = (data: PuestoFormData) => {
+  function handlePuestoSubmit(data: PuestoFormData) {
     const puestoDataToSave: PuestoCreationData = {
       nombre: data.nombre,
       areaId: data.areaId,
@@ -422,11 +418,11 @@ export default function ConfiguracionPage() {
       numeroPersonas: data.numeroPersonas,
     };
     
-    const originalPuesto = editingPuesto ? puestos.find(p => p.id === editingPuesto.id) : undefined;
+    const originalPuesto = puestos.find(p => p.id === data.id);
     const hasNameChanged = !!originalPuesto && originalPuesto.nombre !== data.nombre;
 
-    if (editingPuesto) {
-      updatePuesto(editingPuesto.id, puestoDataToSave);
+    if (data.id) {
+      updatePuesto(data.id, puestoDataToSave);
     } else {
       addPuesto(puestoDataToSave);
     }
@@ -442,15 +438,15 @@ export default function ConfiguracionPage() {
     setEditingPuesto(null);
     setIsPuestoDialogOpen(false);
     puestoForm.reset();
-  };
+  }
 
-  const openManageCostsDialog = (sistema: Sistema) => {
+  function openManageCostsDialog(sistema: Sistema) {
     setSelectedSystemForCosts(sistema);
     setCostosDialogCurrentPage(1);
     setIsManageCostsDialogOpen(true);
-  };
+  }
 
-  const handleSistemaSubmit = (data: SistemaFormData) => {
+  function handleSistemaSubmit(data: SistemaFormData) {
     const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), };
     if (editingSistema) {
       updateSistema(editingSistema.id, sistemaData as SistemaUpdateData);
@@ -463,9 +459,9 @@ export default function ConfiguracionPage() {
     setEditingSistema(null);
     setIsSistemaDialogOpen(false);
     sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
-  };
+  }
 
-  const handleCostoSistemaSubmit = (data: SistemaCostoFormData) => {
+  function handleCostoSistemaSubmit(data: SistemaCostoFormData) {
     const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, };
     if (editingCostoSistema) {
       updateCostoSistema(editingCostoSistema.id, costoDataToSave);
@@ -477,9 +473,8 @@ export default function ConfiguracionPage() {
     setEditingCostoSistema(null);
     setIsCostoSistemaDialogOpen(false);
     costoSistemaForm.reset();
-  };
+  }
   
-  // Edit handlers
   const handleEditArea = (area: Area) => { setEditingArea(area); setIsAreaDialogOpen(true); };
   const handleEditDepartamento = (depto: Departamento) => { setEditingDepartamento(depto); setIsDepartamentoDialogOpen(true); };
   const handleEditPuesto = (puesto: Puesto) => { setEditingPuesto(puesto); setIsPuestoDialogOpen(true); };
@@ -491,14 +486,14 @@ export default function ConfiguracionPage() {
     setIsCostoSistemaDialogOpen(true); 
   };
 
-  // Delete Handlers
-  const promptDelete = (id: string, name: string, type: 'area' | 'departamento' | 'puesto') => {
+  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto') {
     setItemToDelete({ id, name, type });
     setIsConfirmDeleteDialogOpen(true);
-  };
+  }
   
-  const executeDelete = () => {
+  function executeDelete() {
     if (!itemToDelete) return;
+
     const { id, name, type } = itemToDelete;
     let dependencies: string[] = [];
 
@@ -518,41 +513,35 @@ export default function ConfiguracionPage() {
       if (allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt)) dependencies.push('Procesos');
       if (allAcciones.some(a => a.puesto === name)) dependencies.push('Acciones');
     }
-
+  
     if (dependencies.length > 0) {
-      toast({
-        title: "Eliminación Bloqueada",
-        description: `"${name}" está en uso por: ${dependencies.join(', ')} y no puede ser eliminado.`,
-        variant: "destructive",
-        duration: 7000,
-      });
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `"${name}" está en uso por: ${dependencies.join(', ')} y no puede ser eliminado.`,
+            variant: "destructive",
+            duration: 7000,
+        });
     } else {
-      let success = false;
-      if (type === 'area') {
-        deleteArea(id);
-        success = true;
-      } else if (type === 'departamento') {
-        deleteDepartamento(id);
-        success = true;
-      } else if (type === 'puesto') {
-        deletePuesto(id);
-        success = true;
-      }
-      if (success) {
+        if (type === 'area') {
+          deleteArea(id);
+        } else if (type === 'departamento') {
+          deleteDepartamento(id);
+        } else if (type === 'puesto') {
+          deletePuesto(id);
+        }
         toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
-      }
     }
 
     setItemToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
-  };
+  }
 
-  const handleDeleteSistema = (sistemaId: string) => { 
+  function handleDeleteSistema(sistemaId: string) { 
     const sistemaToDelete = sistemas.find(s => s.id === sistemaId);
     if (!sistemaToDelete) return;
 
     const isUsedInProcess = allCapturedProcesses.some(proc => proc.sistemas?.includes(sistemaToDelete.nombre));
-    const isUsedInActivity = allActivities.some(act => act.sistemaUtilizado === sistemaToDelete.nombre);
+    const isUsedInActivity = allActividades.some(act => act.sistemaUtilizado === sistemaToDelete.nombre);
 
     if (isUsedInProcess || isUsedInActivity) {
         toast({
@@ -566,47 +555,39 @@ export default function ConfiguracionPage() {
 
     deleteSistema(sistemaId); 
     toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); 
-  };
+  }
 
-  const handleDeleteCostoSistema = (costoId: string) => { 
+  function handleDeleteCostoSistema(costoId: string) { 
     deleteCostoSistema(costoId); 
     toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); 
-  };
+  }
   
-  // Dialog Openers
   const openAddCostoDialogForSelectedSystem = () => {
      if (!selectedSystemForCosts) return;
      setEditingCostoSistema(null);
      setIsCostoSistemaDialogOpen(true);
   };
 
-  // Generic Sort Functions
   const createSortHandler = <T,>(setter: React.Dispatch<React.SetStateAction<SortConfig<T> | null>>) => (key: T) => { setter(prev => ({ key, direction: prev?.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending' })) };
   const createSortIconGetter = <T,>(config: SortConfig<T> | null) => (key: T) => { if (!config || config.key !== key) { return <ChevronsUpDown className="ml-2 h-3 w-3 opacity-40 group-hover:opacity-100" />; } return config.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3" /> : <ArrowDown className="ml-2 h-3 w-3" />; };
   
-  // Area Sort
   const requestAreaSort = createSortHandler(setAreaSortConfig);
   const getAreaSortIcon = createSortIconGetter(areaSortConfig);
 
-  // Depto Sort
   const requestDeptoSort = createSortHandler(setDeptoSortConfig);
   const getDeptoSortIcon = createSortIconGetter(deptoSortConfig);
 
-  // Puesto Sort
   const requestPuestoSort = createSortHandler(setPuestoSortConfig);
   const getPuestoSortIcon = createSortIconGetter(puestoSortConfig);
 
-  // Sistema Sort
   const requestSistemaSort = createSortHandler(setSistemaSortConfig);
   const getSistemaSortIcon = createSortIconGetter(sistemaSortConfig);
 
-  // Filtered and Sorted Data
   const sortedAndFilteredAreas = useMemo(() => { setAreasCurrentPage(1); let filtered = areas.filter(a => a.nombre.toLowerCase().includes(areaSearchTerm.toLowerCase())); if (areaSortConfig) { filtered.sort((a, b) => { if (a[areaSortConfig.key]! < b[areaSortConfig.key]!) return areaSortConfig.direction === 'ascending' ? -1 : 1; if (a[areaSortConfig.key]! > b[areaSortConfig.key]!) return areaSortConfig.direction === 'ascending' ? 1 : -1; return 0; }); } return filtered; }, [areas, areaSearchTerm, areaSortConfig]);
   const sortedAndFilteredDepartamentos = useMemo(() => { setDepartamentosCurrentPage(1); let filtered = departamentos.filter(d => (d.nombre.toLowerCase().includes(deptoSearchTerm.toLowerCase())) && (deptoAreaFilter === 'all' || d.areaId === deptoAreaFilter)); if (deptoSortConfig) { filtered.sort((a, b) => { const valA = deptoSortConfig.key === 'areaNombre' ? areas.find(ar => ar.id === a.areaId)?.nombre || '' : a[deptoSortConfig.key]; const valB = deptoSortConfig.key === 'areaNombre' ? areas.find(ar => ar.id === b.areaId)?.nombre || '' : b[deptoSortConfig.key]; if (valA < valB) return deptoSortConfig.direction === 'ascending' ? -1 : 1; if (valA > valB) return deptoSortConfig.direction === 'ascending' ? 1 : -1; return 0; }); } return filtered; }, [departamentos, deptoSearchTerm, deptoAreaFilter, deptoSortConfig, areas]);
   const sortedAndFilteredPuestos = useMemo(() => { setPuestosCurrentPage(1); let filtered = puestos.filter(p => (p.nombre.toLowerCase().includes(puestoSearchTerm.toLowerCase())) && (puestoAreaFilter === 'all' || p.areaId === puestoAreaFilter) && (puestoNivelFilter === 'all' || p.nivelOrganizacional === puestoNivelFilter)); if (puestoSortConfig) { filtered.sort((a, b) => { const getVal = (p: Puesto, key: SortablePuestoKeys) => { switch (key) { case 'areaNombre': return areas.find(ar => ar.id === p.areaId)?.nombre || ''; case 'deptoNombre': return departamentos.find(d => d.id === p.departamentoId)?.nombre || ''; case 'jefeNombre': return puestos.find(j => j.id === p.jefeInmediato)?.nombre || ''; default: return p[key as keyof Puesto]; }}; const valA = getVal(a, puestoSortConfig.key); const valB = getVal(b, puestoSortConfig.key); if (valA < valB) return puestoSortConfig.direction === 'ascending' ? -1 : 1; if (valA > valB) return puestoSortConfig.direction === 'ascending' ? 1 : -1; return 0; }); } return filtered; }, [puestos, puestoSearchTerm, puestoAreaFilter, puestoNivelFilter, puestoSortConfig, areas, departamentos]);
   const sortedAndFilteredSistemas = useMemo(() => { setSistemasCurrentPage(1); let filtered = sistemas.filter(s => (s.nombre.toLowerCase().includes(sistemaSearchTerm.toLowerCase())) && (sistemaScopeFilter === 'all' || s.scope === sistemaScopeFilter)); if (sistemaSortConfig) { filtered.sort((a, b) => { const getVal = (s: Sistema, key: SortableSistemaKeys) => key === 'costoAnual' ? getSystemAnnualCostValue(s.id, costosSistemas) : s[key as keyof Sistema]; const valA = getVal(a, sistemaSortConfig.key); const valB = getVal(b, sistemaSortConfig.key); if (valA < valB) return sistemaSortConfig.direction === 'ascending' ? -1 : 1; if (valA > valB) return sistemaSortConfig.direction === 'ascending' ? 1 : -1; return 0; }); } return filtered; }, [sistemas, sistemaSearchTerm, sistemaScopeFilter, sistemaSortConfig, costosSistemas]);
   
-  // Pagination
   const paginatedAreas = useMemo(() => sortedAndFilteredAreas.slice((areasCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG, areasCurrentPage * ITEMS_PER_PAGE_CONFIG), [sortedAndFilteredAreas, areasCurrentPage]);
   const totalAreasPages = Math.ceil(sortedAndFilteredAreas.length / ITEMS_PER_PAGE_CONFIG);
   const paginatedDepartamentos = useMemo(() => sortedAndFilteredDepartamentos.slice((departamentosCurrentPage - 1) * ITEMS_PER_PAGE_CONFIG, departamentosCurrentPage * ITEMS_PER_PAGE_CONFIG), [sortedAndFilteredDepartamentos, departamentosCurrentPage]);
@@ -624,7 +605,7 @@ export default function ConfiguracionPage() {
   const watchedPuestoAreaId = puestoForm.watch('areaId');
   const filteredDepartamentosForPuestoForm = useMemo(() => watchedPuestoAreaId ? departamentos.filter(d => d.areaId === watchedPuestoAreaId) : [], [watchedPuestoAreaId, departamentos]);
   
-  const configSections: Array<{ value: string; label: string; icon: ReactNode; fullDescription: string; }> = [
+  const configSections: Array<{ value: string; label: string; icon: React.ReactNode; fullDescription: string; }> = [
     { value: 'areas', label: 'Áreas', icon: <Building className="h-5 w-5 mr-2" />, fullDescription: 'Administrar las áreas o divisiones principales de la empresa.' },
     { value: 'departamentos', label: 'Departamentos', icon: <Building2 className="h-5 w-5 mr-2" />, fullDescription: 'Administrar los departamentos dentro de cada área.' },
     { value: 'puestos', label: 'Puestos', icon: <Users className="h-5 w-5 mr-2" />, fullDescription: 'Administrar los roles o puestos de trabajo, asignándolos a un departamento.' },
