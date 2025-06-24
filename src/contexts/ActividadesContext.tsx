@@ -110,6 +110,9 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     const originalActividad = actividades.find(a => a.id === id);
     if (!originalActividad) return;
     
+    // Perform side effects BEFORE setState
+    addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
+    
     const changes: CambioHistorial[] = [];
     const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado'];
     
@@ -144,9 +147,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         } : act
       )
     );
-     if (originalActividad) {
-      addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
-    }
   }, [actividades, addLogEntry]);
 
   const softDeleteActividad = useCallback((id: string) => {
@@ -182,6 +182,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
           before: activityInState.activa,
           after: !activityInState.activa,
       };
+      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activityInState.nombre, details: `El estado de la actividad "${activityInState.nombre}" cambió a ${!activityInState.activa ? 'Activa' : 'Inactiva'}.` });
       setActividades((prev) =>
         prev.map((act) => {
           if (findMatch(act)) {
@@ -190,7 +191,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
           return act;
         })
       );
-      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activityInState.nombre, details: `El estado de la actividad "${activityInState.nombre}" cambió a ${!activityInState.activa ? 'Activa' : 'Inactiva'}.` });
     }
   }, [actividades, addLogEntry]);
 

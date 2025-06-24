@@ -110,95 +110,94 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
   }, [addLogEntry]);
 
   const updateAccion = useCallback((id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => {
-    setAcciones(prevAcciones => {
-      const newAcciones = [...prevAcciones];
-      const accionIndex = newAcciones.findIndex(a => a.id === id);
-      if (accionIndex === -1) return prevAcciones;
+    const originalAccion = acciones.find(a => a.id === id);
+    if (!originalAccion) {
+      toast({ title: "Error", description: "No se pudo encontrar la acción a actualizar.", variant: "destructive" });
+      return;
+    }
 
-      const originalAccion = newAcciones[accionIndex];
-      const updatedAccionData = { ...originalAccion, ...data, updatedAt: Date.now() };
+    const updatedAccionData = { ...originalAccion, ...data, updatedAt: Date.now() };
 
-      addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se actualizó la acción "${updatedAccionData.nombre}".` });
+    // --- Start of Side Effect Logic ---
+    addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se actualizó la acción "${updatedAccionData.nombre}".` });
 
-      if (updatedAccionData.estado === 'Completada' && originalAccion.estado !== 'Completada') {
-        const cambios: CambioHistorial[] = [];
-        
-        try {
-          const timeSavingInMinutes = (options?.applyTimeSaving && updatedAccionData.ahorroTiempoEstimado && updatedAccionData.unidadTiempoAhorro === 'Minutos/Instancia')
-            ? updatedAccionData.ahorroTiempoEstimado
-            : 0;
+    if (updatedAccionData.estado === 'Completada' && originalAccion.estado !== 'Completada') {
+      const cambios: CambioHistorial[] = [];
+      
+      try {
+        const timeSavingInMinutes = (options?.applyTimeSaving && updatedAccionData.ahorroTiempoEstimado && updatedAccionData.unidadTiempoAhorro === 'Minutos/Instancia')
+          ? updatedAccionData.ahorroTiempoEstimado
+          : 0;
 
-          const costSaving = (options?.applyCostSaving && updatedAccionData.ahorroEstimado !== undefined)
-            ? updatedAccionData.ahorroEstimado
-            : 0;
+        const costSaving = (options?.applyCostSaving && updatedAccionData.ahorroEstimado !== undefined)
+          ? updatedAccionData.ahorroEstimado
+          : 0;
 
-          // Note: Updating activities is currently disabled as their cost/time are not stored.
-          // This logic primarily applies to Processes now.
-          if (updatedAccionData.procesoId && (timeSavingInMinutes > 0 || costSaving > 0)) {
-            const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-            let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
-            const processIndex = allProcesses.findIndex(p => p.id === updatedAccionData.procesoId);
+        if (updatedAccionData.procesoId && (timeSavingInMinutes > 0 || costSaving > 0)) {
+          const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+          let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
+          const processIndex = allProcesses.findIndex(p => p.id === updatedAccionData.procesoId);
 
-            if (processIndex !== -1) {
-              const targetProcess = {...allProcesses[processIndex]};
-              let processWasUpdated = false;
-              
-              if (timeSavingInMinutes > 0 && targetProcess.tiempoEstimado !== undefined) {
-                const antes = targetProcess.tiempoEstimado;
-                const despues = Math.max(0, antes - timeSavingInMinutes);
-                cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: antes, after: despues });
-                targetProcess.tiempoEstimado = despues;
-                processWasUpdated = true;
-              }
-              if (costSaving > 0 && targetProcess.costoEstimado !== undefined) {
-                const antes = targetProcess.costoEstimado;
-                const despues = Math.max(0, antes - costSaving);
-                cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
-                targetProcess.costoEstimado = despues;
-                processWasUpdated = true;
-              }
-              
-              if(processWasUpdated) {
-                targetProcess.updatedAt = Date.now();
-                allProcesses[processIndex] = targetProcess;
-                localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
-              }
+          if (processIndex !== -1) {
+            const targetProcess = {...allProcesses[processIndex]};
+            let processWasUpdated = false;
+            
+            if (timeSavingInMinutes > 0 && targetProcess.tiempoEstimado !== undefined) {
+              const antes = targetProcess.tiempoEstimado;
+              const despues = Math.max(0, antes - timeSavingInMinutes);
+              cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: antes, after: despues });
+              targetProcess.tiempoEstimado = despues;
+              processWasUpdated = true;
+            }
+            if (costSaving > 0 && targetProcess.costoEstimado !== undefined) {
+              const antes = targetProcess.costoEstimado;
+              const despues = Math.max(0, antes - costSaving);
+              cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
+              targetProcess.costoEstimado = despues;
+              processWasUpdated = true;
+            }
+            
+            if(processWasUpdated) {
+              targetProcess.updatedAt = Date.now();
+              allProcesses[processIndex] = targetProcess;
+              localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
             }
           }
+        }
 
-          if(updatedAccionData.unidadTiempoAhorro && updatedAccionData.unidadTiempoAhorro !== 'Minutos/Instancia' && options?.applyTimeSaving){
-            toast({
-                title: "Mejora de tiempo no aplicada",
-                description: `La unidad (${updatedAccionData.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar.`,
-                variant: "default",
-                duration: 7000
-            });
-          }
-
-          updatedAccionData.historialDeCambios = [...(updatedAccionData.historialDeCambios || []), ...cambios];
-          
-          if(cambios.length > 0) {
-            toast({
-              title: "Mejora Aplicada",
-              description: `Se aplicaron ${cambios.length} cambio(s) al elemento asociado.`,
-            });
-             addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se completó la acción "${updatedAccionData.nombre}" y se aplicaron mejoras automáticas.` });
-          }
-
-        } catch (e) {
-          console.error("Error al aplicar cambios de la acción completada:", e);
+        if(updatedAccionData.unidadTiempoAhorro && updatedAccionData.unidadTiempoAhorro !== 'Minutos/Instancia' && options?.applyTimeSaving){
           toast({
-            title: "Error al aplicar mejora",
-            description: "No se pudieron actualizar los datos del proceso/actividad asociado.",
-            variant: "destructive",
+              title: "Mejora de tiempo no aplicada",
+              description: `La unidad (${updatedAccionData.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar.`,
+              variant: "default",
+              duration: 7000
           });
         }
+
+        updatedAccionData.historialDeCambios = [...(updatedAccionData.historialDeCambios || []), ...cambios];
+        
+        if(cambios.length > 0) {
+          toast({
+            title: "Mejora Aplicada",
+            description: `Se aplicaron ${cambios.length} cambio(s) al elemento asociado.`,
+          });
+           addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: updatedAccionData.nombre, details: `Se completó la acción "${updatedAccionData.nombre}" y se aplicaron mejoras automáticas.` });
+        }
+
+      } catch (e) {
+        console.error("Error al aplicar cambios de la acción completada:", e);
+        toast({
+          title: "Error al aplicar mejora",
+          description: "No se pudieron actualizar los datos del proceso/actividad asociado.",
+          variant: "destructive",
+        });
       }
-      
-      newAcciones[accionIndex] = updatedAccionData;
-      return newAcciones;
-    });
-  }, [addLogEntry]);
+    }
+    // --- End of Side Effect Logic ---
+    
+    setAcciones(prevAcciones => prevAcciones.map(a => a.id === id ? updatedAccionData : a));
+
+  }, [acciones, addLogEntry]);
 
 
   const deleteAccion = useCallback((id: string) => {

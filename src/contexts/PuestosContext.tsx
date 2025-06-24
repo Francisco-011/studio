@@ -79,31 +79,34 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   }, [addLogEntry]);
 
   const updatePuesto = useCallback((id: string, data: PuestoCreationData, allProcesses: CapturedProcess[], allAcciones: Accion[]) => {
-    setPuestos((prevPuestos) => {
-      const originalPuesto = prevPuestos.find(p => p.id === id);
-      if (!originalPuesto) return prevPuestos;
-      
-      const hasNameChanged = originalPuesto.nombre !== data.nombre;
+    const originalPuesto = puestos.find(p => p.id === id);
+    if (!originalPuesto) {
+        toast({ title: 'Error', description: 'No se pudo encontrar el puesto para actualizar.', variant: 'destructive'});
+        return;
+    }
+    
+    // --- Start of Side Effect Logic ---
+    const hasNameChanged = originalPuesto.nombre !== data.nombre;
 
-      if(hasNameChanged && typeof window !== 'undefined') {
-          // Cascade update to processes
-          const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-          let processes: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : allProcesses;
-          processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
-          localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
-          
-          // Cascade update to actions
-          const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-          let acciones: Accion[] = storedAcciones ? JSON.parse(storedAcciones) : allAcciones;
-          acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
-          localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
-      }
-       
-      addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
-      
-      return prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto));
-    });
-  }, [addLogEntry]);
+    if(hasNameChanged && typeof window !== 'undefined') {
+        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+        let processes: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : allProcesses;
+        processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
+        localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+        
+        const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+        let acciones: Accion[] = storedAcciones ? JSON.parse(storedAcciones) : allAcciones;
+        acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
+        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
+    }
+     
+    addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
+    // --- End of Side Effect Logic ---
+    
+    setPuestos((prevPuestos) =>
+      prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto))
+    );
+  }, [puestos, addLogEntry]);
 
   const deletePuesto = useCallback((id: string, allPuestos: Puesto[], allSistemas: Sistema[], allProcesses: CapturedProcess[], allAcciones: Accion[]): boolean => {
     const puestoToDelete = puestos.find(p => p.id === id);
