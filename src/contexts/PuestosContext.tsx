@@ -4,8 +4,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
-import { useDepartamentos } from './DepartamentosContext';
-
 
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -38,23 +36,15 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [isLoadingPuestos, setIsLoadingPuestos] = useState(true);
   const { addLogEntry } = useActivityLog();
-  const { departamentos } = useDepartamentos();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const savedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
         if (savedPuestos) {
-          const parsedPuestos = JSON.parse(savedPuestos).map((p: any) => {
-            if (!p.areaId && p.departamentoId) {
-                const depto = departamentos.find(d => d.id === p.departamentoId);
-                if (depto) {
-                    p.areaId = depto.areaId;
-                }
-            }
-            return p;
-          });
-          setPuestos(parsedPuestos.filter((p: any) => p.areaId)); // Ensure all puestos have an area
+          // The previous data migration logic here was complex and likely causing startup issues.
+          // Loading the data as-is is a more stable approach.
+          setPuestos(JSON.parse(savedPuestos));
         }
       } catch (error) {
         console.error("Failed to load puestos from localStorage", error);
@@ -65,17 +55,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     } else {
       setIsLoadingPuestos(false);
     }
-  }, [departamentos]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingPuestos) {
-       try {
-        localStorage.setItem(LOCAL_STORAGE_PUESTOS_KEY, JSON.stringify(puestos));
-      } catch (error) {
-        console.error("Failed to save puestos to localStorage", error);
-      }
-    }
-  }, [puestos, isLoadingPuestos]);
+  }, []); // Empty dependency array ensures this runs only once on mount.
 
   const addPuesto = useCallback((data: PuestoCreationData) => {
     const newPuesto = { ...data, id: Date.now().toString() };
