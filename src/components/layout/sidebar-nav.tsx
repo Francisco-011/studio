@@ -41,32 +41,36 @@ const navItems: NavItem[] = [
   { href: '/acciones', label: 'Acciones', icon: Target },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
   { href: '/configuracion', label: 'Configuración', icon: Settings, matchPrefix: true },
+  { href: '/configuracion/carga-masiva', label: 'Carga Masiva', icon: UploadCloud },
   { href: '/usuarios', label: 'Usuarios', icon: Users },
 ];
-
-// Sub-item for Carga Masiva, to be nested or handled within Configuración logic if needed.
-const cargaMasivaItem: NavItem = { href: '/configuracion/carga-masiva', label: 'Carga Masiva', icon: UploadCloud };
 
 
 export function SidebarNav() {
   const pathname = usePathname();
 
   const isNavItemActive = (item: NavItem) => {
+    // If a more specific child route is active, the parent should not be.
+    const isMoreSpecificChildActive = navItems.some(
+      child => 
+        child.href !== item.href && 
+        child.href.startsWith(item.href) && 
+        pathname.startsWith(child.href)
+    );
+
     if (item.matchPrefix) {
+      if (isMoreSpecificChildActive) {
+        return false;
+      }
       return pathname.startsWith(item.href);
     }
-    // Handle special case for 'Configuración' to not be active when 'Carga Masiva' is active
-    if (item.href === '/configuracion' && pathname === cargaMasivaItem.href) {
-      return false;
-    }
+    
     return pathname === item.href;
   };
-  
-  const allNavItems = [...navItems, cargaMasivaItem];
 
   return (
     <SidebarMenu>
-      {allNavItems.map((item) => (
+      {navItems.map((item) => (
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
