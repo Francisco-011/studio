@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users, ClipboardCheck, AlertTriangle, Building2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -43,6 +43,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 import { useAreas, type Area as AreaType } from '@/contexts/AreasContext';
+import { useDepartamentos, type Departamento as DepartamentoType } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto as PuestoType } from '@/contexts/PuestosContext';
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -187,6 +188,7 @@ export default function DashboardPage() {
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
 
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
@@ -198,8 +200,11 @@ export default function DashboardPage() {
     to: endOfMonth(new Date()),
   });
   const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
+  
   const [availablePuestosForFilter, setAvailablePuestosForFilter] = useState<PuestoType[]>([]);
+  const [availableDepartamentosForFilter, setAvailableDepartamentosForFilter] = useState<DepartamentoType[]>([]);
 
 
   const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
@@ -229,37 +234,43 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoadingPuestos) {
-      setAvailablePuestosForFilter([]);
-      return;
-    }
     if (selectedArea === 'all') {
-      setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setAvailableDepartamentosForFilter(departamentos.sort((a,b) => a.nombre.localeCompare(b.nombre)));
     } else {
-      const areaObj = areas.find(a => a.nombre === selectedArea);
-      if (areaObj) {
-        const filtered = puestos.filter(p => p.areaId === areaObj.id).sort((a,b) => a.nombre.localeCompare(b.nombre));
-        setAvailablePuestosForFilter(filtered);
-        if (selectedPuesto !== 'all' && !filtered.some(p => p.nombre === selectedPuesto)) {
-          setSelectedPuesto('all');
-        }
+      const areaId = areas.find(a => a.nombre === selectedArea)?.id;
+      if (areaId) {
+        const filtered = departamentos.filter(d => d.areaId === areaId).sort((a,b) => a.nombre.localeCompare(b.nombre));
+        setAvailableDepartamentosForFilter(filtered);
       } else {
-        setAvailablePuestosForFilter(puestos.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setAvailableDepartamentosForFilter([]);
       }
     }
-  }, [selectedArea, puestos, areas, isLoadingPuestos, selectedPuesto]);
+    if (selectedDepartamento !== 'all' && !availableDepartamentosForFilter.some(d => d.nombre === selectedDepartamento)) {
+      setSelectedDepartamento('all');
+    }
+  }, [selectedArea, departamentos, areas, selectedDepartamento, availableDepartamentosForFilter]);
+
 
   useEffect(() => {
-    if (isLoadingPuestos || isLoadingAreas || selectedPuesto === 'all') return;
-
-    const puestoObj = puestos.find(p => p.nombre === selectedPuesto);
-    if (puestoObj && puestoObj.areaId) {
-      const areaObj = areas.find(a => a.id === puestoObj.areaId);
-      if (areaObj && areaObj.nombre !== selectedArea) {
-        setSelectedArea(areaObj.nombre);
+    let puestosToFilter = puestos;
+    if (selectedArea !== 'all') {
+      const areaId = areas.find(a => a.nombre === selectedArea)?.id;
+      if (areaId) {
+        puestosToFilter = puestosToFilter.filter(p => p.areaId === areaId);
       }
     }
-  }, [selectedPuesto, puestos, areas, isLoadingPuestos, isLoadingAreas, selectedArea]);
+    if (selectedDepartamento !== 'all') {
+      const deptoId = departamentos.find(d => d.nombre === selectedDepartamento)?.id;
+      if (deptoId) {
+        puestosToFilter = puestosToFilter.filter(p => p.departamentoId === deptoId);
+      }
+    }
+    setAvailablePuestosForFilter(puestosToFilter.sort((a,b) => a.nombre.localeCompare(b.nombre)));
+    
+    if (selectedPuesto !== 'all' && !puestosToFilter.some(p => p.nombre === selectedPuesto)) {
+      setSelectedPuesto('all');
+    }
+  }, [selectedArea, selectedDepartamento, puestos, areas, departamentos, selectedPuesto]);
 
 
   useEffect(() => {
@@ -267,22 +278,29 @@ export default function DashboardPage() {
         let systemsToDisplay: Sistema[] = [];
         const selectedAreaObject = selectedArea !== 'all' ? areas.find(a => a.nombre === selectedArea) : null;
         const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
-
-        if (selectedPuestoObject) { // Filter by specific Puesto
-             systemsToDisplay = sistemas.filter(system =>
-                system.scope === "Puesto" && system.scopeId === selectedPuestoObject.id
+        const selectedDeptoObject = selectedDepartamento !== 'all' ? departamentos.find(d => d.nombre === selectedDepartamento) : null;
+        
+        // This logic can be complex. Let's define the hierarchy.
+        // Puesto is most specific, then Departamento, then Area.
+        if (selectedPuestoObject) {
+            systemsToDisplay = sistemas.filter(s => s.scope === "Puesto" && s.scopeId === selectedPuestoObject.id);
+        } else if (selectedDeptoObject) {
+            const puestosInDeptoIds = puestos.filter(p => p.departamentoId === selectedDeptoObject.id).map(p => p.id);
+            systemsToDisplay = sistemas.filter(s =>
+                (s.scope === "Departamento" && s.scopeId === selectedDeptoObject.id) ||
+                (s.scope === "Puesto" && s.scopeId && puestosInDeptoIds.includes(s.scopeId))
             );
-        } else if (selectedAreaObject) { // Filter by specific Area (and Puesto is 'all')
-            const puestosInSelectedAreaIds = puestos
-                .filter(p => p.areaId === selectedAreaObject.id)
-                .map(p => p.id);
-
-            systemsToDisplay = sistemas.filter(system =>
-                (system.scope === "Área" && system.scopeId === selectedAreaObject.id) ||
-                (system.scope === "Puesto" && system.scopeId && puestosInSelectedAreaIds.includes(system.scopeId))
+        } else if (selectedAreaObject) {
+            const deptosInAreaIds = departamentos.filter(d => d.areaId === selectedAreaObject.id).map(d => d.id);
+            const puestosInAreaIds = puestos.filter(p => p.areaId === selectedAreaObject.id).map(p => p.id);
+            
+            systemsToDisplay = sistemas.filter(s =>
+                (s.scope === "Área" && s.scopeId === selectedAreaObject.id) ||
+                (s.scope === "Departamento" && s.scopeId && deptosInAreaIds.includes(s.scopeId)) ||
+                (s.scope === "Puesto" && s.scopeId && puestosInAreaIds.includes(s.scopeId))
             );
-        } else { // Both Area and Puesto are 'all'
-            systemsToDisplay = [...sistemas]; // Show all systems
+        } else { // All filters are 'all'
+            systemsToDisplay = [...sistemas];
         }
 
         setCalculatedSystemCosts(calculateAllSystemAnnualCosts(systemsToDisplay, costosSistemas));
@@ -292,10 +310,13 @@ export default function DashboardPage() {
     costosSistemas,
     isLoadingSistemasCostos,
     selectedArea,
+    selectedDepartamento,
     selectedPuesto,
     areas,
+    departamentos,
     puestos,
     isLoadingAreas,
+    isLoadingDepartamentos,
     isLoadingPuestos
   ]);
 
@@ -313,25 +334,28 @@ export default function DashboardPage() {
   }, [selectedEntityType, areas, puestos, isLoadingAreas, isLoadingPuestos]);
 
 
-  const processesFilteredByAreaPuesto = useMemo(() => {
+  const processesFiltered = useMemo(() => {
     let processes = allCapturedProcesses.filter(p => p.activo !== false && !p.deletedAt);
     if (selectedArea !== 'all') {
       processes = processes.filter(proc => proc.area === selectedArea);
+    }
+    if (selectedDepartamento !== 'all') {
+      processes = processes.filter(proc => proc.departamento === selectedDepartamento);
     }
     if (selectedPuesto !== 'all') {
       processes = processes.filter(proc => proc.puesto === selectedPuesto);
     }
     return processes;
-  }, [allCapturedProcesses, selectedArea, selectedPuesto]);
+  }, [allCapturedProcesses, selectedArea, selectedDepartamento, selectedPuesto]);
 
   const filteredCapturedProcesses = useMemo(() => {
-    if (!dashboardDateRange.from || !dashboardDateRange.to) return processesFilteredByAreaPuesto;
-    return processesFilteredByAreaPuesto.filter(proc => {
+    if (!dashboardDateRange.from || !dashboardDateRange.to) return processesFiltered;
+    return processesFiltered.filter(proc => {
         if (!proc.capturedAt) return false;
         const capturedDate = parseISO(proc.capturedAt);
         return isValid(capturedDate) && isWithinInterval(capturedDate, { start: dashboardDateRange.from!, end: dashboardDateRange.to! });
     });
-  }, [processesFilteredByAreaPuesto, dashboardDateRange]);
+  }, [processesFiltered, dashboardDateRange]);
 
   const filteredAcciones = useMemo(() => {
     if (!dashboardDateRange.from || !dashboardDateRange.to) return globalAcciones;
@@ -371,13 +395,13 @@ export default function DashboardPage() {
         }
         if (!dateMatch) return false;
 
-        if (selectedArea !== 'all' || selectedPuesto !== 'all') {
+        if (selectedArea !== 'all' || selectedPuesto !== 'all' || selectedDepartamento !== 'all') {
           if (!act.procesosAsociadosIds || act.procesosAsociadosIds.length === 0) return false;
           return act.procesosAsociadosIds.some(procId => relevantProcessIds.has(procId));
         }
         return true;
     });
-  }, [globalActividades, dashboardDateRange, filteredCapturedProcesses, selectedArea, selectedPuesto]);
+  }, [globalActividades, dashboardDateRange, filteredCapturedProcesses, selectedArea, selectedPuesto, selectedDepartamento]);
 
   const filteredAudits = useMemo(() => {
     if (!dashboardDateRange.from || !dashboardDateRange.to) return allAudits.filter(a => a.status === 'Completada');
@@ -397,17 +421,13 @@ export default function DashboardPage() {
         end: dashboardDateRange.to,
       });
 
-      // Use base data filtered by Area/Puesto for chart consistency across months
-      const baseProcessesForChart = processesFilteredByAreaPuesto;
-      const baseActionsForChart = globalAcciones.filter(accion => {
-         // Apply area/puesto filtering if needed here - for now, actions are global in chart
-         return true;
-      });
+      const baseProcessesForChart = processesFiltered;
+      const baseActionsForChart = globalAcciones; // Actions are not filtered by org structure in this dashboard
       const baseActivitiesForChart = globalActividades.filter(actividad => {
         const relevantProcessIdsForChart = new Set(baseProcessesForChart.map(p => p.id));
-        if (selectedArea !== 'all' || selectedPuesto !== 'all') {
+        if (selectedArea !== 'all' || selectedPuesto !== 'all' || selectedDepartamento !== 'all') {
             if (!actividad.procesosAsociadosIds || actividad.procesosAsociadosIds.length === 0) return false;
-            return actividad.procesosAsociadosIds.some(procId => relevantProcessIdsForChart.has(procId));
+            returnividad.procesosAsociadosIds.some(procId => relevantProcessIdsForChart.has(procId));
         }
         return true;
       });
@@ -510,7 +530,7 @@ export default function DashboardPage() {
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [processesFilteredByAreaPuesto, globalAcciones, globalActividades, isLoadingData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
+  }, [processesFiltered, globalAcciones, globalActividades, isLoadingData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -590,7 +610,7 @@ export default function DashboardPage() {
   const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAcciones || isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos;
 
   const staffSummary = useMemo(() => {
-    if (isLoadingAreas || isLoadingPuestos) {
+    if (isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) {
         return { total: 0, breakdown: [] };
     }
 
@@ -601,6 +621,12 @@ export default function DashboardPage() {
             filteredPuestos = filteredPuestos.filter(p => p.areaId === areaId);
         }
     }
+     if (selectedDepartamento !== 'all') {
+      const deptoId = departamentos.find(d => d.nombre === selectedDepartamento)?.id;
+      if (deptoId) {
+        filteredPuestos = filteredPuestos.filter(p => p.departamentoId === deptoId);
+      }
+    }
     if (selectedPuesto !== 'all') {
         filteredPuestos = filteredPuestos.filter(p => p.nombre === selectedPuesto);
     }
@@ -608,40 +634,40 @@ export default function DashboardPage() {
     let filteredAreas = areas;
     if (selectedArea !== 'all') {
         filteredAreas = filteredAreas.filter(a => a.nombre === selectedArea);
-    } else if (selectedPuesto !== 'all') {
-        const puestoAreaId = filteredPuestos[0]?.areaId;
-        if (puestoAreaId) {
-            filteredAreas = areas.filter(a => a.id === puestoAreaId);
-        } else {
-             filteredAreas = [];
-        }
     }
     
     const total = filteredPuestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
 
-    const breakdownByArea: Map<string, { areaName: string; totalInArea: number; puestos: { puestoName: string; puestoId: string; count: number }[] }> = new Map();
+    const breakdownByArea: Map<string, { areaName: string; totalInArea: number; deptos: { deptoName: string, deptoId: string, totalInDepto: number, puestos: { puestoName: string; puestoId: string; count: number }[] }[] }> = new Map();
 
     filteredAreas.forEach(area => {
-        breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, puestos: [] });
+        breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, deptos: [] });
     });
-     // Handle unassigned puestos only if no specific area/puesto is selected
-    if (selectedArea === 'all' && selectedPuesto === 'all') {
-        breakdownByArea.set('unassigned', { areaName: "Sin Área Asignada", totalInArea: 0, puestos: [] });
-    }
+
+    const deptosInScope = departamentos.filter(depto => {
+        if (selectedArea === 'all') return true;
+        const areaId = areas.find(a => a.nombre === selectedArea)?.id;
+        return depto.areaId === areaId;
+    });
 
     filteredPuestos.forEach(puesto => {
-        const areaId = puesto.areaId || 'unassigned';
+        const areaId = puesto.areaId;
         const areaData = breakdownByArea.get(areaId);
         if (areaData) {
-            const count = puesto.numeroPersonas || 0;
-            areaData.totalInArea += count;
-            if (count > 0) {
-                areaData.puestos.push({
-                    puestoName: puesto.nombre,
-                    puestoId: puesto.id,
-                    count: count,
-                });
+            areaData.totalInArea += (puesto.numeroPersonas || 0);
+
+            let deptoData = areaData.deptos.find(d => d.deptoId === (puesto.departamentoId || 'unassigned'));
+            if (!deptoData) {
+                const deptoName = departamentos.find(d => d.id === puesto.departamentoId)?.nombre || "Sin Departamento Asignado";
+                deptoData = { deptoName, deptoId: puesto.departamentoId || 'unassigned', totalInDepto: 0, puestos: [] };
+                areaData.deptos.push(deptoData);
             }
+            deptoData.totalInDepto += (puesto.numeroPersonas || 0);
+            deptoData.puestos.push({
+                puestoName: puesto.nombre,
+                puestoId: puesto.id,
+                count: puesto.numeroPersonas || 0,
+            });
         }
     });
 
@@ -650,11 +676,14 @@ export default function DashboardPage() {
         .sort((a,b) => b.totalInArea - a.totalInArea);
 
     finalBreakdown.forEach(area => {
-        area.puestos.sort((a,b) => b.count - a.count);
+        area.deptos.sort((a, b) => b.totalInDepto - a.totalInDepto);
+        area.deptos.forEach(depto => {
+            depto.puestos.sort((a,b) => b.count - a.count);
+        });
     });
 
     return { total, breakdown: finalBreakdown };
-  }, [areas, puestos, isLoadingAreas, isLoadingPuestos, selectedArea, selectedPuesto]);
+  }, [areas, departamentos, puestos, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos, selectedArea, selectedDepartamento, selectedPuesto]);
 
 
   const renderMetric = (value: number | string, loading: boolean, icon?: React.ReactNode) => {
@@ -812,7 +841,7 @@ export default function DashboardPage() {
                 <FilterIcon className="h-5 w-5 text-primary"/>
                 <h4 className="text-md font-semibold">Filtros del Dashboard</h4>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
                 <div>
                     <Label htmlFor="dateFrom" className="text-xs">Desde</Label>
                     <Popover>
@@ -843,7 +872,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                     <Label htmlFor="areaFilter" className="text-xs">Área</Label>
-                    <Select value={selectedArea} onValueChange={setSelectedArea} disabled={isLoadingAreas}>
+                    <Select value={selectedArea} onValueChange={(v) => { setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all'); }} disabled={isLoadingAreas}>
                         <SelectTrigger id="areaFilter" className="h-9 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="all">Todas las Áreas</SelectItem>
@@ -851,21 +880,27 @@ export default function DashboardPage() {
                         </SelectContent>
                     </Select>
                 </div>
+                 <div>
+                    <Label htmlFor="departamentoFilter" className="text-xs">Departamento</Label>
+                    <Select value={selectedDepartamento} onValueChange={(v) => { setSelectedDepartamento(v); setSelectedPuesto('all'); }} disabled={isLoadingDepartamentos || selectedArea === 'all'}>
+                        <SelectTrigger id="departamentoFilter" className="h-9 text-sm">
+                            <SelectValue placeholder={selectedArea === 'all' ? "Seleccione un Área" : "Todos los Deptos."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="all">Todos los Departamentos</SelectItem>
+                        {availableDepartamentosForFilter.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div>
                     <Label htmlFor="puestoFilter" className="text-xs">Puesto</Label>
                     <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos || availablePuestosForFilter.length === 0}>
                         <SelectTrigger id="puestoFilter" className="h-9 text-sm">
-                           <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : (availablePuestosForFilter.length === 0 && selectedArea !== 'all' ? "Sin puestos para área" : "Todos los Puestos")} />
+                           <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : (availablePuestosForFilter.length === 0 && (selectedArea !== 'all' || selectedDepartamento !== 'all') ? "Sin puestos" : "Todos los Puestos")} />
                         </SelectTrigger>
                         <SelectContent>
                         <SelectItem value="all">Todos los Puestos</SelectItem>
-                        {isLoadingPuestos ? (
-                             <SelectItem value="loading-puestos" disabled>Cargando...</SelectItem>
-                        ) : availablePuestosForFilter.length === 0 && selectedArea !== 'all' ? (
-                            <SelectItem value="no-puestos-for-area" disabled>No hay puestos para esta área</SelectItem>
-                        ) : (
-                            availablePuestosForFilter.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)
-                        )}
+                        {availablePuestosForFilter.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
@@ -933,7 +968,7 @@ export default function DashboardPage() {
                 Resumen del personal total y desglose por área y puesto, según filtros. La información se basa en el campo "Número de Personas" de la configuración de Puestos.
             </CardDescription>
             <div className="text-2xl font-bold mb-4">
-                Total (filtrado): {renderMetric(staffSummary.total, isLoadingAreas || isLoadingPuestos)} personas
+                Total (filtrado): {renderMetric(staffSummary.total, isLoadingAll)} personas
             </div>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">
@@ -942,7 +977,7 @@ export default function DashboardPage() {
             ) : staffSummary.breakdown.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No hay datos de personal para mostrar según los filtros seleccionados. Verifique la configuración de Puestos.</p>
             ) : (
-                <Accordion type="single" collapsible className="w-full">
+                <Accordion type="multiple" className="w-full">
                 {staffSummary.breakdown.map(areaData => (
                     <AccordionItem value={areaData.areaName} key={areaData.areaName}>
                         <AccordionTrigger>
@@ -952,27 +987,30 @@ export default function DashboardPage() {
                             </div>
                         </AccordionTrigger>
                         <AccordionContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Puesto</TableHead>
-                                        <TableHead className="text-right w-[150px]">Nº Personas</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {areaData.puestos.map(puesto => (
-                                        <TableRow key={puesto.puestoId}>
-                                            <TableCell>{puesto.puestoName}</TableCell>
-                                            <TableCell className="text-right">{puesto.count}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {areaData.puestos.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={2} className="text-center text-muted-foreground">No hay puestos con personal asignado en esta área.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                           {areaData.deptos.length > 0 ? (
+                            <Accordion type="multiple" className="w-full pl-4" collapsible>
+                                {areaData.deptos.map(deptoData => (
+                                    <AccordionItem value={deptoData.deptoId} key={deptoData.deptoId}>
+                                        <AccordionTrigger className="text-sm">
+                                            <div className="flex justify-between w-full pr-4 items-center">
+                                                <span className="font-medium">{deptoData.deptoName}</span>
+                                                <Badge variant="secondary">{deptoData.totalInDepto} personas</Badge>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <Table>
+                                                <TableHeader><TableRow><TableHead>Puesto</TableHead><TableHead className="text-right w-[150px]">Nº Personas</TableHead></TableRow></TableHeader>
+                                                <TableBody>
+                                                    {deptoData.puestos.map(puesto => (
+                                                        <TableRow key={puesto.puestoId}><TableCell>{puesto.puestoName}</TableCell><TableCell className="text-right">{puesto.count}</TableCell></TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                           ) : ( <p className="text-sm text-muted-foreground p-4">No hay departamentos con personal asignado en esta área.</p> )}
                         </AccordionContent>
                     </AccordionItem>
                 ))}
@@ -1060,10 +1098,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4 text-xs">
-              Costos anuales estimados.
-              Si filtra por Puesto, muestra costos solo de ese Puesto.
-              Si filtra por Área (y Puesto='Todos'), muestra costos de esa Área y de Puestos dentro de ella.
-              Si Área y Puesto son 'Todos', muestra todos los sistemas.
+              Costos anuales estimados. Refleja filtros organizacionales.
             </CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4">

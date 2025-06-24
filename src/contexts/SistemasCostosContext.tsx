@@ -214,7 +214,7 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
 export function useSistemasCostos(): SistemasCostosContextType {
   const context = useContext(SistemasCostosContext);
   if (context === undefined) {
-    throw new Error('useSistemasCostos must be used within a SistemasCostosProvider');
+    throw new Error('useSistemasCostos must be used within a SistemasCostosContext.tsx');
   }
   return context;
 }

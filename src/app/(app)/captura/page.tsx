@@ -95,6 +95,8 @@ export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
+const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
+
 
 const defaultFormValues: Partial<CapturaFormData> = {
   area: undefined,
@@ -153,12 +155,17 @@ export default function CapturaPage() {
     
     const puestosInArea = puestos.filter(p => p.areaId === areaId);
 
-    if (watchedDepartamentoName) {
+    if (watchedDepartamentoName && watchedDepartamentoName !== NO_DEPARTAMENTO_SELECTED) {
       const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areaId)?.id;
       if (deptoId) {
         return puestosInArea.filter(p => p.departamentoId === deptoId);
       }
     }
+    // Return puestos in area but not in any depto if 'Sin Departamento' is selected
+    if (watchedDepartamentoName === NO_DEPARTAMENTO_SELECTED) {
+       return puestosInArea.filter(p => !p.departamentoId);
+    }
+
     return puestosInArea;
   }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
 
@@ -241,7 +248,7 @@ export default function CapturaPage() {
 
       const dataToSave: CapturaFormData = {
         ...values,
-        departamento: values.departamento || undefined,
+        departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
         procesosEntrada: values.procesosEntrada || [],
         procesosSalida: values.procesosSalida || [],
         activityOrder: values.activityOrder || [],
@@ -416,8 +423,11 @@ export default function CapturaPage() {
                         value={field.value}
                         disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
                       >
-                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : "Seleccione un depto."} /></SelectTrigger></FormControl>
-                        <SelectContent>{filteredDepartamentos.map((depto) => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent>
+                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : (filteredDepartamentos.length === 0 ? "Sin deptos. para esta área" : "Seleccione un depto.")} /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_DEPARTAMENTO_SELECTED}>Sin Departamento</SelectItem>
+                          {filteredDepartamentos.map((depto) => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
+                        </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>

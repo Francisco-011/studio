@@ -1,70 +1,77 @@
 
 'use client';
 
-import * as React from 'react'; 
-import { useState } from 'react';
+import * as React from 'react';
+import { useState, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
+
 import { useAreas, type Area } from '@/contexts/AreasContext';
+import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
+import { usePuestos, type Puesto, type PuestoCreationData, nivelesOrganizacionales } from '@/contexts/PuestosContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto, tipoCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope } from '@/contexts/SistemasCostosContext';
+import { useAcciones } from '@/contexts/AccionesContext';
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useActividades } from '@/contexts/ActividadesContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2 } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { usePuestos } from '@/contexts/PuestosContext';
-import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
-const areaFormSchema = z.object({
-  id: z.string().optional(),
-  nombre: z.string().min(1, 'El nombre del área es requerido.'),
-});
+// Schemas
+const areaFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre del área es requerido.') });
 type AreaFormData = z.infer<typeof areaFormSchema>;
+
+const departamentoFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre es requerido.'), areaId: z.string({ required_error: 'Debe seleccionar un área.' }) });
+type DepartamentoFormData = z.infer<typeof departamentoFormSchema>;
+
+const puestoFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, "El nombre es requerido."),
+  areaId: z.string({ required_error: 'El área es requerida.' }),
+  departamentoId: z.string().optional(),
+  jefeInmediato: z.string().optional(),
+  nivelOrganizacional: z.enum(nivelesOrganizacionales, { errorMap: () => ({ message: "Seleccione un nivel." }) }),
+  numeroPersonas: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional())
+});
+type PuestoFormData = z.infer<typeof puestoFormSchema>;
+
+const sistemaFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(1, "El nombre es requerido."),
+  scope: z.enum(sistemaScopeOptions),
+  scopeId: z.string().optional(),
+}).refine(data => data.scope === 'Empresa' || !!data.scopeId, { message: "Debe seleccionar un ámbito específico si el alcance no es 'Empresa'.", path: ["scopeId"] });
+type SistemaFormData = z.infer<typeof sistemaFormSchema>;
+
+const costoSistemaFormSchema = z.object({
+  id: z.string().optional(),
+  sistemaId: z.string(),
+  tipoCosto: z.array(z.string()).refine(value => value.some(item => item), { message: "Debe seleccionar al menos un tipo de costo." }),
+  montoUso: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
+  numeroLicencias: z.preprocess(val => val === '' ? undefined : parseInt(String(val), 10), z.number().int().nonnegative().optional()),
+  costoPorLicencia: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
+  formaPago: z.enum(formasDePagoOptions),
+  frecuencia: z.enum(frecuenciasDePagoOptions),
+  moneda: z.enum(tiposDeMonedaOptions),
+  descripcion: z.string().optional(),
+}).refine(data => !data.tipoCosto.includes("Por Licencias") || (data.numeroLicencias !== undefined && data.costoPorLicencia !== undefined), { message: "Número de licencias y costo son requeridos.", path: ["numeroLicencias"] })
+  .refine(data => !data.tipoCosto.includes("Por Uso del Sistema") || data.montoUso !== undefined, { message: "Monto de uso es requerido.", path: ["montoUso"] });
+type CostoSistemaFormData = z.infer<typeof costoSistemaFormSchema>;
+
 
 const PlaceholderContent = ({ title, description, icon }: { title: string, description: string, icon: React.ReactNode }) => (
   <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
@@ -76,78 +83,156 @@ const PlaceholderContent = ({ title, description, icon }: { title: string, descr
 
 
 export default function ConfiguracionPage() {
+  // Contexts
   const { areas, addArea, updateArea, deleteArea, isLoading: isLoadingAreas } = useAreas();
-  const { puestos } = usePuestos();
-  const { departamentos } = useDepartamentos();
+  const { departamentos, addDepartamento, updateDepartamento, deleteDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos } = usePuestos();
+  const { sistemas, costosSistemas, addSistema, updateSistema, deleteSistema, addCostoSistema, updateCostoSistema, deleteCostoSistema, isLoadingSistemasCostos } = useSistemasCostos();
+  const { acciones } = useAcciones();
+  const { actividades } = useActividades();
+  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
 
+  useEffect(() => {
+      const storedData = localStorage.getItem('proceza-captured-data');
+      if (storedData) setAllProcesses(JSON.parse(storedData));
+  }, []);
+
+  // Dialog states
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
-  const [editingArea, setEditingArea] = useState<Area | null>(null);
-  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'area' } | null>(null);
+  const [isDeptoDialogOpen, setIsDeptoDialogOpen] = useState(false);
+  const [isPuestoDialogOpen, setIsPuestoDialogOpen] = useState(false);
+  const [isSistemaDialogOpen, setIsSistemaDialogOpen] = useState(false);
+  const [isCostoDialogOpen, setIsCostoDialogOpen] = useState(false);
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+
+  // Editing states
+  const [editingArea, setEditingArea] = useState<Area | null>(null);
+  const [editingDepto, setEditingDepto] = useState<Departamento | null>(null);
+  const [editingPuesto, setEditingPuesto] = useState<Puesto | null>(null);
+  const [editingSistema, setEditingSistema] = useState<Sistema | null>(null);
+  const [editingCosto, setEditingCosto] = useState<SistemaCosto | null>(null);
+  const [currentSistemaForCosto, setCurrentSistemaForCosto] = useState<Sistema | null>(null);
+  
+  // Search states
   const [areaSearchTerm, setAreaSearchTerm] = useState('');
+  const [deptoSearchTerm, setDeptoSearchTerm] = useState('');
+  const [puestoSearchTerm, setPuestoSearchTerm] = useState('');
+  const [sistemaSearchTerm, setSistemaSearchTerm] = useState('');
 
-  const areaForm = useForm<AreaFormData>({ 
-    resolver: zodResolver(areaFormSchema), 
-    defaultValues: { nombre: '' } 
-  });
+  // Deletion state
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema' } | null>(null);
+  
+  // Forms
+  const areaForm = useForm<AreaFormData>({ resolver: zodResolver(areaFormSchema), defaultValues: { nombre: '' } });
+  const deptoForm = useForm<DepartamentoFormData>({ resolver: zodResolver(departamentoFormSchema) });
+  const puestoForm = useForm<PuestoFormData>({ resolver: zodResolver(puestoFormSchema) });
+  const sistemaForm = useForm<SistemaFormData>({ resolver: zodResolver(sistemaFormSchema) });
+  const costoForm = useForm<CostoSistemaFormData>({ resolver: zodResolver(costoSistemaFormSchema) });
 
-  React.useEffect(() => { 
-    if (editingArea) {
-      areaForm.reset({ id: editingArea.id, nombre: editingArea.nombre }); 
-    } else {
-      areaForm.reset({ nombre: '' });
+  const isLoading = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingSistemasCostos;
+
+  // Effects to reset forms when dialogs open/close
+  useEffect(() => { areaForm.reset(editingArea ? { id: editingArea.id, nombre: editingArea.nombre } : { nombre: '' }); }, [editingArea, areaForm]);
+  useEffect(() => { deptoForm.reset(editingDepto || { nombre: '', areaId: '' }); }, [editingDepto, deptoForm]);
+  useEffect(() => { puestoForm.reset(editingPuesto || { nombre: '', areaId: '' }); }, [editingPuesto, puestoForm]);
+  useEffect(() => { sistemaForm.reset(editingSistema || { nombre: '', scope: 'Empresa' }); }, [editingSistema, sistemaForm]);
+  useEffect(() => {
+    if (isCostoDialogOpen) {
+      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', tipoCosto: [], formaPago: 'Transferencia', frecuencia: 'Mensual', moneda: 'MXN' });
     }
-  }, [editingArea, areaForm]);
+  }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
 
+  // Filtered data
+  const filteredAreas = useMemo(() => areas.filter(a => a.nombre.toLowerCase().includes(areaSearchTerm.toLowerCase())), [areas, areaSearchTerm]);
+  const filteredDeptos = useMemo(() => departamentos.map(d => ({ ...d, areaNombre: areas.find(a => a.id === d.areaId)?.nombre || 'N/A' })).filter(d => d.nombre.toLowerCase().includes(deptoSearchTerm.toLowerCase()) || d.areaNombre.toLowerCase().includes(deptoSearchTerm.toLowerCase())), [departamentos, areas, deptoSearchTerm]);
+  const filteredPuestos = useMemo(() => puestos.map(p => ({ ...p, areaNombre: areas.find(a => a.id === p.areaId)?.nombre || 'N/A', deptoNombre: departamentos.find(d => d.id === p.departamentoId)?.nombre || 'N/A' })).filter(p => p.nombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.areaNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.deptoNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase())), [puestos, areas, departamentos, puestoSearchTerm]);
+  const filteredSistemas = useMemo(() => sistemas.filter(s => s.nombre.toLowerCase().includes(sistemaSearchTerm.toLowerCase())), [sistemas, sistemaSearchTerm]);
+
+  // Submit Handlers
   function handleAreaSubmit(data: AreaFormData) {
-    if (editingArea && data.id) {
-        updateArea(data.id, data.nombre);
-        toast({ title: 'Área Actualizada' });
-    } else {
-        addArea(data.nombre);
-        toast({ title: 'Área Agregada' });
-    }
-    setEditingArea(null);
+    if (editingArea) updateArea(editingArea.id, data.nombre); else addArea(data.nombre);
     setIsAreaDialogOpen(false);
   }
+  function handleDeptoSubmit(data: DepartamentoFormData) {
+    if (editingDepto) updateDepartamento(editingDepto.id, data.nombre, data.areaId); else addDepartamento(data.nombre, data.areaId);
+    setIsDeptoDialogOpen(false);
+  }
+  function handlePuestoSubmit(data: PuestoFormData) {
+    const puestoData: PuestoCreationData = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId };
+    if (editingPuesto) updatePuesto(editingPuesto.id, puestoData); else addPuesto(puestoData);
+    setIsPuestoDialogOpen(false);
+  }
+  function handleSistemaSubmit(data: SistemaFormData) {
+    if (editingSistema) updateSistema(editingSistema.id, data); else addSistema(data);
+    setIsSistemaDialogOpen(false);
+  }
+  function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
+    const costoData = { ...data, tipoCosto: data.tipoCosto as TipoCosto[] };
+    if (editingCosto) updateCostoSistema(editingCosto.id, costoData); else addCostoSistema(costoData);
+    setIsCostoDialogOpen(false);
+  }
 
-  function handleEditArea(area: Area) { 
-    setEditingArea(area); 
-    setIsAreaDialogOpen(true); 
-  }
+  // Edit Handlers
+  function handleEdit<T>(item: T, setEditing: (item: T) => void, setOpen: (open: boolean) => void) { setEditing(item); setOpen(true); }
   
-  function promptDelete(id: string, name: string) { 
-    setItemToDelete({ id, name, type: 'area' }); 
-    setIsConfirmDeleteDialogOpen(true); 
-  }
-  
+  // Delete Logic
+  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema') { setItemToDelete({ id, name, type }); setIsConfirmDeleteDialogOpen(true); }
   function executeDelete() {
     if (!itemToDelete) return;
+    const { id, name, type } = itemToDelete;
+    let isUsed = false;
+    let usageMessage = '';
 
-    // Simplified dependency check for areas
-    const isUsedInPuestos = puestos.some(p => p.areaId === itemToDelete.id);
-    const isUsedInDepartamentos = departamentos.some(d => d.areaId === itemToDelete.id);
-
-    if (isUsedInPuestos || isUsedInDepartamentos) {
-        toast({
-            title: "Eliminación Bloqueada",
-            description: `"${itemToDelete.name}" está en uso por Puestos o Departamentos y no puede ser eliminada.`,
-            variant: "destructive",
-            duration: 7000,
-        });
-    } else {
-      deleteArea(itemToDelete.id);
-      toast({ title: 'Área Eliminada', variant: "destructive" });
+    switch (type) {
+        case 'area':
+            const isUsedInDeptos = departamentos.some(d => d.areaId === id);
+            const isUsedInPuestos = puestos.some(p => p.areaId === id);
+            isUsed = isUsedInDeptos || isUsedInPuestos;
+            usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestos ? 'Puestos' : '');
+            if (!isUsed) deleteArea(id);
+            break;
+        case 'departamento':
+            isUsed = puestos.some(p => p.departamentoId === id);
+            usageMessage = 'Puestos';
+            if (!isUsed) deleteDepartamento(id);
+            break;
+        case 'puesto':
+            isUsed = allProcesses.some(p => p.puesto === name) || acciones.some(a => a.puesto === name);
+            usageMessage = allProcesses.some(p => p.puesto === name) ? 'Procesos Capturados' : 'Acciones de Mejora';
+            if (!isUsed) deletePuesto(id);
+            break;
+        case 'sistema':
+            isUsed = allProcesses.some(p => p.sistemas?.includes(name)) || actividades.some(a => a.sistemaUtilizado === name);
+            usageMessage = allProcesses.some(p => p.sistemas?.includes(name)) ? 'Procesos Capturados' : 'Actividades';
+            if (!isUsed) deleteSistema(id);
+            break;
+        case 'costoSistema':
+            deleteCostoSistema(id);
+            break;
     }
-
+    
+    if (isUsed) {
+        toast({ title: "Eliminación Bloqueada", description: `"${name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
+    } else {
+        toast({ title: 'Elemento Eliminado', variant: "destructive" });
+    }
     setItemToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
 
-  const filteredAreas = React.useMemo(() => {
-    return areas.filter(a => a.nombre.toLowerCase().includes(areaSearchTerm.toLowerCase()));
-  }, [areas, areaSearchTerm]);
-  
+  const watchedPuestoArea = puestoForm.watch('areaId');
+  const filteredDeptosForPuestoForm = useMemo(() => departamentos.filter(d => d.areaId === watchedPuestoArea), [departamentos, watchedPuestoArea]);
+
+  const watchedSistemaScope = sistemaForm.watch('scope');
+  const scopeOptions = useMemo(() => {
+      switch (watchedSistemaScope) {
+          case 'Área': return areas.map(a => ({ id: a.id, nombre: a.nombre }));
+          case 'Departamento': return departamentos.map(d => ({ id: d.id, nombre: `${d.nombre} (${areas.find(a => a.id === d.areaId)?.nombre})` }));
+          case 'Puesto': return puestos.map(p => ({ id: p.id, nombre: `${p.nombre} (${areas.find(a => a.id === p.areaId)?.nombre})` }));
+          default: return [];
+      }
+  }, [watchedSistemaScope, areas, departamentos, puestos]);
+
   const configSections = [
     { value: 'areas', label: 'Áreas', icon: <Building className="h-5 w-5 mr-2" /> },
     { value: 'departamentos', label: 'Departamentos', icon: <Building2 className="h-5 w-5 mr-2" /> },
@@ -177,108 +262,199 @@ export default function ConfiguracionPage() {
             </TabsList>
             
             <TabsContent value="areas">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center"><Building className="h-5 w-5 mr-2" /> Áreas</CardTitle>
-                    <p className="text-sm text-muted-foreground">Administrar las áreas o divisiones principales de la empresa.</p>
-                  </CardHeader>
+                <Card><CardHeader><CardTitle>Áreas</CardTitle><CardDescription>Administrar las áreas o divisiones principales de la empresa.</CardDescription></CardHeader>
                   <CardContent>
                       <div className="flex justify-between items-center mb-4">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                          <Input placeholder="Buscar área..." value={areaSearchTerm} onChange={(e) => setAreaSearchTerm(e.target.value)} className="w-full pl-10" />
-                        </div>
-                        <Dialog open={isAreaDialogOpen} onOpenChange={(isOpen) => { setIsAreaDialogOpen(isOpen); if (!isOpen) setEditingArea(null); }}>
-                          <DialogTrigger asChild>
-                            <Button onClick={() => { setEditingArea(null); areaForm.reset(); }}>
-                              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Área
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader><DialogTitle>{editingArea ? 'Editar Área' : 'Agregar Nueva Área'}</DialogTitle></DialogHeader>
-                            <Form {...areaForm}>
-                              <form onSubmit={areaForm.handleSubmit(handleAreaSubmit)} className="space-y-4 py-4">
-                                <FormField control={areaForm.control} name="nombre" render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Nombre del Área</FormLabel>
-                                    <FormControl><Input placeholder="Ej: Finanzas, Operaciones" {...field} /></FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )} />
-                                <DialogFooter>
-                                  <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                                  <Button type="submit">{editingArea ? 'Guardar Cambios' : 'Agregar Área'}</Button>
-                                </DialogFooter>
-                              </form>
-                            </Form>
-                          </DialogContent>
-                        </Dialog>
+                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar área..." value={areaSearchTerm} onChange={(e) => setAreaSearchTerm(e.target.value)} className="w-full pl-10" /></div>
+                        <Button onClick={() => handleEdit(null, setEditingArea, setIsAreaDialogOpen)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Área</Button>
                       </div>
-                      {isLoadingAreas ? (
-                        <PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} />
-                      ) : filteredAreas.length === 0 ? (
-                        <PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />
-                      ) : (
-                        <Card>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Nombre del Área</TableHead>
-                                <TableHead className="text-right w-[120px]">Acciones</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredAreas.map((area) => (
+                      {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
+                       filteredAreas.length > 0 ? (
+                        <Card><Table><TableHeader><TableRow><TableHead>Nombre del Área</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader>
+                            <TableBody>{filteredAreas.map((area) => (
                                 <TableRow key={area.id}>
                                   <TableCell>{area.nombre}</TableCell>
                                   <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => handleEditArea(area)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
-                                    <Button variant="ghost" size="icon" onClick={() => promptDelete(area.id, area.nombre)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(area, setEditingArea, setIsAreaDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => promptDelete(area.id, area.nombre, 'area')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                                   </TableCell>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </Card>
-                      )}
-                  </CardContent>
-                </Card>
+                              ))}</TableBody>
+                          </Table></Card>) : 
+                          <PlaceholderContent title="No hay áreas" description="Comience agregando una nueva área." icon={<Building className="h-12 w-12 text-muted-foreground" />} />}
+                  </CardContent></Card>
             </TabsContent>
 
             <TabsContent value="departamentos">
-              <PlaceholderContent title="En Construcción" description="La gestión de Departamentos estará disponible aquí." icon={<Building2 className="h-12 w-12 text-muted-foreground" />} />
+                 <Card><CardHeader><CardTitle>Departamentos</CardTitle><CardDescription>Administrar los departamentos dentro de cada área.</CardDescription></CardHeader>
+                  <CardContent>
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar depto o área..." value={deptoSearchTerm} onChange={(e) => setDeptoSearchTerm(e.target.value)} className="w-full pl-10" /></div>
+                        <Button onClick={() => handleEdit(null, setEditingDepto, setIsDeptoDialogOpen)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Depto.</Button>
+                      </div>
+                      {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
+                       filteredDeptos.length > 0 ? (
+                        <Card><Table><TableHeader><TableRow><TableHead>Nombre del Depto.</TableHead><TableHead>Área</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader>
+                            <TableBody>{filteredDeptos.map((depto) => (
+                                <TableRow key={depto.id}>
+                                  <TableCell>{depto.nombre}</TableCell><TableCell>{depto.areaNombre}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(depto, setEditingDepto, setIsDeptoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => promptDelete(depto.id, depto.nombre, 'departamento')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}</TableBody>
+                          </Table></Card>) : 
+                          <PlaceholderContent title="No hay departamentos" description="Comience agregando un nuevo departamento." icon={<Building2 className="h-12 w-12 text-muted-foreground" />} />}
+                  </CardContent></Card>
             </TabsContent>
 
             <TabsContent value="puestos">
-              <PlaceholderContent title="En Construcción" description="La gestión de Puestos estará disponible aquí." icon={<Users className="h-12 w-12 text-muted-foreground" />} />
+                 <Card><CardHeader><CardTitle>Puestos</CardTitle><CardDescription>Administrar los puestos o roles dentro de la organización.</CardDescription></CardHeader>
+                  <CardContent>
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar puesto, área, depto..." value={puestoSearchTerm} onChange={(e) => setPuestoSearchTerm(e.target.value)} className="w-full pl-10" /></div>
+                        <Button onClick={() => handleEdit(null, setEditingPuesto, setIsPuestoDialogOpen)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto</Button>
+                      </div>
+                      {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
+                       filteredPuestos.length > 0 ? (
+                        <Card><Table><TableHeader><TableRow><TableHead>Puesto</TableHead><TableHead>Área</TableHead><TableHead>Depto.</TableHead><TableHead>Nivel</TableHead><TableHead># Personas</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader>
+                            <TableBody>{filteredPuestos.map((puesto) => (
+                                <TableRow key={puesto.id}>
+                                  <TableCell>{puesto.nombre}</TableCell><TableCell>{puesto.areaNombre}</TableCell><TableCell>{puesto.deptoNombre}</TableCell><TableCell>{puesto.nivelOrganizacional}</TableCell><TableCell>{puesto.numeroPersonas || '-'}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(puesto, setEditingPuesto, setIsPuestoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => promptDelete(puesto.id, puesto.nombre, 'puesto')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}</TableBody>
+                          </Table></Card>) : 
+                          <PlaceholderContent title="No hay puestos" description="Comience agregando un nuevo puesto." icon={<Users className="h-12 w-12 text-muted-foreground" />} />}
+                  </CardContent></Card>
             </TabsContent>
-
+            
             <TabsContent value="sistemas">
-               <PlaceholderContent title="En Construcción" description="La gestión de Sistemas y Costos estará disponible aquí." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />
+                 <Card><CardHeader><CardTitle>Sistemas y Costos</CardTitle><CardDescription>Administrar los sistemas de software y sus costos asociados.</CardDescription></CardHeader>
+                  <CardContent>
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar sistema..." value={sistemaSearchTerm} onChange={(e) => setSistemaSearchTerm(e.target.value)} className="w-full pl-10" /></div>
+                        <Button onClick={() => handleEdit(null, setEditingSistema, setIsSistemaDialogOpen)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Sistema</Button>
+                      </div>
+                      {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
+                       filteredSistemas.length > 0 ? (
+                        <Accordion type="single" collapsible className="w-full">
+                          {filteredSistemas.map(sistema => (
+                            <Card key={sistema.id} className="mb-2"><AccordionItem value={sistema.id} className="border-b-0">
+                              <AccordionTrigger className="p-4 hover:no-underline">
+                                <div className="flex justify-between items-center w-full">
+                                  <div className="flex items-center gap-4">
+                                      <span className="font-semibold">{sistema.nombre}</span>
+                                      <Badge variant="outline">{sistema.scope}</Badge>
+                                  </div>
+                                  <div>
+                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEdit(sistema, setEditingSistema, setIsSistemaDialogOpen); }} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); promptDelete(sistema.id, sistema.nombre, 'sistema'); }} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                  </div>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="p-4 pt-0">
+                                <div className="flex justify-end mb-2">
+                                  <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo</Button>
+                                </div>
+                                <Table>
+                                  <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Monto/Licencia</TableHead><TableHead>Frecuencia</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+                                  <TableBody>
+                                    {costosSistemas.filter(c => c.sistemaId === sistema.id).map(costo => (
+                                      <TableRow key={costo.id}>
+                                        <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
+                                        <TableCell>{costo.montoUso ? `${costo.montoUso} ${costo.moneda}` : `${costo.numeroLicencias} x ${costo.costoPorLicencia} ${costo.moneda}`}</TableCell>
+                                        <TableCell>{costo.frecuencia}</TableCell>
+                                        <TableCell className="text-right">
+                                          <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                          <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </AccordionContent>
+                            </AccordionItem></Card>
+                          ))}
+                        </Accordion>) : 
+                        <PlaceholderContent title="No hay sistemas" description="Comience agregando un nuevo sistema." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />}
+                  </CardContent></Card>
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
       
+      {/* Dialogs */}
+      <Dialog open={isAreaDialogOpen} onOpenChange={setIsAreaDialogOpen}>
+        <DialogContent><DialogHeader><DialogTitle>{editingArea ? 'Editar Área' : 'Agregar Área'}</DialogTitle></DialogHeader>
+          <Form {...areaForm}><form onSubmit={areaForm.handleSubmit(handleAreaSubmit)} className="space-y-4 py-4">
+            <FormField control={areaForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+          </form></Form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isDeptoDialogOpen} onOpenChange={setIsDeptoDialogOpen}>
+        <DialogContent><DialogHeader><DialogTitle>{editingDepto ? 'Editar Depto.' : 'Agregar Depto.'}</DialogTitle></DialogHeader>
+          <Form {...deptoForm}><form onSubmit={deptoForm.handleSubmit(handleDeptoSubmit)} className="space-y-4 py-4">
+            <FormField control={deptoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área..." /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={deptoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+          </form></Form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isPuestoDialogOpen} onOpenChange={setIsPuestoDialogOpen}>
+        <DialogContent><DialogHeader><DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Puesto'}</DialogTitle></DialogHeader>
+          <Form {...puestoForm}><form onSubmit={puestoForm.handleSubmit(handlePuestoSubmit)} className="space-y-4 py-4">
+            <FormField control={puestoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área..." /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione depto..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Sin Departamento</SelectItem>{filteredDeptosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre Puesto</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel Organizacional</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione nivel..." /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel># Personas en el Puesto</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+          </form></Form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isSistemaDialogOpen} onOpenChange={setIsSistemaDialogOpen}>
+        <DialogContent><DialogHeader><DialogTitle>{editingSistema ? 'Editar Sistema' : 'Agregar Sistema'}</DialogTitle></DialogHeader>
+          <Form {...sistemaForm}><form onSubmit={sistemaForm.handleSubmit(handleSistemaSubmit)} className="space-y-4 py-4">
+            <FormField control={sistemaForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={sistemaForm.control} name="scope" render={({ field }) => (<FormItem><FormLabel>Alcance</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione alcance..." /></SelectTrigger></FormControl><SelectContent>{sistemaScopeOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            {watchedSistemaScope !== 'Empresa' && <FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Ámbito Específico</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder={`Seleccione ${watchedSistemaScope}...`} /></SelectTrigger></FormControl><SelectContent>{scopeOptions.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />}
+            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+          </form></Form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar Costo para ${currentSistemaForCosto?.nombre}`}</DialogTitle></DialogHeader>
+          <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
+            <FormField control={costoForm.control} name="tipoCosto" render={({ field }) => (
+                <FormItem>{tipoCostoOptions.map(item => (<FormField key={item} control={costoForm.control} name="tipoCosto" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={checked => { return checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter(v => v !== item))}} /></FormControl><FormLabel className="font-normal">{item}</FormLabel></FormItem>)} />))}<FormMessage /></FormItem>
+            )} />
+            {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />}
+            {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
+                <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            </div>)}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{frecuenciasDePagoOptions.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{tiposDeMonedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            </div>
+            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{formasDePagoOptions.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={costoForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+          </form></Form>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              <div className="flex items-center">
-                <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                Confirmar Eliminación
-              </div>
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar "{itemToDelete?.name}"? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setItemToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDelete} className={cn(buttonVariants({ variant: "destructive" }))}>
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de que desea eliminar "{itemToDelete?.name}"? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel onClick={() => setItemToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDelete} className={cn(buttonVariants({ variant: "destructive" }))}>Eliminar</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

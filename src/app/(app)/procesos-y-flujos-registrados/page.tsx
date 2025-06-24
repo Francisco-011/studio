@@ -94,6 +94,8 @@ export interface CapturedProcess extends CapturaFormData {
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
+const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
+
 
 const frecuenciaOptions: readonly string[] = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"];
 const monedaOptions: readonly string[] = ["USD", "MXN", "EUR", "CAD", "GBP"];
@@ -141,7 +143,7 @@ const capturaFormSchema = z.object({
 
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
-type SortableProcessKeys = 'proceso' | 'area' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';
+type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -183,6 +185,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
+  const [selectedDeptoFilter, setSelectedDeptoFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
@@ -226,9 +229,12 @@ export default function ProcesosYFlujosRegistradosPage() {
     const areaId = areas.find(a => a.nombre === watchedEditAreaName)?.id;
     if (!areaId) return [];
     const puestosInArea = puestos.filter(p => p.areaId === areaId);
-    if (watchedEditDepartamentoName) {
+    if (watchedEditDepartamentoName && watchedEditDepartamentoName !== NO_DEPARTAMENTO_SELECTED) {
       const deptoId = departamentos.find(d => d.nombre === watchedEditDepartamentoName && d.areaId === areaId)?.id;
       if (deptoId) return puestosInArea.filter(p => p.departamentoId === deptoId);
+    }
+    if (watchedEditDepartamentoName === NO_DEPARTAMENTO_SELECTED) {
+       return puestosInArea.filter(p => !p.departamentoId);
     }
     return puestosInArea;
   }, [watchedEditAreaName, watchedEditDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
@@ -249,7 +255,10 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   useEffect(() => {
     if (editingProcess) {
-      editForm.reset(editingProcess);
+      editForm.reset({
+        ...editingProcess,
+        departamento: editingProcess.departamento || NO_DEPARTAMENTO_SELECTED
+      });
     }
   }, [editingProcess, editForm]);
 
@@ -318,6 +327,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     if (selectedAreaFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.area === selectedAreaFilter);
+    if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
     if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
     if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.activityOrder?.length || 0) === 0 : (proc.activityOrder?.length || 0) > 0));
@@ -343,7 +353,7 @@ export default function ProcesosYFlujosRegistradosPage() {
        dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -476,6 +486,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         p.id === editingProcess.id ? {
           ...editingProcess,
           ...values,
+          departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
           updatedAt: Date.now(),
           historialDeCambios: [...(p.historialDeCambios || []), ...changes]
         } : p
@@ -594,7 +605,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };
     return { value: 0, isDerived: false }; // Activities no longer have cost
   };
-  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
+  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
   const renderMultiSelectDropdown = (
     field: any, 
@@ -691,9 +702,10 @@ export default function ProcesosYFlujosRegistradosPage() {
         <CardContent>
           <div className="mb-4 p-4 border rounded-lg bg-muted/30">
             <div className="flex items-center gap-2 mb-3"><Filter className="h-5 w-5 text-primary"/><h4 className="text-md font-semibold">Filtros de Búsqueda</h4></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
               <div className="relative xl:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
-              <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={(v) => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger id="depto-filter"><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : (isLoadingDepartamentos ? "Cargando..." : "Todos")} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{departamentos.filter(d => d.areaId === areas.find(a => a.nombre === selectedAreaFilter)?.id).map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mt-4 items-end">
@@ -712,6 +724,7 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
+              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
               <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div></TableHead>
@@ -739,6 +752,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell className="p-1"><Button variant="ghost" size="icon" onClick={() => toggleRow(proc.id)}><ChevronRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} /></Button></TableCell>
                     <TableCell className="font-medium">{proc.proceso}</TableCell>
                     <TableCell>{proc.area}</TableCell>
+                    <TableCell>{proc.departamento || '-'}</TableCell>
                     <TableCell>{proc.puesto}</TableCell>
                     <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
@@ -761,7 +775,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </TableRow>
                 {isExpanded && (
                   <TableRow className={cn(proc.activo === false && "bg-muted/40")}>
-                    <TableCell colSpan={10} className="p-0">
+                    <TableCell colSpan={11} className="p-0">
                       <div className="p-4 bg-muted/50 space-y-4">
                         <Card>
                           <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
@@ -832,7 +846,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-6 py-4 max-h-[75vh] overflow-y-auto pr-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField control={editForm.control} name="area" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('departamento', undefined); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={editForm.control} name="departamento" render={({ field }) => (<FormItem><FormLabel>Departamento</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional"/></SelectTrigger></FormControl><SelectContent>{filteredEditDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="departamento" render={({ field }) => (<FormItem><FormLabel>Departamento</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional"/></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_SELECTED}>Sin Departamento</SelectItem>{filteredEditDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={editForm.control} name="puesto" render={({ field }) => (<FormItem><FormLabel>Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{filteredEditPuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
               <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />

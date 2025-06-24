@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon, FileText, Edit2 } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon, FileText, Edit2, Building } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
@@ -29,7 +30,7 @@ const PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY = 'proceza-puesto-process-order';
 interface TreeNode {
   id: string;
   name: string;
-  type: 'area' | 'puesto' | 'proceso';
+  type: 'area' | 'departamento' | 'puesto' | 'proceso';
   children?: TreeNode[];
   originalId?: string; 
   activities?: Actividad[]; 
@@ -91,6 +92,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 export default function PanelJerarquicoPage() {
   const router = useRouter();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, updateActividad, isLoadingActividades } = useActividades();
   
@@ -124,6 +126,7 @@ export default function PanelJerarquicoPage() {
 
 
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
+  const [selectedDeptoFilter, setSelectedDeptoFilter] = useState<string>('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
   const [treeActivitySearchTerm, setTreeActivitySearchTerm] = useState('');
   const [filterByActivityId, setFilterByActivityId] = useState<string | null>(null);
@@ -161,7 +164,7 @@ export default function PanelJerarquicoPage() {
     }
   }, []);
   
-  const isLoadingAllData = isLoadingAreas || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
+  const isLoadingAllData = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
 
   useEffect(() => {
     if (!isLoadingAllData) {
@@ -213,208 +216,113 @@ export default function PanelJerarquicoPage() {
     if (isLoadingAllData) return;
 
     const buildTree = (): TreeNode[] => {
-      const finalTreeNodes: TreeNode[] = [];
-      const areaNodesMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> = {};
+        let finalTreeNodes: TreeNode[] = [];
+        let areaNodesMap: Record<string, TreeNode & { deptosMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> }> = {};
 
-      let areasToFilterOn = areas;
-      if (!filterByActivityId && selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned') {
-        areasToFilterOn = areas.filter(a => a.id === selectedAreaFilter);
-      }
-      
-      if (!filterByActivityId) {
-          areasToFilterOn.forEach(area => {
-            areaNodesMap[area.id] = {
-                id: `area-${area.id}`, name: area.nombre, type: 'area', originalId: area.id, children: [], puestosMap: {}
-            };
-          });
-          if (selectedAreaFilter === 'all' || selectedAreaFilter === 'area-unassigned') {
-             if (!areaNodesMap['area-unassigned']) {
-                areaNodesMap['area-unassigned'] = {
-                    id: 'area-unassigned', name: 'Procesos Sin Área Específica', type: 'area', originalId: 'area-unassigned', children: [], puestosMap: {}
-                };
-             }
-          }
-      }
-      
-      const targetActivityForFiltering = filterByActivityId ? actividades.find(act => act.id === filterByActivityId) : null;
+        let filteredProcesses = capturedProcesses.filter(proc => 
+            treeProcessStatusFilter === 'all' || 
+            (treeProcessStatusFilter === 'active' && proc.activo !== false) || 
+            (treeProcessStatusFilter === 'inactive' && proc.activo === false)
+        );
 
-      const processesForTree = capturedProcesses.filter(proc => {
-        if (treeProcessStatusFilter === 'active') {
-            return proc.activo !== false;
-        }
-        if (treeProcessStatusFilter === 'inactive') {
-            return proc.activo === false;
-        }
-        return true; 
-      });
-
-
-      processesForTree.forEach(proc => {
-        if (targetActivityForFiltering && !(proc.activityOrder?.includes(targetActivityForFiltering.id) || targetActivityForFiltering.procesosAsociadosIds?.includes(proc.id))) {
-            return; 
-        }
-
-        const procAreaObject = areas.find(a => a.nombre === proc.area);
-        let targetAreaId = procAreaObject ? procAreaObject.id : 'area-unassigned';
-
-        if (filterByActivityId && !areaNodesMap[targetAreaId]) {
-             areaNodesMap[targetAreaId] = {
-                id: `area-${targetAreaId}`, 
-                name: procAreaObject ? procAreaObject.nombre : 'Procesos Sin Área Específica',
-                type: 'area',
-                originalId: targetAreaId,
-                children: [],
-                puestosMap: {}
-             };
-        }
-        
-        if (!areaNodesMap[targetAreaId]) {
-           if (!filterByActivityId && (selectedAreaFilter !== 'all' && selectedAreaFilter !== 'area-unassigned' && targetAreaId !== selectedAreaFilter)) {
-                return; 
-            }
-             if (filterByActivityId && targetAreaId !== (procAreaObject?.id || 'area-unassigned')) {
-                 return; 
-             }
-        }
-
-        const currentAreaNode = areaNodesMap[targetAreaId];
-        if (!currentAreaNode) return; 
-
-
-        const procPuestoObject = puestos.find(p => p.nombre === proc.puesto && p.areaId === (procAreaObject?.id));
-        
-        if (!filterByActivityId && selectedPuestoFilter !== 'all') {
-            if (selectedPuestoFilter === 'puesto-unassigned') {
-                if (procPuestoObject) return; 
-            } else {
-                if (!procPuestoObject || procPuestoObject.id !== selectedPuestoFilter) return;
+        if (filterByActivityId) {
+            const targetActivity = actividades.find(act => act.id === filterByActivityId);
+            if (targetActivity) {
+                const relevantProcessIds = new Set(targetActivity.procesosAsociadosIds || []);
+                filteredProcesses = filteredProcesses.filter(proc => relevantProcessIds.has(proc.id));
             }
         }
         
-        if (!filterByActivityId && treeActivitySearchTerm) {
+        let areasToDisplay = selectedAreaFilter === 'all' ? areas : areas.filter(a => a.nombre === selectedAreaFilter);
+        
+        filteredProcesses.forEach(proc => {
+            const areaObj = areas.find(a => a.nombre === proc.area);
+            if (selectedAreaFilter !== 'all' && proc.area !== selectedAreaFilter) return;
+
+            const deptoObj = departamentos.find(d => d.nombre === proc.departamento && d.areaId === areaObj?.id);
+            if (selectedDeptoFilter !== 'all' && proc.departamento !== selectedDeptoFilter) return;
+
+            const puestoObj = puestos.find(p => p.nombre === proc.puesto && p.departamentoId === deptoObj?.id && p.areaId === areaObj?.id);
+            if (selectedPuestoFilter !== 'all' && proc.puesto !== selectedPuestoFilter) return;
+            
             const searchTermLower = treeActivitySearchTerm.toLowerCase();
-            const processNameMatches = proc.proceso.toLowerCase().includes(searchTermLower);
-            
-            const activitiesInOrder = (proc.activityOrder || [])
-                .map(actId => actividades.find(a => a.id === actId))
-                .filter((act): act is Actividad => !!act);
-            const anyActivityNameMatches = activitiesInOrder.some(act => act.nombre.toLowerCase().includes(searchTermLower));
-            
-            if (!processNameMatches && !anyActivityNameMatches) {
-                return; 
-            }
-        }
-        
-        const targetPuestoIdKey = procPuestoObject?.id || `puesto-unassigned-in-${targetAreaId}`;
-        let targetPuestoName = proc.puesto || 'Procesos Sin Puesto Específico';
-        
-        if (procPuestoObject?.numeroPersonas && procPuestoObject.numeroPersonas > 0) {
-            targetPuestoName = `${targetPuestoName} (${procPuestoObject.numeroPersonas})`;
-        }
-        
-        const puestoNodeId = `puesto-${currentAreaNode.id}-${procPuestoObject?.id || targetPuestoName.replace(/\s+/g, '-')}`;
-
-
-        if (!currentAreaNode.puestosMap[targetPuestoIdKey]) {
-            currentAreaNode.puestosMap[targetPuestoIdKey] = {
-                id: puestoNodeId,
-                name: targetPuestoName,
-                type: 'puesto',
-                originalId: procPuestoObject?.id,
-                children: [],
-                processList: []
-            };
-        }
-        
-        const currentPuestoNode = currentAreaNode.puestosMap[targetPuestoIdKey];
-        currentPuestoNode.processList.push(proc);
-      });
-
-      Object.values(areaNodesMap).forEach(areaNode => {
-        const puestoChildren: TreeNode[] = [];
-        Object.values(areaNode.puestosMap).forEach(puestoNode => {
-          if (puestoNode.processList && puestoNode.processList.length > 0) {
-            
-            const processTreeNodes = puestoNode.processList.map(proc => {
-              let activitiesForNode: Actividad[];
-              const orderedActivityIds = proc.activityOrder || [];
-
-              if (targetActivityForFiltering) {
-                  activitiesForNode = orderedActivityIds.includes(targetActivityForFiltering.id) ? [targetActivityForFiltering] : [];
-              } else {
-                  activitiesForNode = orderedActivityIds
-                    .map(actId => actividades.find(a => a.id === actId))
-                    .filter((act): act is Actividad => !!act);
-                  
-                  if (treeActivitySearchTerm) { 
-                    const searchTermLower = treeActivitySearchTerm.toLowerCase();
-                    if (proc.proceso.toLowerCase().includes(searchTermLower)) {
-                        // Keep all ordered activities if process name matches
-                    } else {
-                        // Filter activities if process name doesn't match
-                        activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(searchTermLower));
-                    }
-                  }
-              }
-              
-              return {
-                id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode, activo: proc.activo,
-              };
-            });
-            
-            const currentPuestoNodeId = puestoNode.id;
-            const orderForThisPuesto = puestoProcessOrders[currentPuestoNodeId];
-            let sortedProcessTreeNodes;
-
-            if (orderForThisPuesto) {
-                sortedProcessTreeNodes = processTreeNodes.sort((a, b) => {
-                    const indexA = orderForThisPuesto.indexOf(a.originalId!);
-                    const indexB = orderForThisPuesto.indexOf(b.originalId!);
-                    if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name);
-                    if (indexA === -1) return 1; 
-                    if (indexB === -1) return -1;
-                    return indexA - indexB;
-                });
-            } else {
-                sortedProcessTreeNodes = processTreeNodes.sort((a, b) => a.name.localeCompare(b.name));
+            if (treeActivitySearchTerm) {
+                const processNameMatches = proc.proceso.toLowerCase().includes(searchTermLower);
+                const activitiesInOrder = (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act);
+                const anyActivityNameMatches = activitiesInOrder.some(act => act.nombre.toLowerCase().includes(searchTermLower));
+                if (!processNameMatches && !anyActivityNameMatches) return;
             }
 
-            let finalProcessNodesForPuesto: TreeNode[];
-            if (targetActivityForFiltering) {
-                finalProcessNodesForPuesto = sortedProcessTreeNodes.filter(ptn => ptn.activities && ptn.activities.length > 0);
-            } else if (treeActivitySearchTerm) {
-                const searchTermLower = treeActivitySearchTerm.toLowerCase();
-                finalProcessNodesForPuesto = sortedProcessTreeNodes.filter(ptn => 
-                    ptn.name.toLowerCase().includes(searchTermLower) || 
-                    (ptn.activities && ptn.activities.some(act => act.nombre.toLowerCase().includes(searchTermLower))) 
-                );
+            const areaId = areaObj?.id || 'unassigned-area';
+            if (!areaNodesMap[areaId]) {
+                areaNodesMap[areaId] = { id: `area-${areaId}`, name: areaObj?.nombre || 'Sin Área', type: 'area', originalId: areaId, deptosMap: {} };
             }
-            else {
-                finalProcessNodesForPuesto = sortedProcessTreeNodes;
+
+            const deptoId = deptoObj?.id || 'unassigned-depto';
+            if (!areaNodesMap[areaId].deptosMap[deptoId]) {
+                areaNodesMap[areaId].deptosMap[deptoId] = { id: `depto-${deptoId}`, name: deptoObj?.nombre || 'Sin Departamento', type: 'departamento', originalId: deptoId, puestosMap: {} };
+            }
+
+            const puestoId = puestoObj?.id || 'unassigned-puesto';
+            if (!areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId]) {
+                areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId] = { id: `puesto-${puestoId}`, name: puestoObj?.nombre || 'Sin Puesto', type: 'puesto', originalId: puestoId, processList: [] };
             }
             
-            if (finalProcessNodesForPuesto.length > 0) {
-                puestoNode.children = finalProcessNodesForPuesto;
-                puestoChildren.push(puestoNode);
-            }
-          }
+            areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId].processList.push(proc);
         });
-        areaNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
-        if (areaNode.children.length > 0) { 
-            finalTreeNodes.push(areaNode);
-        }
-      });
-      
-      return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
+
+        Object.values(areaNodesMap).forEach(areaNode => {
+            let deptoChildren: TreeNode[] = [];
+            Object.values(areaNode.deptosMap).forEach(deptoNode => {
+                let puestoChildren: TreeNode[] = [];
+                Object.values(deptoNode.puestosMap).forEach(puestoNode => {
+                    const processTreeNodes = puestoNode.processList.map(proc => {
+                        let activitiesForNode = (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act);
+                        if (filterByActivityId) {
+                            activitiesForNode = activitiesForNode.filter(act => act.id === filterByActivityId);
+                        }
+                        if (treeActivitySearchTerm && !proc.proceso.toLowerCase().includes(treeActivitySearchTerm.toLowerCase())) {
+                            activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(treeActivitySearchTerm.toLowerCase()));
+                        }
+                        return { id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode, activo: proc.activo };
+                    });
+                    
+                    const orderForThisPuesto = puestoProcessOrders[puestoNode.id];
+                    let sortedProcessNodes = orderForThisPuesto 
+                        ? processTreeNodes.sort((a,b) => orderForThisPuesto.indexOf(a.originalId!) - orderForThisPuesto.indexOf(b.originalId!))
+                        : processTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
+                    
+                    if (filterByActivityId || treeActivitySearchTerm) {
+                        sortedProcessNodes = sortedProcessNodes.filter(p => p.activities && p.activities.length > 0);
+                    }
+                    
+                    if (sortedProcessNodes.length > 0) {
+                        puestoNode.children = sortedProcessNodes;
+                        puestoChildren.push(puestoNode);
+                    }
+                });
+                if (puestoChildren.length > 0) {
+                    deptoNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
+                    deptoChildren.push(deptoNode);
+                }
+            });
+            if (deptoChildren.length > 0) {
+                areaNode.children = deptoChildren.sort((a,b) => a.name.localeCompare(b.name));
+                finalTreeNodes.push(areaNode);
+            }
+        });
+
+        return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
     };
 
     setTreeData(buildTree());
-  }, [
-    areas, puestos, capturedProcesses, actividades, 
+}, [
+    areas, departamentos, puestos, capturedProcesses, actividades, 
     isLoadingAllData, 
-    selectedAreaFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId, treeProcessStatusFilter,
+    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId, treeProcessStatusFilter,
     puestoProcessOrders
-  ]);
+]);
+
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
@@ -681,6 +589,7 @@ export default function PanelJerarquicoPage() {
         setFilterByActivityId(activity.id);
         setFilteredByActivityName(activity.nombre);
         setSelectedAreaFilter('all');
+        setSelectedDeptoFilter('all');
         setSelectedPuestoFilter('all');
         setTreeActivitySearchTerm('');
         setTreeProcessStatusFilter('active'); 
@@ -741,7 +650,8 @@ export default function PanelJerarquicoPage() {
           <span className={cn(
               "text-sm flex-grow", 
               node.type === 'proceso' && "font-semibold", 
-              node.type === 'area' && "font-bold", 
+              node.type === 'area' && "font-bold",
+              node.type === 'departamento' && "font-medium text-foreground/80",
               node.type === 'puesto' && "font-medium",
               node.type === 'proceso' && node.activo === false && "italic text-muted-foreground"
             )}
@@ -855,50 +765,43 @@ export default function PanelJerarquicoPage() {
 
     const csvRows: string[][] = [];
     const headers = [
-      "ID Área", "Nombre Área", "ID Puesto", "Nombre Puesto", 
+      "ID Área", "Nombre Área", "ID Depto", "Nombre Depto", "ID Puesto", "Nombre Puesto", 
       "ID Proceso", "Nombre Proceso", "Estado Proceso", 
-      "Orden Actividad en Proceso", "ID Actividad", "Nombre Actividad", "Estado Actividad"
+      "Orden Actividad", "ID Actividad", "Nombre Actividad", "Estado Actividad"
     ];
     csvRows.push(headers);
 
     treeData.forEach(areaNode => {
-      const areaId = areaNode.originalId || 'N/A';
-      const areaName = areaNode.name;
-
-      (areaNode.children || []).forEach(puestoNode => {
-        const puestoId = puestoNode.originalId || 'N/A';
-        const puestoName = puestoNode.name;
-
-        (puestoNode.children || []).forEach(procesoNode => {
-          const procesoOriginalId = procesoNode.originalId;
-          const procesoCaptured = capturedProcesses.find(p => p.id === procesoOriginalId);
-          const procesoName = procesoNode.name;
-          const procesoActivo = procesoCaptured ? (procesoCaptured.activo !== false ? 'Activo' : 'Inactivo') : 'N/A';
-
-          if (!procesoNode.activities || procesoNode.activities.length === 0) {
-            csvRows.push([
-              escapeCsvCell(areaId), escapeCsvCell(areaName),
-              escapeCsvCell(puestoId), escapeCsvCell(puestoName),
-              escapeCsvCell(procesoOriginalId), escapeCsvCell(procesoName), escapeCsvCell(procesoActivo),
-              '', '', '', '' // Empty activity fields
-            ]);
-          } else {
-            procesoNode.activities.forEach((act, index) => {
-              const activityId = act.id;
-              const activityOriginal = actividades.find(a => a.id === activityId);
-              const activityName = act.nombre;
-              const activityActiva = activityOriginal ? (activityOriginal.activa ? 'Activa' : 'Inactiva') : 'N/A';
-              
-              csvRows.push([
-                escapeCsvCell(areaId), escapeCsvCell(areaName),
-                escapeCsvCell(puestoId), escapeCsvCell(puestoName),
-                escapeCsvCell(procesoOriginalId), escapeCsvCell(procesoName), escapeCsvCell(procesoActivo),
-                escapeCsvCell(index + 1), escapeCsvCell(activityId), escapeCsvCell(activityName), escapeCsvCell(activityActiva)
-              ]);
+        (areaNode.children || []).forEach(deptoNode => {
+            (deptoNode.children || []).forEach(puestoNode => {
+                (puestoNode.children || []).forEach(procesoNode => {
+                    const proc = capturedProcesses.find(p => p.id === procesoNode.originalId);
+                    if ((procesoNode.activities || []).length === 0) {
+                        csvRows.push([
+                            escapeCsvCell(areaNode.originalId), escapeCsvCell(areaNode.name),
+                            escapeCsvCell(deptoNode.originalId), escapeCsvCell(deptoNode.name),
+                            escapeCsvCell(puestoNode.originalId), escapeCsvCell(puestoNode.name),
+                            escapeCsvCell(procesoNode.originalId), escapeCsvCell(procesoNode.name),
+                            escapeCsvCell(proc ? (proc.activo !== false ? 'Activo' : 'Inactivo') : 'N/A'),
+                            '', '', '', ''
+                        ]);
+                    } else {
+                        procesoNode.activities?.forEach((act, index) => {
+                            const actOriginal = actividades.find(a => a.id === act.id);
+                            csvRows.push([
+                                escapeCsvCell(areaNode.originalId), escapeCsvCell(areaNode.name),
+                                escapeCsvCell(deptoNode.originalId), escapeCsvCell(deptoNode.name),
+                                escapeCsvCell(puestoNode.originalId), escapeCsvCell(puestoNode.name),
+                                escapeCsvCell(procesoNode.originalId), escapeCsvCell(procesoNode.name),
+                                escapeCsvCell(proc ? (proc.activo !== false ? 'Activo' : 'Inactivo') : 'N/A'),
+                                escapeCsvCell(index + 1), escapeCsvCell(act.id), escapeCsvCell(act.nombre),
+                                escapeCsvCell(actOriginal ? (actOriginal.activa ? 'Activa' : 'Inactiva') : 'N/A')
+                            ]);
+                        });
+                    }
+                });
             });
-          }
         });
-      });
     });
 
     const csvString = csvRows.map(row => row.join(',')).join('\n');
@@ -978,19 +881,28 @@ export default function PanelJerarquicoPage() {
                     </Button>
                   </div>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div>
-                    <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter} disabled={isLoadingAreas || !!filterByActivityId}>
+                    <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas || !!filterByActivityId}>
                       <SelectTrigger className="w-full">
                         <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                         <SelectValue placeholder="Filtrar por Área" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas las Áreas</SelectItem>
-                        <SelectItem value="area-unassigned">Procesos Sin Área Específica</SelectItem>
-                        {areas.map(area => (
-                          <SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>
-                        ))}
+                        {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                   <div>
+                    <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || !!filterByActivityId || selectedAreaFilter === 'all'}>
+                      <SelectTrigger className="w-full">
+                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los Deptos.</SelectItem>
+                        {departamentos.filter(d => d.areaId === areas.find(a => a.nombre === selectedAreaFilter)?.id).map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1002,10 +914,7 @@ export default function PanelJerarquicoPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos los Puestos</SelectItem>
-                        <SelectItem value="puesto-unassigned">Procesos Sin Puesto Específico</SelectItem>
-                        {puestos.map(puesto => (
-                          <SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>
-                        ))}
+                        {puestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1177,7 +1086,7 @@ export default function PanelJerarquicoPage() {
                   <CardTitle className="text-lg">Diagrama de Relaciones de Procesos</CardTitle>
                   <CardDescription>Visualización gráfica de las interconexiones entre áreas, puestos, procesos y actividades.</CardDescription>
                 </CardHeader>
-                <CardContent className="min-h-[calc(60vh)]"> {/* Adjusted height to match tree view area */}
+                <CardContent className="min-h-[calc(60vh)]">
                   <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center h-full bg-muted/20">
                       <Share2 className="h-16 w-16 text-muted-foreground mb-4" />
                       <p className="text-lg font-semibold text-foreground">Visualización de Diagrama (Conceptual)</p>
@@ -1216,6 +1125,7 @@ export default function PanelJerarquicoPage() {
                 <>
                   <DetailSectionDisplay title="Nombre del Proceso" value={process.proceso} />
                   <DetailSectionDisplay title="Área" value={process.area} />
+                  <DetailSectionDisplay title="Departamento" value={process.departamento} />
                   <DetailSectionDisplay title="Puesto Principal" value={process.puesto} />
                   <DetailSectionDisplay title="Descripción Detallada" value={process.descripcion} isTextarea />
                   <DetailSectionDisplay title="Tiempo Estimado" value={process.tiempoEstimado !== undefined ? `${process.tiempoEstimado} minutos` : undefined} />
@@ -1242,8 +1152,6 @@ export default function PanelJerarquicoPage() {
                   <DetailSectionDisplay title="Nombre de la Actividad" value={activity.nombre} />
                   <DetailSectionDisplay title="Descripción Breve" value={activity.descripcionBreve} isTextarea />
                   <DetailSectionDisplay title="Sistema Utilizado" value={activity.sistemaUtilizado} />
-                  <DetailSectionDisplay title="Tiempo Estimado (min)" value={activity.tiempoEstimadoActividad} />
-                  <DetailSectionDisplay title="Frecuencia de la Actividad" value={activity.frecuenciaActividad} />
                   <DetailSectionDisplay title="Estado" value={activity.activa ? 'Activa' : 'Inactiva'} />
                   <DetailSectionDisplay title="Procesos Asociados" value={associatedProcessNames} isList />
                   <DetailSectionDisplay title="Fecha de Creación" value={activity.createdAt && isValid(new Date(activity.createdAt)) ? format(new Date(activity.createdAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
