@@ -167,6 +167,22 @@ export default function CapturaPage() {
   }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
 
 
+  // Effect to validate and reset 'departamento' if its value becomes invalid
+  useEffect(() => {
+    const currentDepartamento = form.getValues('departamento');
+    if (currentDepartamento && filteredDepartamentos.length > 0 && !filteredDepartamentos.some(d => d.nombre === currentDepartamento)) {
+      form.setValue('departamento', undefined, { shouldDirty: true });
+    }
+  }, [filteredDepartamentos, form]);
+
+  // Effect to validate and reset 'puesto' if its value becomes invalid
+  useEffect(() => {
+    const currentPuesto = form.getValues('puesto');
+    if (currentPuesto && filteredPuestos.length > 0 && !filteredPuestos.some(p => p.nombre === currentPuesto)) {
+      form.setValue('puesto', undefined, { shouldDirty: true });
+    }
+  }, [filteredPuestos, form]);
+
   const availableSistemasForForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
 
@@ -468,7 +484,7 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Área / División</FormLabel>
                       <Select
-                        onValueChange={(value) => { field.onChange(value); form.setValue('departamento', ''); form.setValue('puesto', ''); }}
+                        onValueChange={field.onChange}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
@@ -486,7 +502,7 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Departamento (Opcional)</FormLabel>
                        <Select
-                        onValueChange={(value) => { field.onChange(value); form.setValue('puesto', ''); }}
+                        onValueChange={field.onChange}
                         value={field.value}
                         disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
                       >
