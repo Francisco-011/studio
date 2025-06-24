@@ -90,12 +90,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
 import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2, UploadCloud, Building2, Search, ChevronsUpDown, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_DEPARTAMENTO_VALUE = "__NO_DEPARTAMENTO__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
 const NO_SCOPE_ID_VALUE = "__NO_SCOPE_ID__";
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
 
 const ITEMS_PER_PAGE_CONFIG = 5; 
 
@@ -182,7 +184,7 @@ const costoSistemaFormSchema = z.object({
   const usoSelected = data.tipoCosto.includes("Por Uso del Sistema");
   const licenciasSelected = data.tipoCosto.includes("Por Licencias");
 
-  if (usoSelected && data.montoUso === undefined) {
+  if (usoSelected && (data.montoUso === undefined || data.montoUso === null)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "El monto por uso es requerido si 'Por Uso del Sistema' está seleccionado.",
@@ -191,14 +193,14 @@ const costoSistemaFormSchema = z.object({
   }
 
   if (licenciasSelected) {
-    if (data.numeroLicencias === undefined) {
+    if (data.numeroLicencias === undefined || data.numeroLicencias === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El número de licencias es requerido si 'Por Licencias' está seleccionado.",
         path: ["numeroLicencias"],
       });
     }
-    if (data.costoPorLicencia === undefined) {
+    if (data.costoPorLicencia === undefined || data.costoPorLicencia === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El costo por licencia es requerido si 'Por Licencias' está seleccionado.",
@@ -278,6 +280,7 @@ export default function ConfiguracionPage() {
   } = useSistemasCostos();
   const { acciones: allAcciones, isLoadingAcciones } = useAcciones();
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const { addLogEntry } = useActivityLog();
 
   // State
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -344,11 +347,101 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (isCostoSistemaDialogOpen) { if (editingCostoSistema) { costoSistemaForm.reset({ id: editingCostoSistema.id, sistemaId: editingCostoSistema.sistemaId, tipoCosto: editingCostoSistema.tipoCosto, montoUso: editingCostoSistema.montoUso, numeroLicencias: editingCostoSistema.numeroLicencias, costoPorLicencia: editingCostoSistema.costoPorLicencia, formaPago: editingCostoSistema.formaPago, frecuencia: editingCostoSistema.frecuencia, moneda: editingCostoSistema.moneda, descripcion: editingCostoSistema.descripcion, }); } else if (selectedSystemForCosts) { costoSistemaForm.reset({ sistemaId: selectedSystemForCosts.id, tipoCosto: [], montoUso: undefined, numeroLicencias: undefined, costoPorLicencia: undefined, formaPago: undefined, frecuencia: undefined, moneda: 'USD', descripcion: '' }); } } }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
   
   // Submit handlers
-  function handleAreaSubmit(data: AreaFormData) { if (editingArea && editingArea.id) { updateArea(editingArea.id, data.nombre); } else { addArea(data.nombre); } setEditingArea(null); setIsAreaDialogOpen(false); areaForm.reset(); }
-  function handleDepartamentoSubmit(data: DepartamentoFormData) { if (editingDepartamento && editingDepartamento.id) { updateDepartamento(editingDepartamento.id, data.nombre, data.areaId); } else { addDepartamento(data.nombre, data.areaId); } setEditingDepartamento(null); setIsDepartamentoDialogOpen(false); departamentoForm.reset(); }
-  function handlePuestoSubmit(data: PuestoFormData) { const puestoDataToSave: PuestoCreationData = { nombre: data.nombre, areaId: data.areaId, departamentoId: data.departamentoId === NO_DEPARTAMENTO_VALUE ? undefined : data.departamentoId, jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato, nivelOrganizacional: data.nivelOrganizacional, numeroPersonas: data.numeroPersonas, }; if (editingPuesto && editingPuesto.id) { updatePuesto(editingPuesto.id, puestoDataToSave); } else { addPuesto(puestoDataToSave); } setEditingPuesto(null); setIsPuestoDialogOpen(false); puestoForm.reset(); }
-  function handleSistemaSubmit(data: SistemaFormData) { const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), }; if (editingSistema && editingSistema.id) { updateSistema(editingSistema.id, sistemaData as SistemaUpdateData); toast({ title: 'Sistema Actualizado' }); } else { const newSystem = addSistema(sistemaData as SistemaCreationData); toast({ title: 'Sistema Agregado' }); openManageCostsDialog(newSystem); } setEditingSistema(null); setIsSistemaDialogOpen(false); sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined }); }
-  function handleCostoSistemaSubmit(data: SistemaCostoFormData) { const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, }; if (editingCostoSistema && editingCostoSistema.id) { updateCostoSistema(editingCostoSistema.id, costoDataToSave); toast({ title: 'Costo de Sistema Actualizado' }); } else { addCostoSistema(costoDataToSave); toast({ title: 'Costo de Sistema Agregado' }); } setEditingCostoSistema(null); setIsCostoSistemaDialogOpen(false); costoSistemaForm.reset(); }
+  function handleAreaSubmit(data: AreaFormData) {
+    if (editingArea) {
+      const originalArea = areas.find(a => a.id === editingArea.id);
+      if (originalArea && originalArea.nombre !== data.nombre) {
+        // Cascade update logic
+        const updatedProcesses = allCapturedProcesses.map(p => p.area === originalArea.nombre ? { ...p, area: data.nombre } : p);
+        const updatedAcciones = allAcciones.map(a => a.area === originalArea.nombre ? { ...a, area: data.nombre } : a);
+        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
+        setAllCapturedProcesses(updatedProcesses); // Update local state for immediate UI feedback
+      }
+      updateArea(editingArea.id, data.nombre);
+    } else {
+      addArea(data.nombre);
+    }
+    setEditingArea(null);
+    setIsAreaDialogOpen(false);
+    areaForm.reset();
+  }
+
+  function handleDepartamentoSubmit(data: DepartamentoFormData) {
+    if (editingDepartamento) {
+      const originalDepto = departamentos.find(d => d.id === editingDepartamento.id);
+      if (originalDepto && originalDepto.nombre !== data.nombre) {
+        // Cascade update logic
+        const updatedProcesses = allCapturedProcesses.map(p => p.departamento === originalDepto.nombre ? { ...p, departamento: data.nombre } : p);
+        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+        setAllCapturedProcesses(updatedProcesses);
+      }
+      updateDepartamento(editingDepartamento.id, data.nombre, data.areaId);
+    } else {
+      addDepartamento(data.nombre, data.areaId);
+    }
+    setEditingDepartamento(null);
+    setIsDepartamentoDialogOpen(false);
+    departamentoForm.reset();
+  }
+
+  function handlePuestoSubmit(data: PuestoFormData) {
+    const puestoDataToSave: PuestoCreationData = {
+      nombre: data.nombre,
+      areaId: data.areaId,
+      departamentoId: data.departamentoId === NO_DEPARTAMENTO_VALUE ? undefined : data.departamentoId,
+      jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato,
+      nivelOrganizacional: data.nivelOrganizacional,
+      numeroPersonas: data.numeroPersonas,
+    };
+
+    if (editingPuesto) {
+      const originalPuesto = puestos.find(p => p.id === editingPuesto.id);
+      if (originalPuesto && originalPuesto.nombre !== data.nombre) {
+        // Cascade update logic
+        const updatedProcesses = allCapturedProcesses.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
+        const updatedAcciones = allAcciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
+        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
+        setAllCapturedProcesses(updatedProcesses);
+      }
+      updatePuesto(editingPuesto.id, puestoDataToSave);
+    } else {
+      addPuesto(puestoDataToSave);
+    }
+    setEditingPuesto(null);
+    setIsPuestoDialogOpen(false);
+    puestoForm.reset();
+  }
+
+  function handleSistemaSubmit(data: SistemaFormData) {
+    const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), };
+    if (editingSistema) {
+      updateSistema(editingSistema.id, sistemaData as SistemaUpdateData);
+      toast({ title: 'Sistema Actualizado' });
+    } else {
+      const newSystem = addSistema(sistemaData as SistemaCreationData);
+      toast({ title: 'Sistema Agregado' });
+      openManageCostsDialog(newSystem);
+    }
+    setEditingSistema(null);
+    setIsSistemaDialogOpen(false);
+    sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
+  }
+
+  function handleCostoSistemaSubmit(data: SistemaCostoFormData) {
+    const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, };
+    if (editingCostoSistema) {
+      updateCostoSistema(editingCostoSistema.id, costoDataToSave);
+      toast({ title: 'Costo de Sistema Actualizado' });
+    } else {
+      addCostoSistema(costoDataToSave);
+      toast({ title: 'Costo de Sistema Agregado' });
+    }
+    setEditingCostoSistema(null);
+    setIsCostoSistemaDialogOpen(false);
+    costoSistemaForm.reset();
+  }
   
   // Edit handlers
   function handleEditArea(area: Area) { setEditingArea(area); setIsAreaDialogOpen(true); }
@@ -366,17 +459,38 @@ export default function ConfiguracionPage() {
   function executeDelete() {
     if (!itemToDelete) return;
     
-    let wasDeleted = false;
-    if (itemToDelete.type === 'area') {
-        wasDeleted = deleteArea(itemToDelete.id, departamentos, puestos, sistemas, allCapturedProcesses, allAcciones);
-    } else if (itemToDelete.type === 'departamento') {
-        wasDeleted = deleteDepartamento(itemToDelete.id, puestos, sistemas, allCapturedProcesses);
-    } else if (itemToDelete.type === 'puesto') {
-        wasDeleted = deletePuesto(itemToDelete.id, puestos, sistemas, allCapturedProcesses, allAcciones);
+    let isBlocked = false;
+    const { id, name, type } = itemToDelete;
+
+    if (type === 'area') {
+      if (departamentos.some(d => d.areaId === id) || puestos.some(p => p.areaId === id) || sistemas.some(s => s.scope === "Área" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.area === name && !proc.deletedAt) || allAcciones.some(a => a.area === name)) {
+        isBlocked = true;
+      } else {
+        deleteArea(id);
+      }
+    } else if (type === 'departamento') {
+      if (puestos.some(p => p.departamentoId === id) || sistemas.some(s => s.scope === "Departamento" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.departamento === name && !proc.deletedAt)) {
+        isBlocked = true;
+      } else {
+        deleteDepartamento(id);
+      }
+    } else if (type === 'puesto') {
+      if (puestos.some(p => p.jefeInmediato === id) || sistemas.some(s => s.scope === "Puesto" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt) || allAcciones.some(a => a.puesto === name)) {
+        isBlocked = true;
+      } else {
+        deletePuesto(id);
+      }
     }
 
-    if (wasDeleted) {
-        toast({ title: `${itemToDelete.type.charAt(0).toUpperCase() + itemToDelete.type.slice(1)} Eliminado(a)`, variant: 'destructive' });
+    if (isBlocked) {
+      toast({
+        title: "Eliminación Bloqueada",
+        description: `El ${type} "${name}" está en uso por otra entidad (procesos, acciones, etc.) y no puede ser eliminado.`,
+        variant: "destructive",
+        duration: 7000,
+      });
+    } else {
+      toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
     }
     
     setItemToDelete(null);
@@ -522,7 +636,7 @@ export default function ConfiguracionPage() {
                 <CardContent>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
                         <div className="flex-grow flex flex-wrap gap-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar sistema..." value={sistemaSearchTerm} onChange={(e) => setSistemaSearchTerm(e.target.value)} className="w-full sm:w-[200px] pl-10" /></div><Select value={sistemaScopeFilter} onValueChange={setSistemaScopeFilter}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filtrar por ámbito..." /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Ámbitos</SelectItem>{sistemaScopeOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div>
-                        <Dialog open={isSistemaDialogOpen} onOpenChange={(isOpen) => { setIsSistemaDialogOpen(isOpen); if (!isOpen) setEditingSistema(null); }}><DialogTrigger asChild><Button onClick={() => { setEditingSistema(null); sistemaForm.reset(); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Sistema</Button></DialogTrigger><DialogContent className="sm:max-w-[480px]"><DialogHeader><DialogTitle>{editingSistema ? 'Editar Sistema' : 'Agregar Nuevo Sistema'}</DialogTitle></DialogHeader><Form {...sistemaForm}><form onSubmit={sistemaForm.handleSubmit(handleSistemaSubmit)} className="space-y-4 py-4"><FormField control={sistemaForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre del Sistema</FormLabel><FormControl><Input placeholder="Ej: SAP, Salesforce" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={sistemaForm.control} name="scope" render={({ field }) => (<FormItem><FormLabel>Ámbito del Sistema</FormLabel><Select onValueChange={(value) => { field.onChange(value); sistemaForm.setValue('scopeId', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione ámbito" /></SelectTrigger></FormControl><SelectContent>{sistemaScopeOptions.map(opt => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />{watchedSistemaScope === "Área" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Área</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione área" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{areas.map(a => (<SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />)}{watchedSistemaScope === "Departamento" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Departamento</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingDepartamentos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione depto." /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{departamentos.map(d => (<SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />)}{watchedSistemaScope === "Puesto" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingPuestos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione puesto" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{puestos.map(p => (<SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />)}<DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingSistema ? 'Guardar' : 'Agregar'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+                        <Dialog open={isSistemaDialogOpen} onOpenChange={(isOpen) => { setIsSistemaDialogOpen(isOpen); if (!isOpen) setEditingSistema(null); }}><DialogTrigger asChild><Button onClick={() => { setEditingSistema(null); sistemaForm.reset(); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Sistema</Button></DialogTrigger><DialogContent className="sm:max-w-[480px]"><DialogHeader><DialogTitle>{editingSistema ? 'Editar Sistema' : 'Agregar Nuevo Sistema'}</DialogTitle></DialogHeader><Form {...sistemaForm}><form onSubmit={sistemaForm.handleSubmit(handleSistemaSubmit)} className="space-y-4 py-4"><FormField control={sistemaForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre del Sistema</FormLabel><FormControl><Input placeholder="Ej: SAP, Salesforce" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={sistemaForm.control} name="scope" render={({ field }) => (<FormItem><FormLabel>Ámbito del Sistema</FormLabel><Select onValueChange={(value) => { field.onChange(value); sistemaForm.setValue('scopeId', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione ámbito" /></SelectTrigger></FormControl><SelectContent>{sistemaScopeOptions.map(opt => (<SelectItem key={opt} value={opt}>{opt}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />{watchedSistemaScope === "Área" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Área</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione área" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{areas.map(a => (<SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />)}{watchedSistemaScope === "Departamento" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Departamento</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingDepartamentos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione depto." /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{departamentos.map(d => (<SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />)}{watchedSistemaScope === "Puesto" && (<FormField control={sistemaForm.control} name="scopeId" render={({ field }) => (<FormItem><FormLabel>Seleccionar Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SCOPE_ID_VALUE} disabled={isLoadingPuestos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione puesto" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SCOPE_ID_VALUE} disabled>Seleccione...</SelectItem>{puestos.map(p => (<SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />}<DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingSistema ? 'Guardar' : 'Agregar'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
                     </div>
                     {isLoadingSistemasCostos ? (<PlaceholderContent title="Cargando sistemas..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />) : sistemas.length === 0 ? (<PlaceholderContent title="No hay sistemas registrados" description="Comienza agregando sistemas." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />) : (
                       <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSistemaSort('nombre')}><div className="flex items-center">Nombre {getSistemaSortIcon('nombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSistemaSort('scope')}><div className="flex items-center">Ámbito {getSistemaSortIcon('scope')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSistemaSort('costoAnual')}><div className="flex items-center">Costo Anual {getSistemaSortIcon('costoAnual')}</div></TableHead><TableHead className="text-right w-[220px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedSistemas.map((sistema) => { let scopeDisplay = sistema.scope; if (sistema.scopeId) { if (sistema.scope === "Área") scopeDisplay = `Área: ${areas.find(a => a.id === sistema.scopeId)?.nombre || 'N/A'}`; else if (sistema.scope === "Departamento") scopeDisplay = `Depto: ${departamentos.find(d => d.id === sistema.scopeId)?.nombre || 'N/A'}`; else if (sistema.scope === "Puesto") scopeDisplay = `Puesto: ${puestos.find(p => p.id === sistema.scopeId)?.nombre || 'N/A'}`; } return (<TableRow key={sistema.id}><TableCell>{sistema.nombre}</TableCell><TableCell>{scopeDisplay}</TableCell><TableCell>{getSystemAnnualCost(sistema.id, costosSistemas, sistemas)}</TableCell><TableCell className="text-right space-x-1"><Button variant="outline" size="sm" onClick={() => openManageCostsDialog(sistema)}><DollarSign className="mr-2 h-4 w-4" /> Costos</Button><Button variant="ghost" size="icon" onClick={() => handleEditSistema(sistema)} className="mr-1"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeleteSistema(sistema.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>); })}</TableBody></Table></Card>

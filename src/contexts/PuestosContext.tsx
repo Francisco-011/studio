@@ -4,10 +4,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
-import { toast } from '@/hooks/use-toast';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
-import type { Accion } from './AccionesContext';
-import type { Sistema } from './SistemasCostosContext';
 
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -27,16 +23,14 @@ export type PuestoCreationData = Omit<Puesto, 'id'>;
 interface PuestosContextType {
   puestos: Puesto[];
   addPuesto: (data: PuestoCreationData) => void;
-  updatePuesto: (id: string, data: PuestoCreationData, allProcesses: CapturedProcess[], allAcciones: Accion[]) => void;
-  deletePuesto: (id: string, allPuestos: Puesto[], allSistemas: Sistema[], allProcesses: CapturedProcess[], allAcciones: Accion[]) => boolean;
+  updatePuesto: (id: string, data: PuestoCreationData) => void;
+  deletePuesto: (id: string) => void;
   isLoadingPuestos: boolean;
 }
 
 const PuestosContext = createContext<PuestosContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
-const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
-const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
 
 export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
@@ -78,62 +72,25 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
   }, [addLogEntry]);
 
-  const updatePuesto = useCallback((id: string, data: PuestoCreationData, allProcesses: CapturedProcess[], allAcciones: Accion[]) => {
-    const originalPuesto = puestos.find(p => p.id === id);
-    if (!originalPuesto) {
-        toast({ title: 'Error', description: 'No se pudo encontrar el puesto para actualizar.', variant: 'destructive'});
-        return;
-    }
-    
-    // --- Start of Side Effect Logic ---
-    const hasNameChanged = originalPuesto.nombre !== data.nombre;
+  const updatePuesto = useCallback((id: string, data: PuestoCreationData) => {
+    let originalName = '';
+    setPuestos((prevPuestos) => {
+      const original = prevPuestos.find(p => p.id === id);
+      if (original) originalName = original.nombre;
+      return prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto));
+    });
 
-    if(hasNameChanged && typeof window !== 'undefined') {
-        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-        let processes: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : allProcesses;
-        processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
-        localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
-        
-        const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-        let acciones: Accion[] = storedAcciones ? JSON.parse(storedAcciones) : allAcciones;
-        acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
-        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
+    if (originalName && originalName !== data.nombre) {
+       addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `El puesto "${originalName}" fue renombrado a "${data.nombre}".` });
     }
-     
-    addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
-    // --- End of Side Effect Logic ---
-    
-    setPuestos((prevPuestos) =>
-      prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto))
-    );
-  }, [puestos, addLogEntry]);
+  }, [addLogEntry]);
 
-  const deletePuesto = useCallback((id: string, allPuestos: Puesto[], allSistemas: Sistema[], allProcesses: CapturedProcess[], allAcciones: Accion[]): boolean => {
+  const deletePuesto = useCallback((id: string) => {
     const puestoToDelete = puestos.find(p => p.id === id);
-    if(!puestoToDelete) return false;
-
-    // Dependency checks
-    if (allPuestos.some(p => p.jefeInmediato === id)) {
-        toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" es Jefe Inmediato de otro puesto.`, variant: 'destructive'});
-        return false;
+    if(puestoToDelete) {
+      setPuestos(prevPuestos => prevPuestos.filter((puesto) => puesto.id !== id));
+      addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
     }
-    if (allSistemas.some(s => s.scope === "Puesto" && s.scopeId === id)) {
-        toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
-        return false;
-    }
-    if (allProcesses.some(proc => proc.puesto === puestoToDelete.nombre && !proc.deletedAt)) {
-        toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" está en uso por uno o más procesos.`, variant: 'destructive'});
-        return false;
-    }
-    if (allAcciones.some(a => a.puesto === puestoToDelete.nombre)) {
-        toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a una o más acciones de mejora.`, variant: "destructive"});
-        return false;
-    }
-
-    // Proceed with deletion
-    setPuestos(prevPuestos => prevPuestos.filter((puesto) => puesto.id !== id));
-    addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
-    return true;
   }, [puestos, addLogEntry]);
 
   return (
