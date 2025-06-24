@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,7 +64,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-import type { CapturaFormData, Moneda as CapturaMoneda } from '../captura/page';
+import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
