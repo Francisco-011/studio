@@ -105,6 +105,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
+  const [activityStatusFilter, setActivityStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
@@ -302,10 +303,11 @@ export default function ProcesosYFlujosRegistradosPage() {
               <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
-               <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
-                <div className="w-full"><Label htmlFor="activity-filter" className="text-xs font-medium text-muted-foreground ml-1">Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
-                <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm self-end">Limpiar Todos los Filtros</Button>
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mt-4 items-end">
+               <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado del Proceso</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
+                <div className="w-full"><Label htmlFor="activity-filter" className="text-xs font-medium text-muted-foreground ml-1">Conteo Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
+                <div className="w-full"><Label htmlFor="activity-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado de Actividades</Label><Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as any)}><SelectTrigger id="activity-status-filter"><SelectValue placeholder="Todas"/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="active">Solo Activas</SelectItem><SelectItem value="inactive">Solo Inactivas</SelectItem></SelectContent></Select></div>
+                <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm self-end col-start-auto">Limpiar Todos los Filtros</Button>
             </div>
           </div>
           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
@@ -327,6 +329,16 @@ export default function ProcesosYFlujosRegistradosPage() {
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
                 const isExpanded = expandedRows[proc.id];
                 const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
+
+                const activitiesToShow = (proc.activityOrder || [])
+                    .map(actId => allActivities.find(a => a.id === actId))
+                    .filter((act): act is Actividad => !!act)
+                    .filter(act => {
+                        if (activityStatusFilter === 'all') return true;
+                        if (activityStatusFilter === 'active') return act.activa;
+                        if (activityStatusFilter === 'inactive') return !act.activa;
+                        return true;
+                    });
 
                 return (
                 <React.Fragment key={proc.id}>
@@ -368,27 +380,27 @@ export default function ProcesosYFlujosRegistradosPage() {
                         <div>
                           <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
                            {(proc.activityOrder && proc.activityOrder.length > 0) ? (
-                              <div className="space-y-3">
-                                {proc.activityOrder.map((actId, index) => {
-                                  const act = allActivities.find(a => a.id === actId);
-                                  if (!act) return <div key={`${proc.id}-act-${actId}`} className="p-2 border rounded text-sm text-destructive">Actividad con ID {actId} no encontrada.</div>;
-                                  return (
-                                    <Card key={`${proc.id}-act-${act.id}-${index}`} className="bg-background">
-                                      <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
-                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                          {act.nombre}
-                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
-                                        </CardTitle>
-                                      </CardHeader>
-                                      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
-                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                      </CardContent>
-                                    </Card>
-                                  );
-                                })}
-                              </div>
+                                activitiesToShow.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {activitiesToShow.map((act, index) => (
+                                        <Card key={`${proc.id}-act-${act.id}-${index}`} className="bg-background">
+                                            <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                {act.nombre}
+                                                {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
+                                            </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
+                                            <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                            <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                            </CardContent>
+                                        </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground italic">Ninguna actividad coincide con el filtro de estado actual.</p>
+                                )
                            ) : (
                              <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
                            )}
