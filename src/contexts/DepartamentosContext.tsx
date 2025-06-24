@@ -71,66 +71,65 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
   }, [addLogEntry]);
 
   const updateDepartamento = useCallback((id: string, nombre: string, areaId: string) => {
-    const original = departamentos.find(d => d.id === id);
-    if (!original || (original.nombre === nombre && original.areaId === areaId)) return;
+    setDepartamentos((prev) => {
+      const original = prev.find(d => d.id === id);
+      if (!original || (original.nombre === nombre && original.areaId === areaId)) return prev;
 
-    setDepartamentos((prev) =>
-      prev.map((dep) => (dep.id === id ? { ...dep, nombre, areaId } : dep))
-    );
-
-    if (original.nombre !== nombre) {
-      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-      if (storedProcesses) {
-        let processes: CapturedProcess[] = JSON.parse(storedProcesses);
-        processes = processes.map(p => p.departamento === original.nombre ? { ...p, departamento: nombre } : p);
-        localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+      if (original.nombre !== nombre) {
+        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+        if (storedProcesses) {
+          let processes: CapturedProcess[] = JSON.parse(storedProcesses);
+          processes = processes.map(p => p.departamento === original.nombre ? { ...p, departamento: nombre } : p);
+          localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+        }
       }
-    }
-
-    addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `Se actualizó el departamento de "${original.nombre}" a "${nombre}".` });
-    
-  }, [addLogEntry, departamentos]);
+      
+      addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `Se actualizó el departamento de "${original.nombre}" a "${nombre}".` });
+      return prev.map((dep) => (dep.id === id ? { ...dep, nombre, areaId } : dep));
+    });
+  }, [addLogEntry]);
 
   const deleteDepartamento = useCallback((id: string) => {
-    const toDelete = departamentos.find(d => d.id === id);
-    if (!toDelete) return;
+    setDepartamentos((prev) => {
+      const toDelete = prev.find(d => d.id === id);
+      if (!toDelete) return prev;
 
-    const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
-    if(storedPuestos){
-        const puestos: Puesto[] = JSON.parse(storedPuestos);
-        if(puestos.some(p => p.departamentoId === id)){
-            toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más puestos.`, variant: "destructive"});
-            return;
-        }
-    }
-    
-    const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-    if(storedSistemas){
-        const sistemas: Sistema[] = JSON.parse(storedSistemas);
-        if(sistemas.some(s => s.scope === "Departamento" && s.scopeId === id)){
-            toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
-            return;
-        }
-    }
-    
-    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-    if (storedProcesses) {
-        const processes: CapturedProcess[] = JSON.parse(storedProcesses);
-        const isDeptoInUseByProcess = processes.some(p => p.departamento === toDelete.nombre && !p.deletedAt);
-        if(isDeptoInUseByProcess) {
-            toast({
-              title: 'Eliminación Bloqueada',
-              description: `El departamento "${toDelete.nombre}" no puede ser eliminado porque está en uso por uno o más procesos.`,
-              variant: 'destructive',
-            });
-            return;
-        }
-    }
-    
-    setDepartamentos((prev) => prev.filter((dep) => dep.id !== id));
-    addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: toDelete.nombre, details: `Se eliminó el departamento "${toDelete.nombre}".` });
-
-  }, [addLogEntry, departamentos]);
+      const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
+      if(storedPuestos){
+          const puestos: Puesto[] = JSON.parse(storedPuestos);
+          if(puestos.some(p => p.departamentoId === id)){
+              toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más puestos.`, variant: "destructive"});
+              return prev;
+          }
+      }
+      
+      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+      if(storedSistemas){
+          const sistemas: Sistema[] = JSON.parse(storedSistemas);
+          if(sistemas.some(s => s.scope === "Departamento" && s.scopeId === id)){
+              toast({ title: "Eliminación Bloqueada", description: `El departamento "${toDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
+              return prev;
+          }
+      }
+      
+      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+      if (storedProcesses) {
+          const processes: CapturedProcess[] = JSON.parse(storedProcesses);
+          const isDeptoInUseByProcess = processes.some(p => p.departamento === toDelete.nombre && !p.deletedAt);
+          if(isDeptoInUseByProcess) {
+              toast({
+                title: 'Eliminación Bloqueada',
+                description: `El departamento "${toDelete.nombre}" no puede ser eliminado porque está en uso por uno o más procesos.`,
+                variant: 'destructive',
+              });
+              return prev;
+          }
+      }
+      
+      addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: toDelete.nombre, details: `Se eliminó el departamento "${toDelete.nombre}".` });
+      return prev.filter((dep) => dep.id !== id);
+    });
+  }, [addLogEntry]);
 
   return (
     <DepartamentosContext.Provider value={{ departamentos, addDepartamento, updateDepartamento, deleteDepartamento, isLoading }}>

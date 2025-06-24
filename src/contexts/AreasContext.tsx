@@ -73,88 +73,87 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   }, [addLogEntry]);
 
   const updateArea = useCallback((id: string, nombre: string) => {
-    const originalArea = areas.find(a => a.id === id);
-    if (!originalArea || originalArea.nombre === nombre) return;
+    setAreas((prevAreas) => {
+      const originalArea = prevAreas.find(a => a.id === id);
+      if (!originalArea || originalArea.nombre === nombre) return prevAreas;
 
-    setAreas((prevAreas) =>
-      prevAreas.map((area) => (area.id === id ? { ...area, nombre } : area))
-    );
-    
-    // Cascade update to processes
-    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-    if (storedProcesses) {
-      let processes: CapturedProcess[] = JSON.parse(storedProcesses);
-      processes = processes.map(p => p.area === originalArea.nombre ? { ...p, area: nombre } : p);
-      localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
-    }
+      // Cascade update logic inside the state update to ensure consistency
+      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+      if (storedProcesses) {
+        let processes: CapturedProcess[] = JSON.parse(storedProcesses);
+        processes = processes.map(p => p.area === originalArea.nombre ? { ...p, area: nombre } : p);
+        localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+      }
 
-    // Cascade update to actions
-    const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-    if (storedAcciones) {
-      let acciones: Accion[] = JSON.parse(storedAcciones);
-      acciones = acciones.map(a => a.area === originalArea.nombre ? { ...a, area: nombre } : a);
-      localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
-    }
-    
-    addLogEntry({ action: 'update', entityType: 'Área', entityName: nombre, details: `Se actualizó el área de "${originalArea.nombre}" a "${nombre}", y se reflejó en procesos y acciones.` });
-    
-  }, [addLogEntry, areas]);
+      const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+      if (storedAcciones) {
+        let acciones: Accion[] = JSON.parse(storedAcciones);
+        acciones = acciones.map(a => a.area === originalArea.nombre ? { ...a, area: nombre } : a);
+        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
+      }
+
+      addLogEntry({ action: 'update', entityType: 'Área', entityName: nombre, details: `Se actualizó el área de "${originalArea.nombre}" a "${nombre}", y se reflejó en procesos y acciones.` });
+      
+      return prevAreas.map((area) => (area.id === id ? { ...area, nombre } : area));
+    });
+  }, [addLogEntry]);
 
   const deleteArea = useCallback((id: string) => {
-    const areaToDelete = areas.find(a => a.id === id);
-    if (!areaToDelete) return;
+    setAreas((prevAreas) => {
+      const areaToDelete = prevAreas.find(a => a.id === id);
+      if (!areaToDelete) return prevAreas;
 
-    // Check for dependencies before deleting
-    const storedDepartamentos = localStorage.getItem(LOCAL_STORAGE_DEPARTAMENTOS_KEY);
-    if(storedDepartamentos){
-      const departamentos: Departamento[] = JSON.parse(storedDepartamentos);
-      if(departamentos.some(d => d.areaId === id)){
-        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más departamentos.`, variant: "destructive"});
-        return;
-      }
-    }
-
-    const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
-    if(storedPuestos){
-        const puestos: Puesto[] = JSON.parse(storedPuestos);
-        if(puestos.some(p => p.areaId === id)){
-            toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más puestos.`, variant: "destructive"});
-            return;
+      // Dependency checks using the latest state from prevAreas
+      const storedDepartamentos = localStorage.getItem(LOCAL_STORAGE_DEPARTAMENTOS_KEY);
+      if(storedDepartamentos){
+        const departamentos: Departamento[] = JSON.parse(storedDepartamentos);
+        if(departamentos.some(d => d.areaId === id)){
+          toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más departamentos.`, variant: "destructive"});
+          return prevAreas;
         }
-    }
-    
-    const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-    if(storedSistemas){
-      const sistemas: Sistema[] = JSON.parse(storedSistemas);
-      if(sistemas.some(s => s.scope === "Área" && s.scopeId === id)){
-        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más sistemas.`, variant: "destructive"});
-        return;
       }
-    }
-    
-    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-    if (storedProcesses) {
-      const processes: CapturedProcess[] = JSON.parse(storedProcesses);
-      const isAreaInUseByProcess = processes.some(proc => proc.area === areaToDelete.nombre && !proc.deletedAt);
-      if (isAreaInUseByProcess) {
-        toast({ title: 'Eliminación Bloqueada', description: `El área "${areaToDelete.nombre}" no puede ser eliminada porque está en uso por uno o más procesos.`, variant: 'destructive'});
-        return;
-      }
-    }
-    
-    const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-    if(storedAcciones){
-      const acciones: Accion[] = JSON.parse(storedAcciones);
-      if(acciones.some(a => a.area === areaToDelete.nombre)){
-        toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a una o más acciones de mejora.`, variant: "destructive"});
-        return;
-      }
-    }
 
-    setAreas((prevAreas) => prevAreas.filter((area) => area.id !== id));
-    addLogEntry({ action: 'delete', entityType: 'Área', entityName: areaToDelete.nombre, details: `Se eliminó el área "${areaToDelete.nombre}".` });
+      const storedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
+      if(storedPuestos){
+          const puestos: Puesto[] = JSON.parse(storedPuestos);
+          if(puestos.some(p => p.areaId === id)){
+              toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más puestos.`, variant: "destructive"});
+              return prevAreas;
+          }
+      }
+      
+      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
+      if(storedSistemas){
+        const sistemas: Sistema[] = JSON.parse(storedSistemas);
+        if(sistemas.some(s => s.scope === "Área" && s.scopeId === id)){
+          toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a uno o más sistemas.`, variant: "destructive"});
+          return prevAreas;
+        }
+      }
+      
+      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+      if (storedProcesses) {
+        const processes: CapturedProcess[] = JSON.parse(storedProcesses);
+        const isAreaInUseByProcess = processes.some(proc => proc.area === areaToDelete.nombre && !proc.deletedAt);
+        if (isAreaInUseByProcess) {
+          toast({ title: 'Eliminación Bloqueada', description: `El área "${areaToDelete.nombre}" no puede ser eliminada porque está en uso por uno o más procesos.`, variant: 'destructive'});
+          return prevAreas;
+        }
+      }
+      
+      const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+      if(storedAcciones){
+        const acciones: Accion[] = JSON.parse(storedAcciones);
+        if(acciones.some(a => a.area === areaToDelete.nombre)){
+          toast({ title: "Eliminación Bloqueada", description: `El área "${areaToDelete.nombre}" está asignada a una o más acciones de mejora.`, variant: "destructive"});
+          return prevAreas;
+        }
+      }
 
-  }, [addLogEntry, areas]);
+      addLogEntry({ action: 'delete', entityType: 'Área', entityName: areaToDelete.nombre, details: `Se eliminó el área "${areaToDelete.nombre}".` });
+      return prevAreas.filter((area) => area.id !== id);
+    });
+  }, [addLogEntry]);
 
   return (
     <AreasContext.Provider value={{ areas, addArea, updateArea, deleteArea, isLoading }}>
