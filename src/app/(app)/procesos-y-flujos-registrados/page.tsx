@@ -471,37 +471,40 @@ export default function ProcesosYFlujosRegistradosPage() {
         }
     });
     
-    if(changes.length > 0) {
-        updatedData = updatedData.map(p =>
-            p.id === editingProcess.id ? {
-              ...editingProcess,
-              ...values,
-              updatedAt: Date.now(),
-              historialDeCambios: [...(p.historialDeCambios || []), ...changes]
-            } : p
-        );
-    }
+    // First, update the process being edited.
+    let dataWithChanges = allCapturedData.map(p =>
+        p.id === editingProcess.id ? {
+          ...editingProcess,
+          ...values,
+          updatedAt: Date.now(),
+          historialDeCambios: [...(p.historialDeCambios || []), ...changes]
+        } : p
+    );
     
-    // Cascade name change
+    // Then, if the name changed, cascade the update.
     if (hasNameChanged) {
         const oldName = originalProcess.proceso;
         const newName = values.proceso;
-        updatedData = updatedData.map(p => {
+        dataWithChanges = dataWithChanges.map(p => {
             if (p.id === editingProcess.id) return p; // Skip the just-updated process
             
             const newProcesosEntrada = p.procesosEntrada?.map(entrada => entrada === oldName ? newName : entrada);
             const newProcesosSalida = p.procesosSalida?.map(salida => salida === oldName ? newName : salida);
             
-            return {
+            // Check if there are actual changes to avoid unnecessary updates
+            if (JSON.stringify(p.procesosEntrada) !== JSON.stringify(newProcesosEntrada) || JSON.stringify(p.procesosSalida) !== JSON.stringify(newProcesosSalida)) {
+              return {
                 ...p,
                 procesosEntrada: newProcesosEntrada,
                 procesosSalida: newProcesosSalida,
-            };
+              };
+            }
+            return p;
         });
     }
 
     if (changes.length > 0) {
-      setAllCapturedData(updatedData);
+      setAllCapturedData(dataWithChanges);
       toast({ title: "Proceso Actualizado", description: `${changes.length} campo(s) fueron modificados.` });
     } else {
        toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar." });
