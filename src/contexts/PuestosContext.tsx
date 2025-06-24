@@ -27,15 +27,14 @@ export type PuestoCreationData = Omit<Puesto, 'id'>;
 interface PuestosContextType {
   puestos: Puesto[];
   addPuesto: (data: PuestoCreationData) => void;
-  updatePuesto: (id: string, data: PuestoCreationData) => void;
-  deletePuesto: (id: string) => void;
+  updatePuesto: (id: string, data: PuestoCreationData, allProcesses: CapturedProcess[], allAcciones: Accion[]) => void;
+  deletePuesto: (id: string, allPuestos: Puesto[], allSistemas: Sistema[], allProcesses: CapturedProcess[], allAcciones: Accion[]) => boolean;
   isLoadingPuestos: boolean;
 }
 
 const PuestosContext = createContext<PuestosContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
-const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
 const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
 
@@ -79,28 +78,25 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
   }, [addLogEntry]);
 
-  const updatePuesto = useCallback((id: string, data: PuestoCreationData) => {
+  const updatePuesto = useCallback((id: string, data: PuestoCreationData, allProcesses: CapturedProcess[], allAcciones: Accion[]) => {
     setPuestos((prevPuestos) => {
       const originalPuesto = prevPuestos.find(p => p.id === id);
       if (!originalPuesto) return prevPuestos;
       
       const hasNameChanged = originalPuesto.nombre !== data.nombre;
 
-      if(hasNameChanged) {
+      if(hasNameChanged && typeof window !== 'undefined') {
           // Cascade update to processes
           const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-          if (storedProcesses) {
-              let processes: CapturedProcess[] = JSON.parse(storedProcesses);
-              processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
-              localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
-          }
+          let processes: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : allProcesses;
+          processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
+          localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+          
           // Cascade update to actions
           const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-          if (storedAcciones) {
-              let acciones: Accion[] = JSON.parse(storedAcciones);
-              acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
-              localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
-          }
+          let acciones: Accion[] = storedAcciones ? JSON.parse(storedAcciones) : allAcciones;
+          acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
+          localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
       }
        
       addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
@@ -109,52 +105,33 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     });
   }, [addLogEntry]);
 
-  const deletePuesto = useCallback((id: string) => {
-    setPuestos((prevPuestos) => {
-      const puestoToDelete = prevPuestos.find(p => p.id === id);
-      if(!puestoToDelete) return prevPuestos;
+  const deletePuesto = useCallback((id: string, allPuestos: Puesto[], allSistemas: Sistema[], allProcesses: CapturedProcess[], allAcciones: Accion[]): boolean => {
+    const puestoToDelete = puestos.find(p => p.id === id);
+    if(!puestoToDelete) return false;
 
-      // 1. Check dependency in other puestos (jefeInmediato)
-      if (prevPuestos.some(p => p.jefeInmediato === id)) {
-          toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" es Jefe Inmediato de otro puesto.`, variant: 'destructive'});
-          return prevPuestos;
-      }
+    // Dependency checks
+    if (allPuestos.some(p => p.jefeInmediato === id)) {
+        toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" es Jefe Inmediato de otro puesto.`, variant: 'destructive'});
+        return false;
+    }
+    if (allSistemas.some(s => s.scope === "Puesto" && s.scopeId === id)) {
+        toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
+        return false;
+    }
+    if (allProcesses.some(proc => proc.puesto === puestoToDelete.nombre && !proc.deletedAt)) {
+        toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" está en uso por uno o más procesos.`, variant: 'destructive'});
+        return false;
+    }
+    if (allAcciones.some(a => a.puesto === puestoToDelete.nombre)) {
+        toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a una o más acciones de mejora.`, variant: "destructive"});
+        return false;
+    }
 
-      // 2. Check dependency in sistemas
-      const storedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-      if(storedSistemas){
-        const sistemas: Sistema[] = JSON.parse(storedSistemas);
-        if(sistemas.some(s => s.scope === "Puesto" && s.scopeId === id)){
-          toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a uno o más sistemas.`, variant: "destructive"});
-          return prevPuestos;
-        }
-      }
-
-      // 3. Check dependency in processes
-      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-      if (storedProcesses) {
-        const processes: CapturedProcess[] = JSON.parse(storedProcesses);
-        if (processes.some(proc => proc.puesto === puestoToDelete.nombre && !proc.deletedAt)) {
-          toast({ title: 'Eliminación Bloqueada', description: `El puesto "${puestoToDelete.nombre}" está en uso por uno o más procesos.`, variant: 'destructive'});
-          return prevPuestos;
-        }
-      }
-
-      // 4. Check dependency in acciones
-      const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
-      if(storedAcciones){
-        const acciones: Accion[] = JSON.parse(storedAcciones);
-        if(acciones.some(a => a.puesto === puestoToDelete.nombre)){
-          toast({ title: "Eliminación Bloqueada", description: `El puesto "${puestoToDelete.nombre}" está asignado a una o más acciones de mejora.`, variant: "destructive"});
-          return prevPuestos;
-        }
-      }
-
-      // If all checks pass, proceed with deletion
-      addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
-      return prevPuestos.filter((puesto) => puesto.id !== id);
-    });
-  }, [addLogEntry]);
+    // Proceed with deletion
+    setPuestos(prevPuestos => prevPuestos.filter((puesto) => puesto.id !== id));
+    addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
+    return true;
+  }, [puestos, addLogEntry]);
 
   return (
     <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos }}>

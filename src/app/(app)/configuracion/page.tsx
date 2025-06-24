@@ -27,6 +27,8 @@ import {
   type SistemaCreationData,
   type SistemaUpdateData
 } from '@/contexts/SistemasCostosContext';
+import { useAcciones, type Accion } from '@/contexts/AccionesContext';
+import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,17 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 import {
   Form,
   FormControl,
@@ -75,13 +88,14 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2, UploadCloud, Building2, Search, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, DollarSign, Share2, ClipboardList, Loader2, UploadCloud, Building2, Search, ChevronsUpDown, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NO_AREA_VALUE = "__NO_AREA__";
 const NO_DEPARTAMENTO_VALUE = "__NO_DEPARTAMENTO__";
 const NO_JEFE_VALUE = "__NO_JEFE__";
 const NO_SCOPE_ID_VALUE = "__NO_SCOPE_ID__";
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const ITEMS_PER_PAGE_CONFIG = 5; 
 
@@ -149,27 +163,15 @@ const costoSistemaFormSchema = z.object({
   sistemaId: z.string().min(1, "Debe seleccionar un sistema."),
   tipoCosto: z.array(z.enum(tiposDeCostoOptions)).min(1, "Debe seleccionar al menos un tipo de costo."),
   montoUso: z.preprocess(
-    (val) => {
-      if (val === null || val === undefined || String(val).trim() === '') return undefined;
-      const parsed = parseFloat(String(val));
-      return isNaN(parsed) ? undefined : parsed;
-    },
-    z.number().nonnegative("El monto por uso debe ser positivo o cero.").optional()
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El monto debe ser un número positivo o cero.").optional()
   ),
   numeroLicencias: z.preprocess(
-    (val) => {
-      if (val === null || val === undefined || String(val).trim() === '') return undefined;
-      const parsed = parseInt(String(val), 10);
-      return isNaN(parsed) ? undefined : parsed;
-    },
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El número de licencias debe ser un entero.").nonnegative("El número de licencias debe ser positivo o cero.").optional()
   ),
   costoPorLicencia: z.preprocess(
-    (val) => {
-      if (val === null || val === undefined || String(val).trim() === '') return undefined;
-      const parsed = parseFloat(String(val));
-      return isNaN(parsed) ? undefined : parsed;
-    },
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
     z.number().nonnegative("El costo por licencia debe ser positivo o cero.").optional()
   ),
   formaPago: z.enum(formasDePagoOptions, { errorMap: () => ({ message: "Seleccione una forma de pago válida." })}),
@@ -205,6 +207,7 @@ const costoSistemaFormSchema = z.object({
     }
   }
 });
+
 type SistemaCostoFormData = z.infer<typeof costoSistemaFormSchema>;
 
 
@@ -258,21 +261,23 @@ function getSystemAnnualCost(systemId: string, allCosts: SistemaCosto[], allSist
 
 export default function ConfiguracionPage() {
   const router = useRouter();
-  const { areas, addArea, updateArea: updateContextArea, deleteArea: deleteContextArea, isLoading: isLoadingAreas } = useAreas();
-  const { departamentos, addDepartamento, updateDepartamento: updateContextDepartamento, deleteDepartamento: deleteContextDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, addPuesto, updatePuesto: updateContextPuesto, deletePuesto: deleteContextPuesto, isLoadingPuestos } = usePuestos();
+  const { areas, addArea, updateArea, deleteArea, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, addDepartamento, updateDepartamento, deleteDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos } = usePuestos();
   const { 
     sistemas, 
     costosSistemas, 
-    addSistema: addContextSistema, 
-    updateSistema: updateContextSistema, 
-    deleteSistema: deleteContextSistema, 
-    addCostoSistema: addContextCostoSistema,
-    updateCostoSistema: updateContextCostoSistema,
-    deleteCostoSistema: deleteContextCostoSistema,
+    addSistema, 
+    updateSistema, 
+    deleteSistema, 
+    addCostoSistema,
+    updateCostoSistema,
+    deleteCostoSistema,
     isLoadingSistemasCostos,
     getCostsForSystem,
   } = useSistemasCostos();
+  const { acciones: allAcciones, isLoadingAcciones } = useAcciones();
+  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
 
   // State
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -287,6 +292,10 @@ export default function ConfiguracionPage() {
   const [editingCostoSistema, setEditingCostoSistema] = useState<SistemaCosto | null>(null);
   const [selectedSystemForCosts, setSelectedSystemForCosts] = useState<Sistema | null>(null);
   const [isManageCostsDialogOpen, setIsManageCostsDialogOpen] = useState(false);
+  
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'area' | 'departamento' | 'puesto' } | null>(null);
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+
 
   // Sorting & Filtering State
   const [areaSearchTerm, setAreaSearchTerm] = useState('');
@@ -311,6 +320,14 @@ export default function ConfiguracionPage() {
 
   const [costosDialogCurrentPage, setCostosDialogCurrentPage] = useState(1);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+        if (storedData) {
+            setAllCapturedProcesses(JSON.parse(storedData));
+        }
+    }
+  }, []);
 
   // Forms
   const areaForm = useForm<AreaFormData>({ resolver: zodResolver(areaFormSchema), defaultValues: { nombre: '' } });
@@ -327,11 +344,11 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (isCostoSistemaDialogOpen) { if (editingCostoSistema) { costoSistemaForm.reset({ id: editingCostoSistema.id, sistemaId: editingCostoSistema.sistemaId, tipoCosto: editingCostoSistema.tipoCosto, montoUso: editingCostoSistema.montoUso, numeroLicencias: editingCostoSistema.numeroLicencias, costoPorLicencia: editingCostoSistema.costoPorLicencia, formaPago: editingCostoSistema.formaPago, frecuencia: editingCostoSistema.frecuencia, moneda: editingCostoSistema.moneda, descripcion: editingCostoSistema.descripcion, }); } else if (selectedSystemForCosts) { costoSistemaForm.reset({ sistemaId: selectedSystemForCosts.id, tipoCosto: [], montoUso: undefined, numeroLicencias: undefined, costoPorLicencia: undefined, formaPago: undefined, frecuencia: undefined, moneda: 'USD', descripcion: '' }); } } }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
   
   // Submit handlers
-  function handleAreaSubmit(data: AreaFormData) { if (editingArea && editingArea.id) { updateContextArea(editingArea.id, data.nombre); toast({ title: 'Área Actualizada' }); } else { addArea(data.nombre); toast({ title: 'Área Agregada' }); } setEditingArea(null); setIsAreaDialogOpen(false); areaForm.reset(); }
-  function handleDepartamentoSubmit(data: DepartamentoFormData) { if (editingDepartamento && editingDepartamento.id) { updateContextDepartamento(editingDepartamento.id, data.nombre, data.areaId); toast({ title: 'Departamento Actualizado' }); } else { addDepartamento(data.nombre, data.areaId); toast({ title: 'Departamento Agregado' }); } setEditingDepartamento(null); setIsDepartamentoDialogOpen(false); departamentoForm.reset(); }
-  function handlePuestoSubmit(data: PuestoFormData) { const puestoDataToSave: PuestoCreationData = { nombre: data.nombre, areaId: data.areaId, departamentoId: data.departamentoId === NO_DEPARTAMENTO_VALUE ? undefined : data.departamentoId, jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato, nivelOrganizacional: data.nivelOrganizacional, numeroPersonas: data.numeroPersonas, }; if (editingPuesto && editingPuesto.id) { updateContextPuesto(editingPuesto.id, puestoDataToSave); toast({ title: 'Puesto Actualizado' }); } else { addPuesto(puestoDataToSave); toast({ title: 'Puesto Agregado' }); } setEditingPuesto(null); setIsPuestoDialogOpen(false); puestoForm.reset(); }
-  function handleSistemaSubmit(data: SistemaFormData) { const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), }; if (editingSistema && editingSistema.id) { updateContextSistema(editingSistema.id, sistemaData as SistemaUpdateData); toast({ title: 'Sistema Actualizado' }); } else { const newSystem = addContextSistema(sistemaData as SistemaCreationData); toast({ title: 'Sistema Agregado' }); openManageCostsDialog(newSystem); } setEditingSistema(null); setIsSistemaDialogOpen(false); sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined }); }
-  function handleCostoSistemaSubmit(data: SistemaCostoFormData) { const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, }; if (editingCostoSistema && editingCostoSistema.id) { updateContextCostoSistema(editingCostoSistema.id, costoDataToSave); toast({ title: 'Costo de Sistema Actualizado' }); } else { addContextCostoSistema(costoDataToSave); toast({ title: 'Costo de Sistema Agregado' }); } setEditingCostoSistema(null); setIsCostoSistemaDialogOpen(false); costoSistemaForm.reset(); }
+  function handleAreaSubmit(data: AreaFormData) { if (editingArea && editingArea.id) { updateArea(editingArea.id, data.nombre, allCapturedProcesses, allAcciones); toast({ title: 'Área Actualizada' }); } else { addArea(data.nombre); toast({ title: 'Área Agregada' }); } setEditingArea(null); setIsAreaDialogOpen(false); areaForm.reset(); }
+  function handleDepartamentoSubmit(data: DepartamentoFormData) { if (editingDepartamento && editingDepartamento.id) { updateDepartamento(editingDepartamento.id, data.nombre, data.areaId, allCapturedProcesses); toast({ title: 'Departamento Actualizado' }); } else { addDepartamento(data.nombre, data.areaId); toast({ title: 'Departamento Agregado' }); } setEditingDepartamento(null); setIsDepartamentoDialogOpen(false); departamentoForm.reset(); }
+  function handlePuestoSubmit(data: PuestoFormData) { const puestoDataToSave: PuestoCreationData = { nombre: data.nombre, areaId: data.areaId, departamentoId: data.departamentoId === NO_DEPARTAMENTO_VALUE ? undefined : data.departamentoId, jefeInmediato: data.jefeInmediato === NO_JEFE_VALUE ? undefined : data.jefeInmediato, nivelOrganizacional: data.nivelOrganizacional, numeroPersonas: data.numeroPersonas, }; if (editingPuesto && editingPuesto.id) { updatePuesto(editingPuesto.id, puestoDataToSave, allCapturedProcesses, allAcciones); toast({ title: 'Puesto Actualizado' }); } else { addPuesto(puestoDataToSave); toast({ title: 'Puesto Agregado' }); } setEditingPuesto(null); setIsPuestoDialogOpen(false); puestoForm.reset(); }
+  function handleSistemaSubmit(data: SistemaFormData) { const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), }; if (editingSistema && editingSistema.id) { updateSistema(editingSistema.id, sistemaData as SistemaUpdateData); toast({ title: 'Sistema Actualizado' }); } else { const newSystem = addSistema(sistemaData as SistemaCreationData); toast({ title: 'Sistema Agregado' }); openManageCostsDialog(newSystem); } setEditingSistema(null); setIsSistemaDialogOpen(false); sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined }); }
+  function handleCostoSistemaSubmit(data: SistemaCostoFormData) { const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, }; if (editingCostoSistema && editingCostoSistema.id) { updateCostoSistema(editingCostoSistema.id, costoDataToSave); toast({ title: 'Costo de Sistema Actualizado' }); } else { addCostoSistema(costoDataToSave); toast({ title: 'Costo de Sistema Agregado' }); } setEditingCostoSistema(null); setIsCostoSistemaDialogOpen(false); costoSistemaForm.reset(); }
   
   // Edit handlers
   function handleEditArea(area: Area) { setEditingArea(area); setIsAreaDialogOpen(true); }
@@ -341,11 +358,33 @@ export default function ConfiguracionPage() {
   function handleEditCostoSistema(costo: SistemaCosto) { setEditingCostoSistema(costo); const systemForCost = sistemas.find(s => s.id === costo.sistemaId); if (systemForCost) setSelectedSystemForCosts(systemForCost); setIsCostoSistemaDialogOpen(true); }
 
   // Delete Handlers
-  function handleDeleteArea(areaId: string) { const isAreaInUseByDepto = departamentos.some(depto => depto.areaId === areaId); const isAreaInUseByPuesto = puestos.some(puesto => puesto.areaId === areaId); const isAreaInUseBySistema = sistemas.some(sistema => sistema.scope === "Área" && sistema.scopeId === areaId); if (isAreaInUseByDepto || isAreaInUseBySistema || isAreaInUseByPuesto) { let message = 'El área no puede ser eliminada porque está asignada a:'; if (isAreaInUseByDepto) message += ' uno o más departamentos'; if (isAreaInUseByPuesto) message += `${isAreaInUseByDepto ? ', ' : ''} uno o más puestos`; if (isAreaInUseBySistema) message += `${(isAreaInUseByDepto || isAreaInUseByPuesto) ? ' y' : ''} uno o más sistemas`; message += '.'; toast({ title: 'Error al eliminar', description: message, variant: 'destructive' }); return; } deleteContextArea(areaId); toast({ title: 'Área Eliminada', variant: 'destructive' }); }
-  function handleDeleteDepartamento(deptoId: string) { const isInUseByPuesto = puestos.some(p => p.departamentoId === deptoId); const isInUseBySistema = sistemas.some(s => s.scope === "Departamento" && s.scopeId === deptoId); if (isInUseByPuesto || isInUseBySistema) { toast({ title: 'Error al eliminar', description: 'El departamento no puede ser eliminado porque está en uso por un Puesto o Sistema.', variant: 'destructive' }); return; } deleteContextDepartamento(deptoId); toast({ title: 'Departamento Eliminado', variant: 'destructive' }); }
-  function handleDeletePuesto(puestoId: string) { const isJefeInmediato = puestos.some(p => p.jefeInmediato === puestoId); const isPuestoInUseBySistema = sistemas.some(sistema => sistema.scope === "Puesto" && sistema.scopeId === puestoId); if (isJefeInmediato || isPuestoInUseBySistema) { let message = 'El puesto no puede ser eliminado porque:'; if (isJefeInmediato) message += ' es Jefe Inmediato de otro puesto'; if (isJefeInmediato && isPuestoInUseBySistema) message += ' y'; if (isPuestoInUseBySistema) message += ' está asignado a uno o más sistemas'; message += '.'; toast({ title: 'Error al eliminar', description: message, variant: 'destructive' }); return; } deleteContextPuesto(puestoId); toast({ title: 'Puesto Eliminado', variant: 'destructive' }); }
-  function handleDeleteSistema(sistemaId: string) { deleteContextSistema(sistemaId); toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); }
-  function handleDeleteCostoSistema(costoId: string) { deleteContextCostoSistema(costoId); toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); }
+  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto') {
+    setItemToDelete({ id, name, type });
+    setIsConfirmDeleteDialogOpen(true);
+  }
+  
+  function executeDelete() {
+    if (!itemToDelete) return;
+    
+    let wasDeleted = false;
+    if (itemToDelete.type === 'area') {
+        wasDeleted = deleteArea(itemToDelete.id, departamentos, puestos, sistemas, allCapturedProcesses, allAcciones);
+    } else if (itemToDelete.type === 'departamento') {
+        wasDeleted = deleteDepartamento(itemToDelete.id, puestos, sistemas, allCapturedProcesses);
+    } else if (itemToDelete.type === 'puesto') {
+        wasDeleted = deletePuesto(itemToDelete.id, puestos, sistemas, allCapturedProcesses, allAcciones);
+    }
+
+    if (wasDeleted) {
+        toast({ title: `${itemToDelete.type.charAt(0).toUpperCase() + itemToDelete.type.slice(1)} Eliminado(a)`, variant: 'destructive' });
+    }
+    
+    setItemToDelete(null);
+    setIsConfirmDeleteDialogOpen(false);
+  }
+
+  function handleDeleteSistema(sistemaId: string) { deleteSistema(sistemaId); toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); }
+  function handleDeleteCostoSistema(costoId: string) { deleteCostoSistema(costoId); toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); }
   
   // Dialog Openers
   function openManageCostsDialog(sistema: Sistema) { setSelectedSystemForCosts(sistema); setCostosDialogCurrentPage(1); setIsManageCostsDialogOpen(true); }
@@ -438,7 +477,7 @@ export default function ConfiguracionPage() {
                         </Dialog>
                       </div>
                       {isLoadingAreas ? (<PlaceholderContent title="Cargando áreas..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />) : areas.length === 0 ? (<PlaceholderContent title="No hay áreas registradas" description="Comienza agregando áreas para organizar tu empresa." icon={<Building className="h-12 w-12 text-muted-foreground" />} />) : (
-                        <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAreaSort('nombre')}><div className="flex items-center">Nombre del Área {getAreaSortIcon('nombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedAreas.map((area) => (<TableRow key={area.id}><TableCell>{area.nombre}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditArea(area)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeleteArea(area.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>))}</TableBody></Table></Card>
+                        <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAreaSort('nombre')}><div className="flex items-center">Nombre del Área {getAreaSortIcon('nombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedAreas.map((area) => (<TableRow key={area.id}><TableCell>{area.nombre}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditArea(area)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDelete(area.id, area.nombre, 'area')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>))}</TableBody></Table></Card>
                         {totalAreasPages > 1 && (<div className="flex items-center justify-end space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {areasCurrentPage} de {totalAreasPages} ({sortedAndFilteredAreas.length} total)</span><Button variant="outline" size="sm" onClick={() => setAreasCurrentPage(p => Math.max(1, p - 1))} disabled={areasCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAreasCurrentPage(p => Math.min(totalAreasPages, p + 1))} disabled={areasCurrentPage === totalAreasPages}>Siguiente</Button></div>)}</>
                       )}
                   </CardContent>
@@ -454,7 +493,7 @@ export default function ConfiguracionPage() {
                         <Dialog open={isDepartamentoDialogOpen} onOpenChange={(isOpen) => { setIsDepartamentoDialogOpen(isOpen); if (!isOpen) setEditingDepartamento(null); }}><DialogTrigger asChild><Button onClick={() => { setEditingDepartamento(null); departamentoForm.reset(); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Depto.</Button></DialogTrigger><DialogContent className="sm:max-w-[425px]"><DialogHeader><DialogTitle>{editingDepartamento ? 'Editar Departamento' : 'Agregar Nuevo Departamento'}</DialogTitle></DialogHeader><Form {...departamentoForm}><form onSubmit={departamentoForm.handleSubmit(handleDepartamentoSubmit)} className="space-y-4 py-4"><FormField control={departamentoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre del Departamento</FormLabel><FormControl><Input placeholder="Ej: Contabilidad, Tesorería" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={departamentoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área a la que pertenece</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingDepartamento ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
                       </div>
                       {isLoadingDepartamentos ? (<PlaceholderContent title="Cargando departamentos..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />) : departamentos.length === 0 ? (<PlaceholderContent title="No hay departamentos registrados" description="Comienza agregando departamentos dentro de las áreas." icon={<Building2 className="h-12 w-12 text-muted-foreground" />} />) : (
-                        <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('nombre')}><div className="flex items-center">Nombre Depto. {getDeptoSortIcon('nombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('areaNombre')}><div className="flex items-center">Área {getDeptoSortIcon('areaNombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedDepartamentos.map((depto) => (<TableRow key={depto.id}><TableCell>{depto.nombre}</TableCell><TableCell>{areas.find(a => a.id === depto.areaId)?.nombre || 'N/A'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditDepartamento(depto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeleteDepartamento(depto.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>))}</TableBody></Table></Card>
+                        <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('nombre')}><div className="flex items-center">Nombre Depto. {getDeptoSortIcon('nombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('areaNombre')}><div className="flex items-center">Área {getDeptoSortIcon('areaNombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedDepartamentos.map((depto) => (<TableRow key={depto.id}><TableCell>{depto.nombre}</TableCell><TableCell>{areas.find(a => a.id === depto.areaId)?.nombre || 'N/A'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditDepartamento(depto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDelete(depto.id, depto.nombre, 'departamento')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>))}</TableBody></Table></Card>
                         {totalDepartamentosPages > 1 && (<div className="flex items-center justify-end space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {departamentosCurrentPage} de {totalDepartamentosPages} ({sortedAndFilteredDepartamentos.length} total)</span><Button variant="outline" size="sm" onClick={() => setDepartamentosCurrentPage(p => Math.max(1, p - 1))} disabled={departamentosCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setDepartamentosCurrentPage(p => Math.min(totalDepartamentosPages, p + 1))} disabled={departamentosCurrentPage === totalDepartamentosPages}>Siguiente</Button></div>)}</>
                       )}
                   </CardContent>
@@ -470,7 +509,7 @@ export default function ConfiguracionPage() {
                       <Dialog open={isPuestoDialogOpen} onOpenChange={(isOpen) => { setIsPuestoDialogOpen(isOpen); if (!isOpen) setEditingPuesto(null); }}><DialogTrigger asChild><Button onClick={() => { setEditingPuesto(null); puestoForm.reset(); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Puesto</Button></DialogTrigger><DialogContent className="sm:max-w-[525px]"><DialogHeader><DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Nuevo Puesto'}</DialogTitle></DialogHeader><Form {...puestoForm}><form onSubmit={puestoForm.handleSubmit(handlePuestoSubmit)} className="space-y-4 py-4"><FormField control={puestoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre del Puesto</FormLabel><FormControl><Input placeholder="Ej: Analista Financiero" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={puestoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={(value) => { field.onChange(value); puestoForm.setValue('departamentoId', NO_DEPARTAMENTO_VALUE); }} value={field.value} disabled={isLoadingAreas}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_DEPARTAMENTO_VALUE} disabled={!watchedPuestoAreaId || isLoadingDepartamentos}><FormControl><SelectTrigger><SelectValue placeholder={!watchedPuestoAreaId ? "Seleccione un área primero" : "Seleccione depto..."} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_VALUE}>Nivel de Área / Sin Depto.</SelectItem>{filteredDepartamentosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_JEFE_VALUE} disabled={isLoadingPuestos}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un jefe" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_JEFE_VALUE}>Sin Jefe</SelectItem>{puestos.filter(p => !editingPuesto || p.id !== editingPuesto.id).map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><div className="grid grid-cols-2 gap-4"><FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel>Nº Personas</FormLabel><FormControl><Input type="number" placeholder="Ej: 5" {...field} value={field.value ?? ''} min="0" /></FormControl><FormMessage /></FormItem>)} /></div><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingPuesto ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
                     </div>
                     {isLoadingPuestos ? (<PlaceholderContent title="Cargando puestos..." description="Por favor espere." icon={<Loader2 className="h-12 w-12 text-muted-foreground" />} isLoading />) : puestos.length === 0 ? (<PlaceholderContent title="No hay puestos registrados" description="Comienza agregando puestos para definir la estructura de roles." icon={<Users className="h-12 w-12 text-muted-foreground" />} />) : (
-                      <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nombre')}><div className="flex items-center">Nombre Puesto {getPuestoSortIcon('nombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('deptoNombre')}><div className="flex items-center">Depto. {getPuestoSortIcon('deptoNombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('areaNombre')}><div className="flex items-center">Área {getPuestoSortIcon('areaNombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('jefeNombre')}><div className="flex items-center">Jefe Inmediato {getPuestoSortIcon('jefeNombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedPuestos.map((puesto) => {const depto = departamentos.find(d => d.id === puesto.departamentoId); const area = areas.find(a => a.id === puesto.areaId); const jefe = puestos.find(p => p.id === puesto.jefeInmediato); return (<TableRow key={puesto.id}><TableCell>{puesto.nombre}</TableCell><TableCell>{depto?.nombre || '-'}</TableCell><TableCell>{area?.nombre || 'N/A'}</TableCell><TableCell>{jefe?.nombre || '-'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeletePuesto(puesto.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></Card>
+                      <><Card><Table><TableHeader><TableRow><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nombre')}><div className="flex items-center">Nombre Puesto {getPuestoSortIcon('nombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('deptoNombre')}><div className="flex items-center">Depto. {getPuestoSortIcon('deptoNombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('areaNombre')}><div className="flex items-center">Área {getPuestoSortIcon('areaNombre')}</div></TableHead><TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('jefeNombre')}><div className="flex items-center">Jefe Inmediato {getPuestoSortIcon('jefeNombre')}</div></TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader><TableBody>{paginatedPuestos.map((puesto) => {const depto = departamentos.find(d => d.id === puesto.departamentoId); const area = areas.find(a => a.id === puesto.areaId); const jefe = puestos.find(p => p.id === puesto.jefeInmediato); return (<TableRow key={puesto.id}><TableCell>{puesto.nombre}</TableCell><TableCell>{depto?.nombre || '-'}</TableCell><TableCell>{area?.nombre || 'N/A'}</TableCell><TableCell>{jefe?.nombre || '-'}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditPuesto(puesto)} className="mr-2"><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => promptDelete(puesto.id, puesto.nombre, 'puesto')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>);})}</TableBody></Table></Card>
                       {totalPuestosPages > 1 && (<div className="flex items-center justify-end space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {puestosCurrentPage} de {totalPuestosPages} ({sortedAndFilteredPuestos.length} total)</span><Button variant="outline" size="sm" onClick={() => setPuestosCurrentPage(p => Math.max(1, p - 1))} disabled={puestosCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setPuestosCurrentPage(p => Math.min(totalPuestosPages, p + 1))} disabled={puestosCurrentPage === totalPuestosPages}>Siguiente</Button></div>)}</>
                     )}
                 </CardContent>
@@ -503,6 +542,29 @@ export default function ConfiguracionPage() {
           </Tabs>
         </CardContent>
       </Card>
+      
+      <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                Confirmar Eliminación
+              </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de que desea eliminar "{itemToDelete?.name}"? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setItemToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDelete} className={cn(buttonVariants({ variant: "destructive" }))}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
