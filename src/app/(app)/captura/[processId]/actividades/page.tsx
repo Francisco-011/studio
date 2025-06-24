@@ -257,14 +257,14 @@ export default function DefinirActividadesProcesoPage() {
           const updatedAssociatedIds = Array.from(new Set([...(existingGlobalActivity.procesosAsociadosIds || []), parentProcess.id]));
           
           updateGlobalActivity(existingGlobalActivity.id, {
-            ...activityDataPayload, // Update details from the local definition
+            ...existingGlobalActivity,
+            ...activityDataPayload,
             procesosAsociadosIds: updatedAssociatedIds,
-            activa: existingGlobalActivity.activa, // Preserve existing 'activa' status
           });
         } else {
           const newGlobalActData = {
             ...activityDataPayload,
-            activa: true, // New activities default to active
+            activa: true,
             procesosAsociadosIds: [parentProcess.id],
           };
           const addedActivity = addGlobalActivity(newGlobalActData); 

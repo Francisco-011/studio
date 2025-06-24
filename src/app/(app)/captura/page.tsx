@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useSistemasCostos, type Sistema } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
@@ -278,8 +278,7 @@ export default function CapturaPage() {
     placeholder: string,
     options: { id: string; nombre: string }[],
     isLoading: boolean,
-    specialOption?: string,
-    dropdownType: 'sistemas' | 'procesos' = 'procesos'
+    specialOption?: string
   ) => {
     const currentSelectionNames = (field.value || [])
       .map((val: string) => {
@@ -289,17 +288,7 @@ export default function CapturaPage() {
       .filter(Boolean);
     
     let finalOptions = options;
-    if (dropdownType === 'sistemas') {
-        const currentSelectedSystemNames = new Set(field.value || []);
-        const additionalSelectedSystems = allConfiguredSistemas.filter(
-            sys => currentSelectedSystemNames.has(sys.nombre) && !options.some(opt => opt.id === sys.id)
-        );
-        finalOptions = [...options, ...additionalSelectedSystems.map(s => ({id: s.id, nombre: s.nombre}))]
-                        .filter((option, index, self) => index === self.findIndex(o => o.id === option.id)) // distinct by id
-                        .sort((a,b) => a.nombre.localeCompare(b.nombre)); 
-    }
-
-
+    
     return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -343,14 +332,10 @@ export default function CapturaPage() {
                 {specialOption}
               </DropdownMenuCheckboxItem>
             )}
-            {finalOptions.length === 0 && !specialOption && dropdownType !== 'sistemas' ? (
+            {finalOptions.length === 0 && !specialOption ? (
               <div className="px-2 py-1.5 text-sm text-muted-foreground">
                 No hay elementos configurados.
               </div>
-            ) : finalOptions.length === 0 && !specialOption && dropdownType === 'sistemas' ? (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No hay sistemas disponibles para el contexto actual.
-                </div>
             ) : (
               finalOptions.map((option) => (
                 <DropdownMenuCheckboxItem
@@ -402,7 +387,11 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Área / División</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue('departamento', undefined);
+                          form.setValue('puesto', undefined);
+                        }}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
@@ -420,7 +409,10 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Departamento (Opcional)</FormLabel>
                        <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue('puesto', undefined);
+                        }}
                         value={field.value}
                         disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
                       >
@@ -515,7 +507,7 @@ export default function CapturaPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSistemasForForm, isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos, undefined, 'sistemas')}
+                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSistemasForForm, isLoadingSistemasCostos)}
                     <FormDescription>Seleccione los sistemas o software involucrados. La lista se filtra según el contexto.</FormDescription>
                     <FormMessage />
                   </FormItem>

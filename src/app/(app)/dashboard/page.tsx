@@ -697,6 +697,7 @@ export default function DashboardPage() {
           : 'No especificado';
 
         return `Proceso: ${proc.proceso}\n` +
+               (proc.departamento ? `Departamento: ${proc.departamento}\n` : '') +
                `Descripción: ${proc.descripcion}\n` +
                `Costo Estimado del Proceso: ${effectiveCost}\n` +
                (activitiesString ? `Actividades Clave: ${activitiesString}\n` : '') +

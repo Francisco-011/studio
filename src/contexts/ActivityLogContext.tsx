@@ -66,6 +66,7 @@ export function ActivityLogProvider({ children }: { children: ReactNode }) {
       ...log,
       id: Date.now().toString() + Math.random().toString(16).substring(2),
       timestamp: Date.now(),
+      user: log.user || 'Sistema',
     };
     setLogEntries((prev) => [newEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
   }, []);

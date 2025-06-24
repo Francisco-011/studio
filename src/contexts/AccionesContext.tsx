@@ -59,7 +59,6 @@ interface AccionesContextType {
 const AccionesContext = createContext<AccionesContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
-const LOCAL_STORAGE_ACTIVIDADES_KEY = 'proceza-actividades';
 const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 
@@ -133,31 +132,9 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
             ? updatedAccionData.ahorroEstimado
             : 0;
 
-          if (updatedAccionData.actividadId) {
-            const storedActivities = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
-            let allActivities: Actividad[] = storedActivities ? JSON.parse(storedActivities) : [];
-            const activityIndex = allActivities.findIndex(a => a.id === updatedAccionData.actividadId);
-
-            if (activityIndex !== -1) {
-              const targetActivity = { ...allActivities[activityIndex] };
-              let activityWasUpdated = false;
-
-              // Time and cost savings on activities are removed.
-              // if (timeSavingInMinutes > 0 && targetActivity.tiempoEstimadoActividad !== undefined) {
-              // ...
-              // }
-              // if (costSaving > 0 && targetActivity.costoEstimadoActividad !== undefined) {
-              // ...
-              // }
-
-              if (activityWasUpdated) {
-                targetActivity.updatedAt = Date.now();
-                allActivities[activityIndex] = targetActivity;
-                localStorage.setItem(LOCAL_STORAGE_ACTIVIDADES_KEY, JSON.stringify(allActivities));
-              }
-            }
-          } 
-          else if (updatedAccionData.procesoId) {
+          // Note: Updating activities is currently disabled as their cost/time are not stored.
+          // This logic primarily applies to Processes now.
+          if (updatedAccionData.procesoId && (timeSavingInMinutes > 0 || costSaving > 0)) {
             const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
             let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
             const processIndex = allProcesses.findIndex(p => p.id === updatedAccionData.procesoId);
