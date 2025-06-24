@@ -16,20 +16,52 @@ import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades } from '@/contexts/ActividadesContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 
 // Schemas
@@ -174,7 +206,7 @@ export default function ConfiguracionPage() {
   }
 
   // Edit Handlers
-  function handleEdit<T>(item: T, setEditing: (item: T) => void, setOpen: (open: boolean) => void) { setEditing(item); setOpen(true); }
+  function handleEdit<T>(item: T, setEditing: (item: T | null) => void, setOpen: (open: boolean) => void) { setEditing(item); setOpen(true); }
   
   // Delete Logic
   function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema') { setItemToDelete({ id, name, type }); setIsConfirmDeleteDialogOpen(true); }
