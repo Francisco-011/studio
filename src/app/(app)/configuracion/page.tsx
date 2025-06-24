@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react'; 
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -29,6 +29,7 @@ import {
 } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -165,16 +166,31 @@ const costoSistemaFormSchema = z.object({
   sistemaId: z.string().min(1, "Debe seleccionar un sistema."),
   tipoCosto: z.array(z.enum(tiposDeCostoOptions)).min(1, "Debe seleccionar al menos un tipo de costo."),
   montoUso: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El monto debe ser un número positivo o cero.").optional()
+    (val) => {
+        const processed = String(val).trim();
+        if (processed === '') return undefined;
+        const num = parseFloat(processed);
+        return isNaN(num) ? val : num;
+    },
+    z.number({ invalid_type_error: "Debe ser un número."}).nonnegative("El monto debe ser positivo o cero.").optional()
   ),
   numeroLicencias: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El número de licencias debe ser un entero.").nonnegative("El número de licencias debe ser positivo o cero.").optional()
+    (val) => {
+        const processed = String(val).trim();
+        if (processed === '') return undefined;
+        const num = parseInt(processed, 10);
+        return isNaN(num) ? val : num;
+    },
+    z.number({ invalid_type_error: "Debe ser un número."}).int("El número de licencias debe ser un entero.").nonnegative("El número de licencias debe ser positivo o cero.").optional()
   ),
   costoPorLicencia: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo por licencia debe ser positivo o cero.").optional()
+    (val) => {
+        const processed = String(val).trim();
+        if (processed === '') return undefined;
+        const num = parseFloat(processed);
+        return isNaN(num) ? val : num;
+    },
+    z.number({ invalid_type_error: "Debe ser un número."}).nonnegative("El costo por licencia debe ser positivo o cero.").optional()
   ),
   formaPago: z.enum(formasDePagoOptions, { errorMap: () => ({ message: "Seleccione una forma de pago válida." })}),
   frecuencia: z.enum(frecuenciasDePagoOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida." })}),
@@ -278,9 +294,10 @@ export default function ConfiguracionPage() {
     isLoadingSistemasCostos,
     getCostsForSystem,
   } = useSistemasCostos();
-  const { acciones: allAcciones, isLoadingAcciones } = useAcciones();
+  const { actividades, isLoadingActividades } = useActividades();
+
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
-  const { addLogEntry } = useActivityLog();
+  const [allAcciones, setAllAcciones] = useState<Accion[]>([]);
 
   // State
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -329,6 +346,10 @@ export default function ConfiguracionPage() {
         if (storedData) {
             setAllCapturedProcesses(JSON.parse(storedData));
         }
+        const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+        if (storedAcciones) {
+            setAllAcciones(JSON.parse(storedAcciones));
+        }
     }
   }, []);
 
@@ -347,45 +368,50 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (isCostoSistemaDialogOpen) { if (editingCostoSistema) { costoSistemaForm.reset({ id: editingCostoSistema.id, sistemaId: editingCostoSistema.sistemaId, tipoCosto: editingCostoSistema.tipoCosto, montoUso: editingCostoSistema.montoUso, numeroLicencias: editingCostoSistema.numeroLicencias, costoPorLicencia: editingCostoSistema.costoPorLicencia, formaPago: editingCostoSistema.formaPago, frecuencia: editingCostoSistema.frecuencia, moneda: editingCostoSistema.moneda, descripcion: editingCostoSistema.descripcion, }); } else if (selectedSystemForCosts) { costoSistemaForm.reset({ sistemaId: selectedSystemForCosts.id, tipoCosto: [], montoUso: undefined, numeroLicencias: undefined, costoPorLicencia: undefined, formaPago: undefined, frecuencia: undefined, moneda: 'USD', descripcion: '' }); } } }, [editingCostoSistema, isCostoSistemaDialogOpen, selectedSystemForCosts, costoSistemaForm]);
   
   // Submit handlers
-  function handleAreaSubmit(data: AreaFormData) {
+  const handleAreaSubmit = useCallback((data: AreaFormData) => {
+    const originalArea = editingArea ? areas.find(a => a.id === editingArea.id) : undefined;
+    const hasNameChanged = !!originalArea && originalArea.nombre !== data.nombre;
+
     if (editingArea) {
-      const originalArea = areas.find(a => a.id === editingArea.id);
-      if (originalArea && originalArea.nombre !== data.nombre) {
-        // Cascade update logic
-        const updatedProcesses = allCapturedProcesses.map(p => p.area === originalArea.nombre ? { ...p, area: data.nombre } : p);
-        const updatedAcciones = allAcciones.map(a => a.area === originalArea.nombre ? { ...a, area: data.nombre } : a);
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
-        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
-        setAllCapturedProcesses(updatedProcesses); // Update local state for immediate UI feedback
-      }
       updateArea(editingArea.id, data.nombre);
     } else {
       addArea(data.nombre);
     }
+
+    if (hasNameChanged && originalArea) {
+      const updatedProcesses = allCapturedProcesses.map(p => p.area === originalArea.nombre ? { ...p, area: data.nombre } : p);
+      const updatedAcciones = allAcciones.map(a => a.area === originalArea.nombre ? { ...a, area: data.nombre } : a);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+      localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
+      setAllCapturedProcesses(updatedProcesses);
+      setAllAcciones(updatedAcciones);
+    }
     setEditingArea(null);
     setIsAreaDialogOpen(false);
     areaForm.reset();
-  }
+  }, [editingArea, areas, updateArea, addArea, allCapturedProcesses, allAcciones, areaForm]);
 
-  function handleDepartamentoSubmit(data: DepartamentoFormData) {
+  const handleDepartamentoSubmit = useCallback((data: DepartamentoFormData) => {
+    const originalDepto = editingDepartamento ? departamentos.find(d => d.id === editingDepartamento.id) : undefined;
+    const hasNameChanged = !!originalDepto && originalDepto.nombre !== data.nombre;
+
     if (editingDepartamento) {
-      const originalDepto = departamentos.find(d => d.id === editingDepartamento.id);
-      if (originalDepto && originalDepto.nombre !== data.nombre) {
-        // Cascade update logic
-        const updatedProcesses = allCapturedProcesses.map(p => p.departamento === originalDepto.nombre ? { ...p, departamento: data.nombre } : p);
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
-        setAllCapturedProcesses(updatedProcesses);
-      }
       updateDepartamento(editingDepartamento.id, data.nombre, data.areaId);
     } else {
       addDepartamento(data.nombre, data.areaId);
     }
+
+    if (hasNameChanged && originalDepto) {
+      const updatedProcesses = allCapturedProcesses.map(p => p.departamento === originalDepto.nombre ? { ...p, departamento: data.nombre } : p);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+      setAllCapturedProcesses(updatedProcesses);
+    }
     setEditingDepartamento(null);
     setIsDepartamentoDialogOpen(false);
     departamentoForm.reset();
-  }
+  }, [editingDepartamento, departamentos, updateDepartamento, addDepartamento, allCapturedProcesses, departamentoForm]);
 
-  function handlePuestoSubmit(data: PuestoFormData) {
+  const handlePuestoSubmit = useCallback((data: PuestoFormData) => {
     const puestoDataToSave: PuestoCreationData = {
       nombre: data.nombre,
       areaId: data.areaId,
@@ -394,27 +420,36 @@ export default function ConfiguracionPage() {
       nivelOrganizacional: data.nivelOrganizacional,
       numeroPersonas: data.numeroPersonas,
     };
+    
+    const originalPuesto = editingPuesto ? puestos.find(p => p.id === editingPuesto.id) : undefined;
+    const hasNameChanged = !!originalPuesto && originalPuesto.nombre !== data.nombre;
 
     if (editingPuesto) {
-      const originalPuesto = puestos.find(p => p.id === editingPuesto.id);
-      if (originalPuesto && originalPuesto.nombre !== data.nombre) {
-        // Cascade update logic
-        const updatedProcesses = allCapturedProcesses.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
-        const updatedAcciones = allAcciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
-        localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
-        setAllCapturedProcesses(updatedProcesses);
-      }
       updatePuesto(editingPuesto.id, puestoDataToSave);
     } else {
       addPuesto(puestoDataToSave);
     }
+
+    if (hasNameChanged && originalPuesto) {
+      const updatedProcesses = allCapturedProcesses.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
+      const updatedAcciones = allAcciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
+      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(updatedProcesses));
+      localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(updatedAcciones));
+      setAllCapturedProcesses(updatedProcesses);
+      setAllAcciones(updatedAcciones);
+    }
     setEditingPuesto(null);
     setIsPuestoDialogOpen(false);
     puestoForm.reset();
-  }
+  }, [editingPuesto, puestos, updatePuesto, addPuesto, allCapturedProcesses, allAcciones, puestoForm]);
 
-  function handleSistemaSubmit(data: SistemaFormData) {
+  const openManageCostsDialog = useCallback((sistema: Sistema) => {
+    setSelectedSystemForCosts(sistema);
+    setCostosDialogCurrentPage(1);
+    setIsManageCostsDialogOpen(true);
+  }, []);
+
+  const handleSistemaSubmit = useCallback((data: SistemaFormData) => {
     const sistemaData: SistemaCreationData | SistemaUpdateData = { nombre: data.nombre, scope: data.scope, scopeId: data.scope === "Empresa" ? undefined : (data.scopeId === NO_SCOPE_ID_VALUE ? undefined : data.scopeId), };
     if (editingSistema) {
       updateSistema(editingSistema.id, sistemaData as SistemaUpdateData);
@@ -427,9 +462,9 @@ export default function ConfiguracionPage() {
     setEditingSistema(null);
     setIsSistemaDialogOpen(false);
     sistemaForm.reset({ nombre: '', scope: "Empresa", scopeId: undefined });
-  }
+  }, [editingSistema, updateSistema, addSistema, openManageCostsDialog, sistemaForm]);
 
-  function handleCostoSistemaSubmit(data: SistemaCostoFormData) {
+  const handleCostoSistemaSubmit = useCallback((data: SistemaCostoFormData) => {
     const costoDataToSave: Omit<SistemaCosto, 'id'> = { sistemaId: data.sistemaId, tipoCosto: data.tipoCosto, montoUso: data.tipoCosto.includes("Por Uso del Sistema") ? data.montoUso : undefined, numeroLicencias: data.tipoCosto.includes("Por Licencias") ? data.numeroLicencias : undefined, costoPorLicencia: data.tipoCosto.includes("Por Licencias") ? data.costoPorLicencia : undefined, formaPago: data.formaPago, frecuencia: data.frecuencia, moneda: data.moneda, descripcion: data.descripcion, };
     if (editingCostoSistema) {
       updateCostoSistema(editingCostoSistema.id, costoDataToSave);
@@ -441,68 +476,113 @@ export default function ConfiguracionPage() {
     setEditingCostoSistema(null);
     setIsCostoSistemaDialogOpen(false);
     costoSistemaForm.reset();
-  }
+  }, [editingCostoSistema, updateCostoSistema, addCostoSistema, costoSistemaForm]);
   
   // Edit handlers
-  function handleEditArea(area: Area) { setEditingArea(area); setIsAreaDialogOpen(true); }
-  function handleEditDepartamento(depto: Departamento) { setEditingDepartamento(depto); setIsDepartamentoDialogOpen(true); }
-  function handleEditPuesto(puesto: Puesto) { setEditingPuesto(puesto); setIsPuestoDialogOpen(true); }
-  function handleEditSistema(sistema: Sistema) { setEditingSistema(sistema); setIsSistemaDialogOpen(true); }
-  function handleEditCostoSistema(costo: SistemaCosto) { setEditingCostoSistema(costo); const systemForCost = sistemas.find(s => s.id === costo.sistemaId); if (systemForCost) setSelectedSystemForCosts(systemForCost); setIsCostoSistemaDialogOpen(true); }
+  const handleEditArea = useCallback((area: Area) => { setEditingArea(area); setIsAreaDialogOpen(true); }, []);
+  const handleEditDepartamento = useCallback((depto: Departamento) => { setEditingDepartamento(depto); setIsDepartamentoDialogOpen(true); }, []);
+  const handleEditPuesto = useCallback((puesto: Puesto) => { setEditingPuesto(puesto); setIsPuestoDialogOpen(true); }, []);
+  const handleEditSistema = useCallback((sistema: Sistema) => { setEditingSistema(sistema); setIsSistemaDialogOpen(true); }, []);
+  const handleEditCostoSistema = useCallback((costo: SistemaCosto) => { 
+    setEditingCostoSistema(costo); 
+    const systemForCost = sistemas.find(s => s.id === costo.sistemaId); 
+    if (systemForCost) setSelectedSystemForCosts(systemForCost); 
+    setIsCostoSistemaDialogOpen(true); 
+  }, [sistemas]);
 
   // Delete Handlers
-  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto') {
+  const promptDelete = useCallback((id: string, name: string, type: 'area' | 'departamento' | 'puesto') => {
     setItemToDelete({ id, name, type });
     setIsConfirmDeleteDialogOpen(true);
-  }
+  }, []);
   
-  function executeDelete() {
+  const executeDelete = useCallback(() => {
     if (!itemToDelete) return;
-    
-    let isBlocked = false;
-    const { id, name, type } = itemToDelete;
 
-    if (type === 'area') {
-      if (departamentos.some(d => d.areaId === id) || puestos.some(p => p.areaId === id) || sistemas.some(s => s.scope === "Área" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.area === name && !proc.deletedAt) || allAcciones.some(a => a.area === name)) {
-        isBlocked = true;
-      } else {
-        deleteArea(id);
-      }
-    } else if (type === 'departamento') {
-      if (puestos.some(p => p.departamentoId === id) || sistemas.some(s => s.scope === "Departamento" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.departamento === name && !proc.deletedAt)) {
-        isBlocked = true;
-      } else {
-        deleteDepartamento(id);
-      }
-    } else if (type === 'puesto') {
-      if (puestos.some(p => p.jefeInmediato === id) || sistemas.some(s => s.scope === "Puesto" && s.scopeId === id) || allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt) || allAcciones.some(a => a.puesto === name)) {
-        isBlocked = true;
-      } else {
-        deletePuesto(id);
-      }
-    }
+    const { id, name, type } = itemToDelete;
+    
+    // Always use the latest state from this component
+    const isBlocked = (() => {
+        switch (type) {
+            case 'area':
+                return departamentos.some(d => d.areaId === id) || 
+                       puestos.some(p => p.areaId === id) || 
+                       sistemas.some(s => s.scope === "Área" && s.scopeId === id) || 
+                       allCapturedProcesses.some(proc => proc.area === name && !proc.deletedAt) || 
+                       allAcciones.some(a => a.area === name);
+            case 'departamento':
+                return puestos.some(p => p.departamentoId === id) || 
+                       sistemas.some(s => s.scope === "Departamento" && s.scopeId === id) || 
+                       allCapturedProcesses.some(proc => proc.departamento === name && !proc.deletedAt);
+            case 'puesto':
+                return puestos.some(p => p.jefeInmediato === id) || 
+                       sistemas.some(s => s.scope === "Puesto" && s.scopeId === id) || 
+                       allCapturedProcesses.some(proc => proc.puesto === name && !proc.deletedAt) || 
+                       allAcciones.some(a => a.puesto === name);
+            default:
+                return false;
+        }
+    })();
 
     if (isBlocked) {
-      toast({
-        title: "Eliminación Bloqueada",
-        description: `El ${type} "${name}" está en uso por otra entidad (procesos, acciones, etc.) y no puede ser eliminado.`,
-        variant: "destructive",
-        duration: 7000,
-      });
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `El ${type} "${name}" está en uso por otra entidad (procesos, acciones, etc.) y no puede ser eliminado.`,
+            variant: "destructive",
+            duration: 7000,
+        });
     } else {
-      toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
+        const success = (() => {
+            switch(type) {
+                case 'area': deleteArea(id); return true;
+                case 'departamento': deleteDepartamento(id); return true;
+                case 'puesto': deletePuesto(id); return true;
+                default: return false;
+            }
+        })();
+
+        if (success) {
+            toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Eliminado(a)`, variant: 'destructive' });
+        }
     }
     
     setItemToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
-  }
+  }, [itemToDelete, allCapturedProcesses, allAcciones, departamentos, puestos, sistemas, deleteArea, deleteDepartamento, deletePuesto]);
 
-  function handleDeleteSistema(sistemaId: string) { deleteSistema(sistemaId); toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); }
-  function handleDeleteCostoSistema(costoId: string) { deleteCostoSistema(costoId); toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); }
+  const handleDeleteSistema = useCallback((sistemaId: string) => { 
+    // Check for dependencies before deleting
+    const sistemaToDelete = sistemas.find(s => s.id === sistemaId);
+    if (!sistemaToDelete) return;
+
+    const isUsedInProcess = allCapturedProcesses.some(proc => proc.sistemas?.includes(sistemaToDelete.nombre));
+    const isUsedInActivity = allActivities.some(act => act.sistemaUtilizado === sistemaToDelete.nombre);
+
+    if (isUsedInProcess || isUsedInActivity) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `El sistema "${sistemaToDelete.nombre}" está en uso en procesos o actividades y no puede ser eliminado.`,
+            variant: "destructive",
+            duration: 7000,
+        });
+        return;
+    }
+
+    deleteSistema(sistemaId); 
+    toast({ title: 'Sistema Eliminado', description: 'El sistema y sus costos asociados han sido eliminados.', variant: 'destructive' }); 
+  }, [sistemas, allCapturedProcesses, allActivities, deleteSistema]);
+
+  const handleDeleteCostoSistema = useCallback((costoId: string) => { 
+    deleteCostoSistema(costoId); 
+    toast({ title: 'Costo de Sistema Eliminado', variant: 'destructive' }); 
+  }, [deleteCostoSistema]);
   
   // Dialog Openers
-  function openManageCostsDialog(sistema: Sistema) { setSelectedSystemForCosts(sistema); setCostosDialogCurrentPage(1); setIsManageCostsDialogOpen(true); }
-  function openAddCostoDialogForSelectedSystem() { if (!selectedSystemForCosts) return; setEditingCostoSistema(null); setIsCostoSistemaDialogOpen(true); }
+  const openAddCostoDialogForSelectedSystem = useCallback(() => {
+     if (!selectedSystemForCosts) return;
+     setEditingCostoSistema(null);
+     setIsCostoSistemaDialogOpen(true);
+  }, [selectedSystemForCosts]);
 
   // Generic Sort Functions
   const createSortHandler = <T,>(setter: React.Dispatch<React.SetStateAction<SortConfig<T> | null>>) => (key: T) => { setter(prev => ({ key, direction: prev?.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending' })) };
