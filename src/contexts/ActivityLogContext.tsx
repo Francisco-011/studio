@@ -11,6 +11,7 @@ export type LogAction =
 export interface ActivityLogEntry {
   id: string;
   timestamp: number;
+  user?: string;
   action: LogAction;
   entityType: string;
   entityName: string;

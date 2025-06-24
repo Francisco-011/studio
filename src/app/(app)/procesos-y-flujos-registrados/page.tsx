@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -174,7 +174,6 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
 
 export default function ProcesosYFlujosRegistradosPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
@@ -488,7 +487,81 @@ export default function ProcesosYFlujosRegistradosPage() {
     setEditingProcess(null);
   }
 
-  const handleExport = () => { /* ... (export logic remains same) */ };
+  const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
+    if (cellData === undefined || cellData === null) {
+      return '';
+    }
+    if (Array.isArray(cellData)) {
+      const joinedString = cellData.join('; ');
+      if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
+        return `"${joinedString.replace(/"/g, '""')}"`;
+      }
+      return joinedString;
+    }
+    const stringValue = String(cellData);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const handleExport = () => {
+    if (sortedAndFilteredData.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay datos que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Proceso", "Area", "Departamento", "Puesto", "Estado", "Descripción",
+      "Frecuencia", "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda",
+      "Sistemas", "Información Recibe", "Procesos de Entrada",
+      "Información Entrega", "Procesos de Salida",
+      "Fecha Captura", "Última Modificación"
+    ];
+    
+    const csvRows = [
+      headers.join(','),
+      ...sortedAndFilteredData.map(proc => [
+        escapeCsvCell(proc.id),
+        escapeCsvCell(proc.proceso),
+        escapeCsvCell(proc.area),
+        escapeCsvCell(proc.departamento),
+        escapeCsvCell(proc.puesto),
+        escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
+        escapeCsvCell(proc.descripcion),
+        escapeCsvCell(proc.frecuencia),
+        escapeCsvCell(proc.tiempoEstimado),
+        escapeCsvCell(proc.tiempoIdeal),
+        escapeCsvCell(proc.costoEstimado),
+        escapeCsvCell(proc.costoIdeal),
+        escapeCsvCell(proc.monedaCosto),
+        escapeCsvCell(proc.sistemas),
+        escapeCsvCell(proc.informacionRecibe),
+        escapeCsvCell(proc.procesosEntrada),
+        escapeCsvCell(proc.informacionEntrega),
+        escapeCsvCell(proc.procesosSalida),
+        escapeCsvCell(proc.capturedAt ? format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
+        escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
+      ].join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `procesos_registrados_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
 
   const getEffectiveCost = (proc: CapturedProcess) => {
     if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };

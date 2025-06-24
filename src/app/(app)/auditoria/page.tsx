@@ -63,7 +63,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -284,7 +284,7 @@ export default function AuditoriaPage() {
       findings: [],
     };
     setCurrentAuditSession(newAudit);
-    addLogEntry({ action: 'create', entityType: 'Auditoría', entityName: targetName, details: `Se inició una nueva auditoría para ${newAuditType}: "${targetName}".` });
+    addLogEntry({ user: newAuditorName, action: 'create', entityType: 'Auditoría', entityName: targetName, details: `Se inició una nueva auditoría para ${newAuditType}: "${targetName}".` });
     setIsStartAuditDialogOpen(false);
     setNewAuditType('');
     setNewAuditTargetId('');
@@ -373,7 +373,7 @@ export default function AuditoriaPage() {
         }
         return [...prev, finalAudit];
     });
-    addLogEntry({ action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
+    addLogEntry({ user: finalAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
   };
@@ -394,7 +394,7 @@ export default function AuditoriaPage() {
         }
         return [...prev, cancelledAudit];
     });
-    addLogEntry({ action: 'status_change', entityType: 'Auditoría', entityName: cancelledAudit.targetName, details: `Se canceló la auditoría para "${cancelledAudit.targetName}".` });
+    addLogEntry({ user: cancelledAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: cancelledAudit.targetName, details: `Se canceló la auditoría para "${cancelledAudit.targetName}".` });
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Cancelada", description: "La auditoría ha sido guardada en estado 'Cancelada'." });
     setIsConfirmCancelDialogOpen(false);
@@ -412,7 +412,7 @@ export default function AuditoriaPage() {
   const executeDeleteAudit = () => {
     if (!auditToDelete) return;
     setPastAudits(prev => prev.filter(a => a.id !== auditToDelete.id));
-    addLogEntry({ action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría para "${auditToDelete.targetName}".` });
+    addLogEntry({ user: auditToDelete.auditorName, action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría para "${auditToDelete.targetName}".` });
     toast({ title: 'Auditoría Eliminada', description: `La auditoría para "${auditToDelete.targetName}" ha sido eliminada permanentemente.`, variant: 'destructive' });
     setAuditToDelete(null);
     setIsConfirmDeleteAuditOpen(false);
@@ -832,6 +832,7 @@ export default function AuditoriaPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha y Hora</TableHead>
+                      <TableHead>Usuario</TableHead>
                       <TableHead>Tipo de Entidad</TableHead>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Acción</TableHead>
@@ -842,6 +843,7 @@ export default function AuditoriaPage() {
                     {logEntries.map(log => (
                       <TableRow key={log.id}>
                         <TableCell className="text-xs">{format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
+                        <TableCell>{log.user || 'Sistema'}</TableCell>
                         <TableCell>{log.entityType}</TableCell>
                         <TableCell>{log.entityName}</TableCell>
                         <TableCell>
