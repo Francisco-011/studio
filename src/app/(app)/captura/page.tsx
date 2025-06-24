@@ -136,9 +136,10 @@ export default function CapturaPage() {
     defaultValues: defaultFormValues as CapturaFormData,
   });
   
-  const watchedAreaName = form.watch('area');
-  const watchedDepartamentoName = form.watch('departamento');
-  const watchedProcessName = form.watch('proceso');
+  const { watch, formState, setValue } = form;
+  const watchedAreaName = watch('area');
+  const watchedDepartamentoName = watch('departamento');
+  const watchedProcessName = watch('proceso');
   
   const filteredDepartamentos = useMemo(() => {
     if (!watchedAreaName || isLoadingDepartamentos || isLoadingAreas) return [];
@@ -166,22 +167,19 @@ export default function CapturaPage() {
     return puestosInArea;
   }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
 
-
-  // Effect to validate and reset 'departamento' if its value becomes invalid
+  // Effect to handle cascading resets on user interaction
   useEffect(() => {
-    const currentDepartamento = form.getValues('departamento');
-    if (currentDepartamento && filteredDepartamentos.length > 0 && !filteredDepartamentos.some(d => d.nombre === currentDepartamento)) {
-      form.setValue('departamento', undefined, { shouldDirty: true });
+    if (formState.isDirty && watchedAreaName) {
+      setValue('departamento', undefined);
+      setValue('puesto', undefined);
     }
-  }, [filteredDepartamentos, form]);
+  }, [watchedAreaName, formState.isDirty, setValue]);
 
-  // Effect to validate and reset 'puesto' if its value becomes invalid
   useEffect(() => {
-    const currentPuesto = form.getValues('puesto');
-    if (currentPuesto && filteredPuestos.length > 0 && !filteredPuestos.some(p => p.nombre === currentPuesto)) {
-      form.setValue('puesto', undefined, { shouldDirty: true });
+    if (formState.isDirty && watchedDepartamentoName) {
+      setValue('puesto', undefined);
     }
-  }, [filteredPuestos, form]);
+  }, [watchedDepartamentoName, formState.isDirty, setValue]);
 
   const availableSistemasForForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
