@@ -433,6 +433,9 @@ export default function ProcesosYFlujosRegistradosPage() {
       toast({ title: "Error", description: "No se encontró el proceso original para comparar cambios.", variant: "destructive" });
       return;
     }
+    
+    let updatedData = [...allCapturedData];
+    const hasNameChanged = originalProcess.proceso !== values.proceso;
 
     const changes: CambioHistorial[] = [];
     const fieldsToCompare: (keyof CapturaFormData)[] = [
@@ -467,16 +470,37 @@ export default function ProcesosYFlujosRegistradosPage() {
              });
         }
     });
+    
+    if(changes.length > 0) {
+        updatedData = updatedData.map(p =>
+            p.id === editingProcess.id ? {
+              ...editingProcess,
+              ...values,
+              updatedAt: Date.now(),
+              historialDeCambios: [...(p.historialDeCambios || []), ...changes]
+            } : p
+        );
+    }
+    
+    // Cascade name change
+    if (hasNameChanged) {
+        const oldName = originalProcess.proceso;
+        const newName = values.proceso;
+        updatedData = updatedData.map(p => {
+            if (p.id === editingProcess.id) return p; // Skip the just-updated process
+            
+            const newProcesosEntrada = p.procesosEntrada?.map(entrada => entrada === oldName ? newName : entrada);
+            const newProcesosSalida = p.procesosSalida?.map(salida => salida === oldName ? newName : salida);
+            
+            return {
+                ...p,
+                procesosEntrada: newProcesosEntrada,
+                procesosSalida: newProcesosSalida,
+            };
+        });
+    }
 
     if (changes.length > 0) {
-      const updatedData = allCapturedData.map(p =>
-        p.id === editingProcess.id ? {
-          ...editingProcess,
-          ...values,
-          updatedAt: Date.now(),
-          historialDeCambios: [...(p.historialDeCambios || []), ...changes]
-        } : p
-      );
       setAllCapturedData(updatedData);
       toast({ title: "Proceso Actualizado", description: `${changes.length} campo(s) fueron modificados.` });
     } else {

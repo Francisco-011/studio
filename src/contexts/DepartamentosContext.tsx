@@ -3,6 +3,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { toast } from '@/hooks/use-toast';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+
 
 export interface Departamento {
   id: string;
@@ -21,6 +24,7 @@ interface DepartamentosContextType {
 const DepartamentosContext = createContext<DepartamentosContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_DEPARTAMENTOS_KEY = 'proceza-departamentos';
+const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 export function DepartamentosProvider({ children }: { children: ReactNode }) {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -63,20 +67,46 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
 
   const updateDepartamento = useCallback((id: string, nombre: string, areaId: string) => {
     const original = departamentos.find(d => d.id === id);
+    if (!original || (original.nombre === nombre && original.areaId === areaId)) return;
+
     setDepartamentos((prev) =>
       prev.map((dep) => (dep.id === id ? { ...dep, nombre, areaId } : dep))
     );
-    if(original) {
-      addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `Se actualizó el departamento de "${original.nombre}" a "${nombre}".` });
+
+    if (original.nombre !== nombre) {
+      const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+      if (storedProcesses) {
+        let processes: CapturedProcess[] = JSON.parse(storedProcesses);
+        processes = processes.map(p => p.departamento === original.nombre ? { ...p, departamento: nombre } : p);
+        localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+      }
     }
+
+    addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `Se actualizó el departamento de "${original.nombre}" a "${nombre}".` });
+    
   }, [addLogEntry, departamentos]);
 
   const deleteDepartamento = useCallback((id: string) => {
     const toDelete = departamentos.find(d => d.id === id);
-    setDepartamentos((prev) => prev.filter((dep) => dep.id !== id));
-    if (toDelete) {
-       addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: toDelete.nombre, details: `Se eliminó el departamento "${toDelete.nombre}".` });
+    if (!toDelete) return;
+
+    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+    if (storedProcesses) {
+        const processes: CapturedProcess[] = JSON.parse(storedProcesses);
+        const isDeptoInUseByProcess = processes.some(p => p.departamento === toDelete.nombre && !p.deletedAt);
+        if(isDeptoInUseByProcess) {
+            toast({
+              title: 'Eliminación Bloqueada',
+              description: `El departamento "${toDelete.nombre}" no puede ser eliminado porque está en uso por uno o más procesos.`,
+              variant: 'destructive',
+            });
+            return;
+        }
     }
+    
+    setDepartamentos((prev) => prev.filter((dep) => dep.id !== id));
+    addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: toDelete.nombre, details: `Se eliminó el departamento "${toDelete.nombre}".` });
+
   }, [addLogEntry, departamentos]);
 
   return (

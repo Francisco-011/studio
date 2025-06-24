@@ -4,6 +4,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { toast } from '@/hooks/use-toast';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import type { Accion } from './AccionesContext';
 
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -31,6 +34,8 @@ interface PuestosContextType {
 const PuestosContext = createContext<PuestosContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
+const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
 
 export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
@@ -63,20 +68,56 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
 
   const updatePuesto = useCallback((id: string, data: PuestoCreationData) => {
     const originalPuesto = puestos.find(p => p.id === id);
+    if (!originalPuesto) return;
+    
+    const hasNameChanged = originalPuesto.nombre !== data.nombre;
+
     setPuestos((prevPuestos) =>
       prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto))
     );
-     if (originalPuesto) {
-      addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
+
+    if(hasNameChanged) {
+        // Cascade update to processes
+        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+        if (storedProcesses) {
+            let processes: CapturedProcess[] = JSON.parse(storedProcesses);
+            processes = processes.map(p => p.puesto === originalPuesto.nombre ? { ...p, puesto: data.nombre } : p);
+            localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
+        }
+        // Cascade update to actions
+        const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+        if (storedAcciones) {
+            let acciones: Accion[] = JSON.parse(storedAcciones);
+            acciones = acciones.map(a => a.puesto === originalPuesto.nombre ? { ...a, puesto: data.nombre } : a);
+            localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
+        }
     }
+     
+    addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `Se actualizó el puesto "${originalPuesto.nombre}" a "${data.nombre}".` });
+    
   }, [addLogEntry, puestos]);
 
   const deletePuesto = useCallback((id: string) => {
     const puestoToDelete = puestos.find(p => p.id === id);
-    setPuestos((prevPuestos) => prevPuestos.filter((puesto) => puesto.id !== id));
-    if(puestoToDelete) {
-        addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
+    if(!puestoToDelete) return;
+
+    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+    if (storedProcesses) {
+      const processes: CapturedProcess[] = JSON.parse(storedProcesses);
+      const isPuestoInUseByProcess = processes.some(proc => proc.puesto === puestoToDelete.nombre && !proc.deletedAt);
+      if (isPuestoInUseByProcess) {
+        toast({
+          title: 'Eliminación Bloqueada',
+          description: `El puesto "${puestoToDelete.nombre}" no puede ser eliminado porque está en uso por uno o más procesos.`,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
+
+    setPuestos((prevPuestos) => prevPuestos.filter((puesto) => puesto.id !== id));
+    addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
+
   }, [addLogEntry, puestos]);
 
   return (

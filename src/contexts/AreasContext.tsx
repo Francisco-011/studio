@@ -4,6 +4,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { toast } from '@/hooks/use-toast';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import type { Accion } from './AccionesContext';
 
 export interface Area {
   id: string;
@@ -21,6 +24,9 @@ interface AreasContextType {
 const AreasContext = createContext<AreasContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_AREAS_KEY = 'proceza-areas';
+const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
+const LOCAL_STORAGE_ACCIONES_KEY = 'proceza-acciones';
+
 
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<Area[]>([]);
@@ -63,20 +69,53 @@ export function AreasProvider({ children }: { children: ReactNode }) {
 
   const updateArea = useCallback((id: string, nombre: string) => {
     const originalArea = areas.find(a => a.id === id);
+    if (!originalArea || originalArea.nombre === nombre) return;
+
     setAreas((prevAreas) =>
       prevAreas.map((area) => (area.id === id ? { ...area, nombre } : area))
     );
-    if(originalArea) {
-      addLogEntry({ action: 'update', entityType: 'Área', entityName: nombre, details: `Se actualizó el área de "${originalArea.nombre}" a "${nombre}".` });
+    
+    // Cascade update to processes
+    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+    if (storedProcesses) {
+      let processes: CapturedProcess[] = JSON.parse(storedProcesses);
+      processes = processes.map(p => p.area === originalArea.nombre ? { ...p, area: nombre } : p);
+      localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(processes));
     }
+
+    // Cascade update to actions
+    const storedAcciones = localStorage.getItem(LOCAL_STORAGE_ACCIONES_KEY);
+    if (storedAcciones) {
+      let acciones: Accion[] = JSON.parse(storedAcciones);
+      acciones = acciones.map(a => a.area === originalArea.nombre ? { ...a, area: nombre } : a);
+      localStorage.setItem(LOCAL_STORAGE_ACCIONES_KEY, JSON.stringify(acciones));
+    }
+    
+    addLogEntry({ action: 'update', entityType: 'Área', entityName: nombre, details: `Se actualizó el área de "${originalArea.nombre}" a "${nombre}", y se reflejó en procesos y acciones.` });
+    
   }, [addLogEntry, areas]);
 
   const deleteArea = useCallback((id: string) => {
     const areaToDelete = areas.find(a => a.id === id);
-    setAreas((prevAreas) => prevAreas.filter((area) => area.id !== id));
-    if (areaToDelete) {
-       addLogEntry({ action: 'delete', entityType: 'Área', entityName: areaToDelete.nombre, details: `Se eliminó el área "${areaToDelete.nombre}".` });
+    if (!areaToDelete) return;
+
+    const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+    if (storedProcesses) {
+      const processes: CapturedProcess[] = JSON.parse(storedProcesses);
+      const isAreaInUseByProcess = processes.some(proc => proc.area === areaToDelete.nombre && !proc.deletedAt);
+      if (isAreaInUseByProcess) {
+        toast({
+          title: 'Eliminación Bloqueada',
+          description: `El área "${areaToDelete.nombre}" no puede ser eliminada porque está en uso por uno o más procesos.`,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
+
+    setAreas((prevAreas) => prevAreas.filter((area) => area.id !== id));
+    addLogEntry({ action: 'delete', entityType: 'Área', entityName: areaToDelete.nombre, details: `Se eliminó el área "${areaToDelete.nombre}".` });
+
   }, [addLogEntry, areas]);
 
   return (
