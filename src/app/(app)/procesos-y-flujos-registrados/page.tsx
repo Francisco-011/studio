@@ -29,6 +29,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Database, Search, Eye, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, CalendarClock, ChevronRight } from "lucide-react";
 import type { CapturaFormData } from '../captura/page';
@@ -400,4 +410,5 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
+
 
