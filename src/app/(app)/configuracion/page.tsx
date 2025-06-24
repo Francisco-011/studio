@@ -1,7 +1,6 @@
 
 'use client';
 
-import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, type UseFormReturn } from 'react-hook-form';
@@ -97,9 +96,9 @@ const costoSistemaFormSchema = z.object({
   montoUso: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
   numeroLicencias: z.preprocess(val => val === '' ? undefined : parseInt(String(val), 10), z.number().int().nonnegative().optional()),
   costoPorLicencia: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
-  formaPago: z.enum(formasDePagoOptions),
-  frecuencia: z.enum(frecuenciasDePagoOptions),
-  moneda: z.enum(tiposDeMonedaOptions),
+  formaPago: z.enum(formasDePagoOptions as [string, ...string[]]),
+  frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]),
+  moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]),
   descripcion: z.string().optional(),
 }).refine(data => !data.tipoCosto.includes("Por Licencias") || (data.numeroLicencias !== undefined && data.costoPorLicencia !== undefined), { message: "Número de licencias y costo son requeridos.", path: ["numeroLicencias"] })
   .refine(data => !data.tipoCosto.includes("Por Uso del Sistema") || data.montoUso !== undefined, { message: "Monto de uso es requerido.", path: ["montoUso"] });
@@ -378,18 +377,18 @@ export default function ConfiguracionPage() {
                         <Accordion type="single" collapsible className="w-full">
                           {filteredSistemas.map(sistema => (
                             <Card key={sistema.id} className="mb-2"><AccordionItem value={sistema.id} className="border-b-0">
-                              <AccordionTrigger className="p-4 hover:no-underline">
-                                <div className="flex justify-between items-center w-full">
-                                  <div className="flex items-center gap-4">
-                                      <span className="font-semibold">{sistema.nombre}</span>
-                                      <Badge variant="outline">{sistema.scope}</Badge>
-                                  </div>
-                                  <div>
-                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEdit(sistema, setEditingSistema, setIsSistemaDialogOpen); }} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
-                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); promptDelete(sistema.id, sistema.nombre, 'sistema'); }} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                  </div>
+                              <div className="flex w-full items-center">
+                                <AccordionTrigger className="flex-1 p-4 text-left hover:no-underline">
+                                    <div className="flex items-center gap-4">
+                                        <span className="font-semibold">{sistema.nombre}</span>
+                                        <Badge variant="outline">{sistema.scope}</Badge>
+                                    </div>
+                                </AccordionTrigger>
+                                <div className="pr-4 pl-2 flex-shrink-0">
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(sistema, setEditingSistema, setIsSistemaDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="icon" onClick={() => promptDelete(sistema.id, sistema.nombre, 'sistema')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                                 </div>
-                              </AccordionTrigger>
+                              </div>
                               <AccordionContent className="p-4 pt-0">
                                 <div className="flex justify-end mb-2">
                                   <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo</Button>
@@ -474,10 +473,10 @@ export default function ConfiguracionPage() {
                 <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>)}
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{frecuenciasDePagoOptions.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{tiposDeMonedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
-            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{formasDePagoOptions.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={costoForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
