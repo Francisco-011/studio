@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -410,5 +410,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
+
 
 
