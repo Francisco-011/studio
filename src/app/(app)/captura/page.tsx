@@ -136,7 +136,7 @@ export default function CapturaPage() {
     defaultValues: defaultFormValues as CapturaFormData,
   });
   
-  const { watch, formState, setValue } = form;
+  const { watch, setValue } = form;
   const watchedAreaName = watch('area');
   const watchedDepartamentoName = watch('departamento');
   const watchedProcessName = watch('proceso');
@@ -153,33 +153,16 @@ export default function CapturaPage() {
     const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
     if (!areaId) return [];
     
-    // Filter by area first
     const puestosInArea = puestos.filter(p => p.areaId === areaId);
 
-    // If a department is selected, filter further
     if (watchedDepartamentoName) {
       const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areaId)?.id;
       if (deptoId) {
         return puestosInArea.filter(p => p.departamentoId === deptoId);
       }
     }
-    // If no department is selected, return all positions for the area
     return puestosInArea;
   }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
-
-  // Effect to handle cascading resets on user interaction
-  useEffect(() => {
-    if (formState.isDirty && watchedAreaName) {
-      setValue('departamento', undefined);
-      setValue('puesto', undefined);
-    }
-  }, [watchedAreaName, formState.isDirty, setValue]);
-
-  useEffect(() => {
-    if (formState.isDirty && watchedDepartamentoName) {
-      setValue('puesto', undefined);
-    }
-  }, [watchedDepartamentoName, formState.isDirty, setValue]);
 
   const availableSistemasForForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
@@ -239,7 +222,6 @@ export default function CapturaPage() {
     setEditingId(editId);
 
     if (editId) {
-      // Edit mode: Wait for all data dependencies to load.
       if (isLoadingAreas || isLoadingPuestos || allProcesses.length === 0) {
         return; 
       }
@@ -247,19 +229,15 @@ export default function CapturaPage() {
       const processToEdit = allProcesses.find(p => p.id === editId);
       
       if (processToEdit) {
-        // Populate the form with the process data.
-        // Merging with defaults ensures all fields are accounted for.
         form.reset({
           ...defaultFormValues,
           ...processToEdit,
         });
       } else {
-        // If the process isn't found, show an error and redirect.
         toast({ title: "Error", description: "No se encontró el proceso para editar.", variant: "destructive" });
         router.push('/procesos-y-flujos-registrados');
       }
     } else {
-      // Create mode: Reset the form to its default empty state.
       form.reset(defaultFormValues as CapturaFormData);
     }
   }, [searchParams, allProcesses, isLoadingAreas, isLoadingPuestos, form, router]);
@@ -482,7 +460,11 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Área / División</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setValue('departamento', undefined);
+                          setValue('puesto', undefined);
+                        }}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
@@ -500,7 +482,10 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Departamento (Opcional)</FormLabel>
                        <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setValue('puesto', undefined);
+                        }}
                         value={field.value}
                         disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
                       >
