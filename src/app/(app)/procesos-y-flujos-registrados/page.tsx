@@ -378,7 +378,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
                                         <CardTitle className="text-base flex items-center gap-2">
                                           {act.nombre}
-                                          {!act.activa && <Badge variant="outline">Inactiva</Badge>}
+                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
                                         </CardTitle>
                                       </CardHeader>
                                       <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">

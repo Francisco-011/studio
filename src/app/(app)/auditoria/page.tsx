@@ -153,6 +153,8 @@ export default function AuditoriaPage() {
 
   const [isConfirmDeleteAuditOpen, setIsConfirmDeleteAuditOpen] = useState(false);
   const [auditToDelete, setAuditToDelete] = useState<Audit | null>(null);
+  
+  const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
 
   const findingForm = useForm<AuditFindingFormData>({
@@ -201,12 +203,20 @@ export default function AuditoriaPage() {
   const auditTargetDetails = useMemo(() => {
     if (!currentAuditSession) return null;
 
+    const activityFilterFunc = (act: Actividad) => {
+        if (activityDisplayFilter === 'all') return true;
+        if (activityDisplayFilter === 'active') return act.activa;
+        if (activityDisplayFilter === 'inactive') return !act.activa;
+        return true;
+    }
+
     if (currentAuditSession.auditType === 'proceso') {
       const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
       if (!process) return { name: "Proceso no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
       const processActivities = (process.activityOrder || [])
         .map(actId => actividades.find(a => a.id === actId))
-        .filter((act): act is Actividad => !!act);
+        .filter((act): act is Actividad => !!act)
+        .filter(activityFilterFunc);
 
       return {
         name: process.proceso,
@@ -223,7 +233,8 @@ export default function AuditoriaPage() {
         .map(proc => {
             const processActivities = (proc.activityOrder || [])
                 .map(actId => actividades.find(a => a.id === actId))
-                .filter((act): act is Actividad => !!act);
+                .filter((act): act is Actividad => !!act)
+                .filter(activityFilterFunc);
             return { process: proc, activities: processActivities };
         });
       
@@ -235,7 +246,7 @@ export default function AuditoriaPage() {
         relatedProcesses: relatedProcessesData,
       };
     }
-  }, [currentAuditSession, allProcesses, actividades, puestos, areas]);
+  }, [currentAuditSession, allProcesses, actividades, puestos, areas, activityDisplayFilter]);
 
   useEffect(() => {
     if (isFindingDialogOpen) {
@@ -438,6 +449,21 @@ export default function AuditoriaPage() {
                             <CardTitle className="text-lg">Objetivo de la Auditoría: {auditTargetDetails?.name}</CardTitle>
                         </CardHeader>
                          <CardContent className="space-y-4">
+                            <div className="flex justify-end">
+                                <div className="w-full sm:w-1/3">
+                                    <Label htmlFor="activity-filter" className="text-sm">Mostrar Actividades</Label>
+                                    <Select value={activityDisplayFilter} onValueChange={(v) => setActivityDisplayFilter(v as any)}>
+                                        <SelectTrigger id="activity-filter">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todas</SelectItem>
+                                            <SelectItem value="active">Solo Activas</SelectItem>
+                                            <SelectItem value="inactive">Solo Inactivas</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                             {auditTargetDetails?.process && (
                                 <>
                                 <Card>
@@ -464,13 +490,13 @@ export default function AuditoriaPage() {
                                     {(auditTargetDetails.activities && auditTargetDetails.activities.length > 0) ? (
                                         <Accordion type="multiple" className="w-full space-y-2">
                                         {auditTargetDetails.activities.map((act, index) => (
-                                            <AccordionItem value={act.id} key={act.id} className="bg-background rounded-md border">
+                                            <AccordionItem value={act.id} key={`${act.id}-${index}`} className="bg-background rounded-md border">
                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                     <div className="flex items-center gap-4 text-left">
                                                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
                                                         <span className="text-base font-medium flex items-center gap-2">
                                                           {act.nombre}
-                                                          {!act.activa && <Badge variant="outline">Inactiva</Badge>}
+                                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
                                                         </span>
                                                     </div>
                                                 </AccordionTrigger>
@@ -484,7 +510,7 @@ export default function AuditoriaPage() {
                                         ))}
                                         </Accordion>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
+                                        <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas o que coincidan con el filtro.</p>
                                     )}
                                 </div>
                                 </>
@@ -523,13 +549,13 @@ export default function AuditoriaPage() {
                                                                     {activities && activities.length > 0 ? (
                                                                         <Accordion type="multiple" className="w-full space-y-2">
                                                                         {activities.map((act, index) => (
-                                                                            <AccordionItem value={act.id} key={act.id} className="bg-card rounded-md border">
+                                                                            <AccordionItem value={act.id} key={`${act.id}-${index}`} className="bg-card rounded-md border">
                                                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                                                     <div className="flex items-center gap-4 text-left">
                                                                                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{index + 1}</span>
                                                                                         <span className="text-base font-medium flex items-center gap-2">
                                                                                           {act.nombre}
-                                                                                          {!act.activa && <Badge variant="outline">Inactiva</Badge>}
+                                                                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
                                                                                         </span>
                                                                                     </div>
                                                                                 </AccordionTrigger>
@@ -543,7 +569,7 @@ export default function AuditoriaPage() {
                                                                         ))}
                                                                         </Accordion>
                                                                     ) : (
-                                                                        <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene actividades definidas.</p>
+                                                                        <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene actividades definidas o que coincidan con el filtro.</p>
                                                                     )}
                                                                 </div>
                                                             </AccordionContent>
