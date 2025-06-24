@@ -284,8 +284,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   const getEffectiveCost = (proc: CapturedProcess) => {
     if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };
-    const derivedCost = (proc.activityOrder || []).reduce((sum, actId) => sum + (allActivities.find(a => a.id === actId)?.costoEstimadoActividad || 0), 0);
-    return { value: derivedCost, isDerived: true };
+    return { value: 0, isDerived: false }; // Activities no longer have cost
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
@@ -352,7 +351,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </TableRow>
                 {isExpanded && (
                   <TableRow className={cn(proc.activo === false && "bg-muted/40")}>
-                    <TableCell colSpan={11} className="p-0">
+                    <TableCell colSpan={10} className="p-0">
                       <div className="p-4 bg-muted/50 space-y-4">
                         <Card>
                           <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
@@ -381,10 +380,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                       </CardHeader>
                                       <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
-                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
                                         <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
                                       </CardContent>
                                     </Card>
                                   );
@@ -410,4 +406,3 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
-

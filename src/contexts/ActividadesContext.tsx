@@ -3,7 +3,6 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Moneda } from '@/app/(app)/captura/page';
 import { useActivityLog } from './ActivityLogContext';
 
 export interface Actividad {
@@ -19,12 +18,6 @@ export interface Actividad {
   // New fields for detailed capture
   descripcionBreve?: string;
   sistemaUtilizado?: string;
-  tiempoEstimadoActividad?: number; // in minutes
-  tiempoIdealActividad?: number; // in minutes
-  costoEstimadoActividad?: number;
-  costoIdealActividad?: number;
-  monedaCostoActividad?: Moneda;
-  frecuenciaActividad?: string; 
 }
 
 interface ActividadesContextType {
@@ -147,17 +140,14 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   }, [deletedActividades, addLogEntry]);
 
   const toggleActividadStatus = useCallback((actividadToToggle: Actividad) => {
-    // A truly unique identifier is the object reference itself from the original array, but we can't pass that.
-    // The next best thing is a combination of properties that are extremely unlikely to collide.
-    // The 'createdAt' timestamp is the most reliable one we have.
     const findMatch = (act: Actividad) => act.id === actividadToToggle.id && act.createdAt === actividadToToggle.createdAt;
 
     const activityInState = actividades.find(findMatch);
 
-    if (activityInState) { // Only proceed if we found an exact match
+    if (activityInState) { 
       setActividades((prev) =>
         prev.map((act) => {
-          if (findMatch(act)) { // Update only the one exact match
+          if (findMatch(act)) {
             return { ...act, activa: !act.activa, updatedAt: Date.now() };
           }
           return act;

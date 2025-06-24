@@ -131,24 +131,9 @@ export default function MejorasPage() {
           const associatedActivitiesText = p.activityOrder?.map(actId => {
             const act = actividades.find(a => a.id === actId);
             if (!act) return null;
-            return `    - Actividad (ID: ${act.id}): ${act.nombre}\n` +
-                   `      Tiempo Est.: ${act.tiempoEstimadoActividad ?? 'N/A'} min, Tiempo Ideal: ${act.tiempoIdealActividad ?? 'N/A'} min\n`+
-                   `      Costo Est.: ${act.costoEstimadoActividad ?? 'N/A'}, Costo Ideal: ${act.costoIdealActividad ?? 'N/A'} (${act.monedaCostoActividad || 'N/A'})\n`;
+            return `    - Actividad (ID: ${act.id}): ${act.nombre}\n`;
           }).filter(Boolean).join('');
           
-          // New cost logic
-          const effectiveCost = p.costoEstimado !== undefined && p.costoEstimado !== null
-            ? `${p.costoEstimado} ${p.monedaCosto || ''}`
-            : (() => {
-                const activityCostSum = (p.activityOrder || [])
-                  .reduce((sum, actId) => {
-                    const act = actividades.find(a => a.id === actId);
-                    return sum + (act?.costoEstimadoActividad || 0);
-                  }, 0);
-                return activityCostSum > 0 ? `${activityCostSum} ${p.monedaCosto || ''} (calculado de actividades)` : 'No especificado';
-              })();
-
-
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
                  `Puesto Principal: ${puestoInfo}\n` +
@@ -156,7 +141,7 @@ export default function MejorasPage() {
                  `Frecuencia: ${p.frecuencia}\n` +
                  `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n` +
                  `Tiempo Ideal: ${p.tiempoIdeal !== undefined ? p.tiempoIdeal + ' minutos' : 'No especificado'}\n` +
-                 `Costo Estimado: ${effectiveCost}\n` +
+                 `Costo Estimado: ${p.costoEstimado !== undefined ? `${p.costoEstimado} ${p.monedaCosto || ''}` : 'No especificado'}\n`+
                  `Costo Ideal: ${p.costoIdeal !== undefined ? `${p.costoIdeal} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
                  `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}\n` +
                  (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
@@ -242,49 +227,6 @@ export default function MejorasPage() {
 
     let actionsGeneratedCount = 0;
     
-    // 1. Consolidate efficiency gaps by process
-    const processImprovements = new Map<string, { gaps: any[], totalTime: number, totalCost: number, currency?: Moneda, area?: string, puesto?: string, processId?: string }>();
-
-    analysisResult.efficiencyGaps?.forEach(gap => {
-      if (!processImprovements.has(gap.processName)) {
-        processImprovements.set(gap.processName, { gaps: [], totalTime: 0, totalCost: 0, processId: gap.processId });
-      }
-      const processGroup = processImprovements.get(gap.processName)!;
-      processGroup.gaps.push(gap);
-      processGroup.totalTime += gap.potentialTimeSaving || 0;
-      processGroup.totalCost += gap.potentialCostSaving || 0;
-      if (gap.currency && !processGroup.currency) {
-        processGroup.currency = gap.currency as Moneda;
-      }
-      if (gap.area && !processGroup.area) processGroup.area = gap.area;
-      if (gap.puesto && !processGroup.puesto) processGroup.puesto = gap.puesto;
-    });
-
-    // 2. Create one consolidated action per process with efficiency gaps
-    processImprovements.forEach((group, processName) => {
-      const descriptionItems = group.gaps.map(g => 
-        `- ${g.description} (Ahorro potencial/instancia: ${g.potentialTimeSaving || 0} min, ${formatMejorasCurrency(g.potentialCostSaving, g.currency as TipoMoneda)})`
-      );
-      const consolidatedDescription = `Se han identificado las siguientes oportunidades de mejora para el proceso "${processName}":\n${descriptionItems.join('\n')}`;
-
-      addAccion({
-        nombre: `Optimizar Proceso: ${processName}`,
-        descripcion: consolidatedDescription,
-        responsable: 'Por definir',
-        estado: 'En Revisión' as AccionEstado,
-        origenMejora: 'Análisis IA - Mejoras',
-        area: group.area,
-        puesto: group.puesto,
-        procesoId: group.processId,
-        ahorroTiempoEstimado: group.totalTime > 0 ? group.totalTime : undefined,
-        unidadTiempoAhorro: group.totalTime > 0 ? 'Minutos/Instancia' : undefined,
-        ahorroEstimado: group.totalCost > 0 ? group.totalCost : undefined,
-        monedaAhorro: group.totalCost > 0 ? group.currency : undefined,
-      });
-      actionsGeneratedCount++;
-    });
-
-    // 3. Handle redundant systems (no consolidation)
     analysisResult.redundantSystems?.forEach(sys => {
       const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
       const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}.`;
@@ -304,7 +246,6 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    // 4. Handle duplicate processes (no consolidation)
     analysisResult.duplicateProcesses?.forEach(dup => {
       const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
       const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
@@ -322,7 +263,6 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    // 5. Handle duplicate activities
     analysisResult.duplicateActivities?.forEach(dup => {
       const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
       const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA}/${dup.puestoA}, B: ${dup.areaB}/${dup.puestoB}).`;
@@ -333,7 +273,6 @@ export default function MejorasPage() {
           responsable: 'Por definir',
           estado: 'En Revisión' as AccionEstado,
           origenMejora: 'Análisis IA - Mejoras',
-          // We can link it to the first activity found as a reference point
           actividadId: dup.activityA_Id,
           area: dup.areaA,
           puesto: dup.puestoA,
@@ -341,7 +280,6 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    // 6. Final Toast
     if (actionsGeneratedCount > 0) {
       toast({
         title: "Acciones Propuestas Generadas",
@@ -367,7 +305,7 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados, incluyendo sus costos y tiempos (estimados vs. ideales), para detectar automáticamente ineficiencias, duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos y se ignorarán temas ya cubiertos por acciones en revisión/progreso.
+            Utilice la IA para analizar los procesos y sistemas registrados para detectar automáticamente duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos y se ignorarán temas ya cubiertos por acciones en revisión/progreso.
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
@@ -405,28 +343,6 @@ export default function MejorasPage() {
                   <p className="text-sm whitespace-pre-wrap">{analysisResult.summary || "No se generó un resumen."}</p>
                 </CardContent>
               </Card>
-
-              {analysisResult.efficiencyGaps && analysisResult.efficiencyGaps.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Brechas de Eficiencia Identificadas</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-5 space-y-2 text-sm">
-                      {analysisResult.efficiencyGaps.map((gap, index) => (
-                        <li key={index}>
-                          <strong>{gap.processName}{gap.activityName ? ` (${gap.activityName})` : ''}:</strong> {gap.description}
-                          {(gap.potentialTimeSaving || gap.potentialCostSaving) && (
-                            <span className="text-muted-foreground text-xs block">
-                              Ahorro Potencial/Instancia: {gap.potentialTimeSaving ? `${gap.potentialTimeSaving} min` : ''} {gap.potentialCostSaving ? ` / ${formatMejorasCurrency(gap.potentialCostSaving, gap.currency as TipoMoneda)}` : ''}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
 
               {analysisResult.duplicateProcesses && analysisResult.duplicateProcesses.length > 0 && (
                 <Card>

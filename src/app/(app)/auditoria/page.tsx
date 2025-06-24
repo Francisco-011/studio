@@ -474,12 +474,7 @@ export default function AuditoriaPage() {
                                                 <AccordionContent className="p-4 pt-0 pl-16">
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
-                                                        <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
-                                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                        <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
                                                         <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
                                                     </div>
                                                 </AccordionContent>
                                             </AccordionItem>
@@ -535,12 +530,7 @@ export default function AuditoriaPage() {
                                                                                 <AccordionContent className="p-4 pt-0 pl-16">
                                                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                                                        <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimadoActividad !== undefined ? `${act.tiempoEstimadoActividad} min` : null} />
-                                                                                        <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdealActividad !== undefined ? `${act.tiempoIdealActividad} min` : null} />
-                                                                                        <DetailDisplay title="Costo Estimado" value={act.costoEstimadoActividad !== undefined ? `${act.costoEstimadoActividad} ${act.monedaCostoActividad || ''}` : null} />
-                                                                                        <DetailDisplay title="Costo Ideal" value={act.costoIdealActividad !== undefined ? `${act.costoIdealActividad} ${act.monedaCostoActividad || ''}` : null} />
                                                                                         <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                                                        <DetailDisplay title="Frecuencia" value={act.frecuenciaActividad} />
                                                                                     </div>
                                                                                 </AccordionContent>
                                                                             </AccordionItem>

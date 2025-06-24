@@ -692,17 +692,9 @@ export default function DashboardPage() {
           .filter(Boolean)
           .join(', ');
 
-        // New cost logic
         const effectiveCost = proc.costoEstimado !== undefined && proc.costoEstimado !== null
           ? `${proc.costoEstimado} ${proc.monedaCosto || ''}`
-          : (() => {
-              const activityCostSum = (proc.activityOrder || [])
-                .reduce((sum, actId) => {
-                  const act = globalActividades.find(a => a.id === actId);
-                  return sum + (act?.costoEstimadoActividad || 0);
-                }, 0);
-              return activityCostSum > 0 ? `${activityCostSum} ${proc.monedaCosto || ''} (derivado de actividades)` : 'No especificado';
-            })();
+          : 'No especificado';
 
         return `Proceso: ${proc.proceso}\n` +
                `Descripción: ${proc.descripcion}\n` +

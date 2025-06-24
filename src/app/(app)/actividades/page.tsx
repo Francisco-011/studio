@@ -10,7 +10,6 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { frecuenciaOptions, monedaOptions, type Moneda } from '@/app/(app)/captura/page';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -71,8 +70,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
-const NO_FRECUENCIA_SELECTED_VALUE = "__NO_FRECUENCIA_SELECTED__";
-const NO_MONEDA_SELECTED_VALUE = "__NO_MONEDA_SELECTED__";
 
 
 const actividadFormSchema = z.object({
@@ -80,24 +77,6 @@ const actividadFormSchema = z.object({
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   descripcionBreve: z.string().optional(),
   sistemaUtilizado: z.string().optional(),
-  tiempoEstimadoActividad: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
-  ),
-  tiempoIdealActividad: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
-  ),
-  costoEstimadoActividad: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo debe ser un número positivo.").optional()
-  ),
-  costoIdealActividad: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo debe ser un número positivo.").optional()
-  ),
-  monedaCostoActividad: z.string().optional(),
-  frecuenciaActividad: z.string().optional(),
   activa: z.boolean().default(true),
   procesosAsociadosIds: z.array(z.string()).optional().default([]),
 });
@@ -191,12 +170,6 @@ export default function ActividadesPage() {
       nombre: '',
       descripcionBreve: '',
       sistemaUtilizado: undefined,
-      tiempoEstimadoActividad: undefined,
-      tiempoIdealActividad: undefined,
-      costoEstimadoActividad: undefined,
-      costoIdealActividad: undefined,
-      monedaCostoActividad: undefined,
-      frecuenciaActividad: undefined,
       activa: true,
       procesosAsociadosIds: [],
     },
@@ -210,12 +183,6 @@ export default function ActividadesPage() {
           nombre: editingActividad.nombre,
           descripcionBreve: editingActividad.descripcionBreve || '',
           sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
-          tiempoEstimadoActividad: editingActividad.tiempoEstimadoActividad,
-          tiempoIdealActividad: editingActividad.tiempoIdealActividad,
-          costoEstimadoActividad: editingActividad.costoEstimadoActividad,
-          costoIdealActividad: editingActividad.costoIdealActividad,
-          monedaCostoActividad: editingActividad.monedaCostoActividad,
-          frecuenciaActividad: editingActividad.frecuenciaActividad || undefined,
           activa: editingActividad.activa,
           procesosAsociadosIds: editingActividad.procesosAsociadosIds || []
         });
@@ -224,12 +191,6 @@ export default function ActividadesPage() {
           nombre: '',
           descripcionBreve: '',
           sistemaUtilizado: undefined,
-          tiempoEstimadoActividad: undefined,
-          tiempoIdealActividad: undefined,
-          costoEstimadoActividad: undefined,
-          costoIdealActividad: undefined,
-          monedaCostoActividad: undefined,
-          frecuenciaActividad: undefined,
           activa: true,
           procesosAsociadosIds: []
         });
@@ -243,10 +204,6 @@ export default function ActividadesPage() {
     const activityDataForStorage = {
       ...activityDataFromForm,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
-      monedaCostoActividad: data.monedaCostoActividad === NO_MONEDA_SELECTED_VALUE ? undefined : data.monedaCostoActividad as Moneda,
-      frecuenciaActividad: data.frecuenciaActividad === NO_FRECUENCIA_SELECTED_VALUE
-        ? undefined
-        : data.frecuenciaActividad as typeof frecuenciaOptions[number] | undefined,
     };
 
     if (editingActividad && id) {
@@ -308,10 +265,6 @@ export default function ActividadesPage() {
 
   function handleToggleActividadStatus(actividad: Actividad) {
     toggleActividadStatus(actividad);
-    toast({
-      title: `Actividad ${!actividad.activa ? 'Activada' : 'Desactivada'}`,
-      description: `La actividad "${actividad.nombre}" ha sido ${!actividad.activa ? 'activada' : 'desactivada'}.`,
-    });
   }
 
   const sortedAndFilteredActividades = useMemo(() => {
@@ -413,9 +366,7 @@ export default function ActividadesPage() {
 
     const headers = [
       "ID", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", 
-      "Tiempo Estimado (min)", "Tiempo Ideal (min)", 
-      "Costo Estimado", "Costo Ideal", "Moneda",
-      "Frecuencia Actividad", "Estado", "Num. Procesos Asociados", "Nombres Procesos Asociados",
+      "Estado", "Num. Procesos Asociados", "Nombres Procesos Asociados",
       "Fecha Creación", "Última Modificación"
     ];
 
@@ -431,12 +382,6 @@ export default function ActividadesPage() {
           escapeCsvCell(act.nombre),
           escapeCsvCell(act.descripcionBreve),
           escapeCsvCell(act.sistemaUtilizado),
-          escapeCsvCell(act.tiempoEstimadoActividad),
-          escapeCsvCell(act.tiempoIdealActividad),
-          escapeCsvCell(act.costoEstimadoActividad),
-          escapeCsvCell(act.costoIdealActividad),
-          escapeCsvCell(act.monedaCostoActividad),
-          escapeCsvCell(act.frecuenciaActividad),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
           escapeCsvCell(act.procesosAsociadosCount),
           escapeCsvCell(associatedProcessNames),
@@ -656,95 +601,6 @@ export default function ActividadesPage() {
                       />
                       <FormField
                         control={actividadForm.control}
-                        name="frecuenciaActividad"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Frecuencia de la Actividad</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value || NO_FRECUENCIA_SELECTED_VALUE}
-                            >
-                              <FormControl>
-                                <SelectTrigger><SelectValue placeholder="Seleccione frecuencia" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value={NO_FRECUENCIA_SELECTED_VALUE}>No aplica / Por instancia</SelectItem>
-                                {frecuenciaOptions.map((opt) => (
-                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={actividadForm.control}
-                          name="tiempoEstimadoActividad"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tiempo Estimado (min)</FormLabel>
-                              <FormControl><Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} min="0" /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={actividadForm.control}
-                          name="tiempoIdealActividad"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tiempo Ideal (min)</FormLabel>
-                              <FormControl><Input type="number" placeholder="Ej: 10" {...field} value={field.value ?? ''} min="0" /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={actividadForm.control}
-                          name="costoEstimadoActividad"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Costo Estimado</FormLabel>
-                              <FormControl><Input type="number" placeholder="Ej: 5.00" {...field} value={field.value ?? ''} min="0" step="any" /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={actividadForm.control}
-                          name="costoIdealActividad"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Costo Ideal</FormLabel>
-                              <FormControl><Input type="number" placeholder="Ej: 2.50" {...field} value={field.value ?? ''} min="0" step="any" /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                       <FormField
-                        control={actividadForm.control}
-                        name="monedaCostoActividad"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Moneda de Costos</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || NO_MONEDA_SELECTED_VALUE}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  <SelectItem value={NO_MONEDA_SELECTED_VALUE}>No especificar moneda</SelectItem>
-                                  {monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={actividadForm.control}
                         name="procesosAsociadosIds"
                         render={({ field }) => (
                           <FormItem className="flex flex-col">
@@ -840,17 +696,8 @@ export default function ActividadesPage() {
                     <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
                       <div className="flex items-center">Nombre Actividad {getSortIcon('nombre')}</div>
                     </TableHead>
-                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimadoActividad')}>
-                      <div className="flex items-center justify-center">Tiempo Est./Ideal {getSortIcon('tiempoEstimadoActividad')}</div>
-                    </TableHead>
-                     <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimadoActividad')}>
-                      <div className="flex items-center justify-center">Costo Est./Ideal {getSortIcon('costoEstimadoActividad')}</div>
-                    </TableHead>
                     <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('sistemaUtilizado')}>
                       <div className="flex items-center justify-center">Sistema {getSortIcon('sistemaUtilizado')}</div>
-                    </TableHead>
-                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('frecuenciaActividad')}>
-                      <div className="flex items-center justify-center">Frecuencia {getSortIcon('frecuenciaActividad')}</div>
                     </TableHead>
                      <TableHead className="w-[140px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}>
                       <div className="flex items-center justify-center">Últ. Modif. {getSortIcon('updatedAt')}</div>
@@ -871,12 +718,9 @@ export default function ActividadesPage() {
                         .filter(Boolean)
                         .join(', ') || "No asociada a procesos.";
                     return (
-                    <TableRow key={`${actividad.id}-${index}`}>
+                    <TableRow key={`${actividad.id}-${actividad.createdAt}-${index}`}>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
-                      <TableCell className="text-center text-xs">{actividad.tiempoEstimadoActividad ?? '-'} / {actividad.tiempoIdealActividad ?? '-'}</TableCell>
-                      <TableCell className="text-center text-xs">{actividad.costoEstimadoActividad ?? '-'} / {actividad.costoIdealActividad ?? '-'} {actividad.monedaCostoActividad ?? ''}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.sistemaUtilizado || '-'}</TableCell>
-                      <TableCell className="text-center text-xs">{actividad.frecuenciaActividad || '-'}</TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
                         {actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
                       </TableCell>
