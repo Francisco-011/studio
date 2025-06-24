@@ -142,20 +142,13 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
               const targetActivity = { ...allActivities[activityIndex] };
               let activityWasUpdated = false;
 
-              if (timeSavingInMinutes > 0 && targetActivity.tiempoEstimadoActividad !== undefined) {
-                const antes = targetActivity.tiempoEstimadoActividad;
-                const despues = Math.max(0, antes - timeSavingInMinutes);
-                cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Actividad', before: antes, after: despues });
-                targetActivity.tiempoEstimadoActividad = despues;
-                activityWasUpdated = true;
-              }
-              if (costSaving > 0 && targetActivity.costoEstimadoActividad !== undefined) {
-                const antes = targetActivity.costoEstimadoActividad;
-                const despues = Math.max(0, antes - costSaving);
-                cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Actividad', before: antes, after: despues });
-                targetActivity.costoEstimadoActividad = despues;
-                activityWasUpdated = true;
-              }
+              // Time and cost savings on activities are removed.
+              // if (timeSavingInMinutes > 0 && targetActivity.tiempoEstimadoActividad !== undefined) {
+              // ...
+              // }
+              // if (costSaving > 0 && targetActivity.costoEstimadoActividad !== undefined) {
+              // ...
+              // }
 
               if (activityWasUpdated) {
                 targetActivity.updatedAt = Date.now();

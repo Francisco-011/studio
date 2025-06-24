@@ -14,8 +14,6 @@ export interface Actividad {
   createdAt: number; // Timestamp of creation
   updatedAt?: number;
   deletedAt?: number;
-
-  // New fields for detailed capture
   descripcionBreve?: string;
   sistemaUtilizado?: string;
 }
@@ -48,7 +46,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         const savedActividades = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
         if (savedActividades) {
           const parsedActividades = JSON.parse(savedActividades) as Actividad[];
-          // Ensure createdAt exists for older data, can default to id if it's a timestamp, or updatedAt
           setActividades(parsedActividades.map(act => ({
             ...act,
             createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now() 
@@ -93,7 +90,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       createdAt: currentTime,
       procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
       updatedAt: currentTime,
-      activa: data.activa === undefined ? true : data.activa, // Default to active if not specified
+      activa: data.activa === undefined ? true : data.activa,
     };
     setActividades((prev) => [...prev, newActividad]);
     addLogEntry({ action: 'create', entityType: 'Actividad', entityName: newActividad.nombre, details: `Se creó la actividad "${newActividad.nombre}".` });
@@ -130,7 +127,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   const restoreActividad = useCallback((id: string) => {
     const activityToRestore = deletedActividades.find(act => act.id === id);
     if (activityToRestore) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { deletedAt, ...restoredActivityBase } = activityToRestore;
       const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() };
       setActividades(prev => [...prev, restoredActivity]);

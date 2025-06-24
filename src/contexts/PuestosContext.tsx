@@ -42,8 +42,6 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
       try {
         const savedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
         if (savedPuestos) {
-          // The previous data migration logic here was complex and likely causing startup issues.
-          // Loading the data as-is is a more stable approach.
           setPuestos(JSON.parse(savedPuestos));
         }
       } catch (error) {
@@ -55,7 +53,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     } else {
       setIsLoadingPuestos(false);
     }
-  }, []); // Empty dependency array ensures this runs only once on mount.
+  }, []);
 
   const addPuesto = useCallback((data: PuestoCreationData) => {
     const newPuesto = { ...data, id: Date.now().toString() };
