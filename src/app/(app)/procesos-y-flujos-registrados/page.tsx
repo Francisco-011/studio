@@ -289,7 +289,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
-  if (isLoading || isLoadingActividades) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
+  if (isLoading || isLoadingActividades || isLoadingAreas || isLoadingPuestos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
   return (
     <div className="container mx-auto py-8">
@@ -410,6 +410,4 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
-
-
 
