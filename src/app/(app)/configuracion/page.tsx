@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto, type PuestoCreationData, nivelesOrganizacionales } from '@/contexts/PuestosContext';
-import { useSistemasCostos, type Sistema, type SistemaCosto, tipoCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto, tiposDeCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope } from '@/contexts/SistemasCostosContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades } from '@/contexts/ActividadesContext';
@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from '@/hooks/use-toast';
@@ -167,7 +167,7 @@ export default function ConfiguracionPage() {
     setIsSistemaDialogOpen(false);
   }
   function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
-    const costoData = { ...data, tipoCosto: data.tipoCosto as TipoCosto[] };
+    const costoData = { ...data, tipoCosto: data.tipoCosto as any }; // Cast because Zod infers string[]
     if (editingCosto) updateCostoSistema(editingCosto.id, costoData); else addCostoSistema(costoData);
     setIsCostoDialogOpen(false);
   }
@@ -433,7 +433,7 @@ export default function ConfiguracionPage() {
         <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar Costo para ${currentSistemaForCosto?.nombre}`}</DialogTitle></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField control={costoForm.control} name="tipoCosto" render={({ field }) => (
-                <FormItem>{tipoCostoOptions.map(item => (<FormField key={item} control={costoForm.control} name="tipoCosto" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={checked => { return checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter(v => v !== item))}} /></FormControl><FormLabel className="font-normal">{item}</FormLabel></FormItem>)} />))}<FormMessage /></FormItem>
+                <FormItem>{tiposDeCostoOptions.map(item => (<FormField key={item} control={costoForm.control} name="tipoCosto" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={checked => { return checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter(v => v !== item))}} /></FormControl><FormLabel className="font-normal">{item}</FormLabel></FormItem>)} />))}<FormMessage /></FormItem>
             )} />
             {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />}
             {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
