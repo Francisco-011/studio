@@ -468,7 +468,10 @@ export default function AuditoriaPage() {
                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                     <div className="flex items-center gap-4 text-left">
                                                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                                        <span className="text-base font-medium">{act.nombre}</span>
+                                                        <span className="text-base font-medium flex items-center gap-2">
+                                                          {act.nombre}
+                                                          {!act.activa && <Badge variant="outline">Inactiva</Badge>}
+                                                        </span>
                                                     </div>
                                                 </AccordionTrigger>
                                                 <AccordionContent className="p-4 pt-0 pl-16">
@@ -524,7 +527,10 @@ export default function AuditoriaPage() {
                                                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                                                     <div className="flex items-center gap-4 text-left">
                                                                                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{index + 1}</span>
-                                                                                        <span className="text-base font-medium">{act.nombre}</span>
+                                                                                        <span className="text-base font-medium flex items-center gap-2">
+                                                                                          {act.nombre}
+                                                                                          {!act.activa && <Badge variant="outline">Inactiva</Badge>}
+                                                                                        </span>
                                                                                     </div>
                                                                                 </AccordionTrigger>
                                                                                 <AccordionContent className="p-4 pt-0 pl-16">
