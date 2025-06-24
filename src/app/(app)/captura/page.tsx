@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -129,6 +129,8 @@ export default function CapturaPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
+  
+  const isMounted = useRef(false);
 
 
   const form = useForm<CapturaFormData>({
@@ -263,6 +265,27 @@ export default function CapturaPage() {
       setSimilarProcessWarning(null);
     }
   }, [watchedProcessName, allProcesses, editingId]);
+
+  // Effect to mark component as mounted
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  // Effect to reset 'departamento' and 'puesto' when 'area' changes
+  useEffect(() => {
+    if (isMounted.current) {
+        setValue('departamento', undefined);
+        setValue('puesto', undefined);
+    }
+  }, [watchedAreaName, setValue]);
+
+  // Effect to reset 'puesto' when 'departamento' changes
+  useEffect(() => {
+    if (isMounted.current) {
+        setValue('puesto', undefined);
+    }
+  }, [watchedDepartamentoName, setValue]);
 
 
   function onSubmit(values: CapturaFormData) {
@@ -460,11 +483,7 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Área / División</FormLabel>
                       <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setValue('departamento', undefined);
-                          setValue('puesto', undefined);
-                        }}
+                        onValueChange={field.onChange}
                         value={field.value}
                         disabled={isLoadingAreas}
                       >
@@ -482,10 +501,7 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Departamento (Opcional)</FormLabel>
                        <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setValue('puesto', undefined);
-                        }}
+                        onValueChange={field.onChange}
                         value={field.value}
                         disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
                       >
