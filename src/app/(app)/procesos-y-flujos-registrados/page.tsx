@@ -114,6 +114,9 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  const handleEditActivity = (activityName: string) => {
+    router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
+  };
 
   useEffect(() => {
     setIsLoading(true);
@@ -248,10 +251,10 @@ export default function ProcesosYFlujosRegistradosPage() {
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
   };
-  const handleRestoreProcess = (processId: string) => {
+  const handleRestoreProcess = (id: string) => {
     try {
       const updatedData = allCapturedData.map(p => {
-        if (p.id === processId) {
+        if (p.id === id) {
           const { deletedAt, ...restoredProc } = p;
           return { ...restoredProc, activo: true, updatedAt: Date.now() };
         }
@@ -384,16 +387,21 @@ export default function ProcesosYFlujosRegistradosPage() {
                                     <div className="space-y-3">
                                         {activitiesToShow.map((act, index) => (
                                         <Card key={`${proc.id}-act-${act.id}-${index}`} className="bg-background">
-                                            <CardHeader className="flex-row items-center gap-4 space-y-0 p-4">
-                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                                {act.nombre}
-                                                {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
-                                            </CardTitle>
+                                            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-4">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
+                                                    <CardTitle className="text-base flex items-center gap-2">
+                                                        {act.nombre}
+                                                        {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
+                                                    </CardTitle>
+                                                </div>
+                                                <Button variant="ghost" size="icon" onClick={() => handleEditActivity(act.nombre)} title={`Editar actividad: ${act.nombre}`}>
+                                                    <Edit2 className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
                                             </CardHeader>
                                             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
-                                            <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                            <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
+                                                <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
                                             </CardContent>
                                         </Card>
                                         ))}
