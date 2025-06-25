@@ -88,28 +88,14 @@ type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 const costoSistemaFormSchema = z.object({
   id: z.string().optional(),
   sistemaId: z.string(),
-  descripcion: z.string().min(3, "La descripción es requerida (mínimo 3 caracteres)."),
-  tipoCosto: z.array(z.string()).refine(value => value.some(item => item), { message: "Debe seleccionar al menos un tipo de costo." }),
+  descripcion: z.string().min(1, "La descripción es requerida."),
+  tipoCosto: z.array(z.string()).optional().default([]),
   montoUso: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
   numeroLicencias: z.preprocess(val => val === '' ? undefined : parseInt(String(val), 10), z.number().int().nonnegative().optional()),
   costoPorLicencia: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
-  formaPago: z.enum(formasDePagoOptions as [string, ...string[]]),
-  frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]),
-  moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]),
-}).superRefine((data, ctx) => {
-    if (data.tipoCosto.includes("Por Licencias")) {
-      if (data.numeroLicencias === undefined || data.numeroLicencias === null || isNaN(data.numeroLicencias)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["numeroLicencias"] });
-      }
-      if (data.costoPorLicencia === undefined || data.costoPorLicencia === null || isNaN(data.costoPorLicencia)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["costoPorLicencia"] });
-      }
-    }
-    if (data.tipoCosto.includes("Por Uso del Sistema")) {
-      if (data.montoUso === undefined || data.montoUso === null || isNaN(data.montoUso)) {
-         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["montoUso"] });
-      }
-    }
+  formaPago: z.enum(formasDePagoOptions as [string, ...string[]]).optional(),
+  frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]).optional(),
+  moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
 });
 type CostoSistemaFormData = z.infer<typeof costoSistemaFormSchema>;
 
@@ -546,7 +532,7 @@ export default function ConfiguracionPage() {
               render={({ field }) => (
                   <FormItem>
                       <FormLabel>Descripción</FormLabel>
-                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} /></FormControl>
+                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} value={field.value ?? ''} /></FormControl>
                       <FormDescription>Identificador único para este costo específico.</FormDescription>
                       <FormMessage />
                   </FormItem>
