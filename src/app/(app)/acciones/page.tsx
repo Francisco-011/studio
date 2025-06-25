@@ -726,7 +726,7 @@ export default function AccionesPage() {
                           name="fechaObjetivo"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
-                              <FormLabel>Fecha Objetivo (Opcional)</FormLabel>
+                              <FormLabel>Fecha Límite (Objetivo)</FormLabel>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <FormControl>
@@ -740,6 +740,7 @@ export default function AccionesPage() {
                                   <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} />
                                 </PopoverContent>
                               </Popover>
+                              <FormDescription className="text-xs">La fecha en que se planea completar esta acción.</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -749,7 +750,7 @@ export default function AccionesPage() {
                           name="fechaFinalizacion"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
-                              <FormLabel>Fecha Finalización (Opcional)</FormLabel>
+                              <FormLabel>Fecha de Finalización Real</FormLabel>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <FormControl>
@@ -763,6 +764,7 @@ export default function AccionesPage() {
                                   <Calendar mode="single" selected={field.value} onSelect={field.onChange} />
                                 </PopoverContent>
                               </Popover>
+                              <FormDescription className="text-xs">Fecha en que la acción fue completada.</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -774,7 +776,7 @@ export default function AccionesPage() {
                           name="ahorroEstimado"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Ahorro Estimado (Opcional)</FormLabel>
+                              <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
                               <div className="relative">
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" /></FormControl>
@@ -876,10 +878,10 @@ export default function AccionesPage() {
                       <div className="flex items-center justify-center">Estado {getSortIcon('estado')}</div>
                     </TableHead>
                     <TableHead className="text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('fechaObjetivo')}>
-                      <div className="flex items-center justify-center">Fecha Objetivo {getSortIcon('fechaObjetivo')}</div>
+                      <div className="flex items-center justify-center">Fecha Límite {getSortIcon('fechaObjetivo')}</div>
                     </TableHead>
                     <TableHead className="text-right cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('ahorroEstimado')}>
-                      <div className="flex items-center justify-end">Ahorro Costo {getSortIcon('ahorroEstimado')}</div>
+                      <div className="flex items-center justify-end">Ahorro Anual {getSortIcon('ahorroEstimado')}</div>
                     </TableHead>
                     <TableHead className="text-right cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('ahorroTiempoEstimado')}>
                       <div className="flex items-center justify-end">Ahorro Tiempo {getSortIcon('ahorroTiempoEstimado')}</div>
@@ -894,6 +896,10 @@ export default function AccionesPage() {
                   {paginatedAcciones.map((accion, index) => {
                     const linkedProcess = accion.procesoId ? capturedProcesses.find(p => p.id === accion.procesoId) : null;
                     const linkedActivity = accion.actividadId ? actividades.find(a => a.id === accion.actividadId) : null;
+                    const isOverdue = 
+                        (accion.estado === 'Pendiente' || accion.estado === 'En Progreso') && 
+                        accion.fechaObjetivo && 
+                        new Date(accion.fechaObjetivo) < new Date(new Date().setHours(0, 0, 0, 0));
                     
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
@@ -909,19 +915,25 @@ export default function AccionesPage() {
                       </TableCell>
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
-                        <Badge 
-                          variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
-                          className={cn(
-                            "text-white",
-                            accion.estado === "En Progreso" && "bg-blue-500",
-                            accion.estado === "Pendiente" && "bg-yellow-500",
-                            accion.estado === "En Revisión" && "bg-purple-500",
-                            accion.estado === "Completada" && "bg-green-500",
-                            accion.estado === "Cancelada" && "bg-red-500",
+                        {isOverdue ? (
+                            <Badge variant="destructive" className="bg-orange-600 text-white hover:bg-orange-700">
+                              Atrasada
+                            </Badge>
+                          ) : (
+                            <Badge 
+                              variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
+                              className={cn(
+                                "text-white",
+                                accion.estado === "En Progreso" && "bg-blue-500",
+                                accion.estado === "Pendiente" && "bg-yellow-500",
+                                accion.estado === "En Revisión" && "bg-purple-500",
+                                accion.estado === "Completada" && "bg-green-500",
+                                accion.estado === "Cancelada" && "bg-red-500",
+                              )}
+                            >
+                              {accion.estado}
+                            </Badge>
                           )}
-                        >
-                          {accion.estado}
-                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         {accion.fechaObjetivo && isValid(parseISO(accion.fechaObjetivo)) ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
