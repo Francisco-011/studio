@@ -48,6 +48,7 @@ import { usePuestos, type Puesto as PuestoType } from '@/contexts/PuestosContext
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -83,6 +84,7 @@ interface CalculatedSystemCost {
     totalAnnualCost: number;
     totalLicenses: number;
     currency: TipoMoneda | string;
+    descriptions: string[];
 }
 
 function calculateAllSystemAnnualCosts(
@@ -97,10 +99,12 @@ function calculateAllSystemAnnualCosts(
     let totalAnnualLicenseCost = 0;
     let systemCurrency: TipoMoneda | string = 'USD';
     let systemTotalLicenses = 0;
+    const descriptions: string[] = [];
 
     if (costsForSystem.length > 0) {
       systemCurrency = costsForSystem[0].moneda;
       costsForSystem.forEach(cost => {
+        if(cost.descripcion) descriptions.push(cost.descripcion);
         if (cost.moneda === systemCurrency) {
           let periodicUsage = 0;
           if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
@@ -134,6 +138,7 @@ function calculateAllSystemAnnualCosts(
       totalAnnualCost: totalAnnualUsage + totalAnnualLicenseCost,
       totalLicenses: systemTotalLicenses,
       currency: systemCurrency,
+      descriptions,
     };
   });
 }
@@ -1125,7 +1130,23 @@ export default function DashboardPage() {
                             <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
                             <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
                             <TableCell className="text-right text-xs">{cost.totalLicenses > 0 ? cost.totalLicenses : '-'}</TableCell>
-                            <TableCell className="text-right font-semibold text-xs">{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</TableCell>
+                            <TableCell className="text-right font-semibold text-xs">
+                               <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span>{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</span>
+                                    </TooltipTrigger>
+                                    {cost.descriptions.length > 0 && (
+                                    <TooltipContent>
+                                        <p className="font-bold">Detalle de Costos:</p>
+                                        <ul className="list-disc pl-4 text-left">
+                                            {cost.descriptions.map((desc, i) => <li key={i}>{desc}</li>)}
+                                        </ul>
+                                    </TooltipContent>
+                                    )}
+                                </Tooltip>
+                               </TooltipProvider>
+                            </TableCell>
                         </TableRow>
                         ))}
                     </TableBody>
@@ -1217,3 +1238,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

@@ -57,6 +57,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 // Schemas
@@ -95,9 +96,22 @@ const costoSistemaFormSchema = z.object({
   formaPago: z.enum(formasDePagoOptions as [string, ...string[]]),
   frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]),
   moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]),
-  descripcion: z.string().optional(),
-}).refine(data => !data.tipoCosto.includes("Por Licencias") || (data.numeroLicencias !== undefined && data.costoPorLicencia !== undefined), { message: "Número de licencias y costo son requeridos.", path: ["numeroLicencias"] })
-  .refine(data => !data.tipoCosto.includes("Por Uso del Sistema") || data.montoUso !== undefined, { message: "Monto de uso es requerido.", path: ["montoUso"] });
+  descripcion: z.string().min(1, "La descripción es requerida para identificar el costo."),
+}).superRefine((data, ctx) => {
+    if (data.tipoCosto.includes("Por Licencias")) {
+      if (data.numeroLicencias === undefined || data.numeroLicencias === null || isNaN(data.numeroLicencias)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["numeroLicencias"] });
+      }
+      if (data.costoPorLicencia === undefined || data.costoPorLicencia === null || isNaN(data.costoPorLicencia)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["costoPorLicencia"] });
+      }
+    }
+    if (data.tipoCosto.includes("Por Uso del Sistema")) {
+      if (data.montoUso === undefined || data.montoUso === null || isNaN(data.montoUso)) {
+         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Requerido", path: ["montoUso"] });
+      }
+    }
+});
 type CostoSistemaFormData = z.infer<typeof costoSistemaFormSchema>;
 
 
@@ -166,7 +180,7 @@ export default function ConfiguracionPage() {
   useEffect(() => { sistemaForm.reset(editingSistema || { nombre: '', scope: 'Empresa' }); }, [editingSistema, sistemaForm]);
   useEffect(() => {
     if (isCostoDialogOpen) {
-      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', tipoCosto: [], formaPago: 'Transferencia', frecuencia: 'Mensual', moneda: 'MXN' });
+      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', tipoCosto: [], formaPago: 'Transferencia', frecuencia: 'Mensual', moneda: 'MXN', descripcion: '' });
     }
   }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
 
@@ -446,7 +460,7 @@ export default function ConfiguracionPage() {
                                       
                                       {systemCosts.length > 0 ? (
                                         <Table>
-                                          <TableHeader><TableRow><TableHead>Tipo de Costo</TableHead><TableHead>Costo por Periodo</TableHead><TableHead>Periodo de Pago</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+                                          <TableHeader><TableRow><TableHead>Descripción</TableHead><TableHead>Costo por Periodo</TableHead><TableHead>Periodo de Pago</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                                           <TableBody>
                                             {systemCosts.map(costo => {
                                                 const usageCost = costo.tipoCosto.includes('Por Uso del Sistema') && costo.montoUso ? costo.montoUso : 0;
@@ -454,11 +468,11 @@ export default function ConfiguracionPage() {
                                                 const totalPeriodicCost = usageCost + licenseCost;
                                                 return (
                                                   <TableRow key={costo.id}>
-                                                    <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
+                                                    <TableCell>{costo.descripcion}</TableCell>
                                                     <TableCell>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda }).format(totalPeriodicCost)}</TableCell>
                                                     <TableCell>{costo.frecuencia}</TableCell>
                                                     <TableCell className="text-right">
-                                                      <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                                      <Button variant="ghost" size="icon" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(costo, setEditingCosto, setIsCostoDialogOpen); }} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
                                                       <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                                                     </TableCell>
                                                   </TableRow>
@@ -529,6 +543,18 @@ export default function ConfiguracionPage() {
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField
               control={costoForm.control}
+              name="descripcion"
+              render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Descripción</FormLabel>
+                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} /></FormControl>
+                      <FormDescription>Identificador único para este costo específico.</FormDescription>
+                      <FormMessage />
+                  </FormItem>
+              )}
+            />
+            <FormField
+              control={costoForm.control}
               name="tipoCosto"
               render={() => (
                 <FormItem>
@@ -583,7 +609,7 @@ export default function ConfiguracionPage() {
               <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
             <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={costoForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+            
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
         </DialogContent>
@@ -598,3 +624,5 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
+
+    
