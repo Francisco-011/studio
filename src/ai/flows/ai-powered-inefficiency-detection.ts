@@ -86,15 +86,17 @@ Tu análisis debe centrarse en TRES áreas clave y debes devolver la salida en e
 1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'puesto' y 'processId' del proceso principal donde se detectó.
 
 **Análisis de Duplicados (CRÍTICO):**
-Tu tarea más importante es diferenciar entre **variaciones legítimas** y **duplicaciones reales**.
-- Una **variación** es cuando dos procesos o actividades tienen nombres similares pero descripciones, sistemas o sub-actividades diferentes. Esto es normal en una organización (ej: 'Elaborar Reporte' en Ventas vs. en Finanzas). **NO reportes las variaciones como duplicados.**
-- Una **duplicación real** es cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el mismo trabajo, usan los mismos sistemas y producen el mismo resultado. Esto representa un esfuerzo redundante.
+Tu tarea más importante es diferenciar entre **variaciones legítimas** y **duplicaciones reales**. El contexto organizacional (área, puesto, proceso asociado) es tan importante como la descripción.
 
-Para los arrays a continuación ('duplicateProcesses' y 'duplicateActivities'), solo incluye las **duplicaciones reales**. En el campo 'reason', explica claramente por qué crees que son funcionalmente idénticos y no solo una variación contextual.
+- Una **variación legítima** es cuando dos procesos o actividades tienen nombres o descripciones similares, pero su propósito de negocio es claramente diferente debido al contexto en el que se ejecutan. Por ejemplo, "Bajar información del sistema" por un agente de cobranza (para contactar clientes) y "Bajar información del sistema" por un analista de inventarios (para análisis de stock) son variaciones, NO duplicados, porque sus objetivos son distintos. **NO reportes variaciones como duplicados.**
+
+- Una **duplicación real** es cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el mismo trabajo, usan los mismos sistemas y producen un resultado de negocio idéntico o muy similar. Esto representa un esfuerzo redundante que se podría consolidar. Por ejemplo, "Generar reporte de ventas semanal" en un área y "Crear informe de ventas de la semana" en otra.
+
+Para los arrays 'duplicateProcesses' y 'duplicateActivities', solo incluye las **duplicaciones reales**. En el campo 'reason', explica claramente por qué crees que son funcionalmente idénticos y no solo una variación contextual, considerando el impacto en el negocio.
 
 2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'puestoA', 'areaB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
 
-3.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades para encontrar tareas que son funcionalmente idénticas pero pueden tener nombres ligeramente diferentes o existen en distintas áreas/puestos. Compara sus descripciones y nombres. Pobla el array 'duplicateActivities' con los pares de actividades que sospechas son redundantes, incluyendo su ID, área y puesto para contextualizar dónde ocurre la duplicidad.
+3.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades. Tu objetivo es encontrar **duplicaciones funcionales genuinas**, no simples similitudes en la descripción. **Pondera fuertemente el contexto completo**: el nombre de la actividad, su descripción detallada, el área, el puesto y los procesos a los que está asociada. Si el contexto (área, puesto) es muy diferente, sé extremadamente escéptico sobre si es una duplicación real, a menos que las descripciones y resultados sean idénticos. Pobla el array 'duplicateActivities' con los pares de actividades que sospechas son redundantes, incluyendo su ID, área y puesto para contextualizar dónde ocurre la duplicidad.
 
 **Datos de Entrada:**
 
