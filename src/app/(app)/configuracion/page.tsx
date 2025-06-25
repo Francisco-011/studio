@@ -556,44 +556,37 @@ export default function ConfiguracionPage() {
             <FormField
               control={costoForm.control}
               name="tipoCosto"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo de Costo</FormLabel>
-                   <FormDescription>
-                    Seleccione uno o más tipos de costo.
-                  </FormDescription>
+                  <div className="mb-4">
+                    <FormLabel>Tipo de Costo</FormLabel>
+                    <FormDescription>
+                      Seleccione uno o más tipos de costo.
+                    </FormDescription>
+                  </div>
                   {tiposDeCostoOptions.map((item) => (
-                    <FormField
+                    <FormItem
                       key={item}
-                      control={costoForm.control}
-                      name="tipoCosto"
-                      render={({ field }) => {
-                        return (
-                          <FormItem
-                            key={item}
-                            className="flex flex-row items-center space-x-3 space-y-0 pt-2"
-                          >
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(item)}
-                                onCheckedChange={(checked) => {
-                                  return checked
-                                    ? field.onChange([...(field.value || []), item])
-                                    : field.onChange(
-                                        field.value?.filter(
-                                          (value) => value !== item
-                                        )
-                                      )
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              {item}
-                            </FormLabel>
-                          </FormItem>
-                        )
-                      }}
-                    />
+                      className="flex flex-row items-center space-x-3 space-y-0"
+                    >
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value?.includes(item)}
+                          onCheckedChange={(checked) => {
+                            return checked
+                              ? field.onChange([...(field.value || []), item])
+                              : field.onChange(
+                                  (field.value || []).filter(
+                                    (value) => value !== item
+                                  )
+                                )
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        {item}
+                      </FormLabel>
+                    </FormItem>
                   ))}
                   <FormMessage />
                 </FormItem>
@@ -624,5 +617,3 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-
-    
