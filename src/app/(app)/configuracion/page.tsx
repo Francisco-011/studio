@@ -57,7 +57,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 // Schemas
@@ -420,8 +419,8 @@ export default function ConfiguracionPage() {
                         <Accordion type="single" collapsible className="w-full">
                           {filteredSistemas.map(sistema => (
                             <Card key={sistema.id} className="mb-2"><AccordionItem value={sistema.id} className="border-b-0">
-                              <div className="flex w-full items-center">
-                                <AccordionTrigger className="flex-1 p-4 text-left hover:no-underline">
+                              <div className="flex w-full items-center p-4">
+                                <AccordionTrigger className="flex-1 text-left hover:no-underline p-0">
                                     <div className="flex items-center gap-4">
                                         <span className="font-semibold">{sistema.nombre}</span>
                                         <Badge variant="outline">{sistema.scope}</Badge>
@@ -455,7 +454,7 @@ export default function ConfiguracionPage() {
                                       </div>
 
                                       <div className="flex justify-end mb-2">
-                                        <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar costo adicional</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar costo</Button>
                                       </div>
                                       
                                       {systemCosts.length > 0 ? (
@@ -539,7 +538,7 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo adicional`}</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField
               control={costoForm.control}
@@ -560,32 +559,27 @@ export default function ConfiguracionPage() {
                 <FormItem>
                   <div className="mb-4">
                     <FormLabel>Tipo de Costo</FormLabel>
-                    <FormDescription>
-                      Seleccione uno o más tipos de costo.
-                    </FormDescription>
+                    <FormDescription>Seleccione uno o más tipos de costo.</FormDescription>
                   </div>
                   {tiposDeCostoOptions.map((item) => (
                     <FormItem
                       key={item}
-                      className="flex flex-row items-center space-x-3 space-y-0"
+                      className="flex flex-row items-start space-x-3 space-y-0"
                     >
                       <FormControl>
                         <Checkbox
                           checked={field.value?.includes(item)}
                           onCheckedChange={(checked) => {
+                            const currentValue = field.value || [];
                             return checked
-                              ? field.onChange([...(field.value || []), item])
+                              ? field.onChange([...currentValue, item])
                               : field.onChange(
-                                  (field.value || []).filter(
-                                    (value) => value !== item
-                                  )
-                                )
+                                  currentValue.filter((value) => value !== item)
+                                );
                           }}
                         />
                       </FormControl>
-                      <FormLabel className="font-normal">
-                        {item}
-                      </FormLabel>
+                      <FormLabel className="font-normal">{item}</FormLabel>
                     </FormItem>
                   ))}
                   <FormMessage />
