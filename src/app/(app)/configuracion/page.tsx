@@ -55,8 +55,8 @@ import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, 
 import { cn } from '@/lib/utils';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 
 
 // Schemas
@@ -270,31 +270,34 @@ export default function ConfiguracionPage() {
 
   const calculateTotalAnnualCost = (sistemaId: string) => {
     const costsForSystem = costosSistemas.filter(cost => cost.sistemaId === sistemaId);
-    if (costsForSystem.length === 0) return { total: 0, currency: 'USD' };
+    if (costsForSystem.length === 0) return [];
 
-    const currency = costsForSystem[0].moneda;
-    let totalAnnualCost = 0;
+    const totalsByCurrency = new Map<TipoMoneda, number>();
 
     costsForSystem.forEach(cost => {
-        if (cost.moneda === currency) {
-            let periodicCost = 0;
-            if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
-                periodicCost += cost.montoUso;
-            }
-            if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
-                periodicCost += cost.numeroLicencias * cost.costoPorLicencia;
-            }
-            
-            if (cost.frecuencia === "Mensual") {
-                totalAnnualCost += periodicCost * 12;
-            } else if (cost.frecuencia === "Anual") {
-                totalAnnualCost += periodicCost;
-            } else { // "Otro" - Assume annual for calculation simplicity
-                totalAnnualCost += periodicCost;
-            }
-        }
+      let periodicCost = 0;
+      if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
+        periodicCost += cost.montoUso;
+      }
+      if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
+        periodicCost += cost.numeroLicencias * cost.costoPorLicencia;
+      }
+
+      let annualCost = 0;
+      if (cost.frecuencia === "Mensual") {
+        annualCost = periodicCost * 12;
+      } else { // "Anual" or "Otro" are treated as annual
+        annualCost = periodicCost;
+      }
+
+      const currentTotal = totalsByCurrency.get(cost.moneda) || 0;
+      totalsByCurrency.set(cost.moneda, currentTotal + annualCost);
     });
-    return { total: totalAnnualCost, currency };
+
+    return Array.from(totalsByCurrency.entries()).map(([currency, total]) => ({
+      currency,
+      total,
+    }));
   };
 
 
@@ -417,16 +420,24 @@ export default function ConfiguracionPage() {
                               </div>
                               <AccordionContent className="p-4 pt-0">
                                 {(() => {
-                                  const { total, currency } = calculateTotalAnnualCost(sistema.id);
+                                  const annualCosts = calculateTotalAnnualCost(sistema.id);
                                   const systemCosts = costosSistemas.filter(c => c.sistemaId === sistema.id);
 
                                   return (
                                     <>
                                       <div className="p-4 border rounded-md bg-muted/30 mb-4">
                                         <h4 className="font-semibold text-sm text-muted-foreground">Costo Anual Total Estimado</h4>
-                                        <p className="text-2xl font-bold text-primary">
-                                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(total)}
-                                        </p>
+                                        {annualCosts.length > 0 ? (
+                                          annualCosts.map(({ currency, total }) => (
+                                            <p key={currency} className="text-2xl font-bold text-primary">
+                                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(total)}
+                                            </p>
+                                          ))
+                                        ) : (
+                                          <p className="text-2xl font-bold text-primary">
+                                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD' }).format(0)}
+                                          </p>
+                                        )}
                                       </div>
 
                                       <div className="flex justify-end mb-2">
@@ -437,17 +448,22 @@ export default function ConfiguracionPage() {
                                         <Table>
                                           <TableHeader><TableRow><TableHead>Tipo de Costo</TableHead><TableHead>Costo por Periodo</TableHead><TableHead>Periodo de Pago</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                                           <TableBody>
-                                            {systemCosts.map(costo => (
-                                              <TableRow key={costo.id}>
-                                                <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
-                                                <TableCell>{costo.montoUso ? `${costo.montoUso} ${costo.moneda}` : `${costo.numeroLicencias} x ${costo.costoPorLicencia} ${costo.moneda}`}</TableCell>
-                                                <TableCell>{costo.frecuencia}</TableCell>
-                                                <TableCell className="text-right">
-                                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
-                                                  <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                                </TableCell>
-                                              </TableRow>
-                                            ))}
+                                            {systemCosts.map(costo => {
+                                                const usageCost = costo.tipoCosto.includes('Por Uso del Sistema') && costo.montoUso ? costo.montoUso : 0;
+                                                const licenseCost = costo.tipoCosto.includes('Por Licencias') && costo.numeroLicencias && costo.costoPorLicencia ? costo.numeroLicencias * costo.costoPorLicencia : 0;
+                                                const totalPeriodicCost = usageCost + licenseCost;
+                                                return (
+                                                  <TableRow key={costo.id}>
+                                                    <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
+                                                    <TableCell>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda }).format(totalPeriodicCost)}</TableCell>
+                                                    <TableCell>{costo.frecuencia}</TableCell>
+                                                    <TableCell className="text-right">
+                                                      <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                                      <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                                    </TableCell>
+                                                  </TableRow>
+                                                )
+                                            })}
                                           </TableBody>
                                         </Table>
                                       ) : (
@@ -514,32 +530,44 @@ export default function ConfiguracionPage() {
             <FormField
               control={costoForm.control}
               name="tipoCosto"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel>Tipo de Costo</FormLabel>
                    <FormDescription>
                     Seleccione uno o más tipos de costo.
                   </FormDescription>
                   {tiposDeCostoOptions.map((item) => (
-                    <FormItem key={item} className="flex flex-row items-center space-x-3 space-y-0 pt-2">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value?.includes(item)}
-                          onCheckedChange={(checked) => {
-                            return checked
-                              ? field.onChange([...(field.value || []), item])
-                              : field.onChange(
-                                  field.value?.filter(
-                                    (value) => value !== item
-                                  )
-                                )
-                          }}
-                        />
-                      </FormControl>
-                      <FormLabel className="font-normal">
-                        {item}
-                      </FormLabel>
-                    </FormItem>
+                    <FormField
+                      key={item}
+                      control={costoForm.control}
+                      name="tipoCosto"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={item}
+                            className="flex flex-row items-center space-x-3 space-y-0 pt-2"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...(field.value || []), item])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                          (value) => value !== item
+                                        )
+                                      )
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {item}
+                            </FormLabel>
+                          </FormItem>
+                        )
+                      }}
+                    />
                   ))}
                   <FormMessage />
                 </FormItem>
