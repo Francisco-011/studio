@@ -89,9 +89,18 @@ const costoSistemaFormSchema = z.object({
   id: z.string().optional(),
   sistemaId: z.string(),
   descripcion: z.string().min(1, "La descripción es requerida."),
-  montoUso: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
-  numeroLicencias: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
-  costoPorLicencia: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
+  montoUso: z.preprocess(
+    (val) => (val === undefined || val === null || val === '' ? undefined : parseFloat(String(val))),
+    z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
+  ),
+  numeroLicencias: z.preprocess(
+    (val) => (val === undefined || val === null || val === '' ? undefined : parseInt(String(val), 10)),
+    z.number({ invalid_type_error: "Debe ser un número." }).int("Debe ser entero.").nonnegative("Debe ser positivo.").optional()
+  ),
+  costoPorLicencia: z.preprocess(
+    (val) => (val === undefined || val === null || val === '' ? undefined : parseFloat(String(val))),
+    z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
+  ),
   formaPago: z.enum(formasDePagoOptions as [string, ...string[]]).optional(),
   frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]).optional(),
   moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
