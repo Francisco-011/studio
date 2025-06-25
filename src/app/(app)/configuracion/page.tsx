@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto, type PuestoCreationData, nivelesOrganizacionales } from '@/contexts/PuestosContext';
-import { useSistemasCostos, type Sistema, type SistemaCosto, tiposDeCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto, tiposDeCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades } from '@/contexts/ActividadesContext';
@@ -267,6 +267,34 @@ export default function ConfiguracionPage() {
     { value: 'sistemas', label: 'Sistemas y Costos', icon: <Laptop className="h-5 w-5 mr-2" /> },
   ];
 
+  const calculateTotalAnnualCost = (sistemaId: string) => {
+    const costsForSystem = costosSistemas.filter(cost => cost.sistemaId === sistemaId);
+    if (costsForSystem.length === 0) return { total: 0, currency: 'USD' };
+
+    const currency = costsForSystem[0].moneda;
+    let totalAnnualCost = 0;
+
+    costsForSystem.forEach(cost => {
+        if (cost.moneda === currency) {
+            let periodicCost = 0;
+            if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
+                periodicCost += cost.montoUso;
+            }
+            if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
+                periodicCost += cost.numeroLicencias * cost.costoPorLicencia;
+            }
+            
+            if (cost.frecuencia === "Mensual") {
+                totalAnnualCost += periodicCost * 12;
+            } else {
+                totalAnnualCost += periodicCost;
+            }
+        }
+    });
+    return { total: totalAnnualCost, currency };
+  };
+
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
@@ -361,7 +389,7 @@ export default function ConfiguracionPage() {
             </TabsContent>
             
             <TabsContent value="sistemas">
-                 <Card><CardHeader><CardTitle>Sistemas y Costos</CardTitle><CardDescription>Administrar los sistemas de software y sus costos asociados.</CardDescription></CardHeader>
+                 <Card><CardHeader><CardTitle>Sistemas y Costos</CardTitle><CardDescription>Administrar los sistemas de software y sus costos asociados. Un sistema puede tener múltiples entradas de costo (ej. licencias y uso) que se suman para un total anual.</CardDescription></CardHeader>
                   <CardContent>
                       <div className="flex justify-between items-center mb-4">
                         <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar sistema..." value={sistemaSearchTerm} onChange={(e) => setSistemaSearchTerm(e.target.value)} className="w-full pl-10" /></div>
@@ -385,25 +413,46 @@ export default function ConfiguracionPage() {
                                 </div>
                               </div>
                               <AccordionContent className="p-4 pt-0">
-                                <div className="flex justify-end mb-2">
-                                  <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Costo</Button>
-                                </div>
-                                <Table>
-                                  <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Monto/Licencia</TableHead><TableHead>Frecuencia</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
-                                  <TableBody>
-                                    {costosSistemas.filter(c => c.sistemaId === sistema.id).map(costo => (
-                                      <TableRow key={costo.id}>
-                                        <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
-                                        <TableCell>{costo.montoUso ? `${costo.montoUso} ${costo.moneda}` : `${costo.numeroLicencias} x ${costo.costoPorLicencia} ${costo.moneda}`}</TableCell>
-                                        <TableCell>{costo.frecuencia}</TableCell>
-                                        <TableCell className="text-right">
-                                          <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
-                                          <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
+                                {(() => {
+                                  const { total, currency } = calculateTotalAnnualCost(sistema.id);
+                                  const systemCosts = costosSistemas.filter(c => c.sistemaId === sistema.id);
+
+                                  return (
+                                    <>
+                                      <div className="p-4 border rounded-md bg-muted/30 mb-4">
+                                        <h4 className="font-semibold text-sm text-muted-foreground">Costo Anual Total Estimado</h4>
+                                        <p className="text-2xl font-bold text-primary">
+                                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(total)}
+                                        </p>
+                                      </div>
+
+                                      <div className="flex justify-end mb-2">
+                                        <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Detalle de Costo</Button>
+                                      </div>
+                                      
+                                      {systemCosts.length > 0 ? (
+                                        <Table>
+                                          <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Monto/Licencia</TableHead><TableHead>Frecuencia</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+                                          <TableBody>
+                                            {systemCosts.map(costo => (
+                                              <TableRow key={costo.id}>
+                                                <TableCell>{costo.tipoCosto.join(', ')}</TableCell>
+                                                <TableCell>{costo.montoUso ? `${costo.montoUso} ${costo.moneda}` : `${costo.numeroLicencias} x ${costo.costoPorLicencia} ${costo.moneda}`}</TableCell>
+                                                <TableCell>{costo.frecuencia}</TableCell>
+                                                <TableCell className="text-right">
+                                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(costo, setEditingCosto, setIsCostoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
+                                                  <Button variant="ghost" size="icon" onClick={() => promptDelete(costo.id, `Costo de ${sistema.nombre}`, 'costoSistema')} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      ) : (
+                                        <p className="text-center text-sm text-muted-foreground mt-4">Este sistema no tiene detalles de costos registrados.</p>
+                                      )}
+                                    </>
+                                  )
+                                })()}
                               </AccordionContent>
                             </AccordionItem></Card>
                           ))}
@@ -472,7 +521,7 @@ export default function ConfiguracionPage() {
               <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
             <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={costoForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={costoForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
         </DialogContent>
