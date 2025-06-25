@@ -450,8 +450,8 @@ export default function ConfiguracionPage() {
                                           <TableHeader><TableRow><TableHead>Descripción</TableHead><TableHead>Costo por Periodo</TableHead><TableHead>Periodo de Pago</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                                           <TableBody>
                                             {systemCosts.map(costo => {
-                                                const usageCost = costo.tipoCosto.includes('Por Uso del Sistema') && costo.montoUso ? costo.montoUso : 0;
-                                                const licenseCost = costo.tipoCosto.includes('Por Licencias') && costo.numeroLicencias && costo.costoPorLicencia ? costo.numeroLicencias * costo.costoPorLicencia : 0;
+                                                const usageCost = costo.montoUso || 0;
+                                                const licenseCost = (costo.costoPorLicencia || 0) * (costo.numeroLicencias || 0);
                                                 const totalPeriodicCost = usageCost + licenseCost;
                                                 return (
                                                   <TableRow key={costo.id}>
@@ -541,55 +541,46 @@ export default function ConfiguracionPage() {
               )}
             />
             <FormField
-                control={costoForm.control}
-                name="tipoCosto"
-                render={() => (
-                    <FormItem>
-                        <div className="mb-4">
-                            <FormLabel className="text-base">Tipo de Costo</FormLabel>
-                            <FormDescription>
-                                Seleccione uno o más tipos de costo.
-                            </FormDescription>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            {tiposDeCostoOptions.map((item) => (
-                                <FormField
-                                    key={item}
-                                    control={costoForm.control}
-                                    name="tipoCosto"
-                                    render={({ field }) => {
-                                        return (
-                                            <FormItem
-                                                key={item}
-                                                className="flex flex-row items-start space-x-3 space-y-0"
-                                            >
-                                                <FormControl>
-                                                    <Checkbox
-                                                        checked={field.value?.includes(item)}
-                                                        onCheckedChange={(checked) => {
-                                                            return checked
-                                                                ? field.onChange([...(field.value ?? []), item])
-                                                                : field.onChange(
-                                                                    (field.value ?? []).filter(
-                                                                        (value) => value !== item
-                                                                    )
-                                                                )
-                                                        }}
-                                                    />
-                                                </FormControl>
-                                                <FormLabel className="font-normal">
-                                                    {item}
-                                                </FormLabel>
-                                            </FormItem>
-                                        )
-                                    }}
-                                />
-                            ))}
-                        </div>
-                        <FormMessage />
-                    </FormItem>
-                )}
+              control={costoForm.control}
+              name="tipoCosto"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel className="text-base">Tipo de Costo</FormLabel>
+                    <FormDescription>
+                        Seleccione uno o más tipos de costo.
+                    </FormDescription>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {tiposDeCostoOptions.map((item) => (
+                      <FormItem
+                        key={item}
+                        className="flex flex-row items-start space-x-3 space-y-0"
+                      >
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value?.includes(item)}
+                            onCheckedChange={(checked) => {
+                              const currentValue = field.value ?? [];
+                              if (checked) {
+                                field.onChange([...currentValue, item]);
+                              } else {
+                                field.onChange(currentValue.filter((value) => value !== item));
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          {item}
+                        </FormLabel>
+                      </FormItem>
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
+
             {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
             {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
                 <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
