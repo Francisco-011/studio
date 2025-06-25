@@ -40,7 +40,7 @@ function calculateSystemAnnualCost(
   if (costsForSystem.length === 0) return { cost: 0, currency: 'USD', details: ["Sin costos registrados"] };
   
   let totalAnnualCost = 0;
-  const displayCurrency = costsForSystem[0].moneda; // Use first cost's currency as primary display
+  const displayCurrency = costsForSystem[0].moneda || 'USD'; // Use first cost's currency as primary display
   const costDetails: string[] = [];
 
   costsForSystem.forEach(cost => {
@@ -62,7 +62,7 @@ function calculateSystemAnnualCost(
     }
 
     costDetails.push(
-      `Tipo: ${cost.tipoCosto.join('/')}, ` +
+      `Descripción: ${cost.descripcion}, ` +
       (cost.montoUso ? `Uso: ${formatMejorasCurrency(cost.montoUso, cost.moneda)} ` : '') +
       (cost.numeroLicencias ? `Lic: ${cost.numeroLicencias}x${formatMejorasCurrency(cost.costoPorLicencia, cost.moneda)} ` : '') +
       `(${cost.frecuencia})`
