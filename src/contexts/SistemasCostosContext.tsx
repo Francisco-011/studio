@@ -7,9 +7,6 @@ import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 
 // Types for Systems and Costs
-export const tiposDeCostoOptions = ["Por Uso del Sistema", "Por Licencias"] as const;
-export type TipoCosto = typeof tiposDeCostoOptions[number];
-
 export const formasDePagoOptions = ["Transferencia", "Efectivo", "Tarjeta", "Otros"] as const;
 export type FormaPago = typeof formasDePagoOptions[number];
 
@@ -33,14 +30,13 @@ export interface Sistema {
 export interface SistemaCosto {
   id: string;
   sistemaId: string;
-  tipoCosto: TipoCosto[];
+  descripcion: string;
   montoUso?: number;
   numeroLicencias?: number;
   costoPorLicencia?: number;
-  formaPago: FormaPago;
-  frecuencia: FrecuenciaPago;
-  moneda: TipoMoneda;
-  descripcion?: string;
+  formaPago?: FormaPago;
+  frecuencia?: FrecuenciaPago;
+  moneda?: TipoMoneda;
 }
 
 export interface SistemaCreationData extends Omit<Sistema, 'id'> {}
@@ -86,7 +82,13 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
         }
         const savedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
         if (savedCostosSistemas) {
-          setCostosSistemas(JSON.parse(savedCostosSistemas));
+          const parsedCostos = JSON.parse(savedCostosSistemas).map((c: any) => {
+            if (c.tipoCosto) { // Migration for old data
+              delete c.tipoCosto;
+            }
+            return c;
+          });
+          setCostosSistemas(parsedCostos);
         }
       } catch (error) {
         console.error("Failed to load sistemas/costos from localStorage", error);

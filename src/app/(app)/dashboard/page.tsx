@@ -93,43 +93,45 @@ function calculateAllSystemAnnualCosts(
 ): CalculatedSystemCost[] {
   if (!systemsToCalculate || !allCostos) return [];
 
-  return systemsToCalculate.map(system => {
-    const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
+  const costsBySystem = new Map<string, { system: Sistema; costs: SistemaCosto[] }>();
+
+  systemsToCalculate.forEach(system => {
+    costsBySystem.set(system.id, { system, costs: [] });
+  });
+
+  allCostos.forEach(cost => {
+    if (costsBySystem.has(cost.sistemaId)) {
+      costsBySystem.get(cost.sistemaId)!.costs.push(cost);
+    }
+  });
+
+  return Array.from(costsBySystem.values()).map(({ system, costs }) => {
     let totalAnnualUsage = 0;
     let totalAnnualLicenseCost = 0;
-    let systemCurrency: TipoMoneda | string = 'USD';
     let systemTotalLicenses = 0;
     const descriptions: string[] = [];
+    const mainCurrency: TipoMoneda | string = costs.length > 0 ? (costs[0].moneda || 'USD') : 'USD';
 
-    if (costsForSystem.length > 0) {
-      systemCurrency = costsForSystem[0].moneda;
-      costsForSystem.forEach(cost => {
-        if(cost.descripcion) descriptions.push(cost.descripcion);
-        if (cost.moneda === systemCurrency) {
-          let periodicUsage = 0;
-          if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
-            periodicUsage = cost.montoUso;
-          }
+    costs.forEach(cost => {
+      if (cost.descripcion) descriptions.push(cost.descripcion);
+      
+      const usage = cost.montoUso || 0;
+      const licenses = cost.numeroLicencias || 0;
+      const costPerLicense = cost.costoPorLicencia || 0;
+      const licenseTotal = licenses * costPerLicense;
 
-          let periodicLicense = 0;
-          if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
-            periodicLicense = cost.numeroLicencias * cost.costoPorLicencia;
-            systemTotalLicenses += cost.numeroLicencias;
-          }
+      let multiplier = 1;
+      if (cost.frecuencia === 'Mensual') {
+        multiplier = 12;
+      }
+      
+      if (cost.moneda === mainCurrency) {
+        totalAnnualUsage += usage * multiplier;
+        totalAnnualLicenseCost += licenseTotal * multiplier;
+      }
+      systemTotalLicenses += licenses;
+    });
 
-          if (cost.frecuencia === "Mensual") {
-            totalAnnualUsage += periodicUsage * 12;
-            totalAnnualLicenseCost += periodicLicense * 12;
-          } else if (cost.frecuencia === "Anual") {
-            totalAnnualUsage += periodicUsage;
-            totalAnnualLicenseCost += periodicLicense;
-          } else {
-            totalAnnualUsage += periodicUsage;
-            totalAnnualLicenseCost += periodicLicense;
-          }
-        }
-      });
-    }
     return {
       id: system.id,
       name: system.nombre,
@@ -137,11 +139,12 @@ function calculateAllSystemAnnualCosts(
       annualLicenseCost: totalAnnualLicenseCost,
       totalAnnualCost: totalAnnualUsage + totalAnnualLicenseCost,
       totalLicenses: systemTotalLicenses,
-      currency: systemCurrency,
+      currency: mainCurrency,
       descriptions,
     };
   });
 }
+
 
 interface MonthlyEvolutionData {
   month: string;
@@ -1238,5 +1241,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto, type PuestoCreationData, nivelesOrganizacionales } from '@/contexts/PuestosContext';
-import { useSistemasCostos, type Sistema, type SistemaCosto, tiposDeCostoOptions, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope, type TipoMoneda } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { useActividades } from '@/contexts/ActividadesContext';
@@ -89,10 +89,9 @@ const costoSistemaFormSchema = z.object({
   id: z.string().optional(),
   sistemaId: z.string(),
   descripcion: z.string().min(1, "La descripción es requerida."),
-  tipoCosto: z.array(z.string()).optional().default([]),
-  montoUso: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
-  numeroLicencias: z.preprocess(val => val === '' ? undefined : parseInt(String(val), 10), z.number().int().nonnegative().optional()),
-  costoPorLicencia: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
+  montoUso: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
+  numeroLicencias: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
+  costoPorLicencia: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
   formaPago: z.enum(formasDePagoOptions as [string, ...string[]]).optional(),
   frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]).optional(),
   moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
@@ -116,8 +115,8 @@ export default function ConfiguracionPage() {
   const { puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos } = usePuestos();
   const { sistemas, costosSistemas, addSistema, updateSistema, deleteSistema, addCostoSistema, updateCostoSistema, deleteCostoSistema, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones } = useAcciones();
-  const { actividades } = useActividades();
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const { actividades } = useActividades();
 
   useEffect(() => {
       const storedData = localStorage.getItem('proceza-captured-data');
@@ -165,7 +164,7 @@ export default function ConfiguracionPage() {
   useEffect(() => { sistemaForm.reset(editingSistema || { nombre: '', scope: 'Empresa' }); }, [editingSistema, sistemaForm]);
   useEffect(() => {
     if (isCostoDialogOpen) {
-      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', tipoCosto: [], formaPago: 'Transferencia', frecuencia: 'Mensual', moneda: 'MXN', descripcion: '' });
+      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', descripcion: '' });
     }
   }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
 
@@ -194,7 +193,7 @@ export default function ConfiguracionPage() {
     setIsSistemaDialogOpen(false);
   }
   function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
-    const costoData = { ...data, tipoCosto: data.tipoCosto as any }; // Cast because Zod infers string[]
+    const costoData = { ...data };
     if (editingCosto) updateCostoSistema(editingCosto.id, costoData); else addCostoSistema(costoData);
     setIsCostoDialogOpen(false);
   }
@@ -274,19 +273,15 @@ export default function ConfiguracionPage() {
     const totalsByCurrency = new Map<TipoMoneda, number>();
 
     costsForSystem.forEach(cost => {
-      let periodicCost = 0;
-      if (cost.tipoCosto.includes("Por Uso del Sistema") && cost.montoUso) {
-        periodicCost += cost.montoUso;
-      }
-      if (cost.tipoCosto.includes("Por Licencias") && cost.numeroLicencias && cost.costoPorLicencia) {
-        periodicCost += cost.numeroLicencias * cost.costoPorLicencia;
-      }
-
+      const usageCost = cost.montoUso || 0;
+      const licenseCost = (cost.costoPorLicencia || 0) * (cost.numeroLicencias || 0);
+      const baseAmount = usageCost + licenseCost;
+      
       let annualCost = 0;
       if (cost.frecuencia === "Mensual") {
-        annualCost = periodicCost * 12;
+        annualCost = baseAmount * 12;
       } else { // "Anual" or "Otro" are treated as annual
-        annualCost = periodicCost;
+        annualCost = baseAmount;
       }
 
       if (cost.moneda) {
@@ -526,7 +521,7 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle><DialogDescription>Añada un componente de costo específico para el sistema {currentSistemaForCosto?.nombre}.</DialogDescription></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField
               control={costoForm.control}
@@ -534,63 +529,31 @@ export default function ConfiguracionPage() {
               render={({ field }) => (
                   <FormItem>
                       <FormLabel>Descripción</FormLabel>
-                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} value={field.value ?? ''} /></FormControl>
+                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} /></FormControl>
                       <FormDescription>Identificador único para este costo específico.</FormDescription>
                       <FormMessage />
                   </FormItem>
               )}
             />
-            <FormField
-              control={costoForm.control}
-              name="tipoCosto"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="mb-4">
-                    <FormLabel className="text-base">Tipo de Costo</FormLabel>
-                    <FormDescription>
-                        Seleccione uno o más tipos de costo.
-                    </FormDescription>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {tiposDeCostoOptions.map((item) => (
-                      <FormItem
-                        key={item}
-                        className="flex flex-row items-start space-x-3 space-y-0"
-                      >
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value?.includes(item)}
-                            onCheckedChange={(checked) => {
-                              const currentValue = field.value ?? [];
-                              if (checked) {
-                                field.onChange([...currentValue, item]);
-                              } else {
-                                field.onChange(currentValue.filter((value) => value !== item));
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          {item}
-                        </FormLabel>
-                      </FormItem>
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
-            {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
-                <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            </div>)}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            
+            <div className="space-y-4 rounded-md border p-4">
+                <h4 className="font-medium text-sm">Por Uso del Sistema</h4>
+                <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
             </div>
-            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+
+            <div className="space-y-4 rounded-md border p-4">
+                 <h4 className="font-medium text-sm">Por Licencias</h4>
+                <div className="grid grid-cols-2 gap-4">
+                    <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" placeholder="Ej: 10" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" placeholder="Ej: 50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            </div>
+            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
