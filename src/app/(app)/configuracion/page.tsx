@@ -88,6 +88,7 @@ type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 const costoSistemaFormSchema = z.object({
   id: z.string().optional(),
   sistemaId: z.string(),
+  descripcion: z.string().min(3, "La descripción es requerida (mínimo 3 caracteres)."),
   tipoCosto: z.array(z.string()).refine(value => value.some(item => item), { message: "Debe seleccionar al menos un tipo de costo." }),
   montoUso: z.preprocess(val => val === '' ? undefined : parseFloat(String(val)), z.number().nonnegative().optional()),
   numeroLicencias: z.preprocess(val => val === '' ? undefined : parseInt(String(val), 10), z.number().int().nonnegative().optional()),
@@ -95,7 +96,6 @@ const costoSistemaFormSchema = z.object({
   formaPago: z.enum(formasDePagoOptions as [string, ...string[]]),
   frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]),
   moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]),
-  descripcion: z.string().min(1, "La descripción es requerida para identificar el costo."),
 }).superRefine((data, ctx) => {
     if (data.tipoCosto.includes("Por Licencias")) {
       if (data.numeroLicencias === undefined || data.numeroLicencias === null || isNaN(data.numeroLicencias)) {
@@ -443,12 +443,12 @@ export default function ConfiguracionPage() {
                                         {annualCosts.length > 0 ? (
                                           annualCosts.map(({ currency, total }) => (
                                             <p key={currency} className="text-2xl font-bold text-primary">
-                                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency }).format(total)}
+                                              {new Intl.NumberFormat('es-MX', { style: 'currency', currency, currencyDisplay: 'code' }).format(total)}
                                             </p>
                                           ))
                                         ) : (
                                           <p className="text-2xl font-bold text-primary">
-                                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD' }).format(0)}
+                                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD', currencyDisplay: 'code' }).format(0)}
                                           </p>
                                         )}
                                       </div>
@@ -468,7 +468,7 @@ export default function ConfiguracionPage() {
                                                 return (
                                                   <TableRow key={costo.id}>
                                                     <TableCell>{costo.descripcion}</TableCell>
-                                                    <TableCell>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda }).format(totalPeriodicCost)}</TableCell>
+                                                    <TableCell>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda, currencyDisplay: 'code' }).format(totalPeriodicCost)}</TableCell>
                                                     <TableCell>{costo.frecuencia}</TableCell>
                                                     <TableCell className="text-right">
                                                       <Button variant="ghost" size="icon" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(costo, setEditingCosto, setIsCostoDialogOpen); }} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
@@ -538,7 +538,7 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar Costo`}</DialogTitle></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField
               control={costoForm.control}
@@ -555,33 +555,41 @@ export default function ConfiguracionPage() {
             <FormField
               control={costoForm.control}
               name="tipoCosto"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <div className="mb-4">
-                    <FormLabel>Tipo de Costo</FormLabel>
+                    <FormLabel className="text-base">Tipo de Costo</FormLabel>
                     <FormDescription>Seleccione uno o más tipos de costo.</FormDescription>
                   </div>
-                  {tiposDeCostoOptions.map((item) => (
-                    <FormItem
-                      key={item}
-                      className="flex flex-row items-start space-x-3 space-y-0"
-                    >
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value?.includes(item)}
-                          onCheckedChange={(checked) => {
-                            const currentValue = field.value || [];
-                            return checked
-                              ? field.onChange([...currentValue, item])
-                              : field.onChange(
-                                  currentValue.filter((value) => value !== item)
-                                );
-                          }}
-                        />
-                      </FormControl>
-                      <FormLabel className="font-normal">{item}</FormLabel>
-                    </FormItem>
-                  ))}
+                  <div className="space-y-2">
+                    {tiposDeCostoOptions.map((item) => (
+                      <FormField
+                        key={item}
+                        control={costoForm.control}
+                        name="tipoCosto"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item)}
+                                onCheckedChange={(checked) => {
+                                  const currentValue = field.value || [];
+                                  return checked
+                                    ? field.onChange([...currentValue, item])
+                                    : field.onChange(
+                                        currentValue.filter(
+                                          (value) => value !== item
+                                        )
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">{item}</FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
