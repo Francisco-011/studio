@@ -607,6 +607,12 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
+  const availableProcessesForSelection = useMemo(() => {
+    return allCapturedData
+      .filter(p => !p.deletedAt && p.id !== editingProcess?.id)
+      .map(p => ({ id: p.id, nombre: p.proceso }));
+  }, [allCapturedData, editingProcess]);
+
   const renderMultiSelectDropdown = (
     field: any, 
     label: string,
@@ -863,9 +869,9 @@ export default function ProcesosYFlujosRegistradosPage() {
               </div>
               <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Info. Recibida</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", allCapturedData.map(p=>({id:p.id, nombre: p.proceso})), isLoading, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoading, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Info. Entregada</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", allCapturedData.map(p=>({id:p.id, nombre: p.proceso})), isLoading, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoading, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
                 <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>

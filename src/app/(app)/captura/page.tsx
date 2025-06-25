@@ -127,6 +127,7 @@ export default function CapturaPage() {
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
   
   const isMounted = useRef(false);
@@ -187,6 +188,7 @@ export default function CapturaPage() {
 
 
   useEffect(() => {
+    setIsLoadingProcesses(true);
     try {
       const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedData) {
@@ -196,6 +198,8 @@ export default function CapturaPage() {
     } catch (error) {
       console.error("Error loading all processes from localStorage for dropdowns:", error);
       toast({ title: "Error al Cargar Procesos", description: "No se pudieron cargar los procesos para las listas de selección.", variant: "destructive" });
+    } finally {
+      setIsLoadingProcesses(false);
     }
   }, []);
   
@@ -530,9 +534,9 @@ export default function CapturaPage() {
               </div>
 
               <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso recibe como entrada..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle qué información es necesaria para iniciar o ejecutar el proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, allProcesses.length === 0, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, isLoadingProcesses, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso genera o entrega como resultado..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle cuál es el producto o resultado informativo del proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, allProcesses.length === 0, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, isLoadingProcesses, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
                 <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Actividades</Button>
