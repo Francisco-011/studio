@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
+import { useRouter } from 'next/navigation';
 
 import { useAreas, type Area } from '@/contexts/AreasContext';
 import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
@@ -508,11 +509,42 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar Costo para ${currentSistemaForCosto?.nombre}`}</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo adicional`}</DialogTitle></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
-            <FormField control={costoForm.control} name="tipoCosto" render={({ field }) => (
-                <FormItem>{tiposDeCostoOptions.map(item => (<FormField key={item} control={costoForm.control} name="tipoCosto" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={checked => { return checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter(v => v !== item))}} /></FormControl><FormLabel className="font-normal">{item}</FormLabel></FormItem>)} />))}<FormMessage /></FormItem>
-            )} />
+            <FormField
+              control={costoForm.control}
+              name="tipoCosto"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Costo</FormLabel>
+                   <FormDescription>
+                    Seleccione uno o más tipos de costo.
+                  </FormDescription>
+                  {tiposDeCostoOptions.map((item) => (
+                    <FormItem key={item} className="flex flex-row items-center space-x-3 space-y-0 pt-2">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value?.includes(item)}
+                          onCheckedChange={(checked) => {
+                            return checked
+                              ? field.onChange([...(field.value || []), item])
+                              : field.onChange(
+                                  field.value?.filter(
+                                    (value) => value !== item
+                                  )
+                                )
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        {item}
+                      </FormLabel>
+                    </FormItem>
+                  ))}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
             {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
                 <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
