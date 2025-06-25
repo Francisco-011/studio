@@ -86,24 +86,24 @@ const sistemaFormSchema = z.object({
 type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 
 const costoSistemaFormSchema = z.object({
-  id: z.string().optional(),
-  sistemaId: z.string(),
-  descripcion: z.string().min(1, "La descripción es requerida."),
-  montoUso: z.preprocess(
-    (val) => (val === undefined || val === null || val === '' ? undefined : parseFloat(String(val))),
-    z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
-  ),
-  numeroLicencias: z.preprocess(
-    (val) => (val === undefined || val === null || val === '' ? undefined : parseInt(String(val), 10)),
-    z.number({ invalid_type_error: "Debe ser un número." }).int("Debe ser entero.").nonnegative("Debe ser positivo.").optional()
-  ),
-  costoPorLicencia: z.preprocess(
-    (val) => (val === undefined || val === null || val === '' ? undefined : parseFloat(String(val))),
-    z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
-  ),
-  formaPago: z.enum(formasDePagoOptions as [string, ...string[]]).optional(),
-  frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]).optional(),
-  moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
+    id: z.string().optional(),
+    sistemaId: z.string(),
+    descripcion: z.string().min(1, "La descripción es requerida."),
+    montoUso: z.preprocess(
+      (val) => (val === undefined || val === null || String(val).trim() === '' ? undefined : parseFloat(String(val))),
+      z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
+    ),
+    numeroLicencias: z.preprocess(
+      (val) => (val === undefined || val === null || String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+      z.number({ invalid_type_error: "Debe ser un número." }).int("Debe ser entero.").nonnegative("Debe ser positivo.").optional()
+    ),
+    costoPorLicencia: z.preprocess(
+      (val) => (val === undefined || val === null || String(val).trim() === '' ? undefined : parseFloat(String(val))),
+      z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()
+    ),
+    formaPago: z.enum(formasDePagoOptions as [string, ...string[]]).optional(),
+    frecuencia: z.enum(frecuenciasDePagoOptions as [string, ...string[]]).optional(),
+    moneda: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
 });
 type CostoSistemaFormData = z.infer<typeof costoSistemaFormSchema>;
 
@@ -460,7 +460,7 @@ export default function ConfiguracionPage() {
                                                 return (
                                                   <TableRow key={costo.id}>
                                                     <TableCell>{costo.descripcion}</TableCell>
-                                                    <TableCell>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda, currencyDisplay: 'code' }).format(totalPeriodicCost)}</TableCell>
+                                                    <TableCell>{costo.moneda ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: costo.moneda, currencyDisplay: 'code' }).format(totalPeriodicCost) : (totalPeriodicCost > 0 ? totalPeriodicCost.toFixed(2) : "-")}</TableCell>
                                                     <TableCell>{costo.frecuencia}</TableCell>
                                                     <TableCell className="text-right">
                                                       <Button variant="ghost" size="icon" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(costo, setEditingCosto, setIsCostoDialogOpen); }} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
@@ -530,42 +530,47 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle><DialogDescription>Añada un componente de costo específico para el sistema {currentSistemaForCosto?.nombre}.</DialogDescription></DialogHeader>
-          <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
-            <FormField
-              control={costoForm.control}
-              name="descripcion"
-              render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Descripción</FormLabel>
-                      <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} /></FormControl>
-                      <FormDescription>Identificador único para este costo específico.</FormDescription>
-                      <FormMessage />
-                  </FormItem>
-              )}
-            />
-            
-            <div className="space-y-4 rounded-md border p-4">
-                <h4 className="font-medium text-sm">Por Uso del Sistema</h4>
-                <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-            </div>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingCosto ? 'Editar Costo' : 'Agregar costo'}</DialogTitle>
+            <DialogDescription>Añada un componente de costo específico para el sistema {currentSistemaForCosto?.nombre}.</DialogDescription>
+          </DialogHeader>
+          <Form {...costoForm}>
+            <form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
+              <FormField
+                  control={costoForm.control}
+                  name="descripcion"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Descripción</FormLabel>
+                          <FormControl><Textarea placeholder="Ej: Licencia anual equipo de ventas, Consumo mensual API..." {...field} /></FormControl>
+                          <FormDescription>Identificador único para este costo específico.</FormDescription>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+              <div className="space-y-2 rounded-md border p-4">
+                  <h4 className="font-medium text-sm">Por Uso del Sistema</h4>
+                  <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+              </div>
 
-            <div className="space-y-4 rounded-md border p-4">
-                 <h4 className="font-medium text-sm">Por Licencias</h4>
-                <div className="grid grid-cols-2 gap-4">
-                    <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" placeholder="Ej: 10" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" placeholder="Ej: 50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            </div>
-            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            
-            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
-          </form></Form>
+              <div className="space-y-2 rounded-md border p-4">
+                  <h4 className="font-medium text-sm">Por Licencias</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                      <FormField control={costoForm.control} name="numeroLicencias" render={({ field }) => (<FormItem><FormLabel># Licencias</FormLabel><FormControl><Input type="number" placeholder="Ej: 10" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" placeholder="Ej: 50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                  </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+              <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              
+              <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -578,3 +583,4 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
+
