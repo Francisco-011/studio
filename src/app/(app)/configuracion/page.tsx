@@ -286,7 +286,9 @@ export default function ConfiguracionPage() {
             
             if (cost.frecuencia === "Mensual") {
                 totalAnnualCost += periodicCost * 12;
-            } else {
+            } else if (cost.frecuencia === "Anual") {
+                totalAnnualCost += periodicCost;
+            } else { // "Otro" - Assume annual for calculation simplicity
                 totalAnnualCost += periodicCost;
             }
         }
@@ -427,12 +429,12 @@ export default function ConfiguracionPage() {
                                       </div>
 
                                       <div className="flex justify-end mb-2">
-                                        <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Detalle de Costo</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setCurrentSistemaForCosto(sistema); handleEdit(null, setEditingCosto, setIsCostoDialogOpen); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar costo adicional</Button>
                                       </div>
                                       
                                       {systemCosts.length > 0 ? (
                                         <Table>
-                                          <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Monto/Licencia</TableHead><TableHead>Frecuencia</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+                                          <TableHeader><TableRow><TableHead>Tipo de Costo</TableHead><TableHead>Costo por Periodo</TableHead><TableHead>Periodo de Pago</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                                           <TableBody>
                                             {systemCosts.map(costo => (
                                               <TableRow key={costo.id}>
