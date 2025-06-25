@@ -289,8 +289,10 @@ export default function ConfiguracionPage() {
         annualCost = periodicCost;
       }
 
-      const currentTotal = totalsByCurrency.get(cost.moneda) || 0;
-      totalsByCurrency.set(cost.moneda, currentTotal + annualCost);
+      if (cost.moneda) {
+        const currentTotal = totalsByCurrency.get(cost.moneda) || 0;
+        totalsByCurrency.set(cost.moneda, currentTotal + annualCost);
+      }
     });
 
     return Array.from(totalsByCurrency.entries()).map(([currency, total]) => ({
@@ -524,7 +526,7 @@ export default function ConfiguracionPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isCostoDialogOpen} onOpenChange={setIsCostoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar Costo`}</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>{editingCosto ? 'Editar Costo' : `Agregar costo`}</DialogTitle></DialogHeader>
           <Form {...costoForm}><form onSubmit={costoForm.handleSubmit(handleCostoSistemaSubmit)} className="space-y-4 py-4">
             <FormField
               control={costoForm.control}
@@ -539,46 +541,54 @@ export default function ConfiguracionPage() {
               )}
             />
             <FormField
-              control={costoForm.control}
-              name="tipoCosto"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4">
-                    <FormLabel className="text-base">Tipo de Costo</FormLabel>
-                    <FormDescription>Seleccione uno o más tipos de costo.</FormDescription>
-                  </div>
-                  <div className="space-y-2">
-                    {tiposDeCostoOptions.map((item) => (
-                      <FormField
-                        key={item}
-                        control={costoForm.control}
-                        name="tipoCosto"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(item)}
-                                onCheckedChange={(checked) => {
-                                  const currentValue = field.value || [];
-                                  return checked
-                                    ? field.onChange([...currentValue, item])
-                                    : field.onChange(
-                                        currentValue.filter(
-                                          (value) => value !== item
+                control={costoForm.control}
+                name="tipoCosto"
+                render={() => (
+                    <FormItem>
+                        <div className="mb-4">
+                            <FormLabel className="text-base">Tipo de Costo</FormLabel>
+                            <FormDescription>
+                                Seleccione uno o más tipos de costo.
+                            </FormDescription>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {tiposDeCostoOptions.map((item) => (
+                                <FormField
+                                    key={item}
+                                    control={costoForm.control}
+                                    name="tipoCosto"
+                                    render={({ field }) => {
+                                        return (
+                                            <FormItem
+                                                key={item}
+                                                className="flex flex-row items-start space-x-3 space-y-0"
+                                            >
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(item)}
+                                                        onCheckedChange={(checked) => {
+                                                            return checked
+                                                                ? field.onChange([...(field.value ?? []), item])
+                                                                : field.onChange(
+                                                                    (field.value ?? []).filter(
+                                                                        (value) => value !== item
+                                                                    )
+                                                                )
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">
+                                                    {item}
+                                                </FormLabel>
+                                            </FormItem>
                                         )
-                                      );
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal">{item}</FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        <FormMessage />
+                    </FormItem>
+                )}
             />
             {costoForm.watch('tipoCosto')?.includes('Por Uso del Sistema') && <FormField control={costoForm.control} name="montoUso" render={({ field }) => (<FormItem><FormLabel>Monto por Uso</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
             {costoForm.watch('tipoCosto')?.includes('Por Licencias') && (<div className="grid grid-cols-2 gap-4">
@@ -586,10 +596,10 @@ export default function ConfiguracionPage() {
                 <FormField control={costoForm.control} name="costoPorLicencia" render={({ field }) => (<FormItem><FormLabel>Costo/Licencia</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
             </div>)}
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <FormField control={costoForm.control} name="moneda" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(tiposDeMonedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             </div>
-            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={costoForm.control} name="formaPago" render={({ field }) => (<FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(formasDePagoOptions as readonly string[]).map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
