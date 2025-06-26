@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { toast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 
 interface AuditFinding {
