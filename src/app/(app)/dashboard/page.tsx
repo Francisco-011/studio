@@ -203,10 +203,7 @@ export default function DashboardPage() {
   const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<ChartMetricKey[]>(['procesosMapeados', 'accionesCompletadas']);
 
-  const [dashboardDateRange, setDashboardDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: startOfMonth(subMonths(new Date(), 5)),
-    to: endOfMonth(new Date()),
-  });
+  const [dashboardDateRange, setDashboardDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
@@ -239,6 +236,13 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingData(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setDashboardDateRange({
+      from: startOfMonth(subMonths(new Date(), 5)),
+      to: endOfMonth(new Date()),
+    });
   }, []);
 
   useEffect(() => {
