@@ -89,14 +89,7 @@ export default function ProcesosDashboardPage() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
   const [entityList, setEntityList] = useState<{id: string, name: string}[]>([]);
   
-  const defaultToDate = new Date();
-  const defaultFromDate = new Date();
-  defaultFromDate.setDate(defaultFromDate.getDate() - 90);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: defaultFromDate,
-    to: defaultToDate,
-  });
-
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
   const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades' | 'actividadesDuplicadas'>('personal');
@@ -121,14 +114,17 @@ export default function ProcesosDashboardPage() {
   }, []);
 
   const filteredProcesses = useMemo(() => {
-    if (!dateRange?.from) return [];
-    const from = startOfDay(dateRange.from);
-    const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
-    
-    let processes = allCapturedProcesses.filter(proc => {
-        const procDate = parseISO(proc.capturedAt);
-        return isValid(procDate) && procDate >= from && procDate <= to;
-    });
+    let processes = allCapturedProcesses;
+
+    if (dateRange?.from) {
+      const from = startOfDay(dateRange.from);
+      const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
+      
+      processes = processes.filter(proc => {
+          const procDate = parseISO(proc.capturedAt);
+          return isValid(procDate) && procDate >= from && procDate <= to;
+      });
+    }
 
     if (selectedArea !== 'all') {
       processes = processes.filter(p => p.area === selectedArea);
@@ -145,6 +141,7 @@ export default function ProcesosDashboardPage() {
 
   const comparisonProcesses = useMemo(() => {
     if (!isComparing || !comparisonDateRange?.from) return [];
+    
     const from = startOfDay(comparisonDateRange.from);
     const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
 
@@ -325,9 +322,10 @@ export default function ProcesosDashboardPage() {
 
     try {
       let processDataString = '';
+      const dataForSummary = dateRange?.from ? filteredProcesses : allCapturedProcesses;
 
       if (selectedEntityType === 'area') {
-        const processesInArea = filteredProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
+        const processesInArea = dataForSummary.filter(p => !p.deletedAt && p.area === selectedEntityName);
         if (processesInArea.length === 0) {
             setGeneratedSummary(`No se encontraron procesos capturados para el área "${selectedEntityName}" en el periodo seleccionado.`);
             setIsGeneratingSummary(false);
@@ -355,9 +353,9 @@ export default function ProcesosDashboardPage() {
       } else { // Puesto o Departamento
         let relevantProcesses: CapturedProcess[];
         if (selectedEntityType === 'puesto') {
-          relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
+          relevantProcesses = dataForSummary.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
         } else { // departamento
-          relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.departamento === selectedEntityName);
+          relevantProcesses = dataForSummary.filter(p => !p.deletedAt && p.departamento === selectedEntityName);
         }
 
         if (relevantProcesses.length === 0) {
@@ -534,7 +532,7 @@ export default function ProcesosDashboardPage() {
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
             <DateRangePicker date={dateRange} setDate={setDateRange} />
-             <Button variant="outline" onClick={() => setIsComparing(!isComparing)}>
+             <Button variant="outline" onClick={() => setIsComparing(!isComparing)} disabled={!dateRange}>
                  <CalendarRange className="mr-2 h-4 w-4" />
                  {isComparing ? "Cancelar Comparación" : "Comparar"}
             </Button>
@@ -569,7 +567,7 @@ export default function ProcesosDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosMapeadosCount, comparisonMetrics.procesosMapeadosCount) : undefined)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosMapeadosCount, comparisonMetrics.procesosMapeadosCount) : undefined)}</div><p className="text-xs text-muted-foreground">{dateRange?.from ? 'En el periodo seleccionado' : 'Acumulado Total'}</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle><Layers className="h-4 w-4 text-muted-foreground" /></CardHeader>
