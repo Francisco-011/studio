@@ -132,6 +132,8 @@ interface ValidatedImprovement {
     id: string;
     accionNombre: string;
     procesoNombre: string;
+    area: string;
+    puesto: string;
     metrica: string;
     antes: number | string;
     despues: number | string;
@@ -341,6 +343,8 @@ export default function MejorasDashboardPage() {
                               id: `${accion.id}-${cambio.field}`,
                               accionNombre: accion.nombre,
                               procesoNombre: procesoAfectado.proceso,
+                              area: procesoAfectado.area || 'N/A',
+                              puesto: procesoAfectado.puesto || 'N/A',
                               metrica: cambio.field.includes('Tiempo') ? 'Tiempo (min)' : 'Costo',
                               antes: Number(cambio.before) || 0,
                               despues: Number(cambio.after) || 0,
@@ -444,12 +448,14 @@ export default function MejorasDashboardPage() {
             toast({ title: "Nada que exportar", description: "No hay datos de mejoras para exportar.", variant: "default" });
             return;
         }
-        const headers = ["Acción de Mejora", "Proceso Afectado", "Métrica", "Valor Anterior", "Valor Nuevo", "Ahorro Realizado", "Moneda"];
+        const headers = ["Proceso Afectado", "Área", "Puesto", "Acción de Mejora", "Métrica", "Valor Anterior", "Valor Nuevo", "Ahorro Realizado", "Moneda"];
         const csvRows = [headers.join(',')];
         mejorasValidadas.forEach(m => {
             csvRows.push([
-                escapeCsvCell(m.accionNombre),
                 escapeCsvCell(m.procesoNombre),
+                escapeCsvCell(m.area),
+                escapeCsvCell(m.puesto),
+                escapeCsvCell(m.accionNombre),
                 escapeCsvCell(m.metrica),
                 escapeCsvCell(m.antes),
                 escapeCsvCell(m.despues),
@@ -623,7 +629,8 @@ export default function MejorasDashboardPage() {
                 <div className="max-h-[400px] overflow-y-auto">
                   <Table>
                       <TableHeader><TableRow>
-                          <TableHead>Proceso / Acción</TableHead>
+                          <TableHead>Proceso / Contexto</TableHead>
+                          <TableHead>Acción de Mejora</TableHead>
                           <TableHead>Métrica</TableHead>
                           <TableHead className="text-right">Antes</TableHead>
                           <TableHead className="text-right">Después</TableHead>
@@ -634,8 +641,9 @@ export default function MejorasDashboardPage() {
                             <TableRow key={m.id}>
                                 <TableCell>
                                   <p className="font-medium">{m.procesoNombre}</p>
-                                  <p className="text-xs text-muted-foreground">{m.accionNombre}</p>
+                                  <p className="text-xs text-muted-foreground">{m.area} / {m.puesto}</p>
                                 </TableCell>
+                                <TableCell className="text-xs">{m.accionNombre}</TableCell>
                                 <TableCell>{m.metrica}</TableCell>
                                 <TableCell className="text-right">{m.metrica === 'Tiempo (min)' ? formatMinutesToHours(Number(m.antes)) : formatDashboardCurrency(Number(m.antes), m.moneda || 'USD')}</TableCell>
                                 <TableCell className="text-right">{m.metrica === 'Tiempo (min)' ? formatMinutesToHours(Number(m.despues)) : formatDashboardCurrency(Number(m.despues), m.moneda || 'USD')}</TableCell>
