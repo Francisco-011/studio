@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import { DateRange } from "react-day-picker";
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { ChartContainer } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 
 
@@ -76,6 +76,9 @@ export default function ProcesosDashboardPage() {
     from: defaultFromDate,
     to: defaultToDate,
   });
+
+  const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades'>('personal');
+
 
    useEffect(() => {
     setIsLoadingData(true);
@@ -232,17 +235,77 @@ export default function ProcesosDashboardPage() {
 
   const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
 
-  const { chartData: staffChartData, chartConfig: staffChartConfig } = useMemo(() => {
+  const { chartData, chartConfig, chartDescription } = useMemo(() => {
     if (isLoadingAll) {
-      return { chartData: [], chartConfig: {} };
+      return { chartData: [], chartConfig: {}, chartDescription: '' };
     }
-    const data = staffSummary.breakdown.map((area, index) => ({
-      name: area.areaName,
-      value: area.totalInArea,
+
+    let data;
+    let description = '';
+
+    switch (chartDataType) {
+        case 'procesos':
+            description = 'Distribución del número total de procesos mapeados en cada área.';
+            const procesosPorArea = new Map<string, number>();
+            filteredProcesses.forEach(proc => {
+                if(proc.area) {
+                    procesosPorArea.set(proc.area, (procesosPorArea.get(proc.area) || 0) + 1);
+                }
+            });
+            data = Array.from(procesosPorArea.entries()).map(([name, value]) => ({ name, value }));
+            break;
+
+        case 'variaciones':
+            description = 'Número de procesos en cada área que tienen el mismo nombre que procesos en otras áreas/puestos.';
+            const processContexts = new Map<string, Set<string>>();
+            filteredProcesses.forEach(proc => {
+                if (!processContexts.has(proc.proceso)) {
+                    processContexts.set(proc.proceso, new Set());
+                }
+                processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
+            });
+            const variationNames = new Set<string>();
+            processContexts.forEach((contexts, processName) => {
+                if (contexts.size > 1) {
+                    variationNames.add(processName);
+                }
+            });
+            const variacionesPorArea = new Map<string, number>();
+            filteredProcesses.forEach(proc => {
+                if (proc.area && variationNames.has(proc.proceso)) {
+                    variacionesPorArea.set(proc.area, (variacionesPorArea.get(proc.area) || 0) + 1);
+                }
+            });
+            data = Array.from(variacionesPorArea.entries()).map(([name, value]) => ({ name, value }));
+            break;
+
+        case 'sinActividades':
+            description = 'Número de procesos en cada área que no tienen actividades definidas.';
+            const sinActividadesPorArea = new Map<string, number>();
+            filteredProcesses.forEach(proc => {
+                if (proc.area && (!proc.activityOrder || proc.activityOrder.length === 0)) {
+                    sinActividadesPorArea.set(proc.area, (sinActividadesPorArea.get(proc.area) || 0) + 1);
+                }
+            });
+            data = Array.from(sinActividadesPorArea.entries()).map(([name, value]) => ({ name, value }));
+            break;
+        
+        case 'personal':
+        default:
+            description = 'Distribución porcentual del personal en las áreas principales.';
+            data = staffSummary.breakdown.map((area) => ({
+                name: area.areaName,
+                value: area.totalInArea,
+            }));
+            break;
+    }
+
+    const coloredData = data.sort((a,b) => b.value - a.value).map((entry, index) => ({
+      ...entry,
       fill: `hsl(var(--chart-${(index % 12) + 1}))`
     }));
 
-    const config = data.reduce((acc, entry) => {
+    const config = coloredData.reduce((acc, entry) => {
         acc[entry.name] = {
             label: entry.name,
             color: entry.fill
@@ -250,8 +313,9 @@ export default function ProcesosDashboardPage() {
         return acc;
     }, {} as ChartConfig);
 
-    return { chartData: data, chartConfig: config };
-  }, [staffSummary, isLoadingAll]);
+    return { chartData: coloredData, chartConfig: config, chartDescription: description };
+
+  }, [chartDataType, filteredProcesses, staffSummary.breakdown, isLoadingAll]);
 
   const handleExport = () => {
     if (staffSummary.breakdown.length === 0) {
@@ -361,17 +425,31 @@ export default function ProcesosDashboardPage() {
         <div className="lg:col-span-2 flex flex-col gap-6">
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle>Personal por Área</CardTitle>
-                    <CardDescription>Distribución porcentual del personal en las áreas principales.</CardDescription>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>Análisis Gráfico</CardTitle>
+                       <Select value={chartDataType} onValueChange={(v) => setChartDataType(v as any)}>
+                          <SelectTrigger className="w-[220px] h-8 text-xs">
+                              <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="personal">Distribución de Personal</SelectItem>
+                              <SelectItem value="procesos">Procesos por Área</SelectItem>
+                              <SelectItem value="variaciones">Variaciones por Área</SelectItem>
+                              <SelectItem value="sinActividades">Procesos sin Actividades</SelectItem>
+                          </SelectContent>
+                      </Select>
+                    </div>
+                    <CardDescription>{chartDescription}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center justify-center">
                     {isLoadingAll ? <div className="h-[200px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> :
-                     staffChartData.length > 0 ? (
-                        <ChartContainer config={staffChartConfig} className="min-h-[200px] w-full">
+                     chartData.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
                             <ResponsiveContainer>
                                 <PieChart>
-                                    <Pie data={staffChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                        {staffChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                                    <Tooltip content={<ChartTooltipContent hideLabel />} />
+                                    <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                        {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
                                     </Pie>
                                     <Legend />
                                 </PieChart>
