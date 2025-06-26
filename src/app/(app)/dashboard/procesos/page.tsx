@@ -1,8 +1,10 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory } from "lucide-react";
+import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
 import {
   Table,
   TableBody,
@@ -23,6 +25,11 @@ import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summariz
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
+import { DateRange } from "react-day-picker";
+import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { ChartContainer } from '@/components/ui/chart';
+
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -32,6 +39,17 @@ const renderMetric = (value: number | string, loading: boolean) => {
   }
   return value;
 }
+
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
 
 export default function ProcesosDashboardPage() {
@@ -49,6 +67,14 @@ export default function ProcesosDashboardPage() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
   const [entityList, setEntityList] = useState<{id: string, name: string}[]>([]);
   
+  const defaultToDate = new Date();
+  const defaultFromDate = new Date();
+  defaultFromDate.setDate(defaultFromDate.getDate() - 90);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: defaultFromDate,
+    to: defaultToDate,
+  });
+
    useEffect(() => {
     setIsLoadingData(true);
     try {
@@ -62,6 +88,18 @@ export default function ProcesosDashboardPage() {
       setIsLoadingData(false);
     }
   }, []);
+
+  const filteredProcesses = useMemo(() => {
+    if (!dateRange?.from) return allCapturedProcesses;
+    const from = startOfDay(dateRange.from);
+    const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
+    
+    return allCapturedProcesses.filter(proc => {
+        const procDate = parseISO(proc.capturedAt);
+        return isValid(procDate) && procDate >= from && procDate <= to;
+    });
+  }, [allCapturedProcesses, dateRange]);
+
 
   useEffect(() => {
     if (selectedEntityType === 'area' && !isLoadingAreas) {
@@ -86,7 +124,7 @@ export default function ProcesosDashboardPage() {
         procesosSinActividadesCount: 0,
       };
     }
-    const processes = allCapturedProcesses.filter(p => p.activo !== false && !p.deletedAt);
+    const processes = filteredProcesses.filter(p => p.activo !== false && !p.deletedAt);
     const activeActivities = globalActividades.filter(a => a.activa);
 
     const processContexts = new Map<string, Set<string>>();
@@ -109,7 +147,7 @@ export default function ProcesosDashboardPage() {
       procesosSinActividadesCount: processes.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length,
       procesosConVariacionesCount,
     };
-  }, [allCapturedProcesses, globalActividades, isLoadingData, isLoadingActividades]);
+  }, [filteredProcesses, globalActividades, isLoadingData, isLoadingActividades]);
 
   const staffSummary = useMemo(() => {
     if (isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) {
@@ -158,13 +196,13 @@ export default function ProcesosDashboardPage() {
     try {
       let relevantProcesses: CapturedProcess[];
       if (selectedEntityType === 'area') {
-        relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
+        relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
       } else {
-        relevantProcesses = allCapturedProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
+        relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
       }
 
       if (relevantProcesses.length === 0) {
-        setGeneratedSummary(`No se encontraron procesos capturados para ${selectedEntityType === 'area' ? 'el área' : 'el puesto'} "${selectedEntityName}".`);
+        setGeneratedSummary(`No se encontraron procesos capturados para ${selectedEntityType === 'area' ? 'el área' : 'el puesto'} "${selectedEntityName}" en el periodo seleccionado.`);
         setIsGeneratingSummary(false);
         return;
       }
@@ -190,42 +228,92 @@ export default function ProcesosDashboardPage() {
     }
   };
 
+  const staffChartData = useMemo(() => {
+    return staffSummary.breakdown.map((area, index) => ({
+      name: area.areaName,
+      value: area.totalInArea,
+      fill: `var(--chart-${(index % 12) + 1})`
+    }));
+  }, [staffSummary]);
+
   const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
+
+  const handleExport = () => {
+    if (staffSummary.breakdown.length === 0) {
+        toast({ title: "Nada que exportar", description: "No hay datos de distribución de personal para exportar.", variant: "default" });
+        return;
+    }
+    const headers = ["Área", "Departamento", "Puesto", "Número de Personas"];
+    const csvRows = [headers.join(',')];
+    staffSummary.breakdown.forEach(area => {
+        area.deptos.forEach(depto => {
+            depto.puestos.forEach(puesto => {
+                csvRows.push([
+                    escapeCsvCell(area.areaName),
+                    escapeCsvCell(depto.deptoName),
+                    escapeCsvCell(puesto.puestoName),
+                    escapeCsvCell(puesto.count)
+                ].join(','));
+            });
+        });
+    });
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `distribucion_personal_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
 
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Procesos y Eficiencia</h1>
-        <p className="text-muted-foreground">Analice la salud, estructura y eficiencia de sus procesos operativos y personal.</p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Procesos y Eficiencia</h1>
+          <p className="text-muted-foreground">Analice la salud, estructura y eficiencia de sus procesos operativos y personal.</p>
+        </div>
+        <DateRangePicker date={dateRange} setDate={setDateRange} />
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle><Layers className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Mismo nombre, diferente área/puesto</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle><CopyCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Actividades activas en 2+ procesos</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos sin Actividades</CardTitle><PackageX className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Procesos sin flujo de trabajo</p></CardContent>
         </Card>
       </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-         <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <CardTitle>Distribución de Personal</CardTitle>
+       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+         <Card className="shadow-lg lg:col-span-3">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <CardTitle>Distribución de Personal</CardTitle>
+                </div>
+                <Button variant="outline" onClick={handleExport} disabled={staffSummary.breakdown.length === 0}>
+                    <FileText className="mr-2 h-4 w-4" /> Exportar CSV
+                </Button>
+            </div>
+            <CardDescription className="pt-2">Resumen del personal total y desglose por área, departamento y puesto.</CardDescription>
           </CardHeader>
           <CardContent>
-            <CardDescription className="mb-4">Resumen del personal total y desglose por área y puesto.</CardDescription>
             <div className="text-2xl font-bold mb-4">Total: {renderMetric(staffSummary.total, isLoadingAll)} personas</div>
             {isLoadingAll ? (<div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : 
              staffSummary.breakdown.length === 0 ? (<p className="text-muted-foreground text-sm">No hay datos de personal.</p>) : (
@@ -255,21 +343,45 @@ export default function ProcesosDashboardPage() {
             )}
           </CardContent>
         </Card>
-        <Card className="shadow-lg">
-          <CardHeader><div className="flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /><CardTitle>Análisis de Entidad por IA</CardTitle></div><CardDescription>Seleccione un área o puesto para obtener un resumen de sus funciones.</CardDescription></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
-                <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
-                <div className="md:col-span-2"><label htmlFor="entityNameSelect" className="text-sm font-medium">Nombre</label><Select value={selectedEntityName} onValueChange={setSelectedEntityName} disabled={selectedEntityType === 'none' || isLoadingAll || entityList.length === 0}><SelectTrigger id="entityNameSelect"><SelectValue placeholder={selectedEntityType === 'none' ? "Seleccione tipo" : "Seleccione nombre..."} /></SelectTrigger><SelectContent>{entityList.map(e => (<SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>))}</SelectContent></Select></div>
-            </div>
-            <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || selectedEntityType === 'none' || !selectedEntityName} className="w-full mb-4">{isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}Generar Resumen</Button>
-            {isGeneratingSummary && (<div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /><p className="ml-2">Generando...</p></div>)}
-            {generatedSummary && !isGeneratingSummary && (
-                <div><h4 className="font-semibold mb-2">Resumen Generado:</h4><Textarea value={generatedSummary} readOnly className="min-h-[150px] bg-muted/50" rows={8}/></div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="lg:col-span-2 flex flex-col gap-6">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle>Personal por Área</CardTitle>
+                    <CardDescription>Distribución porcentual del personal en las áreas principales.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center">
+                    {isLoadingAll ? <div className="h-[200px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> :
+                     staffChartData.length > 0 ? (
+                        <ChartContainer config={{}} className="min-h-[200px] w-full">
+                            <ResponsiveContainer>
+                                <PieChart>
+                                    <Pie data={staffChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                        {staffChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                                    </Pie>
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                     ) : <p className="text-muted-foreground text-sm h-[200px] flex items-center">No hay datos para graficar.</p>}
+                </CardContent>
+            </Card>
+        </div>
        </div>
+
+      <Card className="shadow-lg">
+        <CardHeader><div className="flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /><CardTitle>Análisis de Entidad por IA</CardTitle></div><CardDescription>Seleccione un área o puesto para obtener un resumen de sus funciones basado en los procesos del periodo seleccionado.</CardDescription></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
+              <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
+              <div className="md:col-span-2"><label htmlFor="entityNameSelect" className="text-sm font-medium">Nombre</label><Select value={selectedEntityName} onValueChange={setSelectedEntityName} disabled={selectedEntityType === 'none' || isLoadingAll || entityList.length === 0}><SelectTrigger id="entityNameSelect"><SelectValue placeholder={selectedEntityType === 'none' ? "Seleccione tipo" : "Seleccione nombre..."} /></SelectTrigger><SelectContent>{entityList.map(e => (<SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>))}</SelectContent></Select></div>
+          </div>
+          <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || selectedEntityType === 'none' || !selectedEntityName} className="w-full mb-4">{isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}Generar Resumen</Button>
+          {isGeneratingSummary && (<div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /><p className="ml-2">Generando...</p></div>)}
+          {generatedSummary && !isGeneratingSummary && (
+              <div><h4 className="font-semibold mb-2">Resumen Generado:</h4><Textarea value={generatedSummary} readOnly className="min-h-[150px] bg-muted/50" rows={8}/></div>
+          )}
+        </CardContent>
+       </Card>
     </div>
   );
 }
