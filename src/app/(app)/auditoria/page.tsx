@@ -66,14 +66,14 @@ import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
-import { useActivityLog } from '@/contexts/ActivityLogContext';
+import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/contexts/ActivityLogContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -83,7 +83,7 @@ type FindingType = typeof findingTypes[number];
 
 const auditStatuses = ["En Progreso", "Completada", "Cancelada", "Pendiente"] as const;
 type AuditStatus = typeof auditStatuses[number];
-
+const auditTypes = ["proceso", "puesto", "sistema"] as const;
 
 const auditFindingSchema = z.object({
   type: z.enum(findingTypes, { errorMap: () => ({ message: "Seleccione un tipo válido."})}),
@@ -105,7 +105,7 @@ interface AuditFinding extends AuditFindingFormData {
   isActionCreated: boolean;
 }
 
-interface Audit {
+export interface Audit {
   id: string;
   auditType: 'proceso' | 'puesto' | 'sistema';
   targetId: string;
@@ -116,6 +116,19 @@ interface Audit {
   status: AuditStatus;
   findings: AuditFinding[];
 }
+
+type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings';
+type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig<T> {
+  key: T;
+  direction: SortDirection;
+}
+
+const AUDIT_ITEMS_PER_PAGE = 10;
+const LOG_ITEMS_PER_PAGE = 15;
+
 
 const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
   if (value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea && !isList)) {
@@ -169,6 +182,18 @@ export default function AuditoriaPage() {
   const [auditToDelete, setAuditToDelete] = useState<Audit | null>(null);
   
   const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  const [auditSearchTerm, setAuditSearchTerm] = useState('');
+  const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | 'proceso' | 'puesto' | 'sistema'>('all');
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | AuditStatus>('all');
+  const [auditSortConfig, setAuditSortConfig] = useState<SortConfig<SortableAuditKeys> | null>(null);
+  const [auditCurrentPage, setAuditCurrentPage] = useState(1);
+
+  const [logSearchTerm, setLogSearchTerm] = useState('');
+  const [logActionFilter, setLogActionFilter] = useState<'all' | LogAction>('all');
+  const [logEntityTypeFilter, setLogEntityTypeFilter] = useState<'all' | string>('all');
+  const [logSortConfig, setLogSortConfig] = useState<SortConfig<SortableLogKeys> | null>(null);
+  const [logCurrentPage, setLogCurrentPage] = useState(1);
 
 
   const findingForm = useForm<AuditFindingFormData>({
@@ -456,6 +481,115 @@ export default function AuditoriaPage() {
     toast({ title: 'Auditoría Eliminada', description: `La auditoría para "${auditToDelete.targetName}" ha sido eliminada permanentemente.`, variant: 'destructive' });
     setAuditToDelete(null);
     setIsConfirmDeleteAuditOpen(false);
+  };
+
+  const filteredAndSortedAudits = useMemo(() => {
+    setAuditCurrentPage(1);
+    let filtered = pastAudits.filter(audit => {
+      const lowerSearch = auditSearchTerm.toLowerCase();
+      const matchesSearch = audit.targetName.toLowerCase().includes(lowerSearch) || audit.auditorName.toLowerCase().includes(lowerSearch);
+      const matchesType = auditTypeFilter === 'all' || audit.auditType === auditTypeFilter;
+      const matchesStatus = auditStatusFilter === 'all' || audit.status === auditStatusFilter;
+      return matchesSearch && matchesType && matchesStatus;
+    });
+
+    if (auditSortConfig !== null) {
+      filtered.sort((a, b) => {
+        let valA: any, valB: any;
+        if (auditSortConfig.key === 'numFindings') {
+          valA = a.findings.length;
+          valB = b.findings.length;
+        } else {
+          valA = a[auditSortConfig.key];
+          valB = b[auditSortConfig.key];
+        }
+
+        if (auditSortConfig.key === 'auditDate') {
+          valA = valA ? parseISO(valA).getTime() : 0;
+          valB = valB ? parseISO(valB).getTime() : 0;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+
+        if (valA < valB) return auditSortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return auditSortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      filtered.sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime());
+    }
+    return filtered;
+  }, [pastAudits, auditSearchTerm, auditTypeFilter, auditStatusFilter, auditSortConfig]);
+
+  const totalAuditPages = Math.ceil(filteredAndSortedAudits.length / AUDIT_ITEMS_PER_PAGE);
+  const paginatedAudits = useMemo(() => filteredAndSortedAudits.slice((auditCurrentPage - 1) * AUDIT_ITEMS_PER_PAGE, auditCurrentPage * AUDIT_ITEMS_PER_PAGE), [filteredAndSortedAudits, auditCurrentPage]);
+
+  const requestAuditSort = (key: SortableAuditKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (auditSortConfig?.key === key && auditSortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setAuditSortConfig({ key, direction });
+  };
+  const getAuditSortIcon = (key: SortableAuditKeys) => {
+    if (!auditSortConfig || auditSortConfig.key !== key) return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    return auditSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const uniqueLogActions = useMemo(() => ['all', ...Array.from(new Set(logEntries.map(log => log.action)))], [logEntries]);
+  const uniqueLogEntityTypes = useMemo(() => ['all', ...Array.from(new Set(logEntries.map(log => log.entityType)))], [logEntries]);
+
+  const filteredAndSortedLogs = useMemo(() => {
+    setLogCurrentPage(1);
+    let filtered = logEntries.filter(log => {
+      const lowerSearch = logSearchTerm.toLowerCase();
+      const matchesSearch = log.user?.toLowerCase().includes(lowerSearch) || log.entityName.toLowerCase().includes(lowerSearch) || log.details.toLowerCase().includes(lowerSearch);
+      const matchesAction = logActionFilter === 'all' || log.action === logActionFilter;
+      const matchesEntityType = logEntityTypeFilter === 'all' || log.entityType === logEntityTypeFilter;
+      return matchesSearch && matchesAction && matchesEntityType;
+    });
+
+    if (logSortConfig !== null) {
+      filtered.sort((a, b) => {
+        let valA = a[logSortConfig.key];
+        let valB = b[logSortConfig.key];
+
+        if (logSortConfig.key === 'timestamp') {
+          valA = a.timestamp;
+          valB = b.timestamp;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        
+        if (valA < valB) return logSortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return logSortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    } else {
+       filtered.sort((a, b) => b.timestamp - a.timestamp);
+    }
+    return filtered;
+  }, [logEntries, logSearchTerm, logActionFilter, logEntityTypeFilter, logSortConfig]);
+  
+  const totalLogPages = Math.ceil(filteredAndSortedLogs.length / LOG_ITEMS_PER_PAGE);
+  const paginatedLogs = useMemo(() => filteredAndSortedLogs.slice((logCurrentPage - 1) * LOG_ITEMS_PER_PAGE, logCurrentPage * LOG_ITEMS_PER_PAGE), [filteredAndSortedLogs, logCurrentPage]);
+  
+  const requestLogSort = (key: SortableLogKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (logSortConfig?.key === key && logSortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setLogSortConfig({ key, direction });
+  };
+  const getLogSortIcon = (key: SortableLogKeys) => {
+    if (!logSortConfig || logSortConfig.key !== key) return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    return logSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
   const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos;
@@ -914,21 +1048,30 @@ export default function AuditoriaPage() {
               <TabsTrigger value="actividad">Registro de Actividad del Sistema</TabsTrigger>
             </TabsList>
             <TabsContent value="historial" className="mt-4">
-                {pastAudits.length > 0 ? (
+                <div className="space-y-2 mb-4 p-2 border rounded-lg bg-muted/20">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <Input placeholder="Buscar por objetivo o auditor..." value={auditSearchTerm} onChange={(e) => setAuditSearchTerm(e.target.value)} />
+                    <Select value={auditTypeFilter} onValueChange={(v) => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t=><SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
+                    <Select value={auditStatusFilter} onValueChange={(v) => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                  </div>
+                </div>
+                {paginatedAudits.length > 0 ? (
+                <>
+                <div className="rounded-md border">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Objetivo Auditado</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Auditor</TableHead>
-                            <TableHead>Fecha</TableHead>
-                             <TableHead>Estado</TableHead>
-                            <TableHead>Hallazgos</TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('targetName')}><div className="flex items-center">Objetivo Auditado{getAuditSortIcon('targetName')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditType')}><div className="flex items-center">Tipo{getAuditSortIcon('auditType')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditorName')}><div className="flex items-center">Auditor{getAuditSortIcon('auditorName')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditDate')}><div className="flex items-center">Fecha{getAuditSortIcon('auditDate')}</div></TableHead>
+                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('status')}><div className="flex items-center">Estado{getAuditSortIcon('status')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('numFindings')}><div className="flex items-center">Hallazgos{getAuditSortIcon('numFindings')}</div></TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {pastAudits.sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime()).map(audit => (
+                        {paginatedAudits.map(audit => (
                             <TableRow key={audit.id}>
                                 <TableCell className="font-medium">{audit.targetName}</TableCell>
                                 <TableCell className="capitalize">{audit.auditType}</TableCell>
@@ -955,8 +1098,11 @@ export default function AuditoriaPage() {
                         ))}
                     </TableBody>
                 </Table>
+                </div>
+                 <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages} ({filteredAndSortedAudits.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.max(1, p - 1))} disabled={auditCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.min(totalAuditPages, p + 1))} disabled={auditCurrentPage === totalAuditPages || totalAuditPages === 0}>Siguiente</Button></div></div>
+                </>
                 ) : (
-                <div className="text-center p-8 text-muted-foreground">No hay auditorías completadas.</div>
+                <div className="text-center p-8 text-muted-foreground">No hay auditorías que coincidan con los filtros.</div>
                 )}
             </TabsContent>
             <TabsContent value="actividad" className="mt-4">
@@ -965,32 +1111,44 @@ export default function AuditoriaPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : logEntries.length > 0 ? (
+                <>
+                <div className="space-y-2 mb-4 p-2 border rounded-lg bg-muted/20">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <Input placeholder="Buscar en registro..." value={logSearchTerm} onChange={(e) => setLogSearchTerm(e.target.value)} />
+                    <Select value={logActionFilter} onValueChange={(v) => setLogActionFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas las Acciones</SelectItem>{uniqueLogActions.slice(1).map(a=><SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>)}</SelectContent></Select>
+                    <Select value={logEntityTypeFilter} onValueChange={(v) => setLogEntityTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas las Entidades</SelectItem>{uniqueLogEntityTypes.slice(1).map(e=><SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select>
+                  </div>
+                </div>
+                <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Fecha y Hora</TableHead>
-                      <TableHead>Usuario</TableHead>
-                      <TableHead>Tipo de Entidad</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Acción</TableHead>
+                      <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestLogSort('timestamp')}><div className="flex items-center">Fecha y Hora{getLogSortIcon('timestamp')}</div></TableHead>
+                      <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestLogSort('user')}><div className="flex items-center">Usuario{getLogSortIcon('user')}</div></TableHead>
+                      <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestLogSort('entityType')}><div className="flex items-center">Tipo Entidad{getLogSortIcon('entityType')}</div></TableHead>
+                      <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestLogSort('entityName')}><div className="flex items-center">Nombre Entidad{getLogSortIcon('entityName')}</div></TableHead>
+                      <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestLogSort('action')}><div className="flex items-center">Acción{getLogSortIcon('action')}</div></TableHead>
                       <TableHead>Detalles</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logEntries.map(log => (
+                    {paginatedLogs.map(log => (
                       <TableRow key={log.id}>
                         <TableCell className="text-xs">{format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
                         <TableCell>{log.user || 'Sistema'}</TableCell>
                         <TableCell>{log.entityType}</TableCell>
                         <TableCell>{log.entityName}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{log.action}</Badge>
+                          <Badge variant="secondary" className="capitalize">{log.action.replace('_', ' ')}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{log.details}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                </div>
+                 <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages} ({filteredAndSortedLogs.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.max(1, p - 1))} disabled={logCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.min(totalLogPages, p + 1))} disabled={logCurrentPage === totalLogPages || totalLogPages === 0}>Siguiente</Button></div></div>
+                </>
               ) : (
                 <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
                       <History className="h-16 w-16 text-muted-foreground mb-4" />
