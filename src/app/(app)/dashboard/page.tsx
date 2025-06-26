@@ -63,7 +63,7 @@ interface AuditFinding {
 interface Audit {
   id: string;
   auditDate: string; // ISO string
-  status: 'En Progreso' | 'Completada';
+  status: 'En Progreso' | 'Completada' | 'Cancelada';
   findings: AuditFinding[];
 }
 
