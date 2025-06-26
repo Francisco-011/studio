@@ -82,7 +82,7 @@ const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
 type FindingType = typeof findingTypes[number];
 
-const auditStatuses = ["En Progreso", "Completada", "Cancelada", "Pendiente"] as const;
+const auditStatuses = ["En Progreso", "Completada", "Cancelada"] as const;
 type AuditStatus = typeof auditStatuses[number];
 const auditTypes = ["proceso", "puesto", "sistema"] as const;
 
@@ -343,7 +343,7 @@ export default function AuditoriaPage() {
       targetName: targetName,
       auditorName: newAuditorName,
       auditDate: new Date().toISOString(),
-      status: 'Pendiente',
+      status: 'En Progreso',
       findings: [],
       processIdsToAudit: (newAuditType === 'puesto' && newAuditProcessIds.length > 0) ? newAuditProcessIds : undefined,
     };
@@ -467,11 +467,7 @@ export default function AuditoriaPage() {
   };
   
   const handleEditAudit = (audit: Audit) => {
-    const auditToOpen = {...audit};
-    if (auditToOpen.status === 'Pendiente') {
-        auditToOpen.status = 'En Progreso';
-    }
-    setCurrentAuditSession(auditToOpen);
+    setCurrentAuditSession(audit);
   };
 
   const promptDeleteAudit = (audit: Audit) => {
@@ -1105,8 +1101,7 @@ export default function AuditoriaPage() {
                                       {
                                         "bg-green-600 hover:bg-green-700": audit.status === "Completada",
                                         "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
-                                        "bg-blue-600 hover:bg-blue-700": audit.status === "En Progreso",
-                                        "bg-amber-600 hover:bg-amber-700": audit.status === "Pendiente",
+                                        "bg-orange-600 hover:bg-orange-700": audit.status === "En Progreso",
                                       }
                                     )}
                                   >{audit.status}</Badge>
