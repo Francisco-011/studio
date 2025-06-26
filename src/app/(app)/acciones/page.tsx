@@ -926,15 +926,16 @@ export default function AccionesPage() {
                               Atrasada
                             </Badge>
                           ) : (
-                            <Badge 
-                              variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
+                            <Badge
                               className={cn(
-                                "text-white",
-                                accion.estado === "En Progreso" && "bg-blue-600",
-                                accion.estado === "Pendiente" && "bg-amber-600",
-                                accion.estado === "En Revisión" && "bg-purple-600",
-                                accion.estado === "Completada" && "bg-green-700",
-                                accion.estado === "Cancelada" && "bg-red-600",
+                                "text-white border-transparent",
+                                {
+                                  "bg-green-700 hover:bg-green-600": accion.estado === "Completada",
+                                  "bg-red-600 hover:bg-red-700": accion.estado === "Cancelada",
+                                  "bg-blue-600 hover:bg-blue-700": accion.estado === "En Progreso",
+                                  "bg-amber-600 hover:bg-amber-700": accion.estado === "Pendiente",
+                                  "bg-purple-600 hover:bg-purple-700": accion.estado === "En Revisión",
+                                }
                               )}
                             >
                               {accion.estado}

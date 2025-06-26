@@ -397,7 +397,7 @@ export default function AuditoriaPage() {
       nombre: `Hallazgo en ${currentAuditSession.auditType}: ${currentAuditSession.targetName}`,
       descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
       responsable: 'Por Asignar',
-      estado: 'Pendiente',
+      estado: 'En Revisión',
       origenMejora: `Auditoría - ${currentAuditSession.auditorName}`,
     };
 
@@ -861,8 +861,8 @@ export default function AuditoriaPage() {
                                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
                                         <div className="flex justify-end pt-2 items-center gap-2">
                                         {finding.isActionCreated ? 
-                                            <Badge variant="default" className="bg-green-600">Acción Creada</Badge> : 
-                                            <Badge variant="outline">Acción Pendiente</Badge>
+                                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">Acción Creada</Badge> : 
+                                            <Badge className="bg-amber-600 text-white hover:bg-amber-700 border-transparent">Acción Pendiente</Badge>
                                         }
                                         <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated || isReadOnly}>
                                             <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Acción ya Creada' : 'Registrar Plan de Acción'}
