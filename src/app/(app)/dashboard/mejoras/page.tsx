@@ -36,7 +36,7 @@ import { Label } from '@/components/ui/label';
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 function formatDashboardCurrency(amount: number, currency: string) {
-  if (currency === 'N/A') return '-';
+  if (currency === 'N/A' || !currency) return amount.toLocaleString('es-MX');
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   } catch (e) {
@@ -180,7 +180,7 @@ export default function MejorasDashboardPage() {
       
       if (range?.from) {
         const from = startOfDay(range.from);
-        const to = range.to ? endOfDay(range.to) : endOfDay(range.to);
+        const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
         filtered = filtered.filter(accion => {
             if (accion.fechaFinalizacion) {
                 const completionDate = parseISO(accion.fechaFinalizacion);
@@ -358,7 +358,8 @@ export default function MejorasDashboardPage() {
   }, [filteredAcciones, allCapturedProcesses]);
   
   const { chartData, chartConfig, chartDescription } = useMemo(() => {
-    let data, description;
+    let data: any[] = [], description = '';
+    const config: ChartConfig = {};
     
     switch (chartType) {
         case 'costos':
@@ -367,9 +368,11 @@ export default function MejorasDashboardPage() {
                 .filter(sys => sys.currency !== 'N/A')
                 .map(sys => ({
                     name: `${sys.name} (${sys.currency})`,
-                    'Costo Uso': sys.annualUsageCost,
-                    'Costo Licencias': sys.annualLicenseCost,
+                    CostoUso: sys.annualUsageCost,
+                    CostoLicencias: sys.annualLicenseCost,
                 }));
+            config['CostoUso'] = { label: 'Costo Uso', color: 'hsl(var(--chart-2))' };
+            config['CostoLicencias'] = { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' };
             break;
 
         case 'ahorrosPorArea':
@@ -387,59 +390,47 @@ export default function MejorasDashboardPage() {
                 name,
                 ...values,
             }));
+            const allCurrencies = new Set<string>();
+            data.forEach(d => {
+              Object.keys(d).forEach(k => { if(k !== 'name') allCurrencies.add(k) })
+            });
+            let i = 1;
+            allCurrencies.forEach(currency => {
+              config[currency] = { label: currency, color: `hsl(var(--chart-${i++}))` };
+            });
             break;
 
         case 'ahorrosPorAccion':
         default:
             description = 'Ahorro anual estimado por cada acción de mejora completada en el período.';
-            const processChartAcciones = (acciones: Accion[], suffix = "") => {
-                const data: { [key: string]: { ahorro: number, moneda: string } } = {};
+            const processChartAcciones = (acciones: Accion[]) => {
+                const dataMap = new Map<string, { ahorro: number, moneda: string }>();
                 acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
                     .forEach(a => {
-                        const key = `${a.nombre}${suffix}`;
-                        data[key] = {
-                            ahorro: (data[key]?.ahorro || 0) + a.ahorroEstimado!,
-                            moneda: a.monedaAhorro!
-                        };
+                        const current = dataMap.get(a.nombre) || { ahorro: 0, moneda: a.monedaAhorro! };
+                        current.ahorro += a.ahorroEstimado!;
+                        dataMap.set(a.nombre, current);
                     });
-                return data;
+                return dataMap;
             };
 
             const primaryData = processChartAcciones(filteredAcciones);
-            const comparisonData = isComparing ? processChartAcciones(comparisonAcciones, " (Comp)") : {};
+            const comparisonData = isComparing ? processChartAcciones(comparisonAcciones) : new Map();
             
-            const allNames = new Set([...Object.keys(primaryData), ...Object.keys(comparisonData).map(k => k.replace(" (Comp)", ""))]);
+            const allNames = new Set([...primaryData.keys(), ...comparisonData.keys()]);
             
-            data = Array.from(allNames).map(name => {
-                const baseName = name.replace(" (Comp)", "");
-                return {
-                    name: baseName,
-                    'Ahorro': primaryData[baseName] ? primaryData[baseName].ahorro : 0,
-                    'Ahorro (Comp)': comparisonData[`${baseName} (Comp)`] ? comparisonData[`${baseName} (Comp)`].ahorro : 0,
-                    moneda: primaryData[baseName]?.moneda || comparisonData[`${baseName} (Comp)`]?.moneda || '',
-                }
-            });
+            data = Array.from(allNames).map(name => ({
+                name,
+                Ahorro: primaryData.get(name)?.ahorro || 0,
+                AhorroComp: comparisonData.get(name)?.ahorro || 0,
+                moneda: primaryData.get(name)?.moneda || comparisonData.get(name)?.moneda || '',
+            }));
+            
+            config['Ahorro'] = { label: 'Ahorro Periodo Actual', color: 'hsl(var(--chart-1))' };
+            config['AhorroComp'] = { label: 'Ahorro Periodo Comp.', color: 'hsl(var(--chart-2))' };
             break;
     }
     
-    const config: ChartConfig = {};
-    if (chartType === 'costos') {
-      config['Costo Uso'] = { label: 'Costo Uso', color: 'hsl(var(--chart-2))' };
-      config['Costo Licencias'] = { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' };
-    } else if (chartType === 'ahorrosPorAccion') {
-      config['Ahorro'] = { label: 'Ahorro Periodo Actual', color: 'hsl(var(--chart-1))' };
-      config['Ahorro (Comp)'] = { label: 'Ahorro Periodo Comp.', color: 'hsl(var(--chart-2))' };
-    } else { // ahorrosPorArea
-      const allCurrencies = new Set<string>();
-      data.forEach(d => {
-        Object.keys(d).forEach(k => { if(k !== 'name') allCurrencies.add(k) })
-      });
-      let i = 1;
-      allCurrencies.forEach(currency => {
-        config[currency] = { label: currency, color: `hsl(var(--chart-${i++}))` };
-      });
-    }
-
     return { chartData: data, chartConfig: config, chartDescription: description };
 
   }, [chartType, filteredSystemCosts, filteredAcciones, comparisonAcciones, isComparing]);
@@ -598,11 +589,11 @@ export default function MejorasDashboardPage() {
            <div className="flex justify-between items-center">
               <CardTitle>Análisis Gráfico</CardTitle>
               <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
-                  <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                      <SelectItem value="ahorrosPorAccion">Ahorros por Acción</SelectItem>
-                      <SelectItem value="ahorrosPorArea">Ahorros por Área</SelectItem>
-                      <SelectItem value="costos">Costos de Sistemas</SelectItem>
+                      <SelectItem value="ahorrosPorAccion">Ahorros Monetarios por Acción</SelectItem>
+                      <SelectItem value="ahorrosPorArea">Ahorros Monetarios por Área</SelectItem>
+                      <SelectItem value="costos">Costos Anuales de Sistemas</SelectItem>
                   </SelectContent>
               </Select>
            </div>
@@ -617,21 +608,50 @@ export default function MejorasDashboardPage() {
                         <CartesianGrid horizontal={false} />
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
-                        <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
+                        <Tooltip
+                            cursor={{ fill: "hsl(var(--muted))" }}
+                            content={
+                                <ChartTooltipContent
+                                    formatter={(value, name, item) => {
+                                        const { payload } = item;
+                                        if (chartType === 'ahorrosPorAccion') {
+                                            const currency = payload.moneda || 'N/A';
+                                            return (
+                                                <div className="flex w-full justify-between items-center">
+                                                    <span>{chartConfig[name]?.label || name}</span>
+                                                    <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                        {formatDashboardCurrency(value as number, currency)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        }
+                                        return (
+                                            <div className="flex w-full justify-between items-center">
+                                              <span>{chartConfig[name]?.label || name}</span>
+                                              <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                {formatDashboardCurrency(value as number, payload.name.match(/\(([^)]+)\)/)?.[1] || 'USD')}
+                                              </span>
+                                            </div>
+                                        );
+                                    }}
+                                    labelClassName="font-bold"
+                                />
+                            }
+                        />
                         <Legend />
                         {chartType === 'costos' ? (
                           <>
-                            <Bar dataKey="Costo Uso" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
-                            <Bar dataKey="Costo Licencias" stackId="a" fill="hsl(var(--chart-1))" radius={[4, 4, 4, 4]} />
+                            <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 4, 4]} />
                           </>
                         ) : chartType === 'ahorrosPorAccion' ? (
                           <>
-                            <Bar dataKey="Ahorro" fill="hsl(var(--chart-1))" radius={4} />
-                            {isComparing && <Bar dataKey="Ahorro (Comp)" fill="hsl(var(--chart-2))" radius={4} opacity={0.6} />}
+                            <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
+                            {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
                           </>
                         ) : (
                            Object.keys(chartConfig).map(key => (
-                              <Bar key={key} dataKey={key} stackId="a" fill={chartConfig[key].color} radius={4} />
+                              <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
                            ))
                         )}
                     </BarChart>
@@ -639,7 +659,7 @@ export default function MejorasDashboardPage() {
             </ChartContainer>
           ) : (
               <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-                  <p className="text-muted-foreground">No hay datos para graficar.</p>
+                  <p className="text-muted-foreground">No hay datos para graficar con los filtros seleccionados.</p>
               </div>
           )}
         </CardContent>
