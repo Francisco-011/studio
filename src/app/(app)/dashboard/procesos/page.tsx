@@ -100,6 +100,10 @@ export default function ProcesosDashboardPage() {
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
   const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades' | 'actividadesDuplicadas'>('personal');
+  
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
+  const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
 
 
    useEffect(() => {
@@ -121,22 +125,46 @@ export default function ProcesosDashboardPage() {
     const from = startOfDay(dateRange.from);
     const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
     
-    return allCapturedProcesses.filter(proc => {
+    let processes = allCapturedProcesses.filter(proc => {
         const procDate = parseISO(proc.capturedAt);
         return isValid(procDate) && procDate >= from && procDate <= to;
     });
-  }, [allCapturedProcesses, dateRange]);
+
+    if (selectedArea !== 'all') {
+      processes = processes.filter(p => p.area === selectedArea);
+    }
+    if (selectedDepartamento !== 'all') {
+      processes = processes.filter(p => p.departamento === selectedDepartamento);
+    }
+    if (selectedPuesto !== 'all') {
+      processes = processes.filter(p => p.puesto === selectedPuesto);
+    }
+    return processes;
+
+  }, [allCapturedProcesses, dateRange, selectedArea, selectedDepartamento, selectedPuesto]);
 
   const comparisonProcesses = useMemo(() => {
     if (!isComparing || !comparisonDateRange?.from) return [];
     const from = startOfDay(comparisonDateRange.from);
     const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
 
-    return allCapturedProcesses.filter(proc => {
+    let processes = allCapturedProcesses.filter(proc => {
         const procDate = parseISO(proc.capturedAt);
         return isValid(procDate) && procDate >= from && procDate <= to;
     });
-  }, [allCapturedProcesses, comparisonDateRange, isComparing]);
+
+    if (selectedArea !== 'all') {
+      processes = processes.filter(p => p.area === selectedArea);
+    }
+    if (selectedDepartamento !== 'all') {
+      processes = processes.filter(p => p.departamento === selectedDepartamento);
+    }
+    if (selectedPuesto !== 'all') {
+      processes = processes.filter(p => p.puesto === selectedPuesto);
+    }
+
+    return processes;
+  }, [allCapturedProcesses, comparisonDateRange, isComparing, selectedArea, selectedDepartamento, selectedPuesto]);
 
   useEffect(() => {
     if (selectedEntityType === 'area' && !isLoadingAreas) {
@@ -200,20 +228,69 @@ export default function ProcesosDashboardPage() {
       return processMetrics(comparisonProcesses);
   }, [comparisonProcesses, isComparing, globalActividades, isLoadingData, isLoadingActividades]);
 
+  const availableDepartamentos = useMemo(() => {
+    if (isLoadingDepartamentos || selectedArea === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedArea);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [selectedArea, areas, departamentos, isLoadingDepartamentos]);
+
+  const availablePuestos = useMemo(() => {
+      if (isLoadingPuestos) return puestos;
+      let scopedPuestos = puestos;
+
+      if (selectedArea !== 'all') {
+          const area = areas.find(a => a.nombre === selectedArea);
+          if (area) {
+              scopedPuestos = scopedPuestos.filter(p => p.areaId === area.id);
+          } else {
+              return [];
+          }
+      }
+      if (selectedDepartamento !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+          if (depto) {
+              scopedPuestos = scopedPuestos.filter(p => p.departamentoId === depto.id);
+          } else {
+             return [];
+          }
+      }
+      return scopedPuestos;
+  }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
   const staffSummary = useMemo(() => {
     if (isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) {
         return { total: 0, breakdown: [] };
     }
+    
+    let filteredPuestos = puestos;
+    if (selectedArea !== 'all') {
+        const area = areas.find(a => a.nombre === selectedArea);
+        if (area) {
+            filteredPuestos = filteredPuestos.filter(p => p.areaId === area.id);
+        } else {
+            filteredPuestos = [];
+        }
+    }
+    if (selectedDepartamento !== 'all') {
+        const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+        if (depto) {
+             filteredPuestos = filteredPuestos.filter(p => p.departamentoId === depto.id);
+        } else {
+             filteredPuestos = [];
+        }
+    }
+    if (selectedPuesto !== 'all') {
+        filteredPuestos = filteredPuestos.filter(p => p.nombre === selectedPuesto);
+    }
 
-    const total = puestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
+    const total = filteredPuestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
     const breakdownByArea: Map<string, { areaName: string; totalInArea: number; deptos: { deptoName: string, deptoId: string, totalInDepto: number, puestos: { puestoName: string; puestoId: string; count: number }[] }[] }> = new Map();
 
     areas.forEach(area => {
         breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, deptos: [] });
     });
 
-    puestos.forEach(puesto => {
+    filteredPuestos.forEach(puesto => {
         const areaId = puesto.areaId;
         const areaData = breakdownByArea.get(areaId);
         if (areaData) {
@@ -235,7 +312,8 @@ export default function ProcesosDashboardPage() {
         area.deptos.forEach(depto => depto.puestos.sort((a,b) => b.count - a.count));
     });
     return { total, breakdown: finalBreakdown };
-  }, [areas, departamentos, puestos, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos]);
+  }, [areas, departamentos, puestos, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos, selectedArea, selectedDepartamento, selectedPuesto]);
+
 
   const handleGenerateSummary = async () => {
     if (selectedEntityType === 'none' || !selectedEntityName) {
@@ -470,6 +548,24 @@ export default function ProcesosDashboardPage() {
             </div>
         )}
 
+      <div className="mb-6 flex flex-col sm:flex-row gap-2 items-center bg-muted/50 p-3 rounded-lg border">
+        <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+          <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
+            <SelectTrigger><SelectValue/></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
+            <SelectTrigger><SelectValue placeholder={selectedArea === 'all' ? 'Seleccione área primero' : 'Todos los Deptos.'} /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
+            <SelectTrigger><SelectValue placeholder="Todos los Puestos" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
@@ -506,7 +602,7 @@ export default function ProcesosDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold mb-4">Total: {renderMetric(staffSummary.total, isLoadingAll)} personas</div>
             {isLoadingAll ? (<div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : 
-             staffSummary.breakdown.length === 0 ? (<p className="text-muted-foreground text-sm">No hay datos de personal.</p>) : (
+             staffSummary.breakdown.length === 0 ? (<p className="text-muted-foreground text-sm">No hay datos de personal para los filtros seleccionados.</p>) : (
                 <Accordion type="multiple" className="w-full max-h-[400px] overflow-y-auto">
                 {staffSummary.breakdown.map(areaData => (
                     <AccordionItem value={areaData.areaName} key={areaData.areaName}>
