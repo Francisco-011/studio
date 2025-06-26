@@ -51,7 +51,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -73,7 +73,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -466,7 +466,11 @@ export default function AuditoriaPage() {
   };
   
   const handleEditAudit = (audit: Audit) => {
-    setCurrentAuditSession({ ...audit, status: 'En Progreso' });
+    const auditToOpen = {...audit};
+    if (auditToOpen.status === 'Pendiente') {
+        auditToOpen.status = 'En Progreso';
+    }
+    setCurrentAuditSession(auditToOpen);
   };
 
   const promptDeleteAudit = (audit: Audit) => {
@@ -604,6 +608,7 @@ export default function AuditoriaPage() {
   }
 
   if (currentAuditSession) {
+    const isReadOnly = currentAuditSession.status === 'Completada' || currentAuditSession.status === 'Cancelada';
     // AUDIT WORKSPACE VIEW
     return (
         <div className="container mx-auto py-8">
@@ -611,15 +616,24 @@ export default function AuditoriaPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
-                            <CardTitle className="text-2xl font-headline">Auditoría en Progreso</CardTitle>
+                            <CardTitle className="text-2xl font-headline">Auditoría: {currentAuditSession.targetName}</CardTitle>
                             <CardDescription>
-                                Auditor: {currentAuditSession.auditorName} | Fecha: {format(parseISO(currentAuditSession.auditDate), 'dd/MM/yyyy')}
+                                Auditor: {currentAuditSession.auditorName} | Fecha: {format(parseISO(currentAuditSession.auditDate), 'dd/MM/yyyy')} | Estado: {currentAuditSession.status}
                             </CardDescription>
                         </div>
                         <Button variant="secondary" onClick={() => setCurrentAuditSession(null)}>Volver a la Lista</Button>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    {isReadOnly && (
+                        <Alert variant="default" className="mb-4 bg-blue-50 border-blue-200 text-blue-800">
+                            <Info className="h-4 w-4 !text-blue-800" />
+                            <AlertTitle>Modo de solo lectura</AlertTitle>
+                            <AlertDescription>
+                                Esta auditoría está '{currentAuditSession.status}' y no puede ser modificada.
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     <Card className="bg-muted/30">
                         <CardHeader>
                             <CardTitle className="text-lg">Objetivo de la Auditoría: {auditTargetDetails?.name}</CardTitle>
@@ -656,10 +670,12 @@ export default function AuditoriaPage() {
                                         <DetailDisplay title="Costo Estimado" value={auditTargetDetails.process.costoEstimado !== undefined ? `${auditTargetDetails.process.costoEstimado} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
                                         <DetailDisplay title="Costo Ideal" value={auditTargetDetails.process.costoIdeal !== undefined ? `${auditTargetDetails.process.costoIdeal} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
                                         <DetailDisplay title="Sistemas" value={auditTargetDetails.process.sistemas} isList />
-                                        <DetailDisplay title="Entradas" value={auditTargetDetails.process.informacionRecibe} isTextarea />
-                                        <DetailDisplay title="Salidas" value={auditTargetDetails.process.informacionEntrega} isTextarea />
                                         <DetailDisplay title="Procesos de Entrada" value={auditTargetDetails.process.procesosEntrada} isList />
                                         <DetailDisplay title="Procesos de Salida" value={auditTargetDetails.process.procesosSalida} isList />
+                                        <div className="col-span-full space-y-2">
+                                           <DetailDisplay title="Información que Recibe (Entradas)" value={auditTargetDetails.process.informacionRecibe} isTextarea />
+                                           <DetailDisplay title="Información que Entrega (Salidas)" value={auditTargetDetails.process.informacionEntrega} isTextarea />
+                                        </div>
                                     </CardContent>
                                 </Card>
                                 
@@ -820,7 +836,7 @@ export default function AuditoriaPage() {
                     <div>
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="text-xl font-semibold">Registro de Hallazgos</h3>
-                          <Button onClick={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}>
+                          <Button onClick={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }} disabled={isReadOnly}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Agregar Hallazgo
                           </Button>
                         </div>
@@ -829,12 +845,12 @@ export default function AuditoriaPage() {
                                 <Card key={finding.id} className="bg-muted/20">
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                    <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'secondary' : 'default')}>{finding.type}</Badge>
+                                    <Badge variant={ finding.type === 'Conforme' ? 'default' : finding.type === 'No Conforme' ? 'destructive' : 'secondary' } className={cn(finding.type === 'Conforme' && 'bg-green-600 hover:bg-green-700')}>{finding.type}</Badge>
                                     Hallazgo #{finding.id.slice(-4)}
                                     </CardTitle>
                                     <div>
-                                      <Button variant="ghost" size="icon" onClick={() => { setEditingFinding(finding); setIsFindingDialogOpen(true); }} className="text-muted-foreground hover:text-foreground h-7 w-7"><Edit className="h-4 w-4"/></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => promptDeleteFinding(finding)} className="text-destructive hover:text-destructive h-7 w-7"><Trash2 className="h-4 w-4"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => { setEditingFinding(finding); setIsFindingDialogOpen(true); }} className="text-muted-foreground hover:text-foreground h-7 w-7" disabled={isReadOnly}><Edit className="h-4 w-4"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => promptDeleteFinding(finding)} className="text-destructive hover:text-destructive h-7 w-7" disabled={isReadOnly}><Trash2 className="h-4 w-4"/></Button>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -843,9 +859,13 @@ export default function AuditoriaPage() {
                                     <div className="p-3 border rounded-md bg-background space-y-2">
                                         <p className="text-sm font-semibold">Plan de Acción Propuesto:</p>
                                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
-                                        <div className="flex justify-end pt-2">
-                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated}>
-                                            <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Plan de Acción Creado' : 'Registrar Plan de Acción'}
+                                        <div className="flex justify-end pt-2 items-center gap-2">
+                                        {finding.isActionCreated ? 
+                                            <Badge variant="default" className="bg-green-600">Acción Creada</Badge> : 
+                                            <Badge variant="outline">Acción Pendiente</Badge>
+                                        }
+                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated || isReadOnly}>
+                                            <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Acción ya Creada' : 'Registrar Plan de Acción'}
                                         </Button>
                                         </div>
                                     </div>
@@ -856,8 +876,8 @@ export default function AuditoriaPage() {
                         </div>
                     </div>
                     <div className="flex justify-end pt-4 space-x-2">
-                        <Button variant="destructive" onClick={promptCancelAudit}> <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría</Button>
-                        <Button size="lg" onClick={handleFinalizeAudit}> <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría</Button>
+                        <Button variant="destructive" onClick={promptCancelAudit} disabled={isReadOnly}> <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría</Button>
+                        <Button size="lg" onClick={handleFinalizeAudit} disabled={isReadOnly}> <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría</Button>
                     </div>
                 </CardContent>
             </Card>
@@ -1088,7 +1108,8 @@ export default function AuditoriaPage() {
                                 <TableCell>{audit.findings.length}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="outline" size="sm" onClick={() => handleEditAudit(audit)} className="mr-2">
-                                        <Edit className="mr-2 h-4 w-4" /> Ver / Editar
+                                      {audit.status === 'Completada' || audit.status === 'Cancelada' ? <Eye className="mr-2 h-4 w-4" /> : <Edit className="mr-2 h-4 w-4" />}
+                                      {audit.status === 'Completada' || audit.status === 'Cancelada' ? 'Ver Detalles' : 'Ver / Editar'}
                                     </Button>
                                     <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} className="text-destructive hover:text-destructive">
                                       <Trash2 className="h-4 w-4" />
