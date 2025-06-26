@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -845,7 +846,7 @@ export default function AuditoriaPage() {
                                 <Card key={finding.id} className="bg-muted/20">
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                    <Badge variant={ finding.type === 'Conforme' ? 'default' : finding.type === 'No Conforme' ? 'destructive' : 'secondary' } className={cn(finding.type === 'Conforme' && 'bg-green-600 hover:bg-green-700')}>{finding.type}</Badge>
+                                    <Badge variant={ finding.type === 'Conforme' ? 'default' : finding.type === 'No Conforme' ? 'destructive' : 'secondary' } className={cn(finding.type === 'Conforme' && 'bg-green-600 hover:bg-green-700 text-white border-transparent')}>{finding.type}</Badge>
                                     Hallazgo #{finding.id.slice(-4)}
                                     </CardTitle>
                                     <div>
@@ -861,7 +862,7 @@ export default function AuditoriaPage() {
                                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{finding.proposedAction}</p>
                                         <div className="flex justify-end pt-2 items-center gap-2">
                                         {finding.isActionCreated ? 
-                                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">Acción Creada</Badge> : 
+                                            <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white border-transparent">Acción Creada</Badge> : 
                                             <Badge className="bg-amber-600 text-white hover:bg-amber-700 border-transparent">Acción Pendiente</Badge>
                                         }
                                         <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated || isReadOnly}>
@@ -1098,12 +1099,17 @@ export default function AuditoriaPage() {
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
                                  <TableCell>
-                                  <Badge variant={
-                                      audit.status === "Completada" ? "default" :
-                                      audit.status === "Cancelada" ? "destructive" :
-                                      audit.status === "Pendiente" ? "outline" :
-                                      "secondary" // En Progreso
-                                  }>{audit.status}</Badge>
+                                  <Badge
+                                    className={cn(
+                                      "border-transparent text-white",
+                                      {
+                                        "bg-green-600 hover:bg-green-700": audit.status === "Completada",
+                                        "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
+                                        "bg-blue-600 hover:bg-blue-700": audit.status === "En Progreso",
+                                        "bg-amber-600 hover:bg-amber-700": audit.status === "Pendiente",
+                                      }
+                                    )}
+                                  >{audit.status}</Badge>
                                 </TableCell>
                                 <TableCell>{audit.findings.length}</TableCell>
                                 <TableCell className="text-right">
