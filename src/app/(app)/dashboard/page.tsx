@@ -445,7 +445,7 @@ export default function DashboardPage() {
         const relevantProcessIdsForChart = new Set(baseProcessesForChart.map(p => p.id));
         if (selectedArea !== 'all' || selectedPuesto !== 'all' || selectedDepartamento !== 'all') {
             if (!actividad.procesosAsociadosIds || actividad.procesosAsociadosIds.length === 0) return false;
-            returnividad.procesosAsociadosIds.some(procId => relevantProcessIdsForChart.has(procId));
+            return actividad.procesosAsociadosIds.some(procId => relevantProcessIdsForChart.has(procId));
         }
         return true;
       });
