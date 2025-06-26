@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardCheck, AlertTriangle, TrendingUp, Loader2, FileText } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, TrendingUp, Loader2, FileText, CalendarRange } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -11,9 +11,10 @@ import { DateRange } from "react-day-picker";
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 
 interface AuditFinding {
@@ -30,9 +31,28 @@ interface Audit {
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
-const renderMetric = (value: number | string, loading: boolean) => {
+const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
-  return value;
+  return (
+    <>
+      {value}
+      {comparisonValue && (
+          <p className="text-xs text-muted-foreground pt-1">
+            {comparisonValue}
+          </p>
+      )}
+    </>
+  );
+}
+
+const getComparisonText = (current: number, previous: number): string => {
+    if (previous === 0) {
+        return current > 0 ? "+∞% vs periodo anterior" : "Sin cambios vs periodo anterior";
+    }
+    const diff = ((current - previous) / previous) * 100;
+    if (diff > 0) return `+${diff.toFixed(0)}% vs periodo anterior`;
+    if (diff < 0) return `${diff.toFixed(0)}% vs periodo anterior`;
+    return "Sin cambios vs periodo anterior";
 }
 
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
@@ -53,11 +73,14 @@ export default function AuditoriaDashboardPage() {
   
   const defaultToDate = new Date();
   const defaultFromDate = new Date();
-  defaultFromDate.setDate(defaultFromDate.getDate() - 90);
+  defaultFromDate.setDate(defaultFromDate.getDate() - 29); // Default to last 30 days
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: defaultFromDate,
     to: defaultToDate,
   });
+
+  const [isComparing, setIsComparing] = useState(false);
+  const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     setIsLoadingData(true);
@@ -65,7 +88,6 @@ export default function AuditoriaDashboardPage() {
       const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
       if (storedAudits) {
         const parsedAudits = JSON.parse(storedAudits);
-        // Add a safeguard for missing 'findings' array
         const sanitizedAudits = parsedAudits.map((audit: any) => ({
             ...audit,
             findings: audit.findings || [],
@@ -80,7 +102,7 @@ export default function AuditoriaDashboardPage() {
   }, []);
 
   const filteredAudits = useMemo(() => {
-    if (!dateRange?.from) return allAudits;
+    if (!dateRange?.from) return [];
     const from = startOfDay(dateRange.from);
     const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
     
@@ -89,6 +111,17 @@ export default function AuditoriaDashboardPage() {
         return isValid(auditDate) && auditDate >= from && auditDate <= to;
     });
   }, [allAudits, dateRange]);
+
+  const comparisonAudits = useMemo(() => {
+    if (!isComparing || !comparisonDateRange?.from) return [];
+    const from = startOfDay(comparisonDateRange.from);
+    const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
+
+    return allAudits.filter(audit => {
+        const auditDate = parseISO(audit.auditDate);
+        return isValid(auditDate) && auditDate >= from && auditDate <= to;
+    });
+}, [allAudits, comparisonDateRange, isComparing]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -100,31 +133,60 @@ export default function AuditoriaDashboardPage() {
     };
   }, [filteredAudits]);
 
+  const comparisonMetrics = useMemo(() => {
+    if (!isComparing) return null;
+    const completedAudits = comparisonAudits.filter(a => a.status === 'Completada');
+    return {
+      auditoriasCompletadasCount: completedAudits.length,
+      hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
+      hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0),
+    };
+  }, [comparisonAudits, isComparing]);
+
   const chartData = useMemo(() => {
-    const dataByMonth: { [key: string]: { month: string; 'Auditorías Completadas': number; 'Hallazgos No Conformes': number; 'Oportunidades de Mejora': number } } = {};
+    const processData = (audits: Audit[], suffix: string) => {
+        const data: { [key: string]: { [key: string]: any } } = {};
+        audits.filter(a => a.status === 'Completada').forEach(audit => {
+            const auditDate = parseISO(audit.auditDate);
+            if (!isValid(auditDate)) return;
 
-    filteredAudits.filter(a => a.status === 'Completada').forEach(audit => {
-        const monthKey = format(parseISO(audit.auditDate), 'MMM yyyy', { locale: es });
-        if (!dataByMonth[monthKey]) {
-            dataByMonth[monthKey] = {
-                month: monthKey,
-                'Auditorías Completadas': 0,
-                'Hallazgos No Conformes': 0,
-                'Oportunidades de Mejora': 0,
-            };
+            const sortKey = format(auditDate, 'yyyy-MM-dd');
+            if (!data[sortKey]) data[sortKey] = {};
+
+            const completedKey = `Auditorías Completadas${suffix}`;
+            const nonConformKey = `Hallazgos No Conformes${suffix}`;
+            const opportunityKey = `Oportunidades de Mejora${suffix}`;
+
+            data[sortKey][completedKey] = (data[sortKey][completedKey] || 0) + 1;
+            data[sortKey][nonConformKey] = (data[sortKey][nonConformKey] || 0) + audit.findings.filter(f => f.type === 'No Conforme').length;
+            data[sortKey][opportunityKey] = (data[sortKey][opportunityKey] || 0) + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length;
+        });
+        return data;
+    }
+
+    const primaryData = processData(filteredAudits, "");
+    const secondaryData = isComparing ? processData(comparisonAudits, " (Comp)") : {};
+    
+    const allKeys = new Set([...Object.keys(primaryData), ...Object.keys(secondaryData)]);
+    const sortedKeys = Array.from(allKeys).sort();
+
+    return sortedKeys.map(key => {
+        const date = format(parseISO(key), 'dd MMM', { locale: es });
+        return {
+            date,
+            ...primaryData[key],
+            ...secondaryData[key],
         }
-        dataByMonth[monthKey]['Auditorías Completadas']++;
-        dataByMonth[monthKey]['Hallazgos No Conformes'] += audit.findings.filter(f => f.type === 'No Conforme').length;
-        dataByMonth[monthKey]['Oportunidades de Mejora'] += audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length;
     });
+}, [filteredAudits, comparisonAudits, isComparing]);
 
-    return Object.values(dataByMonth).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
-  }, [filteredAudits]);
-
-  const chartConfig = {
+  const chartConfig: ChartConfig = {
     'Auditorías Completadas': { label: 'Auditorías Completadas', color: 'hsl(var(--chart-1))' },
     'Hallazgos No Conformes': { label: 'Hallazgos No Conformes', color: 'hsl(var(--chart-5))' },
     'Oportunidades de Mejora': { label: 'Oportunidades de Mejora', color: 'hsl(var(--chart-3))' },
+    'Auditorías Completadas (Comp)': { label: 'Auditorías (Comp)', color: 'hsl(var(--chart-1))' },
+    'Hallazgos No Conformes (Comp)': { label: 'Hallazgos NC (Comp)', color: 'hsl(var(--chart-5))' },
+    'Oportunidades de Mejora (Comp)': { label: 'Oportunidades (Comp)', color: 'hsl(var(--chart-3))' },
   };
 
   const isLoadingAll = isLoadingData;
@@ -167,28 +229,40 @@ export default function AuditoriaDashboardPage() {
           <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Cumplimiento y Auditoría</h1>
           <p className="text-muted-foreground">Monitoree el estado de las auditorías y el cumplimiento general de los procesos.</p>
         </div>
-        <DateRangePicker date={dateRange} setDate={setDateRange} />
+        <div className="flex gap-2 flex-wrap justify-end">
+            <DateRangePicker date={dateRange} setDate={setDateRange} />
+             <Button variant="outline" onClick={() => setIsComparing(!isComparing)}>
+                 <CalendarRange className="mr-2 h-4 w-4" />
+                 {isComparing ? "Cancelar Comparación" : "Comparar"}
+            </Button>
+        </div>
       </div>
+        {isComparing && (
+            <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center bg-muted/50 p-3 rounded-lg border">
+                <p className="text-sm font-medium">Comparar con:</p>
+                <DateRangePicker date={comparisonDateRange} setDate={setComparisonDateRange} />
+            </div>
+        )}
 
        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Auditorías Completadas</CardTitle><ClipboardCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.auditoriasCompletadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.auditoriasCompletadasCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.auditoriasCompletadasCount, comparisonMetrics.auditoriasCompletadasCount) : undefined)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Hallazgos No Conformes</CardTitle><AlertTriangle className="h-4 w-4 text-destructive" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosNoConformesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De auditorías completadas</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosNoConformesCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.hallazgosNoConformesCount, comparisonMetrics.hallazgosNoConformesCount) : undefined)}</div><p className="text-xs text-muted-foreground">De auditorías completadas</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Oportunidades de Mejora</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosOportunidadCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De auditorías completadas</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosOportunidadCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.hallazgosOportunidadCount, comparisonMetrics.hallazgosOportunidadCount) : undefined)}</div><p className="text-xs text-muted-foreground">De auditorías completadas</p></CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
             <CardTitle>Evolución de Auditorías y Hallazgos</CardTitle>
-            <CardDescription>Tendencia mensual de las auditorías completadas en el periodo seleccionado.</CardDescription>
+            <CardDescription>Tendencia de las auditorías completadas en el periodo seleccionado.</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[300px]">
           {isLoadingAll ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div> :
@@ -197,13 +271,16 @@ export default function AuditoriaDashboardPage() {
               <ResponsiveContainer>
                 <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
+                  <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip content={<ChartTooltipContent />} />
                   <Legend />
                   <Line type="monotone" dataKey="Auditorías Completadas" stroke="var(--color-Auditorías Completadas)" />
                   <Line type="monotone" dataKey="Hallazgos No Conformes" stroke="var(--color-Hallazgos No Conformes)" />
                   <Line type="monotone" dataKey="Oportunidades de Mejora" stroke="var(--color-Oportunidades de Mejora)" />
+                  {isComparing && <Line type="monotone" dataKey="Auditorías Completadas (Comp)" stroke="var(--color-Auditorías Completadas (Comp))" strokeDasharray="5 5" />}
+                  {isComparing && <Line type="monotone" dataKey="Hallazgos No Conformes (Comp)" stroke="var(--color-Hallazgos No Conformes (Comp))" strokeDasharray="5 5" />}
+                  {isComparing && <Line type="monotone" dataKey="Oportunidades de Mejora (Comp)" stroke="var(--color-Oportunidades de Mejora (Comp))" strokeDasharray="5 5" />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartContainer>
@@ -244,7 +321,15 @@ export default function AuditoriaDashboardPage() {
                             <TableCell>{format(parseISO(audit.auditDate), 'dd MMM yyyy', {locale: es})}</TableCell>
                             <TableCell>{audit.targetName}</TableCell>
                             <TableCell>{audit.auditType}</TableCell>
-                            <TableCell><Badge>{audit.status}</Badge></TableCell>
+                            <TableCell>
+                                <Badge className={cn("text-white border-transparent", {
+                                    "bg-green-600 hover:bg-green-700": audit.status === "Completada",
+                                    "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
+                                    "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
+                                })}>
+                                    {audit.status}
+                                </Badge>
+                            </TableCell>
                         </TableRow>
                     )) : (
                         <TableRow><TableCell colSpan={4} className="text-center">No hay auditorías para mostrar.</TableCell></TableRow>
