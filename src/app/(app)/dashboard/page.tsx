@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, CheckCircle2, TrendingUp, FileSearch2, ClipboardCheck, AlertTriangle, Loader2 } from "lucide-react";
+import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp } from "lucide-react";
 import { format, parseISO, isValid } from 'date-fns';
 import { useSistemasCostos, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion } from '@/contexts/AccionesContext';
@@ -76,13 +75,21 @@ export default function DashboardPage() {
       .map(([currency, total]) => formatDashboardCurrency(total, currency))
       .join(', ') || 'N/A';
 
+    const ahorroTiempoMap = new Map<string, number>();
+    completedActions.forEach(a => {
+      if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
+        ahorroTiempoMap.set(a.unidadTiempoAhorro, (ahorroTiempoMap.get(a.unidadTiempoAhorro) || 0) + a.ahorroTiempoEstimado);
+      }
+    });
+    const ahorroTiempoRealizado = Array.from(ahorroTiempoMap.entries()).map(([unit, total]) => `${total} ${unit.split('/')[0]}`).join(', ') || 'N/A';
+
     return {
       procesosMapeadosCount: processes.length,
       accionesCompletadasCount: completedActions.length,
       auditoriasCompletadasCount: completedAudits.length,
       hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
-      hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0),
       ahorroCostosRealizado,
+      ahorroTiempoRealizado,
     };
   }, [allCapturedProcesses, globalAcciones, allAudits]);
 
@@ -95,7 +102,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Una vista de alto nivel de los indicadores clave de rendimiento (KPIs) de toda la organización.</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Total de procesos activos</p></CardContent>
@@ -109,16 +116,16 @@ export default function DashboardPage() {
             <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro de Tiempo Realizado</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroTiempoRealizado, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Auditorías Completadas</CardTitle><ClipboardCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.auditoriasCompletadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Total histórico</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Hallazgos No Conformes</CardTitle><AlertTriangle className="h-4 w-4 text-destructive" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosNoConformesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De todas las auditorías</p></CardContent>
-        </Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Oportunidades de Mejora</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.hallazgosOportunidadCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De todas las auditorías</p></CardContent>
         </Card>
       </div>
 
