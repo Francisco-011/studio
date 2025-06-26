@@ -77,7 +77,7 @@ export default function ProcesosDashboardPage() {
     to: defaultToDate,
   });
 
-  const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades'>('personal');
+  const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades' | 'actividadesDuplicadas'>('personal');
 
 
    useEffect(() => {
@@ -290,6 +290,27 @@ export default function ProcesosDashboardPage() {
             data = Array.from(sinActividadesPorArea.entries()).map(([name, value]) => ({ name, value }));
             break;
         
+        case 'actividadesDuplicadas':
+            description = 'Distribución de actividades duplicadas (usadas en más de un proceso) por área.';
+            const duplicadasPorArea = new Map<string, number>();
+            const duplicatedActivities = globalActividades.filter(act => act.activa && (act.procesosAsociadosCount || 0) > 1);
+
+            duplicatedActivities.forEach(act => {
+                const areasForThisActivity = new Set<string>();
+                act.procesosAsociadosIds?.forEach(procId => {
+                    const proc = allCapturedProcesses.find(p => p.id === procId);
+                    if (proc?.area) {
+                        areasForThisActivity.add(proc.area);
+                    }
+                });
+                areasForThisActivity.forEach(areaName => {
+                    duplicadasPorArea.set(areaName, (duplicadasPorArea.get(areaName) || 0) + 1);
+                });
+            });
+            
+            data = Array.from(duplicadasPorArea.entries()).map(([name, value]) => ({ name, value }));
+            break;
+
         case 'personal':
         default:
             description = 'Distribución porcentual del personal en las áreas principales.';
@@ -315,7 +336,7 @@ export default function ProcesosDashboardPage() {
 
     return { chartData: coloredData, chartConfig: config, chartDescription: description };
 
-  }, [chartDataType, filteredProcesses, staffSummary.breakdown, isLoadingAll]);
+  }, [chartDataType, filteredProcesses, staffSummary.breakdown, isLoadingAll, globalActividades, allCapturedProcesses]);
 
   const handleExport = () => {
     if (staffSummary.breakdown.length === 0) {
@@ -436,6 +457,7 @@ export default function ProcesosDashboardPage() {
                               <SelectItem value="procesos">Procesos por Área</SelectItem>
                               <SelectItem value="variaciones">Variaciones por Área</SelectItem>
                               <SelectItem value="sinActividades">Procesos sin Actividades</SelectItem>
+                              <SelectItem value="actividadesDuplicadas">Actividades Duplicadas</SelectItem>
                           </SelectContent>
                       </Select>
                     </div>
