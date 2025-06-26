@@ -930,8 +930,8 @@ export default function AccionesPage() {
                               variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
                               className={cn(
                                 "text-white",
-                                accion.estado === "En Progreso" && "bg-blue-500",
-                                accion.estado === "Pendiente" && "bg-yellow-500",
+                                accion.estado === "En Progreso" && "bg-cyan-500",
+                                accion.estado === "Pendiente" && "bg-amber-500",
                                 accion.estado === "En Revisión" && "bg-purple-500",
                                 accion.estado === "Completada" && "bg-green-500",
                                 accion.estado === "Cancelada" && "bg-red-500",
