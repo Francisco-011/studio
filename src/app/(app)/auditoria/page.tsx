@@ -118,7 +118,7 @@ export interface Audit {
   findings: AuditFinding[];
 }
 
-type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings';
+type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings' | 'pendingActions';
 type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
 type SortDirection = 'ascending' | 'descending';
 
@@ -187,6 +187,7 @@ export default function AuditoriaPage() {
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
   const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | 'proceso' | 'puesto' | 'sistema'>('all');
   const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | AuditStatus>('all');
+  const [pendingActionsFilter, setPendingActionsFilter] = useState<'all' | 'with_pending' | 'no_pending'>('all');
   const [auditSortConfig, setAuditSortConfig] = useState<SortConfig<SortableAuditKeys> | null>(null);
   const [auditCurrentPage, setAuditCurrentPage] = useState(1);
 
@@ -495,7 +496,11 @@ export default function AuditoriaPage() {
       const matchesSearch = audit.targetName.toLowerCase().includes(lowerSearch) || audit.auditorName.toLowerCase().includes(lowerSearch);
       const matchesType = auditTypeFilter === 'all' || audit.auditType === auditTypeFilter;
       const matchesStatus = auditStatusFilter === 'all' || audit.status === auditStatusFilter;
-      return matchesSearch && matchesType && matchesStatus;
+      const pendingCount = audit.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+      const matchesPending = pendingActionsFilter === 'all' ||
+                           (pendingActionsFilter === 'with_pending' && pendingCount > 0) ||
+                           (pendingActionsFilter === 'no_pending' && pendingCount === 0);
+      return matchesSearch && matchesType && matchesStatus && matchesPending;
     });
 
     if (auditSortConfig !== null) {
@@ -504,6 +509,9 @@ export default function AuditoriaPage() {
         if (auditSortConfig.key === 'numFindings') {
           valA = a.findings.length;
           valB = b.findings.length;
+        } else if (auditSortConfig.key === 'pendingActions') {
+            valA = a.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+            valB = b.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
         } else {
           valA = a[auditSortConfig.key];
           valB = b[auditSortConfig.key];
@@ -527,7 +535,7 @@ export default function AuditoriaPage() {
       filtered.sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime());
     }
     return filtered;
-  }, [pastAudits, auditSearchTerm, auditTypeFilter, auditStatusFilter, auditSortConfig]);
+  }, [pastAudits, auditSearchTerm, auditTypeFilter, auditStatusFilter, pendingActionsFilter, auditSortConfig]);
 
   const totalAuditPages = Math.ceil(filteredAndSortedAudits.length / AUDIT_ITEMS_PER_PAGE);
   const paginatedAudits = useMemo(() => filteredAndSortedAudits.slice((auditCurrentPage - 1) * AUDIT_ITEMS_PER_PAGE, auditCurrentPage * AUDIT_ITEMS_PER_PAGE), [filteredAndSortedAudits, auditCurrentPage]);
@@ -1070,10 +1078,18 @@ export default function AuditoriaPage() {
             </TabsList>
             <TabsContent value="historial" className="mt-4">
                 <div className="space-y-2 mb-4 p-2 border rounded-lg bg-muted/20">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                     <Input placeholder="Buscar por objetivo o auditor..." value={auditSearchTerm} onChange={(e) => setAuditSearchTerm(e.target.value)} />
                     <Select value={auditTypeFilter} onValueChange={(v) => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t=><SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
                     <Select value={auditStatusFilter} onValueChange={(v) => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                    <Select value={pendingActionsFilter} onValueChange={(v) => setPendingActionsFilter(v as any)}>
+                        <SelectTrigger><SelectValue placeholder="Acc. Pendientes (Todos)" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Acc. Pendientes (Todos)</SelectItem>
+                            <SelectItem value="with_pending">Con Pendientes</SelectItem>
+                            <SelectItem value="no_pending">Sin Pendientes</SelectItem>
+                        </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {paginatedAudits.length > 0 ? (
@@ -1086,19 +1102,22 @@ export default function AuditoriaPage() {
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditType')}><div className="flex items-center">Tipo{getAuditSortIcon('auditType')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditorName')}><div className="flex items-center">Auditor{getAuditSortIcon('auditorName')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('auditDate')}><div className="flex items-center">Fecha{getAuditSortIcon('auditDate')}</div></TableHead>
-                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('status')}><div className="flex items-center">Estado{getAuditSortIcon('status')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('status')}><div className="flex items-center">Estado{getAuditSortIcon('status')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={()=>requestAuditSort('numFindings')}><div className="flex items-center">Hallazgos{getAuditSortIcon('numFindings')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAuditSort('pendingActions')}><div className="flex items-center">Acciones Pend.{getAuditSortIcon('pendingActions')}</div></TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {paginatedAudits.map(audit => (
+                        {paginatedAudits.map(audit => {
+                            const pendingActionsCount = audit.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+                            return (
                             <TableRow key={audit.id}>
                                 <TableCell className="font-medium">{audit.targetName}</TableCell>
                                 <TableCell className="capitalize">{audit.auditType}</TableCell>
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
-                                 <TableCell>
+                                <TableCell>
                                   <Badge
                                     className={cn(
                                       "border-transparent text-white",
@@ -1111,6 +1130,13 @@ export default function AuditoriaPage() {
                                   >{audit.status}</Badge>
                                 </TableCell>
                                 <TableCell>{audit.findings.length}</TableCell>
+                                <TableCell>
+                                  {pendingActionsCount > 0 ? (
+                                      <Badge variant="destructive">{pendingActionsCount}</Badge>
+                                  ) : (
+                                      <span className="text-muted-foreground">0</span>
+                                  )}
+                                </TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="outline" size="sm" onClick={() => handleEditAudit(audit)} className="mr-2">
                                       {audit.status === 'Completada' || audit.status === 'Cancelada' ? <Eye className="mr-2 h-4 w-4" /> : <Edit className="mr-2 h-4 w-4" />}
@@ -1121,7 +1147,7 @@ export default function AuditoriaPage() {
                                     </Button>
                                 </TableCell>
                             </TableRow>
-                        ))}
+                        )})}
                     </TableBody>
                 </Table>
                 </div>
@@ -1212,3 +1238,4 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
