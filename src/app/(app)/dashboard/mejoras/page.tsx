@@ -118,12 +118,22 @@ export default function MejorasDashboardPage() {
         ahorroTiempoMap.set(a.unidadTiempoAhorro, (ahorroTiempoMap.get(a.unidadTiempoAhorro) || 0) + a.ahorroTiempoEstimado);
       }
     });
+
+    const ahorroTiempoRealizado = Array.from(ahorroTiempoMap.entries()).map(([unit, total]) => {
+      if (unit.startsWith('Minutos') && total >= 60) {
+        const hours = (total / 60).toFixed(1).replace(/\.0$/, '');
+        const newUnitLabel = unit.replace('Minutos', 'Horas').split('/')[0];
+        return `${hours} ${newUnitLabel}`;
+      }
+      return `${total} ${unit.split('/')[0]}`;
+    }).join(', ') || 'N/A';
+
     return {
       accionesCompletadasCount: completedActions.length,
       accionesEnRevisionCount: globalAcciones.filter(acc => acc.estado === 'En Revisión').length,
       accionesEnProgresoCount: globalAcciones.filter(acc => acc.estado === 'En Progreso').length,
       ahorroCostosRealizado: Array.from(ahorroCostosMap.entries()).map(([currency, total]) => formatDashboardCurrency(total, currency)).join(', ') || 'N/A',
-      ahorroTiempoRealizado: Array.from(ahorroTiempoMap.entries()).map(([unit, total]) => `${total} ${unit.split('/')[0]}`).join(', ') || 'N/A',
+      ahorroTiempoRealizado,
     };
   }, [globalAcciones, isLoadingAcciones]);
 
@@ -132,7 +142,7 @@ export default function MejorasDashboardPage() {
   const flattenedSystemCosts = useMemo(() => {
     if (isLoadingSistemasCostos) return [];
     return calculatedSystemCosts.flatMap(system => 
-        system.costsByCurrency.length > 0 
+        (system.costsByCurrency && system.costsByCurrency.length > 0)
             ? system.costsByCurrency.map(cost => ({
                 id: `${system.id}-${cost.currency}`,
                 name: system.name,
