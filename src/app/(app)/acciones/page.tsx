@@ -922,7 +922,7 @@ export default function AccionesPage() {
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
                         {isOverdue ? (
-                            <Badge variant="destructive" className="bg-orange-600 text-white hover:bg-orange-700">
+                            <Badge variant="destructive" className="bg-orange-700 text-white">
                               Atrasada
                             </Badge>
                           ) : (
@@ -930,11 +930,11 @@ export default function AccionesPage() {
                               variant={accion.estado === "Completada" ? "default" : accion.estado === "Cancelada" ? "destructive" : "secondary"}
                               className={cn(
                                 "text-white",
-                                accion.estado === "En Progreso" && "bg-cyan-500",
-                                accion.estado === "Pendiente" && "bg-amber-500",
-                                accion.estado === "En Revisión" && "bg-purple-500",
-                                accion.estado === "Completada" && "bg-green-500",
-                                accion.estado === "Cancelada" && "bg-red-500",
+                                accion.estado === "En Progreso" && "bg-blue-600",
+                                accion.estado === "Pendiente" && "bg-amber-600",
+                                accion.estado === "En Revisión" && "bg-purple-600",
+                                accion.estado === "Completada" && "bg-green-700",
+                                accion.estado === "Cancelada" && "bg-red-600",
                               )}
                             >
                               {accion.estado}
