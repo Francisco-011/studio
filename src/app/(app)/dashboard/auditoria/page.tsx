@@ -62,7 +62,15 @@ export default function AuditoriaDashboardPage() {
     setIsLoadingData(true);
     try {
       const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
-      if (storedAudits) setAllAudits(JSON.parse(storedAudits));
+      if (storedAudits) {
+        const parsedAudits = JSON.parse(storedAudits);
+        // Add a safeguard for missing 'findings' array
+        const sanitizedAudits = parsedAudits.map((audit: any) => ({
+            ...audit,
+            findings: audit.findings || [],
+        }));
+        setAllAudits(sanitizedAudits);
+      }
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
     } finally {
