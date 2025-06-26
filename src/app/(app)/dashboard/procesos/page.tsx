@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText } from "lucide-react";
+import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText, CalendarRange } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import {
   Table,
@@ -35,12 +35,32 @@ import type { ChartConfig } from '@/components/ui/chart';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
-const renderMetric = (value: number | string, loading: boolean) => {
+const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) {
     return <Loader2 className={`h-5 w-5 animate-spin`} />;
   }
-  return value;
+  return (
+    <>
+      {value}
+      {comparisonValue && (
+        <p className="text-xs text-muted-foreground pt-1">
+          {comparisonValue}
+        </p>
+      )}
+    </>
+  );
 }
+
+const getComparisonText = (current: number, previous: number): string => {
+    if (previous === 0) {
+        return current > 0 ? "+∞% vs periodo anterior" : "Sin cambios vs periodo anterior";
+    }
+    const diff = ((current - previous) / previous) * 100;
+    if (diff > 0) return `+${diff.toFixed(0)}% vs periodo anterior`;
+    if (diff < 0) return `${diff.toFixed(0)}% vs periodo anterior`;
+    return "Sin cambios vs periodo anterior";
+}
+
 
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
   if (cellData === undefined || cellData === null) {
@@ -77,6 +97,8 @@ export default function ProcesosDashboardPage() {
     to: defaultToDate,
   });
 
+  const [isComparing, setIsComparing] = useState(false);
+  const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
   const [chartDataType, setChartDataType] = useState<'personal' | 'procesos' | 'variaciones' | 'sinActividades' | 'actividadesDuplicadas'>('personal');
 
 
@@ -95,7 +117,7 @@ export default function ProcesosDashboardPage() {
   }, []);
 
   const filteredProcesses = useMemo(() => {
-    if (!dateRange?.from) return allCapturedProcesses;
+    if (!dateRange?.from) return [];
     const from = startOfDay(dateRange.from);
     const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
     
@@ -105,6 +127,16 @@ export default function ProcesosDashboardPage() {
     });
   }, [allCapturedProcesses, dateRange]);
 
+  const comparisonProcesses = useMemo(() => {
+    if (!isComparing || !comparisonDateRange?.from) return [];
+    const from = startOfDay(comparisonDateRange.from);
+    const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
+
+    return allCapturedProcesses.filter(proc => {
+        const procDate = parseISO(proc.capturedAt);
+        return isValid(procDate) && procDate >= from && procDate <= to;
+    });
+  }, [allCapturedProcesses, comparisonDateRange, isComparing]);
 
   useEffect(() => {
     if (selectedEntityType === 'area' && !isLoadingAreas) {
@@ -119,40 +151,52 @@ export default function ProcesosDashboardPage() {
     }
   }, [selectedEntityType, areas, puestos, isLoadingAreas, isLoadingPuestos]);
 
+  const processMetrics = (processesToAnalyze: CapturedProcess[]) => {
+      if (isLoadingData || isLoadingActividades) {
+        return {
+          procesosMapeadosCount: 0,
+          procesosConVariacionesCount: 0,
+          actividadesDuplicadasCount: 0,
+          procesosSinActividadesCount: 0,
+        };
+      }
+      const processes = processesToAnalyze.filter(p => p.activo !== false && !p.deletedAt);
+      const activeActivities = globalActividades.filter(a => a.activa);
 
-  const dashboardMetrics = useMemo(() => {
-    if (isLoadingData || isLoadingActividades) {
+      const processContexts = new Map<string, Set<string>>();
+      processes.forEach(proc => {
+          if (!processContexts.has(proc.proceso)) {
+              processContexts.set(proc.proceso, new Set());
+          }
+          processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
+      });
+      let procesosConVariacionesCount = 0;
+      processContexts.forEach(contexts => {
+          if (contexts.size > 1) {
+              procesosConVariacionesCount++;
+          }
+      });
+      
+      const processesInPeriodIds = new Set(processes.map(p => p.id));
+      const duplicatedActivitiesInPeriod = activeActivities.filter(act => {
+        const associatedInPeriod = act.procesosAsociadosIds?.filter(procId => processesInPeriodIds.has(procId)) || [];
+        return associatedInPeriod.length > 1;
+      });
+
       return {
-        procesosMapeadosCount: 0,
-        procesosConVariacionesCount: 0,
-        actividadesDuplicadasCount: 0,
-        procesosSinActividadesCount: 0,
+        procesosMapeadosCount: processes.length,
+        actividadesDuplicadasCount: duplicatedActivitiesInPeriod.length,
+        procesosSinActividadesCount: processes.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length,
+        procesosConVariacionesCount,
       };
-    }
-    const processes = filteredProcesses.filter(p => p.activo !== false && !p.deletedAt);
-    const activeActivities = globalActividades.filter(a => a.activa);
+  }
 
-    const processContexts = new Map<string, Set<string>>();
-    processes.forEach(proc => {
-        if (!processContexts.has(proc.proceso)) {
-            processContexts.set(proc.proceso, new Set());
-        }
-        processContexts.get(proc.proceso)!.add(`${proc.area}|${proc.puesto}`);
-    });
-    let procesosConVariacionesCount = 0;
-    processContexts.forEach(contexts => {
-        if (contexts.size > 1) {
-            procesosConVariacionesCount++;
-        }
-    });
+  const dashboardMetrics = useMemo(() => processMetrics(filteredProcesses), [filteredProcesses, globalActividades, isLoadingData, isLoadingActividades]);
+  const comparisonMetrics = useMemo(() => {
+      if (!isComparing) return null;
+      return processMetrics(comparisonProcesses);
+  }, [comparisonProcesses, isComparing, globalActividades, isLoadingData, isLoadingActividades]);
 
-    return {
-      procesosMapeadosCount: processes.length,
-      actividadesDuplicadasCount: activeActivities.filter(act => (act.procesosAsociadosCount || 0) > 1).length,
-      procesosSinActividadesCount: processes.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length,
-      procesosConVariacionesCount,
-    };
-  }, [filteredProcesses, globalActividades, isLoadingData, isLoadingActividades]);
 
   const staffSummary = useMemo(() => {
     if (isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) {
@@ -377,25 +421,38 @@ export default function ProcesosDashboardPage() {
           <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Procesos y Eficiencia</h1>
           <p className="text-muted-foreground">Analice la salud, estructura y eficiencia de sus procesos operativos y personal.</p>
         </div>
-        <DateRangePicker date={dateRange} setDate={setDateRange} />
+        <div className="flex gap-2 flex-wrap justify-end">
+            <DateRangePicker date={dateRange} setDate={setDateRange} />
+             <Button variant="outline" onClick={() => setIsComparing(!isComparing)}>
+                 <CalendarRange className="mr-2 h-4 w-4" />
+                 {isComparing ? "Cancelar Comparación" : "Comparar"}
+            </Button>
+        </div>
       </div>
       
+       {isComparing && (
+            <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center bg-muted/50 p-3 rounded-lg border">
+                <p className="text-sm font-medium">Comparar con:</p>
+                <DateRangePicker date={comparisonDateRange} setDate={setComparisonDateRange} />
+            </div>
+        )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosMapeadosCount, comparisonMetrics.procesosMapeadosCount) : undefined)}</div><p className="text-xs text-muted-foreground">En el periodo seleccionado</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle><Layers className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Mismo nombre, diferente área/puesto</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosConVariacionesCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosConVariacionesCount, comparisonMetrics.procesosConVariacionesCount) : undefined)}</div><p className="text-xs text-muted-foreground">Mismo nombre, diferente área/puesto</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Actividades Duplicadas</CardTitle><CopyCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Actividades activas en 2+ procesos</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.actividadesDuplicadasCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.actividadesDuplicadasCount, comparisonMetrics.actividadesDuplicadasCount) : undefined)}</div><p className="text-xs text-muted-foreground">Actividades activas en 2+ procesos</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos sin Actividades</CardTitle><PackageX className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Procesos sin flujo de trabajo</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosSinActividadesCount, comparisonMetrics.procesosSinActividadesCount) : undefined)}</div><p className="text-xs text-muted-foreground">Procesos sin flujo de trabajo</p></CardContent>
         </Card>
       </div>
 
