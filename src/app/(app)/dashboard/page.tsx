@@ -70,22 +70,27 @@ interface Audit {
 
 function formatDashboardCurrency(amount: number, currency: string) {
   try {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+    // Using 'code' will display "MXN", "USD", etc. instead of symbols.
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   } catch (e) {
     return `${amount.toFixed(0)} ${currency}`;
   }
 }
 
-interface CalculatedSystemCost {
-    id: string;
-    name: string;
+interface CostByCurrency {
+    currency: TipoMoneda | string;
     annualUsageCost: number;
     annualLicenseCost: number;
     totalAnnualCost: number;
+}
+interface CalculatedSystemCost {
+    id: string;
+    name: string;
+    costsByCurrency: CostByCurrency[];
     totalLicenses: number;
-    currency: TipoMoneda | string;
     descriptions: string[];
 }
+
 
 function calculateAllSystemAnnualCosts(
   systemsToCalculate: Sistema[],
@@ -106,11 +111,9 @@ function calculateAllSystemAnnualCosts(
   });
 
   return Array.from(costsBySystem.values()).map(({ system, costs }) => {
-    let totalAnnualUsage = 0;
-    let totalAnnualLicenseCost = 0;
+    const costsByCurrency = new Map<TipoMoneda | string, CostByCurrency>();
     let systemTotalLicenses = 0;
     const descriptions: string[] = [];
-    const mainCurrency: TipoMoneda | string = costs.length > 0 ? (costs[0].moneda || 'MXN') : 'MXN';
 
     costs.forEach(cost => {
       if (cost.descripcion) descriptions.push(cost.descripcion);
@@ -125,21 +128,24 @@ function calculateAllSystemAnnualCosts(
         multiplier = 12;
       }
       
-      if (cost.moneda === mainCurrency) {
-        totalAnnualUsage += usage * multiplier;
-        totalAnnualLicenseCost += licenseTotal * multiplier;
-      }
       systemTotalLicenses += licenses;
+
+      const currency = cost.moneda || 'MXN';
+      if (!costsByCurrency.has(currency)) {
+        costsByCurrency.set(currency, { currency, annualUsageCost: 0, annualLicenseCost: 0, totalAnnualCost: 0 });
+      }
+
+      const currentCosts = costsByCurrency.get(currency)!;
+      currentCosts.annualUsageCost += usage * multiplier;
+      currentCosts.annualLicenseCost += licenseTotal * multiplier;
+      currentCosts.totalAnnualCost = currentCosts.annualUsageCost + currentCosts.annualLicenseCost;
     });
 
     return {
       id: system.id,
       name: system.nombre,
-      annualUsageCost: totalAnnualUsage,
-      annualLicenseCost: totalAnnualLicenseCost,
-      totalAnnualCost: totalAnnualUsage + totalAnnualLicenseCost,
+      costsByCurrency: Array.from(costsByCurrency.values()),
       totalLicenses: systemTotalLicenses,
-      currency: mainCurrency,
       descriptions,
     };
   });
@@ -825,14 +831,17 @@ export default function DashboardPage() {
 
     csvRows.push(["Costos de Sistemas (refleja filtros de Área/Puesto)"]);
     csvRows.push(["Sistema", "Uso Anual", "Lic. Anual", "Total Lic.", "Total Anual"]);
-    calculatedSystemCosts.forEach(cost => {
-      csvRows.push([
-        escapeCsvCell(cost.name),
-        escapeCsvCell(formatDashboardCurrency(cost.annualUsageCost, cost.currency)),
-        escapeCsvCell(formatDashboardCurrency(cost.annualLicenseCost, cost.currency)),
-        escapeCsvCell(cost.totalLicenses > 0 ? cost.totalLicenses : '-'),
-        escapeCsvCell(formatDashboardCurrency(cost.totalAnnualCost, cost.currency)),
-      ]);
+    calculatedSystemCosts.forEach(system => {
+        const totalAnnualCostStr = system.costsByCurrency.map(c => formatDashboardCurrency(c.totalAnnualCost, c.currency)).join('; ');
+        const annualUsageCostStr = system.costsByCurrency.map(c => formatDashboardCurrency(c.annualUsageCost, c.currency)).join('; ');
+        const annualLicenseCostStr = system.costsByCurrency.map(c => formatDashboardCurrency(c.annualLicenseCost, c.currency)).join('; ');
+        csvRows.push([
+            escapeCsvCell(system.name),
+            escapeCsvCell(annualUsageCostStr),
+            escapeCsvCell(annualLicenseCostStr),
+            escapeCsvCell(system.totalLicenses > 0 ? system.totalLicenses : '-'),
+            escapeCsvCell(totalAnnualCostStr),
+        ]);
     });
     csvRows.push([]);
 
@@ -1183,23 +1192,29 @@ export default function DashboardPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {calculatedSystemCosts.map((cost) => (
-                        <TableRow key={cost.id}>
-                            <TableCell className="font-medium text-xs">{cost.name}</TableCell>
-                            <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualUsageCost, cost.currency)}</TableCell>
-                            <TableCell className="text-right text-xs">{formatDashboardCurrency(cost.annualLicenseCost, cost.currency)}</TableCell>
-                            <TableCell className="text-right text-xs">{cost.totalLicenses > 0 ? cost.totalLicenses : '-'}</TableCell>
+                        {calculatedSystemCosts.map((system) => (
+                        <TableRow key={system.id}>
+                            <TableCell className="font-medium text-xs">{system.name}</TableCell>
+                            <TableCell className="text-right text-xs">
+                                {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualUsageCost, c.currency)}</div>) : <span>-</span>}
+                            </TableCell>
+                            <TableCell className="text-right text-xs">
+                                {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualLicenseCost, c.currency)}</div>) : <span>-</span>}
+                            </TableCell>
+                            <TableCell className="text-right text-xs">{system.totalLicenses > 0 ? system.totalLicenses : '-'}</TableCell>
                             <TableCell className="text-right font-semibold text-xs">
                                <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span>{formatDashboardCurrency(cost.totalAnnualCost, cost.currency)}</span>
+                                        <div>
+                                            {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.totalAnnualCost, c.currency)}</div>) : <span>-</span>}
+                                        </div>
                                     </TooltipTrigger>
-                                    {cost.descriptions.length > 0 && (
+                                    {system.descriptions.length > 0 && (
                                     <TooltipContent>
                                         <p className="font-bold">Detalle de Costos:</p>
                                         <ul className="list-disc pl-4 text-left">
-                                            {cost.descriptions.map((desc, i) => <li key={i}>{desc}</li>)}
+                                            {system.descriptions.map((desc, i) => <li key={i}>{desc}</li>)}
                                         </ul>
                                     </TooltipContent>
                                     )}
