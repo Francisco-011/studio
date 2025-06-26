@@ -27,7 +27,13 @@ import { toast } from '@/hooks/use-toast';
 import { formatMinutesToHours } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ChartConfig } from '@/components/ui/chart';
+import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { Label } from '@/components/ui/label';
 
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 function formatDashboardCurrency(amount: number, currency: string) {
   if (currency === 'N/A') return '-';
@@ -122,63 +128,89 @@ const renderMetric = (value: number | string, loading: boolean, comparisonValue?
 
 type ChartType = 'costos' | 'ahorros';
 
+interface ValidatedImprovement {
+    id: string;
+    accionNombre: string;
+    procesoNombre: string;
+    metrica: string;
+    antes: number | string;
+    despues: number | string;
+    ahorro: number;
+    moneda?: string;
+}
+
 export default function MejorasDashboardPage() {
-  const [isLoadingData, setIsLoadingData] = useState(true);
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
-  const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
-
-  const defaultToDate = new Date();
-  const defaultFromDate = new Date();
-  defaultFromDate.setDate(defaultFromDate.getDate() - 90);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: defaultFromDate,
-    to: defaultToDate,
-  });
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, isLoadingPuestos } = usePuestos();
   
+  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
-  const [chartType, setChartType] = useState<ChartType>('costos');
-
+  const [chartType, setChartType] = useState<ChartType>('ahorros');
+  
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
+  const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
 
   useEffect(() => {
-    setIsLoadingData(isLoadingSistemasCostos || isLoadingAcciones);
-  }, [isLoadingSistemasCostos, isLoadingAcciones]);
+    setIsLoadingData(isLoadingSistemasCostos || isLoadingAcciones || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos);
+  }, [isLoadingSistemasCostos, isLoadingAcciones, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos]);
   
   useEffect(() => {
-    if (!isLoadingSistemasCostos && sistemas && costosSistemas) {
-      setCalculatedSystemCosts(calculateAllSystemAnnualCosts(sistemas, costosSistemas));
-    }
-  }, [sistemas, costosSistemas, isLoadingSistemasCostos]);
-
-  const filteredAcciones = useMemo(() => {
-    if (!dateRange?.from) return [];
-    const from = startOfDay(dateRange.from);
-    const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
-
-    return globalAcciones.filter(accion => {
-      if (accion.fechaFinalizacion) {
-        const completionDate = parseISO(accion.fechaFinalizacion);
-        return isValid(completionDate) && completionDate >= from && completionDate <= to;
-      }
-      return false; // Only include actions with a completion date within the range
-    });
-  }, [globalAcciones, dateRange]);
-  
-  const comparisonAcciones = useMemo(() => {
-    if (!isComparing || !comparisonDateRange?.from) return [];
-    const from = startOfDay(comparisonDateRange.from);
-    const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
-
-    return globalAcciones.filter(accion => {
-        if (accion.fechaFinalizacion) {
-            const completionDate = parseISO(accion.fechaFinalizacion);
-            return isValid(completionDate) && completionDate >= from && completionDate <= to;
+    try {
+        const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+        if (storedProcesses) {
+            setAllCapturedProcesses(JSON.parse(storedProcesses));
         }
-        return false;
-    });
-  }, [globalAcciones, comparisonDateRange, isComparing]);
+    } catch(e) {
+        console.error("Error loading processes for mejoras dashboard", e);
+    }
+  }, []);
 
+  const filterAccionesByCriteria = (accionesToFilter: Accion[], range?: DateRange): Accion[] => {
+      let filtered = accionesToFilter;
+      
+      if (range?.from) {
+        const from = startOfDay(range.from);
+        const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
+        filtered = filtered.filter(accion => {
+            if (accion.fechaFinalizacion) {
+                const completionDate = parseISO(accion.fechaFinalizacion);
+                return isValid(completionDate) && completionDate >= from && completionDate <= to;
+            }
+            return false;
+        });
+      }
+      
+      if (selectedArea !== 'all') {
+        const puestosInArea = puestos.filter(p => p.areaId === areas.find(a => a.nombre === selectedArea)?.id).map(p => p.nombre);
+        filtered = filtered.filter(a => a.area === selectedArea || (a.puesto && puestosInArea.includes(a.puesto)));
+      }
+      if (selectedDepartamento !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+          if (depto) {
+              const puestosInDepto = puestos.filter(p => p.departamentoId === depto.id).map(p => p.nombre);
+              filtered = filtered.filter(a => a.puesto && puestosInDepto.includes(a.puesto));
+          } else {
+              filtered = [];
+          }
+      }
+      if (selectedPuesto !== 'all') {
+        filtered = filtered.filter(a => a.puesto === selectedPuesto);
+      }
+      
+      return filtered;
+  }
+  
+  const filteredAcciones = useMemo(() => filterAccionesByCriteria(globalAcciones, dateRange), [globalAcciones, dateRange, selectedArea, selectedDepartamento, selectedPuesto, areas, departamentos, puestos]);
+  const comparisonAcciones = useMemo(() => isComparing ? filterAccionesByCriteria(globalAcciones, comparisonDateRange) : [], [globalAcciones, comparisonDateRange, isComparing, selectedArea, selectedDepartamento, selectedPuesto, areas, departamentos, puestos]);
+  
   const processAccionesMetrics = (accionesToProcess: Accion[]) => {
       const completedActions = accionesToProcess.filter(acc => acc.estado === 'Completada');
       const ahorroCostosMap = new Map<string, number>();
@@ -187,24 +219,19 @@ export default function MejorasDashboardPage() {
           ahorroCostosMap.set(a.monedaAhorro, (ahorroCostosMap.get(a.monedaAhorro) || 0) + a.ahorroEstimado);
         }
       });
-      const ahorroTiempoMap = new Map<string, number>();
+      
+      let totalMinutesSaved = 0;
       completedActions.forEach(a => {
         if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
-          let valueInMinutes = a.ahorroTiempoEstimado;
-          let baseUnit = a.unidadTiempoAhorro;
-          if (baseUnit.startsWith('Horas')) {
-            valueInMinutes = a.ahorroTiempoEstimado * 60;
-            baseUnit = baseUnit.replace('Horas', 'Minutos');
-          }
-          ahorroTiempoMap.set(baseUnit, (ahorroTiempoMap.get(baseUnit) || 0) + valueInMinutes);
+            let valueInMinutes = a.ahorroTiempoEstimado;
+            if (a.unidadTiempoAhorro.startsWith('Horas')) {
+                valueInMinutes *= 60;
+            }
+            totalMinutesSaved += valueInMinutes;
         }
       });
-
-      const ahorroTiempoRealizado = Array.from(ahorroTiempoMap.entries()).map(([unit, totalMinutes]) => {
-          const unitLabel = unit.replace('Minutos/', '/').replace('Minutos', '');
-          return `${formatMinutesToHours(totalMinutes)} ${unitLabel}`;
-      }).join(', ') || 'N/A';
-
+      const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
+      
       return {
         accionesCompletadasCount: completedActions.length,
         ahorroCostosRealizado: Array.from(ahorroCostosMap.entries()).map(([currency, total]) => formatDashboardCurrency(total, currency)).join(', ') || 'N/A',
@@ -224,13 +251,11 @@ export default function MejorasDashboardPage() {
         totalAhorroMXN: 0,
       };
     }
-
     const { accionesCompletadasCount, ahorroCostosRealizado, ahorroTiempoRealizado, totalAhorroMXN } = processAccionesMetrics(filteredAcciones);
-
     return {
       accionesCompletadasCount,
-      accionesEnRevisionCount: globalAcciones.filter(acc => acc.estado === 'En Revisión').length, // These are not date-filtered
-      accionesEnProgresoCount: globalAcciones.filter(acc => acc.estado === 'En Progreso').length, // These are not date-filtered
+      accionesEnRevisionCount: globalAcciones.filter(acc => acc.estado === 'En Revisión').length,
+      accionesEnProgresoCount: globalAcciones.filter(acc => acc.estado === 'En Progreso').length,
       ahorroCostosRealizado,
       ahorroTiempoRealizado,
       totalAhorroMXN,
@@ -243,34 +268,52 @@ export default function MejorasDashboardPage() {
   }, [comparisonAcciones, isComparing, isLoadingAcciones]);
 
 
-  const isLoadingAll = isLoadingData || isLoadingAcciones || isLoadingSistemasCostos;
+  const isLoadingAll = isLoadingData;
 
-  const flattenedSystemCosts = useMemo(() => {
-    if (isLoadingSistemasCostos) return [];
-    return calculatedSystemCosts.flatMap(system => 
-        (system.costsByCurrency && system.costsByCurrency.length > 0)
-            ? system.costsByCurrency.map(cost => ({
-                id: `${system.id}-${cost.currency}`,
-                name: system.name,
-                currency: cost.currency,
-                annualUsageCost: cost.annualUsageCost,
-                annualLicenseCost: cost.annualLicenseCost,
-                descriptions: system.descriptions,
-            }))
-            : [{
-                id: system.id,
-                name: system.name,
-                currency: 'N/A',
-                annualUsageCost: 0,
-                annualLicenseCost: 0,
-                descriptions: ["Sin costos registrados"],
-            }]
-    ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [calculatedSystemCosts, isLoadingSistemasCostos]);
+  const filteredSystemCosts = useMemo(() => {
+      if (isLoadingSistemasCostos || isLoadingAll) return [];
+      
+      let processesToConsider = allCapturedProcesses.filter(p => !p.deletedAt);
+      if (selectedArea !== 'all') {
+          processesToConsider = processesToConsider.filter(p => p.area === selectedArea);
+      }
+      if (selectedDepartamento !== 'all') {
+          processesToConsider = processesToConsider.filter(p => p.departamento === selectedDepartamento);
+      }
+      if (selectedPuesto !== 'all') {
+          processesToConsider = processesToConsider.filter(p => p.puesto === selectedPuesto);
+      }
+      
+      const systemNamesInScope = new Set<string>();
+      processesToConsider.forEach(p => { p.sistemas?.forEach(s => systemNamesInScope.add(s)); });
+      const systemsToCalculate = sistemas.filter(s => systemNamesInScope.has(s.nombre));
+      
+      const calculated = calculateAllSystemAnnualCosts(systemsToCalculate, costosSistemas);
 
+      return calculated.flatMap(system => 
+          (system.costsByCurrency && system.costsByCurrency.length > 0)
+              ? system.costsByCurrency.map(cost => ({
+                  id: `${system.id}-${cost.currency}`,
+                  name: system.name,
+                  currency: cost.currency,
+                  annualUsageCost: cost.annualUsageCost,
+                  annualLicenseCost: cost.annualLicenseCost,
+                  descriptions: system.descriptions,
+              }))
+              : [{
+                  id: system.id,
+                  name: system.name,
+                  currency: 'N/A',
+                  annualUsageCost: 0,
+                  annualLicenseCost: 0,
+                  descriptions: ["Sin costos registrados"],
+              }]
+      ).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allCapturedProcesses, sistemas, costosSistemas, selectedArea, selectedDepartamento, selectedPuesto, isLoadingSistemasCostos, isLoadingAll]);
+  
   const grandTotals = useMemo(() => {
     const totals = new Map<string, { usage: number; license: number }>();
-    flattenedSystemCosts.forEach(item => {
+    filteredSystemCosts.forEach(item => {
         if(item.currency !== 'N/A') {
             const current = totals.get(item.currency) || { usage: 0, license: 0 };
             current.usage += item.annualUsageCost;
@@ -283,12 +326,37 @@ export default function MejorasDashboardPage() {
         ...data,
         total: data.usage + data.license
     }));
-  }, [flattenedSystemCosts]);
+  }, [filteredSystemCosts]);
+  
+  const mejorasValidadas = useMemo((): ValidatedImprovement[] => {
+      const mejoras: ValidatedImprovement[] = [];
+      filteredAcciones
+          .filter(a => a.estado === 'Completada' && a.historialDeCambios && a.historialDeCambios.length > 0)
+          .forEach(accion => {
+              accion.historialDeCambios?.forEach(cambio => {
+                  if (cambio.field.includes('Tiempo') || cambio.field.includes('Costo')) {
+                      const procesoAfectado = allCapturedProcesses.find(p => p.id === accion.procesoId);
+                      if (procesoAfectado) {
+                          mejoras.push({
+                              id: `${accion.id}-${cambio.field}`,
+                              accionNombre: accion.nombre,
+                              procesoNombre: procesoAfectado.proceso,
+                              metrica: cambio.field.includes('Tiempo') ? 'Tiempo (min)' : 'Costo',
+                              antes: Number(cambio.before) || 0,
+                              despues: Number(cambio.after) || 0,
+                              ahorro: (Number(cambio.before) || 0) - (Number(cambio.after) || 0),
+                              moneda: accion.monedaAhorro,
+                          });
+                      }
+                  }
+              });
+          });
+      return mejoras;
+  }, [filteredAcciones, allCapturedProcesses]);
   
   const chartData = useMemo(() => {
     if (chartType === 'costos') {
-      // Logic for system costs chart
-      return flattenedSystemCosts
+      return filteredSystemCosts
           .filter(sys => sys.currency !== 'N/A')
           .map(sys => ({
               name: `${sys.name} (${sys.currency})`,
@@ -296,29 +364,35 @@ export default function MejorasDashboardPage() {
               'Costo Licencias': sys.annualLicenseCost,
           }));
     } else {
-      // Logic for savings chart
       const processChartAcciones = (acciones: Accion[], suffix = "") => {
-          const data: { [key: string]: number } = {};
+          const data: { [key: string]: { ahorro: number, moneda: string } } = {};
           acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
               .forEach(a => {
-                  const key = `${a.nombre} (${a.monedaAhorro})${suffix}`;
-                  data[key] = (data[key] || 0) + a.ahorroEstimado!;
+                  const key = `${a.nombre}${suffix}`;
+                  data[key] = {
+                      ahorro: (data[key]?.ahorro || 0) + a.ahorroEstimado!,
+                      moneda: a.monedaAhorro!
+                  };
               });
           return data;
       };
 
       const primaryData = processChartAcciones(filteredAcciones);
-      const secondaryData = isComparing ? processChartAcciones(comparisonAcciones, " (Comp)") : {};
+      const comparisonData = isComparing ? processChartAcciones(comparisonAcciones, " (Comp)") : {};
       
-      const allNames = new Set([...Object.keys(primaryData), ...Object.keys(secondaryData).map(k => k.replace(" (Comp)", ""))]);
+      const allNames = new Set([...Object.keys(primaryData), ...Object.keys(comparisonData).map(k => k.replace(" (Comp)", ""))]);
       
-      return Array.from(allNames).map(name => ({
-          name: name.split(' (')[0],
-          'Ahorro': primaryData[name] || 0,
-          'Ahorro (Comp)': secondaryData[`${name} (Comp)`] || 0,
-      }));
+      return Array.from(allNames).map(name => {
+          const baseName = name.replace(" (Comp)", "");
+          return {
+              name: baseName,
+              'Ahorro': primaryData[baseName] ? primaryData[baseName].ahorro : 0,
+              'Ahorro (Comp)': comparisonData[`${baseName} (Comp)`] ? comparisonData[`${baseName} (Comp)`].ahorro : 0,
+              moneda: primaryData[baseName]?.moneda || comparisonData[`${baseName} (Comp)`]?.moneda || '',
+          }
+      });
     }
-  }, [chartType, flattenedSystemCosts, filteredAcciones, comparisonAcciones, isComparing]);
+  }, [chartType, filteredSystemCosts, filteredAcciones, comparisonAcciones, isComparing]);
 
   const chartConfig: ChartConfig = useMemo(() => {
     if (chartType === 'costos') {
@@ -334,38 +408,86 @@ export default function MejorasDashboardPage() {
     }
   }, [chartType]);
 
-  const handleExport = () => {
-    if (flattenedSystemCosts.length === 0) {
-        toast({ title: "Nada que exportar", description: "No hay datos de costos de sistemas para exportar.", variant: "default" });
-        return;
+  const handleExport = (type: 'sistemas' | 'mejoras') => {
+    if (type === 'sistemas') {
+        if (filteredSystemCosts.length === 0) {
+            toast({ title: "Nada que exportar", description: "No hay datos de costos de sistemas para exportar.", variant: "default" });
+            return;
+        }
+        const headers = ["Sistema", "Moneda", "Costo Anual (Uso)", "Costo Anual (Licencias)", "Costo Anual (Total)"];
+        const csvRows = [headers.join(',')];
+        filteredSystemCosts.forEach(sys => {
+            const row = [
+                escapeCsvCell(sys.name),
+                escapeCsvCell(sys.currency),
+                escapeCsvCell(sys.annualUsageCost.toFixed(2)),
+                escapeCsvCell(sys.annualLicenseCost.toFixed(2)),
+                escapeCsvCell((sys.annualUsageCost + sys.annualLicenseCost).toFixed(2))
+            ];
+            csvRows.push(row.join(','));
+        });
+        grandTotals.forEach(total => {
+            csvRows.push(['']);
+            csvRows.push([`Total General (${total.currency})`, '', escapeCsvCell(total.usage.toFixed(2)), escapeCsvCell(total.license.toFixed(2)), escapeCsvCell(total.total.toFixed(2))].join(','));
+        });
+        const csvString = csvRows.join('\n');
+        const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `costos_sistemas_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    } else { // mejoras
+        if (mejorasValidadas.length === 0) {
+            toast({ title: "Nada que exportar", description: "No hay datos de mejoras para exportar.", variant: "default" });
+            return;
+        }
+        const headers = ["Acción de Mejora", "Proceso Afectado", "Métrica", "Valor Anterior", "Valor Nuevo", "Ahorro Realizado", "Moneda"];
+        const csvRows = [headers.join(',')];
+        mejorasValidadas.forEach(m => {
+            csvRows.push([
+                escapeCsvCell(m.accionNombre),
+                escapeCsvCell(m.procesoNombre),
+                escapeCsvCell(m.metrica),
+                escapeCsvCell(m.antes),
+                escapeCsvCell(m.despues),
+                escapeCsvCell(m.ahorro),
+                escapeCsvCell(m.moneda || 'N/A'),
+            ].join(','));
+        });
+        const csvString = csvRows.join('\n');
+        const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `validacion_mejoras_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     }
-    const headers = ["Sistema", "Moneda", "Costo Anual (Uso)", "Costo Anual (Licencias)", "Costo Anual (Total)"];
-    const csvRows = [headers.join(',')];
-    flattenedSystemCosts.forEach(sys => {
-        const row = [
-            escapeCsvCell(sys.name),
-            escapeCsvCell(sys.currency),
-            escapeCsvCell(sys.annualUsageCost.toFixed(2)),
-            escapeCsvCell(sys.annualLicenseCost.toFixed(2)),
-            escapeCsvCell((sys.annualUsageCost + sys.annualLicenseCost).toFixed(2))
-        ];
-        csvRows.push(row.join(','));
-    });
-    grandTotals.forEach(total => {
-        csvRows.push(['']);
-        csvRows.push([`Total General (${total.currency})`, '', escapeCsvCell(total.usage.toFixed(2)), escapeCsvCell(total.license.toFixed(2)), escapeCsvCell(total.total.toFixed(2))].join(','));
-    });
-
-    const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `costos_sistemas_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
   };
+  
+  const availableDepartamentos = useMemo(() => {
+    if (isLoadingDepartamentos || selectedArea === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedArea);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [selectedArea, areas, departamentos, isLoadingDepartamentos]);
+
+  const availablePuestos = useMemo(() => {
+      if (isLoadingPuestos) return puestos;
+      let scopedPuestos = puestos;
+      if (selectedArea !== 'all') {
+          const area = areas.find(a => a.nombre === selectedArea);
+          scopedPuestos = area ? scopedPuestos.filter(p => p.areaId === area.id) : [];
+      }
+      if (selectedDepartamento !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+          scopedPuestos = depto ? scopedPuestos.filter(p => p.departamentoId === depto.id) : [];
+      }
+      return scopedPuestos;
+  }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
 
   return (
@@ -377,7 +499,7 @@ export default function MejorasDashboardPage() {
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
             <DateRangePicker date={dateRange} setDate={setDateRange} />
-            <Button variant="outline" onClick={() => setIsComparing(!isComparing)}>
+            <Button variant="outline" onClick={() => setIsComparing(!isComparing)} disabled={!dateRange}>
                  <CalendarRange className="mr-2 h-4 w-4" />
                  {isComparing ? "Cancelar Comparación" : "Comparar"}
             </Button>
@@ -390,6 +512,24 @@ export default function MejorasDashboardPage() {
                 <DateRangePicker date={comparisonDateRange} setDate={setComparisonDateRange} />
             </div>
         )}
+
+       <div className="mb-6 flex flex-col sm:flex-row gap-2 items-center bg-muted/50 p-3 rounded-lg border">
+        <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+          <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
+            <SelectTrigger><SelectValue placeholder="Todas las Áreas"/></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
+            <SelectTrigger><SelectValue placeholder={selectedArea === 'all' ? 'Seleccione área primero' : 'Todos los Deptos.'} /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
+            <SelectTrigger><SelectValue placeholder="Todos los Puestos" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+       </div>
 
        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -413,56 +553,97 @@ export default function MejorasDashboardPage() {
             <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Pendientes de aprobación</p></CardContent>
         </Card>
       </div>
+      
+      <Card className="shadow-lg mb-8">
+        <CardHeader>
+           <div className="flex justify-between items-center">
+              <CardTitle>Análisis Gráfico</CardTitle>
+              <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
+                  <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="ahorros">Ahorros por Acción</SelectItem>
+                      <SelectItem value="costos">Costos de Sistemas</SelectItem>
+                  </SelectContent>
+              </Select>
+           </div>
+            <CardDescription>
+              {chartType === 'costos'
+                  ? 'Comparativa de costos anuales (Uso vs. Licencias) por sistema y moneda.'
+                  : 'Ahorro anual estimado por cada acción de mejora completada en el período.'}
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
+          chartData.length > 0 ? (
+            <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+                <ResponsiveContainer>
+                    <BarChart data={chartData} layout="vertical">
+                        <CartesianGrid horizontal={false} />
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
+                        <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
+                        <Legend />
+                        {chartType === 'costos' ? (
+                          <>
+                            <Bar dataKey="Costo Uso" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="Costo Licencias" stackId="a" fill="hsl(var(--chart-1))" radius={[4, 4, 4, 4]} />
+                          </>
+                        ) : (
+                          <>
+                            <Bar dataKey="Ahorro" fill="hsl(var(--chart-1))" radius={4} />
+                            {isComparing && <Bar dataKey="Ahorro (Comp)" fill="hsl(var(--chart-2))" radius={4} opacity={0.6} />}
+                          </>
+                        )}
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartContainer>
+          ) : (
+              <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
+                  <p className="text-muted-foreground">No hay datos para graficar.</p>
+              </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="shadow-lg">
-          <CardHeader>
-             <div className="flex justify-between items-center">
-                <CardTitle>Análisis Gráfico</CardTitle>
-                <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
-                    <SelectTrigger className="w-[200px]">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="costos">Costos de Sistemas</SelectItem>
-                        <SelectItem value="ahorros">Ahorros por Acción</SelectItem>
-                    </SelectContent>
-                </Select>
-             </div>
-              <CardDescription>
-                {chartType === 'costos'
-                    ? 'Comparativa de costos anuales (Uso vs. Licencias) por sistema y moneda.'
-                    : 'Ahorro anual estimado por cada acción de mejora completada en el período.'}
-              </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle>Validación de Ahorros por Acción</CardTitle>
+              <CardDescription className="text-xs mt-1">Detalle de las mejoras aplicadas por acciones completadas en el periodo.</CardDescription>
+            </div>
+            <Button variant="outline" onClick={() => handleExport('mejoras')} disabled={mejorasValidadas.length === 0}>
+                <FileText className="mr-2 h-4 w-4" /> Exportar CSV
+            </Button>
           </CardHeader>
           <CardContent>
-            {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
-            chartData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
-                  <ResponsiveContainer>
-                      <BarChart data={chartData} layout="vertical">
-                          <CartesianGrid horizontal={false} />
-                          <XAxis type="number" hide />
-                          <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
-                          <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                          <Legend />
-                          {chartType === 'costos' ? (
-                            <>
-                              <Bar dataKey="Costo Uso" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey="Costo Licencias" stackId="a" fill="hsl(var(--chart-1))" radius={[4, 4, 4, 4]} />
-                            </>
-                          ) : (
-                            <>
-                              <Bar dataKey="Ahorro" fill="hsl(var(--chart-1))" radius={4} />
-                              {isComparing && <Bar dataKey="Ahorro (Comp)" fill="hsl(var(--chart-2))" radius={4} opacity={0.6} />}
-                            </>
-                          )}
-                      </BarChart>
-                  </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-                <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-                    <p className="text-muted-foreground">No hay datos para graficar.</p>
+            {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            : mejorasValidadas.length === 0 ? <p className="text-muted-foreground text-sm">No hay mejoras validadas en el periodo seleccionado.</p>
+            : (
+                <div className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                      <TableHeader><TableRow>
+                          <TableHead>Proceso / Acción</TableHead>
+                          <TableHead>Métrica</TableHead>
+                          <TableHead className="text-right">Antes</TableHead>
+                          <TableHead className="text-right">Después</TableHead>
+                          <TableHead className="text-right font-bold">Ahorro</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {mejorasValidadas.map(m => (
+                            <TableRow key={m.id}>
+                                <TableCell>
+                                  <p className="font-medium">{m.procesoNombre}</p>
+                                  <p className="text-xs text-muted-foreground">{m.accionNombre}</p>
+                                </TableCell>
+                                <TableCell>{m.metrica}</TableCell>
+                                <TableCell className="text-right">{m.metrica === 'Tiempo (min)' ? formatMinutesToHours(Number(m.antes)) : formatDashboardCurrency(Number(m.antes), m.moneda || 'USD')}</TableCell>
+                                <TableCell className="text-right">{m.metrica === 'Tiempo (min)' ? formatMinutesToHours(Number(m.despues)) : formatDashboardCurrency(Number(m.despues), m.moneda || 'USD')}</TableCell>
+                                <TableCell className="text-right font-bold text-green-600">{m.metrica === 'Tiempo (min)' ? formatMinutesToHours(m.ahorro) : formatDashboardCurrency(m.ahorro, m.moneda || 'USD')}</TableCell>
+                            </TableRow>
+                        ))}
+                      </TableBody>
+                  </Table>
                 </div>
             )}
           </CardContent>
@@ -471,66 +652,52 @@ export default function MejorasDashboardPage() {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle>Costos de Sistemas</CardTitle>
-              <CardDescription className="text-xs mt-1">Costos anuales estimados de todos los sistemas configurados.</CardDescription>
+              <CardTitle>Costos de Sistemas (Filtrado)</CardTitle>
+              <CardDescription className="text-xs mt-1">Costos anuales de sistemas usados por procesos que cumplen los filtros.</CardDescription>
             </div>
-            <Button variant="outline" onClick={handleExport} disabled={flattenedSystemCosts.length === 0}>
+            <Button variant="outline" onClick={() => handleExport('sistemas')} disabled={filteredSystemCosts.length === 0}>
                 <FileText className="mr-2 h-4 w-4" /> Exportar CSV
             </Button>
           </CardHeader>
           <CardContent>
-            {isLoadingAll ? (
-                <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : flattenedSystemCosts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas.</p>
-            ) : (
+            {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            : filteredSystemCosts.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos de costos para los filtros seleccionados.</p>
+            : (
                 <div className="max-h-[400px] overflow-y-auto">
                   <Table>
-                    <TableHeader>
-                        <TableRow>
-                          <TableHead>Sistema</TableHead>
-                          <TableHead className="text-right">Costo Anual (Uso)</TableHead>
-                          <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
-                          <TableHead className="text-right font-bold">Costo Anual (Total)</TableHead>
-                        </TableRow>
-                    </TableHeader>
+                    <TableHeader><TableRow>
+                        <TableHead>Sistema</TableHead>
+                        <TableHead className="text-right">Costo Anual (Uso)</TableHead>
+                        <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
+                        <TableHead className="text-right font-bold">Costo Anual (Total)</TableHead>
+                    </TableRow></TableHeader>
                     <TableBody>
-                        {flattenedSystemCosts.map((system) => (
+                        {filteredSystemCosts.map((system) => (
                         <TableRow key={system.id}>
                             <TableCell className="font-medium">
-                                <TooltipProvider>
-                                    <UiTooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="cursor-default">{system.name}</span>
-                                        </TooltipTrigger>
-                                        {system.descriptions.length > 0 && (
-                                        <TooltipContent><p className="font-bold">Detalle de Costos:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>
-                                        )}
-                                    </UiTooltip>
-                                </TooltipProvider>
+                                <TooltipProvider><UiTooltip>
+                                    <TooltipTrigger asChild><span className="cursor-default">{system.name}</span></TooltipTrigger>
+                                    {system.descriptions.length > 0 && (<TooltipContent><p className="font-bold">Detalle de Costos:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>)}
+                                </UiTooltip></TooltipProvider>
                             </TableCell>
-                            <TableCell className="text-right">
-                                {formatDashboardCurrency(system.annualUsageCost, system.currency)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                                {formatDashboardCurrency(system.annualLicenseCost, system.currency)}
-                            </TableCell>
-                             <TableCell className="text-right font-bold">
-                                {formatDashboardCurrency(system.annualUsageCost + system.annualLicenseCost, system.currency)}
-                            </TableCell>
+                            <TableCell className="text-right">{formatDashboardCurrency(system.annualUsageCost, system.currency)}</TableCell>
+                            <TableCell className="text-right">{formatDashboardCurrency(system.annualLicenseCost, system.currency)}</TableCell>
+                            <TableCell className="text-right font-bold">{formatDashboardCurrency(system.annualUsageCost + system.annualLicenseCost, system.currency)}</TableCell>
                         </TableRow>
                         ))}
                     </TableBody>
-                    <TableFooter>
-                      {grandTotals.map(total => (
-                        <TableRow key={total.currency} className="font-extrabold bg-muted/50 hover:bg-muted/70">
-                            <TableCell>Total General ({total.currency})</TableCell>
-                            <TableCell className="text-right">{formatDashboardCurrency(total.usage, total.currency)}</TableCell>
-                            <TableCell className="text-right">{formatDashboardCurrency(total.license, total.currency)}</TableCell>
-                            <TableCell className="text-right">{formatDashboardCurrency(total.total, total.currency)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableFooter>
+                    {grandTotals.length > 0 && (
+                      <TableFooter>
+                        {grandTotals.map(total => (
+                          <TableRow key={total.currency} className="font-extrabold bg-muted/50 hover:bg-muted/70">
+                              <TableCell>Total ({total.currency})</TableCell>
+                              <TableCell className="text-right">{formatDashboardCurrency(total.usage, total.currency)}</TableCell>
+                              <TableCell className="text-right">{formatDashboardCurrency(total.license, total.currency)}</TableCell>
+                              <TableCell className="text-right">{formatDashboardCurrency(total.total, total.currency)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableFooter>
+                    )}
                   </Table>
                 </div>
             )}

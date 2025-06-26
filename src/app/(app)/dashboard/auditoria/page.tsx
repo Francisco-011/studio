@@ -15,6 +15,12 @@ import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/compone
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 
 interface AuditFinding {
@@ -27,9 +33,11 @@ interface Audit {
   findings: AuditFinding[];
   targetName: string;
   auditType: string;
+  targetId: string;
 }
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
+const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -69,18 +77,21 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 
 export default function AuditoriaDashboardPage() {
   const [allAudits, setAllAudits] = useState<Audit[]>([]);
+  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   
-  const defaultToDate = new Date();
-  const defaultFromDate = new Date();
-  defaultFromDate.setDate(defaultFromDate.getDate() - 29); // Default to last 30 days
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: defaultFromDate,
-    to: defaultToDate,
-  });
-
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, isLoadingPuestos } = usePuestos();
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
+
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
+  const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
+
 
   useEffect(() => {
     setIsLoadingData(true);
@@ -94,6 +105,10 @@ export default function AuditoriaDashboardPage() {
         }));
         setAllAudits(sanitizedAudits);
       }
+       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+      if (storedProcesses) {
+        setAllCapturedProcesses(JSON.parse(storedProcesses));
+      }
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
     } finally {
@@ -101,46 +116,62 @@ export default function AuditoriaDashboardPage() {
     }
   }, []);
 
-  const filteredAudits = useMemo(() => {
-    if (!dateRange?.from) return [];
-    const from = startOfDay(dateRange.from);
-    const to = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
+  const filterAuditsByCriteria = (auditsToFilter: Audit[], range?: DateRange) => {
+    let filtered = auditsToFilter;
     
-    return allAudits.filter(audit => {
-        const auditDate = parseISO(audit.auditDate);
-        return isValid(auditDate) && auditDate >= from && auditDate <= to;
-    });
-  }, [allAudits, dateRange]);
+    if (range?.from) {
+      const from = startOfDay(range.from);
+      const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
+      filtered = filtered.filter(audit => {
+          const auditDate = parseISO(audit.auditDate);
+          return isValid(auditDate) && auditDate >= from && auditDate <= to;
+      });
+    }
 
-  const comparisonAudits = useMemo(() => {
-    if (!isComparing || !comparisonDateRange?.from) return [];
-    const from = startOfDay(comparisonDateRange.from);
-    const to = comparisonDateRange.to ? endOfDay(comparisonDateRange.to) : endOfDay(new Date());
+    if (selectedArea !== 'all' || selectedDepartamento !== 'all' || selectedPuesto !== 'all') {
+      filtered = filtered.filter(audit => {
+        if (audit.auditType === 'proceso') {
+          const proc = allCapturedProcesses.find(p => p.id === audit.targetId);
+          if (!proc) return false;
+          const areaMatch = selectedArea === 'all' || proc.area === selectedArea;
+          const deptoMatch = selectedDepartamento === 'all' || proc.departamento === selectedDepartamento;
+          const puestoMatch = selectedPuesto === 'all' || proc.puesto === selectedPuesto;
+          return areaMatch && deptoMatch && puestoMatch;
+        }
+        if (audit.auditType === 'puesto') {
+          const pst = puestos.find(p => p.id === audit.targetId);
+          if (!pst) return false;
+          const areaForPuesto = areas.find(a => a.id === pst.areaId)?.nombre;
+          const deptoForPuesto = departamentos.find(d => d.id === pst.departamentoId)?.nombre;
+          const areaMatch = selectedArea === 'all' || areaForPuesto === selectedArea;
+          const deptoMatch = selectedDepartamento === 'all' || deptoForPuesto === selectedDepartamento;
+          const puestoMatch = selectedPuesto === 'all' || pst.nombre === selectedPuesto;
+          return areaMatch && deptoMatch && puestoMatch;
+        }
+        // No filter for 'sistema' audits based on entity hierarchy
+        return true;
+      });
+    }
 
-    return allAudits.filter(audit => {
-        const auditDate = parseISO(audit.auditDate);
-        return isValid(auditDate) && auditDate >= from && auditDate <= to;
-    });
-}, [allAudits, comparisonDateRange, isComparing]);
+    return filtered;
+  };
 
+  const filteredAudits = useMemo(() => filterAuditsByCriteria(allAudits, dateRange), [allAudits, dateRange, selectedArea, selectedDepartamento, selectedPuesto, allCapturedProcesses, puestos, areas, departamentos]);
+  const comparisonAudits = useMemo(() => isComparing ? filterAuditsByCriteria(allAudits, comparisonDateRange) : [], [allAudits, comparisonDateRange, isComparing, selectedArea, selectedDepartamento, selectedPuesto, allCapturedProcesses, puestos, areas, departamentos]);
 
-  const dashboardMetrics = useMemo(() => {
-    const completedAudits = filteredAudits.filter(a => a.status === 'Completada');
-    return {
-      auditoriasCompletadasCount: completedAudits.length,
-      hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
-      hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0),
-    };
-  }, [filteredAudits]);
+  const processMetrics = (audits: Audit[]) => {
+      const completedAudits = audits.filter(a => a.status === 'Completada');
+      return {
+          auditoriasCompletadasCount: completedAudits.length,
+          hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
+          hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0),
+      };
+  }
 
+  const dashboardMetrics = useMemo(() => processMetrics(filteredAudits), [filteredAudits]);
   const comparisonMetrics = useMemo(() => {
-    if (!isComparing) return null;
-    const completedAudits = comparisonAudits.filter(a => a.status === 'Completada');
-    return {
-      auditoriasCompletadasCount: completedAudits.length,
-      hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
-      hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0),
-    };
+      if (!isComparing) return null;
+      return processMetrics(comparisonAudits);
   }, [comparisonAudits, isComparing]);
 
   const chartData = useMemo(() => {
@@ -188,8 +219,29 @@ export default function AuditoriaDashboardPage() {
     'Hallazgos No Conformes (Comp)': { label: 'Hallazgos NC (Comp)', color: 'hsl(var(--chart-5))' },
     'Oportunidades de Mejora (Comp)': { label: 'Oportunidades (Comp)', color: 'hsl(var(--chart-3))' },
   };
+  
+  const availableDepartamentos = useMemo(() => {
+    if (isLoadingDepartamentos || selectedArea === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedArea);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [selectedArea, areas, departamentos, isLoadingDepartamentos]);
 
-  const isLoadingAll = isLoadingData;
+  const availablePuestos = useMemo(() => {
+      if (isLoadingPuestos) return puestos;
+      let scopedPuestos = puestos;
+      if (selectedArea !== 'all') {
+          const area = areas.find(a => a.nombre === selectedArea);
+          scopedPuestos = area ? scopedPuestos.filter(p => p.areaId === area.id) : [];
+      }
+      if (selectedDepartamento !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+          scopedPuestos = depto ? scopedPuestos.filter(p => p.departamentoId === depto.id) : [];
+      }
+      return scopedPuestos;
+  }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
+
+
+  const isLoadingAll = isLoadingData || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
 
   const handleExport = () => {
     if (filteredAudits.length === 0) {
@@ -231,7 +283,7 @@ export default function AuditoriaDashboardPage() {
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
             <DateRangePicker date={dateRange} setDate={setDateRange} />
-             <Button variant="outline" onClick={() => setIsComparing(!isComparing)}>
+             <Button variant="outline" onClick={() => setIsComparing(!isComparing)} disabled={!dateRange}>
                  <CalendarRange className="mr-2 h-4 w-4" />
                  {isComparing ? "Cancelar Comparación" : "Comparar"}
             </Button>
@@ -243,6 +295,24 @@ export default function AuditoriaDashboardPage() {
                 <DateRangePicker date={comparisonDateRange} setDate={setComparisonDateRange} />
             </div>
         )}
+
+      <div className="mb-6 flex flex-col sm:flex-row gap-2 items-center bg-muted/50 p-3 rounded-lg border">
+        <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+          <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
+            <SelectTrigger><SelectValue placeholder="Todas las Áreas"/></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
+            <SelectTrigger><SelectValue placeholder={selectedArea === 'all' ? 'Seleccione área primero' : 'Todos los Deptos.'} /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
+            <SelectTrigger><SelectValue placeholder="Todos los Puestos" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
 
        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -286,7 +356,7 @@ export default function AuditoriaDashboardPage() {
             </ChartContainer>
           ) : (
             <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-              <p className="text-muted-foreground">No hay datos de auditoría en el rango de fechas seleccionado.</p>
+              <p className="text-muted-foreground">No hay datos de auditoría para los filtros seleccionados.</p>
             </div>
           )}
         </CardContent>
@@ -297,7 +367,7 @@ export default function AuditoriaDashboardPage() {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>Auditorías Recientes</CardTitle>
-              <CardDescription>Lista de auditorías en el periodo seleccionado.</CardDescription>
+              <CardDescription>Lista de auditorías que cumplen con los filtros seleccionados.</CardDescription>
             </div>
             <Button variant="outline" onClick={handleExport} disabled={filteredAudits.length === 0}>
                 <FileText className="mr-2 h-4 w-4" /> Exportar CSV
