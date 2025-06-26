@@ -162,6 +162,10 @@ export default function AccionesPage() {
 
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   function formatHistoryValue(field: string, value: any, moneda?: Moneda): string {
     if (value === undefined || value === null) return "-";
@@ -461,7 +465,7 @@ export default function AccionesPage() {
     const headers = [
       "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", 
       "Proceso Asociado", "Actividad Asociada",
-      "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Estimado", "Moneda Ahorro", 
+      "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Anual Estimado", "Moneda Ahorro", 
       "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
     ];
@@ -897,9 +901,11 @@ export default function AccionesPage() {
                     const linkedProcess = accion.procesoId ? capturedProcesses.find(p => p.id === accion.procesoId) : null;
                     const linkedActivity = accion.actividadId ? actividades.find(a => a.id === accion.actividadId) : null;
                     const isOverdue = 
+                        isClient &&
                         (accion.estado === 'Pendiente' || accion.estado === 'En Progreso') && 
-                        accion.fechaObjetivo && 
-                        new Date(accion.fechaObjetivo) < new Date(new Date().setHours(0, 0, 0, 0));
+                        accion.fechaObjetivo &&
+                        isValid(parseISO(accion.fechaObjetivo)) &&
+                        parseISO(accion.fechaObjetivo) < new Date(new Date().setHours(0, 0, 0, 0));
                     
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
