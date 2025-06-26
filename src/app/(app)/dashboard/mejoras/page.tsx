@@ -287,7 +287,7 @@ export default function MejorasDashboardPage() {
       
       const systemNamesInScope = new Set<string>();
       processesToConsider.forEach(p => { p.sistemas?.forEach(s => systemNamesInScope.add(s)); });
-      const systemsToCalculate = sistemas.filter(s => systemNamesInScope.has(s.nombre));
+      const systemsToCalculate = sistemas.filter(s => s.nombre && systemNamesInScope.has(s.nombre));
       
       const calculated = calculateAllSystemAnnualCosts(systemsToCalculate, costosSistemas);
 
@@ -309,7 +309,7 @@ export default function MejorasDashboardPage() {
                   annualLicenseCost: 0,
                   descriptions: ["Sin costos registrados"],
               }]
-      ).sort((a, b) => a.name.localeCompare(b.name));
+      ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [allCapturedProcesses, sistemas, costosSistemas, selectedArea, selectedDepartamento, selectedPuesto, isLoadingSistemasCostos, isLoadingAll]);
   
   const grandTotals = useMemo(() => {
@@ -623,7 +623,7 @@ export default function MejorasDashboardPage() {
                                           } else if (chartType === 'ahorrosPorAccion') {
                                               currency = payload.moneda || 'N/A';
                                           } else if (chartType === 'ahorrosPorArea') {
-                                              currency = name; // The dataKey is the currency
+                                              currency = name || 'N/A';
                                           }
                                           const formattedValue = formatDashboardCurrency(value as number, currency);
                                           return (
