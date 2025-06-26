@@ -61,9 +61,11 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAcciones } from '@/contexts/AccionesContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -71,7 +73,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -105,7 +107,7 @@ interface AuditFinding extends AuditFindingFormData {
 
 interface Audit {
   id: string;
-  auditType: 'proceso' | 'puesto';
+  auditType: 'proceso' | 'puesto' | 'sistema';
   targetId: string;
   targetName: string;
   processIdsToAudit?: string[];
@@ -140,6 +142,8 @@ export default function AuditoriaPage() {
   const { addAccion, isLoadingAcciones } = useAcciones();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { areas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
 
   const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
@@ -149,7 +153,7 @@ export default function AuditoriaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartAuditDialogOpen, setIsStartAuditDialogOpen] = useState(false);
   
-  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | ''>('');
+  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | 'sistema' | ''>('');
   const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
   const [newAuditProcessIds, setNewAuditProcessIds] = useState<string[]>([]);
   const [newAuditorName, setNewAuditorName] = useState<string>('Auditor Principal');
@@ -215,6 +219,7 @@ export default function AuditoriaPage() {
   }, [newAuditType, newAuditTargetId]);
 
   const auditTargetDetails = useMemo(() => {
+    const nullDetails = { name: "No encontrado", process: null, activities: [], puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null };
     if (!currentAuditSession) return null;
 
     const activityFilterFunc = (act: Actividad) => {
@@ -226,23 +231,27 @@ export default function AuditoriaPage() {
 
     if (currentAuditSession.auditType === 'proceso') {
       const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
-      if (!process) return { name: "Proceso no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
+      if (!process) return nullDetails;
       const processActivities = (process.activityOrder || [])
         .map(actId => actividades.find(a => a.id === actId))
         .filter((act): act is Actividad => !!act)
         .filter(activityFilterFunc);
 
+      const puestoQueEjecuta = puestos.find(p => p.nombre === process.puesto);
+      const jefeInmediato = puestoQueEjecuta?.jefeInmediato ? puestos.find(p => p.id === puestoQueEjecuta.jefeInmediato) : null;
+      const departamento = puestoQueEjecuta ? departamentos.find(d => d.id === puestoQueEjecuta.departamentoId) : null;
+
       return {
-        name: process.proceso,
-        process,
-        activities: processActivities,
-        puesto: null,
-        relatedProcesses: [],
+        name: process.proceso, process, activities: processActivities, puesto: null,
+        relatedProcesses: [], sistema: null, departamento, jefeInmediato
       };
-    } else { // Puesto
+    } else if (currentAuditSession.auditType === 'puesto') {
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
-      if (!puesto) return { name: "Puesto no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
+      if (!puesto) return nullDetails;
       
+      const jefeInmediato = puesto.jefeInmediato ? puestos.find(p => p.id === puesto.jefeInmediato) : null;
+      const departamento = puesto.departamentoId ? departamentos.find(d => d.id === puesto.departamentoId) : null;
+
       let relatedProcessesForPuesto = allProcesses.filter(proc => proc.puesto === puesto.nombre);
 
       if (currentAuditSession.processIdsToAudit && currentAuditSession.processIdsToAudit.length > 0) {
@@ -251,23 +260,29 @@ export default function AuditoriaPage() {
       }
 
       const relatedProcessesData = relatedProcessesForPuesto
-        .map(proc => {
-            const processActivities = (proc.activityOrder || [])
-                .map(actId => actividades.find(a => a.id === actId))
-                .filter((act): act is Actividad => !!act)
-                .filter(activityFilterFunc);
-            return { process: proc, activities: processActivities };
-        });
+        .map(proc => ({
+          process: proc,
+          activities: (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act).filter(activityFilterFunc)
+        }));
       
       return {
-        name: puesto.nombre,
-        process: null,
-        activities: [],
-        puesto,
-        relatedProcesses: relatedProcessesData,
+        name: puesto.nombre, process: null, activities: [], puesto, relatedProcesses: relatedProcessesData, sistema: null,
+        departamento, jefeInmediato,
       };
+    } else { // Sistema
+        const sistema = sistemas.find(s => s.id === currentAuditSession.targetId);
+        if(!sistema) return nullDetails;
+
+        const costosDelSistema = costosSistemas.filter(c => c.sistemaId === sistema.id);
+        const procesosQueUsanSistema = allProcesses.filter(p => p.sistemas?.includes(sistema.nombre));
+
+        return {
+            name: sistema.nombre, process: null, activities: [], puesto: null, sistema: {...sistema, costos: costosDelSistema },
+            relatedProcesses: procesosQueUsanSistema.map(p => ({ process: p, activities: []})),
+            departamento: null, jefeInmediato: null
+        }
     }
-  }, [currentAuditSession, allProcesses, actividades, puestos, areas, activityDisplayFilter]);
+  }, [currentAuditSession, allProcesses, actividades, puestos, areas, activityDisplayFilter, departamentos, sistemas, costosSistemas]);
 
   useEffect(() => {
     if (isFindingDialogOpen) {
@@ -287,7 +302,8 @@ export default function AuditoriaPage() {
     }
     const targetName = newAuditType === 'proceso'
       ? allProcesses.find(p => p.id === newAuditTargetId)?.proceso
-      : puestos.find(p => p.id === newAuditTargetId)?.nombre;
+      : newAuditType === 'puesto' ? puestos.find(p => p.id === newAuditTargetId)?.nombre
+      : sistemas.find(s => s.id === newAuditTargetId)?.nombre;
 
     if (!targetName) {
         toast({ title: "Error", description: "No se encontró el nombre del objetivo seleccionado." });
@@ -351,11 +367,6 @@ export default function AuditoriaPage() {
 
   const handleCreateActionPlan = (finding: AuditFinding) => {
     if (!currentAuditSession) return;
-    const target = currentAuditSession.auditType === 'proceso'
-      ? allProcesses.find(p => p.id === currentAuditSession.targetId)
-      : puestos.find(p => p.id === currentAuditSession.targetId);
-    
-    if (!target) return;
     
     let actionData: any = {
       nombre: `Hallazgo en ${currentAuditSession.auditType}: ${currentAuditSession.targetName}`,
@@ -366,12 +377,18 @@ export default function AuditoriaPage() {
     };
 
     if (currentAuditSession.auditType === 'proceso') {
-      actionData.procesoId = target.id;
-      actionData.area = (target as CapturedProcess).area;
-      actionData.puesto = (target as CapturedProcess).puesto;
-    } else {
-      actionData.puesto = (target as Puesto).nombre;
-      actionData.area = areas.find(a => a.id === (target as Puesto).areaId)?.nombre;
+      const target = allProcesses.find(p => p.id === currentAuditSession!.targetId);
+      if (target) {
+          actionData.procesoId = target.id;
+          actionData.area = target.area;
+          actionData.puesto = target.puesto;
+      }
+    } else if (currentAuditSession.auditType === 'puesto') {
+      const target = puestos.find(p => p.id === currentAuditSession!.targetId);
+      if (target) {
+        actionData.puesto = target.nombre;
+        actionData.area = areas.find(a => a.id === target.areaId)?.nombre;
+      }
     }
 
     addAccion(actionData);
@@ -441,7 +458,9 @@ export default function AuditoriaPage() {
     setIsConfirmDeleteAuditOpen(false);
   };
 
-  if (isLoading || isLoadingActividades || isLoadingPuestos) {
+  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos;
+
+  if (isLoadingAllData) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />
@@ -494,7 +513,9 @@ export default function AuditoriaPage() {
                                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         <DetailDisplay title="Descripción" value={auditTargetDetails.process.descripcion} isTextarea />
                                         <DetailDisplay title="Área" value={auditTargetDetails.process.area} />
-                                        <DetailDisplay title="Puesto" value={auditTargetDetails.process.puesto} />
+                                        <DetailDisplay title="Departamento" value={auditTargetDetails.departamento?.nombre} />
+                                        <DetailDisplay title="Puesto que Ejecuta" value={auditTargetDetails.process.puesto} />
+                                        <DetailDisplay title="Jefe Inmediato del Puesto" value={auditTargetDetails.jefeInmediato?.nombre} />
                                         <DetailDisplay title="Frecuencia" value={auditTargetDetails.process.frecuencia} />
                                         <DetailDisplay title="Tiempo Estimado" value={auditTargetDetails.process.tiempoEstimado !== undefined ? `${auditTargetDetails.process.tiempoEstimado} min` : null} />
                                         <DetailDisplay title="Tiempo Ideal" value={auditTargetDetails.process.tiempoIdeal !== undefined ? `${auditTargetDetails.process.tiempoIdeal} min` : null} />
@@ -544,6 +565,8 @@ export default function AuditoriaPage() {
                                     <CardContent className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             <DetailDisplay title="Área" value={areas.find(a => a.id === auditTargetDetails.puesto?.areaId)?.nombre || 'No asignada'} />
+                                            <DetailDisplay title="Departamento" value={auditTargetDetails.departamento?.nombre} />
+                                            <DetailDisplay title="Jefe Inmediato" value={auditTargetDetails.jefeInmediato?.nombre} />
                                             <DetailDisplay title="Nivel Organizacional" value={auditTargetDetails.puesto.nivelOrganizacional} />
                                             <DetailDisplay title="Número de Personas" value={auditTargetDetails.puesto.numeroPersonas} />
                                         </div>
@@ -601,6 +624,57 @@ export default function AuditoriaPage() {
                                                         </AccordionItem>
                                                     ))}
                                                 </Accordion>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+                            {auditTargetDetails?.sistema && (
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Detalles del Sistema</CardTitle></CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <DetailDisplay title="Alcance del Sistema" value={auditTargetDetails.sistema.scope} />
+                                        
+                                        {auditTargetDetails.sistema.costos && auditTargetDetails.sistema.costos.length > 0 && (
+                                            <div>
+                                                <Separator className="my-4" />
+                                                <h4 className="font-semibold text-md mb-2">Costos Registrados</h4>
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Descripción</TableHead>
+                                                            <TableHead>Monto/Uso</TableHead>
+                                                            <TableHead>Licencias</TableHead>
+                                                            <TableHead>Costo/Lic</TableHead>
+                                                            <TableHead>Frecuencia</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {auditTargetDetails.sistema.costos.map(cost => (
+                                                            <TableRow key={cost.id}>
+                                                                <TableCell>{cost.descripcion}</TableCell>
+                                                                <TableCell>{cost.montoUso ? `${cost.montoUso.toFixed(2)} ${cost.moneda || ''}` : '-'}</TableCell>
+                                                                <TableCell>{cost.numeroLicencias || '-'}</TableCell>
+                                                                <TableCell>{cost.costoPorLicencia ? `${cost.costoPorLicencia.toFixed(2)} ${cost.moneda || ''}` : '-'}</TableCell>
+                                                                <TableCell>{cost.frecuencia || '-'}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        )}
+                                        
+                                        {auditTargetDetails.relatedProcesses && auditTargetDetails.relatedProcesses.length > 0 && (
+                                            <div>
+                                                <Separator className="my-4" />
+                                                <h4 className="font-semibold text-md mb-2">Procesos que Utilizan "{auditTargetDetails.sistema.nombre}"</h4>
+                                                <ul className="list-disc pl-5 text-sm space-y-1">
+                                                    {auditTargetDetails.relatedProcesses.map(p => (
+                                                        <li key={p.process.id}>
+                                                            {p.process.proceso} <span className="text-xs text-muted-foreground">({p.process.area} / {p.process.puesto})</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
                                         )}
                                     </CardContent>
@@ -745,7 +819,7 @@ export default function AuditoriaPage() {
                     <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
                 </div>
                 <CardDescription>
-                    Inicie nuevas auditorías a procesos o puestos, o consulte el historial de auditorías completadas.
+                    Inicie nuevas auditorías a procesos, puestos o sistemas, o consulte el historial de auditorías completadas.
                 </CardDescription>
             </div>
             <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
@@ -764,11 +838,12 @@ export default function AuditoriaPage() {
                         </div>
                         <div>
                             <Label htmlFor="auditTypeSelect">Tipo de Auditoría</Label>
-                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
+                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | 'sistema' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
                                 <SelectTrigger id="auditTypeSelect"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="proceso">Proceso</SelectItem>
                                     <SelectItem value="puesto">Puesto</SelectItem>
+                                    <SelectItem value="sistema">Sistema</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -780,8 +855,10 @@ export default function AuditoriaPage() {
                                 <SelectContent>
                                     {newAuditType === 'proceso' ? (
                                         allProcesses.map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)
-                                    ) : (
+                                    ) : newAuditType === 'puesto' ? (
                                         puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
+                                    ) : (
+                                        sistemas.map(s => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)
                                     )}
                                 </SelectContent>
                             </Select>
@@ -854,7 +931,7 @@ export default function AuditoriaPage() {
                         {pastAudits.sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime()).map(audit => (
                             <TableRow key={audit.id}>
                                 <TableCell className="font-medium">{audit.targetName}</TableCell>
-                                <TableCell>{audit.auditType === 'proceso' ? 'Proceso' : 'Puesto'}</TableCell>
+                                <TableCell className="capitalize">{audit.auditType}</TableCell>
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
                                  <TableCell>
