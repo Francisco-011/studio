@@ -58,6 +58,9 @@ export default {
           '7': 'hsl(var(--chart-7))',
           '8': 'hsl(var(--chart-8))',
           '9': 'hsl(var(--chart-9))',
+          '10': 'hsl(var(--chart-10))',
+          '11': 'hsl(var(--chart-11))',
+          '12': 'hsl(var(--chart-12))',
         },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',

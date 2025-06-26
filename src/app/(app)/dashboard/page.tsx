@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users, ClipboardCheck, AlertTriangle, Building2 } from "lucide-react";
+import { Factory, DollarSign, ListChecks, PackageX, Loader2, Layers, CopyCheck, CheckCircle2, TrendingUp, FileSearch2, Activity as ActivityIcon, CalendarIcon as CalendarIconLucide, Brain, AreaChart, UserSquare2, Filter as FilterIcon, Download, Settings2, Users, ClipboardCheck, AlertTriangle, Building2, Clock, TrendingDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -157,6 +157,9 @@ interface MonthlyEvolutionData {
   actividadesActivas: number;
   actividadesDuplicadas: number;
   procesosConVariaciones: number;
+  auditoriasCompletadas: number;
+  hallazgosNoConformes: number;
+  hallazgosOportunidad: number;
 }
 
 type ChartMetricKey = keyof Omit<MonthlyEvolutionData, 'month'>;
@@ -171,6 +174,9 @@ const baseChartConfig = {
   actividadesActivas: { label: "Activ. Activas Creadas", color: "hsl(var(--chart-7))" },
   actividadesDuplicadas: { label: "Activ. Duplic. Creadas", color: "hsl(var(--chart-8))" },
   procesosConVariaciones: { label: "Nuevos Proc. c/Variación", color: "hsl(var(--chart-9))" },
+  auditoriasCompletadas: { label: "Auditorías Completadas", color: "hsl(var(--chart-10))" },
+  hallazgosNoConformes: { label: "Hallazgos No Conf.", color: "hsl(var(--chart-11))" },
+  hallazgosOportunidad: { label: "Oport. de Mejora", color: "hsl(var(--chart-12))" },
 } satisfies ChartConfig;
 
 
@@ -201,7 +207,7 @@ export default function DashboardPage() {
 
   const [calculatedSystemCosts, setCalculatedSystemCosts] = useState<CalculatedSystemCost[]>([]);
   const [evolutionChartData, setEvolutionChartData] = useState<MonthlyEvolutionData[]>([]);
-  const [selectedChartMetrics, setSelectedChartMetrics] = useState<ChartMetricKey[]>(['procesosMapeados', 'accionesCompletadas']);
+  const [selectedChartMetrics, setSelectedChartMetrics] = useState<ChartMetricKey[]>(['procesosMapeados', 'accionesCompletadas', 'auditoriasCompletadas']);
 
   const [dashboardDateRange, setDashboardDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [selectedArea, setSelectedArea] = useState<string>('all');
@@ -434,7 +440,7 @@ export default function DashboardPage() {
       });
 
       const baseProcessesForChart = processesFiltered;
-      const baseActionsForChart = globalAcciones; // Actions are not filtered by org structure in this dashboard
+      const baseActionsForChart = globalAcciones; 
       const baseActivitiesForChart = globalActividades.filter(actividad => {
         const relevantProcessIdsForChart = new Set(baseProcessesForChart.map(p => p.id));
         if (selectedArea !== 'all' || selectedPuesto !== 'all' || selectedDepartamento !== 'all') {
@@ -513,7 +519,7 @@ export default function DashboardPage() {
         });
         
         const processNamesOverall = new Map<string, Set<string>>();
-        baseProcessesForChart.forEach(p => { // Compare against all relevant processes for variation context
+        baseProcessesForChart.forEach(p => { 
             if (!processNamesOverall.has(p.proceso)) {
                 processNamesOverall.set(p.proceso, new Set());
             }
@@ -525,6 +531,16 @@ export default function DashboardPage() {
                 procesosConVariacionesEnMes++;
             }
         });
+
+        const auditsInMonth = allAudits.filter(audit => {
+          if (audit.status !== 'Completada') return false;
+          const auditDate = parseISO(audit.auditDate);
+          return isValid(auditDate) && isWithinInterval(auditDate, { start: monthStart, end: monthEnd });
+        });
+
+        const auditoriasCompletadasEnMes = auditsInMonth.length;
+        const hallazgosNoConformesEnMes = auditsInMonth.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0);
+        const hallazgosOportunidadEnMes = auditsInMonth.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0);
 
 
         monthlyData.push({
@@ -538,11 +554,14 @@ export default function DashboardPage() {
           actividadesActivas: actividadesActivasCreadasEnMes,
           actividadesDuplicadas: actividadesDuplicadasCreadasEnMes,
           procesosConVariaciones: procesosConVariacionesEnMes,
+          auditoriasCompletadas: auditoriasCompletadasEnMes,
+          hallazgosNoConformes: hallazgosNoConformesEnMes,
+          hallazgosOportunidad: hallazgosOportunidadEnMes,
         });
       });
       setEvolutionChartData(monthlyData);
     }
-  }, [processesFiltered, globalAcciones, globalActividades, isLoadingData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
+  }, [allAudits, processesFiltered, globalAcciones, globalActividades, isLoadingData, isLoadingAcciones, isLoadingActividades, dashboardDateRange, selectedArea, selectedPuesto]);
 
 
   const dashboardMetrics = useMemo(() => {
@@ -560,6 +579,8 @@ export default function DashboardPage() {
         auditoriasCompletadasCount: 0,
         hallazgosNoConformesCount: 0,
         hallazgosOportunidadCount: 0,
+        ahorroCostosRealizado: 'N/A',
+        ahorroTiempoRealizado: 'N/A',
       };
     }
 
@@ -577,7 +598,8 @@ export default function DashboardPage() {
        return (globalActivity?.procesosAsociadosCount || 0) > 1;
     }).length;
 
-    const accionesCompletadasCount = filteredAcciones.filter(acc => acc.estado === 'Completada').length;
+    const completedActions = filteredAcciones.filter(acc => acc.estado === 'Completada');
+    const accionesCompletadasCount = completedActions.length;
     const accionesEnRevisionCount = filteredAcciones.filter(acc => acc.estado === 'En Revisión').length;
     const accionesEnProgresoCount = filteredAcciones.filter(acc => acc.estado === 'En Progreso').length;
 
@@ -596,10 +618,31 @@ export default function DashboardPage() {
     });
     const procesosSinActividadesCount = filteredCapturedProcesses.filter(proc => !proc.activityOrder || proc.activityOrder.length === 0).length;
 
-    // Audit metrics
     const auditoriasCompletadasCount = filteredAudits.length;
     const hallazgosNoConformesCount = filteredAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0);
     const hallazgosOportunidadCount = filteredAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length, 0);
+
+    const ahorroCostosMap = new Map<string, number>();
+    completedActions.forEach(a => {
+      if (a.ahorroEstimado && a.monedaAhorro) {
+        const current = ahorroCostosMap.get(a.monedaAhorro) || 0;
+        ahorroCostosMap.set(a.monedaAhorro, current + a.ahorroEstimado);
+      }
+    });
+    const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
+      .map(([currency, total]) => formatDashboardCurrency(total, currency))
+      .join(', ') || 'N/A';
+
+    const ahorroTiempoMap = new Map<string, number>();
+    completedActions.forEach(a => {
+      if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
+        const current = ahorroTiempoMap.get(a.unidadTiempoAhorro) || 0;
+        ahorroTiempoMap.set(a.unidadTiempoAhorro, current + a.ahorroTiempoEstimado);
+      }
+    });
+    const ahorroTiempoRealizado = Array.from(ahorroTiempoMap.entries())
+      .map(([unit, total]) => `${total} ${unit.split('/')[0]}`)
+      .join(', ') || 'N/A';
 
 
     return {
@@ -615,6 +658,8 @@ export default function DashboardPage() {
       auditoriasCompletadasCount,
       hallazgosNoConformesCount,
       hallazgosOportunidadCount,
+      ahorroCostosRealizado,
+      ahorroTiempoRealizado,
     };
   }, [filteredCapturedProcesses, filteredAcciones, filteredActividades, filteredAudits, globalActividades, isLoadingData, isLoadingActividades, isLoadingAcciones]);
 
@@ -769,7 +814,6 @@ export default function DashboardPage() {
     const metrics = [
       { name: "Procesos Activos Mapeados", value: dashboardMetrics.procesosMapeadosCount },
       { name: "Procesos con Variaciones", value: dashboardMetrics.procesosConVariacionesCount },
-      { name: "Actividades Activas", value: dashboardMetrics.actividadesActivasCount },
       { name: "Actividades Duplicadas", value: dashboardMetrics.actividadesDuplicadasCount },
       { name: "Acciones Completadas", value: dashboardMetrics.accionesCompletadasCount },
       { name: "Acciones en Revisión", value: dashboardMetrics.accionesEnRevisionCount },
@@ -926,10 +970,30 @@ export default function DashboardPage() {
         Métricas clave y gráficos basados en el rango de fechas y filtros de área/puesto seleccionados.
       </p>
 
-       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4 mb-8">
+       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos Mapeados</CardTitle><Factory className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosMapeadosCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Procesos activos en el periodo</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones Completadas</CardTitle><CheckCircle2 className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Finalizadas en el periodo</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro Anual Realizado</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro de Tiempo</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroTiempoRealizado, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones en Progreso</CardTitle><ActivityIcon className="h-4 w-4 text-muted-foreground" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Activas en el periodo</p></CardContent>
+        </Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones en Revisión</CardTitle><FileSearch2 className="h-4 w-4 text-muted-foreground" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Pendientes de aprobación</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos con Variaciones</CardTitle><Layers className="h-4 w-4 text-muted-foreground" /></CardHeader>
@@ -942,18 +1006,6 @@ export default function DashboardPage() {
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Procesos sin Actividades</CardTitle><PackageX className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Procesos no detallados</p></CardContent>
-        </Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones Completadas</CardTitle><CheckCircle2 className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesCompletadasCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Finalizadas en el periodo</p></CardContent>
-        </Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones en Progreso</CardTitle><ActivityIcon className="h-4 w-4 text-muted-foreground" /></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnProgresoCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Activas en el periodo</p></CardContent>
-        </Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones en Revisión</CardTitle><FileSearch2 className="h-4 w-4 text-muted-foreground" /></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Pendientes de aprobación</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Auditorías Completadas</CardTitle><ClipboardCheck className="h-4 w-4 text-muted-foreground" /></CardHeader>

@@ -34,6 +34,9 @@
     --chart-7: 45 70% 55%;  /* Gold/Yellow */
     --chart-8: 200 70% 60%; /* Sky Blue */
     --chart-9: 330 65% 60%; /* Pink */
+    --chart-10: 190 60% 50%; /* Cyan */
+    --chart-11: 270 50% 55%; /* Indigo */
+    --chart-12: 60 70% 50%; /* Yellow/Ochre */
 
 
     /* Sidebar specific colors for light theme */
@@ -77,6 +80,9 @@
     --chart-7: 45 75% 60%;  /* Lighter Gold/Yellow */
     --chart-8: 200 75% 65%; /* Lighter Sky Blue */
     --chart-9: 330 70% 65%; /* Lighter Pink */
+    --chart-10: 190 65% 55%; /* Lighter Cyan */
+    --chart-11: 270 55% 60%; /* Lighter Indigo */
+    --chart-12: 60 75% 55%;  /* Lighter Yellow/Ochre */
 
     /* Sidebar specific colors for dark theme */
     --sidebar-background: 220 15% 10%; /* Even darker for depth */
