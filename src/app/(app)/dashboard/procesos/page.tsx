@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -20,7 +19,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
+import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
