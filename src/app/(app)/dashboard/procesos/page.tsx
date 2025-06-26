@@ -27,8 +27,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
 import { DateRange } from "react-day-picker";
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ChartContainer } from '@/components/ui/chart';
+import type { ChartConfig } from '@/components/ui/chart';
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -228,15 +230,28 @@ export default function ProcesosDashboardPage() {
     }
   };
 
-  const staffChartData = useMemo(() => {
-    return staffSummary.breakdown.map((area, index) => ({
+  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
+
+  const { chartData: staffChartData, chartConfig: staffChartConfig } = useMemo(() => {
+    if (isLoadingAll) {
+      return { chartData: [], chartConfig: {} };
+    }
+    const data = staffSummary.breakdown.map((area, index) => ({
       name: area.areaName,
       value: area.totalInArea,
-      fill: `var(--chart-${(index % 12) + 1})`
+      fill: `hsl(var(--chart-${(index % 12) + 1}))`
     }));
-  }, [staffSummary]);
 
-  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
+    const config = data.reduce((acc, entry) => {
+        acc[entry.name] = {
+            label: entry.name,
+            color: entry.fill
+        };
+        return acc;
+    }, {} as ChartConfig);
+
+    return { chartData: data, chartConfig: config };
+  }, [staffSummary, isLoadingAll]);
 
   const handleExport = () => {
     if (staffSummary.breakdown.length === 0) {
@@ -352,7 +367,7 @@ export default function ProcesosDashboardPage() {
                 <CardContent className="flex items-center justify-center">
                     {isLoadingAll ? <div className="h-[200px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> :
                      staffChartData.length > 0 ? (
-                        <ChartContainer config={{}} className="min-h-[200px] w-full">
+                        <ChartContainer config={staffChartConfig} className="min-h-[200px] w-full">
                             <ResponsiveContainer>
                                 <PieChart>
                                     <Pie data={staffChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
