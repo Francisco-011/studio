@@ -27,7 +27,8 @@ function formatDashboardCurrency(amount: number, currency: string) {
 
 interface CostByCurrency {
     currency: TipoMoneda | string;
-    totalAnnualCost: number;
+    annualUsageCost: number;
+    annualLicenseCost: number;
 }
 interface CalculatedSystemCost {
     id: string;
@@ -42,25 +43,34 @@ function calculateAllSystemAnnualCosts(
 ): CalculatedSystemCost[] {
   return systemsToCalculate.map(system => {
     const costsForSystem = allCostos.filter(cost => cost.sistemaId === system.id);
-    const costsByCurrency = new Map<TipoMoneda | string, number>();
+    const costsByCurrency = new Map<TipoMoneda | string, { annualUsageCost: number; annualLicenseCost: number }>();
     const descriptions: string[] = [];
 
     costsForSystem.forEach(cost => {
       if (cost.descripcion) descriptions.push(cost.descripcion);
-      const baseAmount = (cost.montoUso || 0) + ((cost.costoPorLicencia || 0) * (cost.numeroLicencias || 0));
       const multiplier = cost.frecuencia === 'Mensual' ? 12 : 1;
+      
+      const usageCost = (cost.montoUso || 0) * multiplier;
+      const licenseCost = ((cost.costoPorLicencia || 0) * (cost.numeroLicencias || 0)) * multiplier;
+
       const currency = cost.moneda || 'MXN';
-      costsByCurrency.set(currency, (costsByCurrency.get(currency) || 0) + baseAmount * multiplier);
+      const currentCosts = costsByCurrency.get(currency) || { annualUsageCost: 0, annualLicenseCost: 0 };
+      
+      costsByCurrency.set(currency, {
+          annualUsageCost: currentCosts.annualUsageCost + usageCost,
+          annualLicenseCost: currentCosts.annualLicenseCost + licenseCost
+      });
     });
 
     return {
       id: system.id,
       name: system.nombre,
-      costsByCurrency: Array.from(costsByCurrency.entries()).map(([currency, totalAnnualCost]) => ({ currency, totalAnnualCost })),
+      costsByCurrency: Array.from(costsByCurrency.entries()).map(([currency, { annualUsageCost, annualLicenseCost }]) => ({ currency, annualUsageCost, annualLicenseCost })),
       descriptions,
     };
   });
 }
+
 
 const renderMetric = (value: number | string, loading: boolean) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -164,26 +174,36 @@ export default function MejorasDashboardPage() {
                     <TableHeader>
                         <TableRow>
                         <TableHead>Sistema</TableHead>
-                        <TableHead className="text-right">Total Anual</TableHead>
+                        <TableHead className="text-right">Costo Anual (Uso)</TableHead>
+                        <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {calculatedSystemCosts.map((system) => (
                         <TableRow key={system.id}>
-                            <TableCell className="font-medium">{system.name}</TableCell>
+                            <TableCell className="font-medium">
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="cursor-default">{system.name}</span>
+                                        </TooltipTrigger>
+                                        {system.descriptions.length > 0 && (
+                                        <TooltipContent><p className="font-bold">Detalle de Costos:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>
+                                        )}
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </TableCell>
                             <TableCell className="text-right font-semibold">
-                               <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div>
-                                            {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.totalAnnualCost, c.currency)}</div>) : <span>-</span>}
-                                        </div>
-                                    </TooltipTrigger>
-                                    {system.descriptions.length > 0 && (
-                                    <TooltipContent><p className="font-bold">Detalle:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>
-                                    )}
-                                </Tooltip>
-                               </TooltipProvider>
+                                {system.costsByCurrency.length > 0 ? 
+                                    system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualUsageCost, c.currency)}</div>) 
+                                    : <span>-</span>
+                                }
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                                {system.costsByCurrency.length > 0 ? 
+                                    system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualLicenseCost, c.currency)}</div>) 
+                                    : <span>-</span>
+                                }
                             </TableCell>
                         </TableRow>
                         ))}
