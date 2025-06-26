@@ -467,7 +467,11 @@ export default function AuditoriaPage() {
   };
   
   const handleEditAudit = (audit: Audit) => {
-    setCurrentAuditSession(audit);
+    let auditToOpen = audit;
+    if (audit.status !== 'Completada' && audit.status !== 'Cancelada') {
+        auditToOpen = { ...audit, status: 'En Progreso' };
+    }
+    setCurrentAuditSession(auditToOpen);
   };
 
   const promptDeleteAudit = (audit: Audit) => {
@@ -627,7 +631,7 @@ export default function AuditoriaPage() {
                             <Info className="h-4 w-4 !text-blue-800" />
                             <AlertTitle>Modo de solo lectura</AlertTitle>
                             <AlertDescription>
-                                Esta auditoría está '{currentAuditSession.status}' y no puede ser modificada.
+                                Esta auditoría está '{currentAuditSession.status}' y no puede ser modificada. Solo puede registrar planes de acción de hallazgos existentes.
                             </AlertDescription>
                         </Alert>
                     )}
@@ -861,7 +865,7 @@ export default function AuditoriaPage() {
                                             <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white border-transparent">Acción Creada</Badge> : 
                                             <Badge className="bg-amber-600 text-white hover:bg-amber-700 border-transparent">Acción Pendiente</Badge>
                                         }
-                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated || isReadOnly}>
+                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated}>
                                             <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Acción ya Creada' : 'Registrar Plan de Acción'}
                                         </Button>
                                         </div>
