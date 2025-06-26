@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type DragEvent, type ReactNode } from 'react';
@@ -18,7 +19,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatMinutesToHours } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -1128,7 +1129,7 @@ export default function PanelJerarquicoPage() {
                   <DetailSectionDisplay title="Departamento" value={process.departamento} />
                   <DetailSectionDisplay title="Puesto Principal" value={process.puesto} />
                   <DetailSectionDisplay title="Descripción Detallada" value={process.descripcion} isTextarea />
-                  <DetailSectionDisplay title="Tiempo Estimado" value={process.tiempoEstimado !== undefined ? `${process.tiempoEstimado} minutos` : undefined} />
+                  <DetailSectionDisplay title="Tiempo Estimado" value={process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : undefined} />
                   <DetailSectionDisplay title="Frecuencia" value={process.frecuencia} />
                   <DetailSectionDisplay title="Sistemas Utilizados" value={process.sistemas} isList />
                   <DetailSectionDisplay title="Información que Recibe (Entradas)" value={process.informacionRecibe} isTextarea />

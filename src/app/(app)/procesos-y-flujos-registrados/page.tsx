@@ -66,7 +66,7 @@ import {
 
 import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatMinutesToHours } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
@@ -761,7 +761,9 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell>{proc.departamento || '-'}</TableCell>
                     <TableCell>{proc.puesto}</TableCell>
                     <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
-                    <TableCell className="text-center text-xs">{proc.tiempoEstimado ?? '-'} / {proc.tiempoIdeal ?? '-'}</TableCell>
+                    <TableCell className="text-center text-xs">
+                        {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'} / {proc.tiempoIdeal !== undefined ? formatMinutesToHours(proc.tiempoIdeal) : '-'}
+                    </TableCell>
                     <TableCell className="text-center text-xs">
                         <TooltipProvider><Tooltip><TooltipTrigger asChild>
                             <span>

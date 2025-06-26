@@ -72,7 +72,7 @@ import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { cn } from '@/lib/utils';
+import { cn, formatMinutesToHours } from '@/lib/utils';
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info } from "lucide-react";
 
@@ -674,8 +674,8 @@ export default function AuditoriaPage() {
                                         <DetailDisplay title="Puesto que Ejecuta" value={auditTargetDetails.process.puesto} />
                                         <DetailDisplay title="Jefe Inmediato del Puesto" value={auditTargetDetails.jefeInmediato?.nombre} />
                                         <DetailDisplay title="Frecuencia" value={auditTargetDetails.process.frecuencia} />
-                                        <DetailDisplay title="Tiempo Estimado" value={auditTargetDetails.process.tiempoEstimado !== undefined ? `${auditTargetDetails.process.tiempoEstimado} min` : null} />
-                                        <DetailDisplay title="Tiempo Ideal" value={auditTargetDetails.process.tiempoIdeal !== undefined ? `${auditTargetDetails.process.tiempoIdeal} min` : null} />
+                                        <DetailDisplay title="Tiempo Estimado" value={auditTargetDetails.process.tiempoEstimado !== undefined ? formatMinutesToHours(auditTargetDetails.process.tiempoEstimado) : null} />
+                                        <DetailDisplay title="Tiempo Ideal" value={auditTargetDetails.process.tiempoIdeal !== undefined ? formatMinutesToHours(auditTargetDetails.process.tiempoIdeal) : null} />
                                         <DetailDisplay title="Costo Estimado" value={auditTargetDetails.process.costoEstimado !== undefined ? `${auditTargetDetails.process.costoEstimado} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
                                         <DetailDisplay title="Costo Ideal" value={auditTargetDetails.process.costoIdeal !== undefined ? `${auditTargetDetails.process.costoIdeal} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
                                         <DetailDisplay title="Sistemas" value={auditTargetDetails.process.sistemas} isList />
@@ -743,7 +743,7 @@ export default function AuditoriaPage() {
                                                                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                                                                         <DetailDisplay title="Descripción" value={process.descripcion} isTextarea />
                                                                         <DetailDisplay title="Frecuencia" value={process.frecuencia} />
-                                                                        <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado ?? '-'} / ${process.tiempoIdeal ?? '-'} min`} />
+                                                                        <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : '-'} / ${process.tiempoIdeal !== undefined ? formatMinutesToHours(process.tiempoIdeal) : '-'}`} />
                                                                         <DetailDisplay title="Costo Est./Ideal" value={`${process.costoEstimado ?? '-'} / ${process.costoIdeal ?? '-'} ${process.monedaCosto || ''}`} />
                                                                         <DetailDisplay title="Sistemas" value={process.sistemas} isList />
                                                                         <DetailDisplay title="Procesos de Entrada" value={process.procesosEntrada} isList />
@@ -1238,4 +1238,3 @@ export default function AuditoriaPage() {
     </div>
   );
 }
-
