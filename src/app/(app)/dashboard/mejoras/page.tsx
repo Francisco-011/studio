@@ -11,6 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
@@ -18,6 +19,7 @@ import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 function formatDashboardCurrency(amount: number, currency: string) {
+  if (currency === 'N/A') return '-';
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   } catch (e) {
@@ -127,6 +129,46 @@ export default function MejorasDashboardPage() {
 
   const isLoadingAll = isLoadingData || isLoadingAcciones || isLoadingSistemasCostos;
 
+  const flattenedSystemCosts = useMemo(() => {
+    if (isLoadingSistemasCostos) return [];
+    return calculatedSystemCosts.flatMap(system => 
+        system.costsByCurrency.length > 0 
+            ? system.costsByCurrency.map(cost => ({
+                id: `${system.id}-${cost.currency}`,
+                name: system.name,
+                currency: cost.currency,
+                annualUsageCost: cost.annualUsageCost,
+                annualLicenseCost: cost.annualLicenseCost,
+                descriptions: system.descriptions,
+            }))
+            : [{
+                id: system.id,
+                name: system.name,
+                currency: 'N/A',
+                annualUsageCost: 0,
+                annualLicenseCost: 0,
+                descriptions: ["Sin costos registrados"],
+            }]
+    ).sort((a, b) => a.name.localeCompare(b.name));
+  }, [calculatedSystemCosts, isLoadingSistemasCostos]);
+
+  const grandTotals = useMemo(() => {
+    const totals = new Map<string, { usage: number; license: number }>();
+    flattenedSystemCosts.forEach(item => {
+        if(item.currency !== 'N/A') {
+            const current = totals.get(item.currency) || { usage: 0, license: 0 };
+            current.usage += item.annualUsageCost;
+            current.license += item.annualLicenseCost;
+            totals.set(item.currency, current);
+        }
+    });
+    return Array.from(totals.entries()).map(([currency, data]) => ({
+        currency,
+        ...data,
+        total: data.usage + data.license
+    }));
+  }, [flattenedSystemCosts]);
+
   return (
     <div className="container mx-auto py-8">
        <div className="mb-6">
@@ -166,20 +208,22 @@ export default function MejorasDashboardPage() {
             <CardDescription className="mb-4 text-xs">Costos anuales estimados de todos los sistemas configurados.</CardDescription>
             {isLoadingAll ? (
                 <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : calculatedSystemCosts.length === 0 ? (
+            ) : flattenedSystemCosts.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No hay datos de costos de sistemas.</p>
             ) : (
                 <div className="max-h-[400px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead>Sistema</TableHead>
-                        <TableHead className="text-right">Costo Anual (Uso)</TableHead>
-                        <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
+                          <TableHead>Sistema</TableHead>
+                          <TableHead>Moneda</TableHead>
+                          <TableHead className="text-right">Costo Anual (Uso)</TableHead>
+                          <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
+                          <TableHead className="text-right font-bold">Costo Anual (Total)</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {calculatedSystemCosts.map((system) => (
+                        {flattenedSystemCosts.map((system) => (
                         <TableRow key={system.id}>
                             <TableCell className="font-medium">
                                 <TooltipProvider>
@@ -193,21 +237,29 @@ export default function MejorasDashboardPage() {
                                     </Tooltip>
                                 </TooltipProvider>
                             </TableCell>
-                            <TableCell className="text-right font-semibold">
-                                {system.costsByCurrency.length > 0 ? 
-                                    system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualUsageCost, c.currency)}</div>) 
-                                    : <span>-</span>
-                                }
+                            <TableCell>{system.currency}</TableCell>
+                            <TableCell className="text-right">
+                                {formatDashboardCurrency(system.annualUsageCost, system.currency)}
                             </TableCell>
-                            <TableCell className="text-right font-semibold">
-                                {system.costsByCurrency.length > 0 ? 
-                                    system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualLicenseCost, c.currency)}</div>) 
-                                    : <span>-</span>
-                                }
+                            <TableCell className="text-right">
+                                {formatDashboardCurrency(system.annualLicenseCost, system.currency)}
+                            </TableCell>
+                             <TableCell className="text-right font-bold">
+                                {formatDashboardCurrency(system.annualUsageCost + system.annualLicenseCost, system.currency)}
                             </TableCell>
                         </TableRow>
                         ))}
                     </TableBody>
+                    <TableFooter>
+                      {grandTotals.map(total => (
+                        <TableRow key={total.currency} className="font-extrabold bg-muted/50 hover:bg-muted/70">
+                            <TableCell colSpan={2}>Total General ({total.currency})</TableCell>
+                            <TableCell className="text-right">{formatDashboardCurrency(total.usage, total.currency)}</TableCell>
+                            <TableCell className="text-right">{formatDashboardCurrency(total.license, total.currency)}</TableCell>
+                            <TableCell className="text-right">{formatDashboardCurrency(total.total, total.currency)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableFooter>
                   </Table>
                 </div>
             )}
