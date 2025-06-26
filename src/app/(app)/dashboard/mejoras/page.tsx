@@ -216,7 +216,6 @@ export default function MejorasDashboardPage() {
                     <TableHeader>
                         <TableRow>
                           <TableHead>Sistema</TableHead>
-                          <TableHead>Moneda</TableHead>
                           <TableHead className="text-right">Costo Anual (Uso)</TableHead>
                           <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
                           <TableHead className="text-right font-bold">Costo Anual (Total)</TableHead>
@@ -237,7 +236,6 @@ export default function MejorasDashboardPage() {
                                     </Tooltip>
                                 </TooltipProvider>
                             </TableCell>
-                            <TableCell>{system.currency}</TableCell>
                             <TableCell className="text-right">
                                 {formatDashboardCurrency(system.annualUsageCost, system.currency)}
                             </TableCell>
@@ -253,7 +251,7 @@ export default function MejorasDashboardPage() {
                     <TableFooter>
                       {grandTotals.map(total => (
                         <TableRow key={total.currency} className="font-extrabold bg-muted/50 hover:bg-muted/70">
-                            <TableCell colSpan={2}>Total General ({total.currency})</TableCell>
+                            <TableCell>Total General ({total.currency})</TableCell>
                             <TableCell className="text-right">{formatDashboardCurrency(total.usage, total.currency)}</TableCell>
                             <TableCell className="text-right">{formatDashboardCurrency(total.license, total.currency)}</TableCell>
                             <TableCell className="text-right">{formatDashboardCurrency(total.total, total.currency)}</TableCell>
