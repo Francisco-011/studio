@@ -301,7 +301,7 @@ export default function MejorasPage() {
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-center gap-2">
           <Lightbulb className="h-6 w-6 text-primary" />
-          <CardTitle className="text-2xl font-headline">Oportunidades de Mejora</CardTitle>
+          <CardTitle className="text-2xl font-headline">Análisis de Oportunidades con IA</CardTitle>
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
