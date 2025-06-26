@@ -110,7 +110,7 @@ function calculateAllSystemAnnualCosts(
     let totalAnnualLicenseCost = 0;
     let systemTotalLicenses = 0;
     const descriptions: string[] = [];
-    const mainCurrency: TipoMoneda | string = costs.length > 0 ? (costs[0].moneda || 'USD') : 'USD';
+    const mainCurrency: TipoMoneda | string = costs.length > 0 ? (costs[0].moneda || 'MXN') : 'MXN';
 
     costs.forEach(cost => {
       if (cost.descripcion) descriptions.push(cost.descripcion);
