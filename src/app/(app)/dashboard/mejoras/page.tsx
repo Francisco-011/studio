@@ -83,7 +83,7 @@ function calculateAllSystemAnnualCosts(
 
     return {
       id: system.id,
-      name: system.nombre,
+      name: system.name,
       costsByCurrency: Array.from(costsByCurrency.entries()).map(([currency, { annualUsageCost, annualLicenseCost }]) => ({ currency, annualUsageCost, annualLicenseCost })),
       descriptions,
     };
@@ -402,7 +402,7 @@ export default function MejorasDashboardPage() {
 
         case 'ahorrosPorAccion':
         default:
-            description = 'Ahorro anual estimado por cada acción de mejora completada en el período.';
+            description = 'Ahorro monetario anual estimado por cada acción de mejora completada en el período.';
             const processChartAcciones = (acciones: Accion[]) => {
                 const dataMap = new Map<string, { ahorro: number, moneda: string }>();
                 acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
@@ -613,47 +613,58 @@ export default function MejorasDashboardPage() {
                             content={
                                 <ChartTooltipContent
                                     formatter={(value, name, item) => {
-                                        const { payload } = item;
-                                        if (chartType === 'ahorrosPorAccion') {
-                                            const currency = payload.moneda || 'N/A';
-                                            return (
-                                                <div className="flex w-full justify-between items-center">
-                                                    <span>{chartConfig[name]?.label || name}</span>
-                                                    <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                                        {formatDashboardCurrency(value as number, currency)}
-                                                    </span>
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <div className="flex w-full justify-between items-center">
-                                              <span>{chartConfig[name]?.label || name}</span>
-                                              <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                                {formatDashboardCurrency(value as number, payload.name.match(/\(([^)]+)\)/)?.[1] || 'USD')}
-                                              </span>
-                                            </div>
-                                        );
+                                        try {
+                                          const { payload } = item;
+                                          let currency = 'N/A';
+
+                                          if (chartType === 'costos') {
+                                              const match = payload.name.match(/\(([^)]+)\)/);
+                                              if (match) currency = match[1];
+                                          } else if (chartType === 'ahorrosPorAccion') {
+                                              currency = payload.moneda || 'N/A';
+                                          } else if (chartType === 'ahorrosPorArea') {
+                                              currency = name; // The dataKey is the currency
+                                          }
+                                          const formattedValue = formatDashboardCurrency(value as number, currency);
+                                          return (
+                                              <div className="flex w-full justify-between items-center">
+                                                  <span>{chartConfig[name]?.label || name}</span>
+                                                  <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                      {formattedValue}
+                                                  </span>
+                                              </div>
+                                          );
+                                        } catch(e) { return null; }
                                     }}
                                     labelClassName="font-bold"
                                 />
                             }
                         />
                         <Legend />
-                        {chartType === 'costos' ? (
-                          <>
-                            <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
-                            <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 4, 4]} />
-                          </>
-                        ) : chartType === 'ahorrosPorAccion' ? (
-                          <>
-                            <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
-                            {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
-                          </>
-                        ) : (
-                           Object.keys(chartConfig).map(key => (
-                              <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
-                           ))
-                        )}
+                        {(() => {
+                            switch (chartType) {
+                                case 'costos':
+                                    return (
+                                        <>
+                                            <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
+                                            <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 4, 4]} />
+                                        </>
+                                    );
+                                case 'ahorrosPorAccion':
+                                    return (
+                                        <>
+                                            <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
+                                            {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
+                                        </>
+                                    );
+                                case 'ahorrosPorArea':
+                                    return Object.keys(chartConfig).map(key => (
+                                        <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
+                                    ));
+                                default:
+                                    return null;
+                            }
+                        })()}
                     </BarChart>
                 </ResponsiveContainer>
             </ChartContainer>
