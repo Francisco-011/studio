@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -10,6 +9,7 @@ import { useAcciones, type Accion } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { formatMinutesToHours } from '@/lib/utils';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -84,21 +84,25 @@ export default function DashboardPage() {
       .map(([currency, total]) => formatDashboardCurrency(total, currency))
       .join(', ') || 'N/A';
 
-    const ahorroTiempoMap = new Map<string, number>();
+    const ahorroPorPeriodo = new Map<string, number>(); // Key: "Instancia", "Día", "Semana", etc. Value: total minutes
     completedActions.forEach(a => {
-      if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
-        ahorroTiempoMap.set(a.unidadTiempoAhorro, (ahorroTiempoMap.get(a.unidadTiempoAhorro) || 0) + a.ahorroTiempoEstimado);
-      }
-    });
-    
-    const ahorroTiempoRealizado = Array.from(ahorroTiempoMap.entries()).map(([unit, total]) => {
-        if (unit.startsWith('Minutos') && total >= 60) {
-          const hours = (total / 60).toFixed(1).replace(/\.0$/, '');
-          const newUnitLabel = unit.replace('Minutos', 'Horas').split('/')[0];
-          return `${hours} ${newUnitLabel}`;
+        if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
+            const parts = a.unidadTiempoAhorro.split('/');
+            const unitType = parts[0];
+            const period = parts.length > 1 ? parts[1] : 'Instancia';
+            
+            let minutes = a.ahorroTiempoEstimado;
+            if (unitType.startsWith('Horas')) {
+                minutes *= 60;
+            }
+            ahorroPorPeriodo.set(period, (ahorroPorPeriodo.get(period) || 0) + minutes);
         }
-        return `${total} ${unit.split('/')[0]}`;
-      }).join(', ') || 'N/A';
+    });
+
+    const ahorroTiempoRealizado = Array.from(ahorroPorPeriodo.entries()).map(([period, totalMinutes]) => {
+        const formattedTime = formatMinutesToHours(totalMinutes);
+        return period !== 'Instancia' ? `${formattedTime} /${period}` : formattedTime;
+    }).join(', ') || 'N/A';
 
     return {
       procesosMapeadosCount: processes.length,
