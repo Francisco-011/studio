@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText, CalendarRange } from "lucide-react";
+import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText, CalendarRange, Building2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import {
   Table,
@@ -83,7 +83,7 @@ export default function ProcesosDashboardPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   
-  const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'none'>('none');
+  const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'departamento' | 'none'>('none');
   const [selectedEntityName, setSelectedEntityName] = useState<string>('');
   const [generatedSummary, setGeneratedSummary] = useState<string>('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
@@ -145,11 +145,14 @@ export default function ProcesosDashboardPage() {
     } else if (selectedEntityType === 'puesto' && !isLoadingPuestos) {
       setEntityList(puestos.map(p => ({ id: p.id, name: p.nombre })).sort((a,b) => a.name.localeCompare(b.name)));
       setSelectedEntityName('');
+    } else if (selectedEntityType === 'departamento' && !isLoadingDepartamentos) {
+      setEntityList(departamentos.map(d => ({ id: d.id, name: d.nombre })).sort((a,b) => a.name.localeCompare(b.name)));
+      setSelectedEntityName('');
     } else {
       setEntityList([]);
       setSelectedEntityName('');
     }
-  }, [selectedEntityType, areas, puestos, isLoadingAreas, isLoadingPuestos]);
+  }, [selectedEntityType, areas, puestos, departamentos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
 
   const processMetrics = (processesToAnalyze: CapturedProcess[]) => {
       if (isLoadingData || isLoadingActividades) {
@@ -243,23 +246,53 @@ export default function ProcesosDashboardPage() {
     setGeneratedSummary('');
 
     try {
-      let relevantProcesses: CapturedProcess[];
+      let processDataString = '';
+
       if (selectedEntityType === 'area') {
-        relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
-      } else {
-        relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
-      }
+        const processesInArea = filteredProcesses.filter(p => !p.deletedAt && p.area === selectedEntityName);
+        if (processesInArea.length === 0) {
+            setGeneratedSummary(`No se encontraron procesos capturados para el área "${selectedEntityName}" en el periodo seleccionado.`);
+            setIsGeneratingSummary(false);
+            return;
+        }
 
-      if (relevantProcesses.length === 0) {
-        setGeneratedSummary(`No se encontraron procesos capturados para ${selectedEntityType === 'area' ? 'el área' : 'el puesto'} "${selectedEntityName}" en el periodo seleccionado.`);
-        setIsGeneratingSummary(false);
-        return;
-      }
+        const processesByDept: Record<string, CapturedProcess[]> = {};
+        processesInArea.forEach(proc => {
+            const deptName = proc.departamento || 'Sin Departamento Asignado';
+            if (!processesByDept[deptName]) {
+                processesByDept[deptName] = [];
+            }
+            processesByDept[deptName].push(proc);
+        });
 
-      const processDataString = relevantProcesses.map(proc => {
-        const activitiesString = (proc.activityOrder || []).map(actId => globalActividades.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ');
-        return `Proceso: ${proc.proceso}\nDescripción: ${proc.descripcion}\n` + (activitiesString ? `Actividades Clave: ${activitiesString}\n` : '');
-      }).join('\n---\n');
+        processDataString = `El Área "${selectedEntityName}" contiene los siguientes departamentos y procesos:\n\n`;
+        processDataString += Object.entries(processesByDept).map(([deptName, deptProcs]) => {
+            const deptProcsString = deptProcs.map(proc => {
+                const activitiesString = (proc.activityOrder || []).map(actId => globalActividades.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ');
+                return `  - Proceso: ${proc.proceso} (Ejecutado por Puesto: ${proc.puesto})\n    Descripción: ${proc.descripcion}\n` + (activitiesString ? `    Actividades Clave: ${activitiesString}\n` : '');
+            }).join('');
+            return `Departamento: ${deptName}\n${deptProcsString}`;
+        }).join('\n---\n');
+
+      } else { // Puesto o Departamento
+        let relevantProcesses: CapturedProcess[];
+        if (selectedEntityType === 'puesto') {
+          relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.puesto === selectedEntityName);
+        } else { // departamento
+          relevantProcesses = filteredProcesses.filter(p => !p.deletedAt && p.departamento === selectedEntityName);
+        }
+
+        if (relevantProcesses.length === 0) {
+            setGeneratedSummary(`No se encontraron procesos capturados para ${selectedEntityType === 'puesto' ? 'el puesto' : 'el departamento'} "${selectedEntityName}" en el periodo seleccionado.`);
+            setIsGeneratingSummary(false);
+            return;
+        }
+        processDataString = relevantProcesses.map(proc => {
+            const activitiesString = (proc.activityOrder || []).map(actId => globalActividades.find(a => a.id === actId)?.nombre).filter(Boolean).join(', ');
+            let context = selectedEntityType === 'departamento' ? ` (Ejecutado por Puesto: ${proc.puesto})` : '';
+            return `Proceso: ${proc.proceso}${context}\nDescripción: ${proc.descripcion}\n` + (activitiesString ? `Actividades Clave: ${activitiesString}\n` : '');
+        }).join('\n---\n');
+      }
 
       const result: SummarizeEntityOutput = await summarizeEntity({
         entityType: selectedEntityType,
@@ -541,10 +574,10 @@ export default function ProcesosDashboardPage() {
        </div>
 
       <Card className="shadow-lg">
-        <CardHeader><div className="flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /><CardTitle>Análisis de Entidad por IA</CardTitle></div><CardDescription>Seleccione un área o puesto para obtener un resumen de sus funciones basado en los procesos del periodo seleccionado.</CardDescription></CardHeader>
+        <CardHeader><div className="flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /><CardTitle>Análisis de Entidad por IA</CardTitle></div><CardDescription>Seleccione una área, departamento o puesto para obtener un resumen de sus funciones basado en los procesos del periodo seleccionado.</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
-              <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
+              <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'departamento'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="departamento"><Building2 className="inline-block h-4 w-4 mr-2" />Departamento</SelectItem><SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
               <div className="md:col-span-2"><label htmlFor="entityNameSelect" className="text-sm font-medium">Nombre</label><Select value={selectedEntityName} onValueChange={setSelectedEntityName} disabled={selectedEntityType === 'none' || isLoadingAll || entityList.length === 0}><SelectTrigger id="entityNameSelect"><SelectValue placeholder={selectedEntityType === 'none' ? "Seleccione tipo" : "Seleccione nombre..."} /></SelectTrigger><SelectContent>{entityList.map(e => (<SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>))}</SelectContent></Select></div>
           </div>
           <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || selectedEntityType === 'none' || !selectedEntityName} className="w-full mb-4">{isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}Generar Resumen</Button>
