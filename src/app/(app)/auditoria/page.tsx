@@ -43,6 +43,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -63,7 +71,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown } from "lucide-react";
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
@@ -100,6 +108,7 @@ interface Audit {
   auditType: 'proceso' | 'puesto';
   targetId: string;
   targetName: string;
+  processIdsToAudit?: string[];
   auditorName: string;
   auditDate: string; // ISO string
   status: AuditStatus;
@@ -142,6 +151,7 @@ export default function AuditoriaPage() {
   
   const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | ''>('');
   const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
+  const [newAuditProcessIds, setNewAuditProcessIds] = useState<string[]>([]);
   const [newAuditorName, setNewAuditorName] = useState<string>('Auditor Principal');
 
   const [isFindingDialogOpen, setIsFindingDialogOpen] = useState(false);
@@ -200,6 +210,10 @@ export default function AuditoriaPage() {
     }
   }, [currentAuditSession, isLoading]);
   
+  useEffect(() => {
+    setNewAuditProcessIds([]);
+  }, [newAuditType, newAuditTargetId]);
+
   const auditTargetDetails = useMemo(() => {
     if (!currentAuditSession) return null;
 
@@ -228,8 +242,15 @@ export default function AuditoriaPage() {
     } else { // Puesto
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
       if (!puesto) return { name: "Puesto no encontrado", process: null, activities: [], puesto: null, relatedProcesses: [] };
-      const relatedProcessesData = allProcesses
-        .filter(proc => proc.puesto === puesto.nombre)
+      
+      let relatedProcessesForPuesto = allProcesses.filter(proc => proc.puesto === puesto.nombre);
+
+      if (currentAuditSession.processIdsToAudit && currentAuditSession.processIdsToAudit.length > 0) {
+        const processIdSet = new Set(currentAuditSession.processIdsToAudit);
+        relatedProcessesForPuesto = relatedProcessesForPuesto.filter(proc => processIdSet.has(proc.id));
+      }
+
+      const relatedProcessesData = relatedProcessesForPuesto
         .map(proc => {
             const processActivities = (proc.activityOrder || [])
                 .map(actId => actividades.find(a => a.id === actId))
@@ -282,12 +303,14 @@ export default function AuditoriaPage() {
       auditDate: new Date().toISOString(),
       status: 'Pendiente',
       findings: [],
+      processIdsToAudit: (newAuditType === 'puesto' && newAuditProcessIds.length > 0) ? newAuditProcessIds : undefined,
     };
     setCurrentAuditSession(newAudit);
     addLogEntry({ user: newAuditorName, action: 'create', entityType: 'Auditoría', entityName: targetName, details: `Se inició una nueva auditoría para ${newAuditType}: "${targetName}".` });
     setIsStartAuditDialogOpen(false);
     setNewAuditType('');
     setNewAuditTargetId('');
+    setNewAuditProcessIds([]);
   };
   
   const handleFindingSubmit = (data: AuditFindingFormData) => {
@@ -527,7 +550,7 @@ export default function AuditoriaPage() {
                                         {auditTargetDetails.relatedProcesses && auditTargetDetails.relatedProcesses.length > 0 && (
                                             <div>
                                                 <Separator className="my-4" />
-                                                <h4 className="font-semibold text-md mb-2">Procesos Asociados al Puesto</h4>
+                                                <h4 className="font-semibold text-md mb-2">Procesos Auditados del Puesto</h4>
                                                 <Accordion type="multiple" className="w-full">
                                                     {auditTargetDetails.relatedProcesses.map(({ process, activities }) => (
                                                         <AccordionItem value={process.id} key={process.id}>
@@ -541,6 +564,8 @@ export default function AuditoriaPage() {
                                                                         <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado ?? '-'} / ${process.tiempoIdeal ?? '-'} min`} />
                                                                         <DetailDisplay title="Costo Est./Ideal" value={`${process.costoEstimado ?? '-'} / ${process.costoIdeal ?? '-'} ${process.monedaCosto || ''}`} />
                                                                         <DetailDisplay title="Sistemas" value={process.sistemas} isList />
+                                                                        <DetailDisplay title="Procesos de Entrada" value={process.procesosEntrada} isList />
+                                                                        <DetailDisplay title="Procesos de Salida" value={process.procesosSalida} isList />
                                                                     </CardContent>
                                                                 </Card>
                                                                 
@@ -761,6 +786,41 @@ export default function AuditoriaPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        )}
+                        {newAuditType === 'puesto' && newAuditTargetId && (
+                           <div>
+                            <Label>Procesos a Auditar (Opcional)</Label>
+                             <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between font-normal">
+                                  <span className="truncate">
+                                    {newAuditProcessIds.length > 0 ? `${newAuditProcessIds.length} proceso(s) seleccionado(s)` : "Todos los procesos del puesto"}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+                                <DropdownMenuLabel>Seleccione los procesos a auditar</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {allProcesses
+                                  .filter(p => p.puesto === puestos.find(pu => pu.id === newAuditTargetId)?.nombre)
+                                  .map(proc => (
+                                    <DropdownMenuCheckboxItem
+                                        key={proc.id}
+                                        checked={newAuditProcessIds.includes(proc.id)}
+                                        onCheckedChange={(checked) => {
+                                            setNewAuditProcessIds(prev =>
+                                                checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id)
+                                            )
+                                        }}
+                                    >
+                                        {proc.proceso}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <p className="text-xs text-muted-foreground mt-1">Si no selecciona ninguno, se auditarán todos los procesos del puesto.</p>
+                           </div>
                         )}
                     </div>
                     <DialogFooter>
