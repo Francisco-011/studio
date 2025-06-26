@@ -126,7 +126,7 @@ const renderMetric = (value: number | string, loading: boolean, comparisonValue?
   );
 }
 
-type ChartType = 'costos' | 'ahorros';
+type ChartType = 'costos' | 'ahorrosPorAccion' | 'ahorrosPorArea';
 
 interface ValidatedImprovement {
     id: string;
@@ -154,7 +154,7 @@ export default function MejorasDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
-  const [chartType, setChartType] = useState<ChartType>('ahorros');
+  const [chartType, setChartType] = useState<ChartType>('ahorrosPorAccion');
   
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
@@ -180,7 +180,7 @@ export default function MejorasDashboardPage() {
       
       if (range?.from) {
         const from = startOfDay(range.from);
-        const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
+        const to = range.to ? endOfDay(range.to) : endOfDay(range.to);
         filtered = filtered.filter(accion => {
             if (accion.fechaFinalizacion) {
                 const completionDate = parseISO(accion.fechaFinalizacion);
@@ -238,7 +238,8 @@ export default function MejorasDashboardPage() {
         accionesCompletadasCount: completedActions.length,
         ahorroCostosRealizado: Array.from(ahorroCostosMap.entries()).map(([currency, total]) => formatDashboardCurrency(total, currency)).join(', ') || 'N/A',
         ahorroTiempoRealizado,
-        totalAhorroMXN: ahorroCostosMap.get('MXN') || 0, // for comparison
+        totalAhorroMXN: ahorroCostosMap.get('MXN') || 0,
+        totalAhorroUSD: ahorroCostosMap.get('USD') || 0,
       };
   }
 
@@ -251,16 +252,14 @@ export default function MejorasDashboardPage() {
         ahorroCostosRealizado: 'N/A',
         ahorroTiempoRealizado: 'N/A',
         totalAhorroMXN: 0,
+        totalAhorroUSD: 0,
       };
     }
-    const { accionesCompletadasCount, ahorroCostosRealizado, ahorroTiempoRealizado, totalAhorroMXN } = processAccionesMetrics(filteredAcciones);
+    const metrics = processAccionesMetrics(filteredAcciones);
     return {
-      accionesCompletadasCount,
+      ...metrics,
       accionesEnRevisionCount: globalAcciones.filter(acc => acc.estado === 'En Revisión').length,
       accionesEnProgresoCount: globalAcciones.filter(acc => acc.estado === 'En Progreso').length,
-      ahorroCostosRealizado,
-      ahorroTiempoRealizado,
-      totalAhorroMXN,
     };
   }, [filteredAcciones, globalAcciones, isLoadingAcciones]);
   
@@ -358,59 +357,93 @@ export default function MejorasDashboardPage() {
       return mejoras;
   }, [filteredAcciones, allCapturedProcesses]);
   
-  const chartData = useMemo(() => {
-    if (chartType === 'costos') {
-      return filteredSystemCosts
-          .filter(sys => sys.currency !== 'N/A')
-          .map(sys => ({
-              name: `${sys.name} (${sys.currency})`,
-              'Costo Uso': sys.annualUsageCost,
-              'Costo Licencias': sys.annualLicenseCost,
-          }));
-    } else {
-      const processChartAcciones = (acciones: Accion[], suffix = "") => {
-          const data: { [key: string]: { ahorro: number, moneda: string } } = {};
-          acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
-              .forEach(a => {
-                  const key = `${a.nombre}${suffix}`;
-                  data[key] = {
-                      ahorro: (data[key]?.ahorro || 0) + a.ahorroEstimado!,
-                      moneda: a.monedaAhorro!
-                  };
-              });
-          return data;
-      };
+  const { chartData, chartConfig, chartDescription } = useMemo(() => {
+    let data, description;
+    
+    switch (chartType) {
+        case 'costos':
+            description = 'Comparativa de costos anuales (Uso vs. Licencias) por sistema y moneda.';
+            data = filteredSystemCosts
+                .filter(sys => sys.currency !== 'N/A')
+                .map(sys => ({
+                    name: `${sys.name} (${sys.currency})`,
+                    'Costo Uso': sys.annualUsageCost,
+                    'Costo Licencias': sys.annualLicenseCost,
+                }));
+            break;
 
-      const primaryData = processChartAcciones(filteredAcciones);
-      const comparisonData = isComparing ? processChartAcciones(comparisonAcciones, " (Comp)") : {};
-      
-      const allNames = new Set([...Object.keys(primaryData), ...Object.keys(comparisonData).map(k => k.replace(" (Comp)", ""))]);
-      
-      return Array.from(allNames).map(name => {
-          const baseName = name.replace(" (Comp)", "");
-          return {
-              name: baseName,
-              'Ahorro': primaryData[baseName] ? primaryData[baseName].ahorro : 0,
-              'Ahorro (Comp)': comparisonData[`${baseName} (Comp)`] ? comparisonData[`${baseName} (Comp)`].ahorro : 0,
-              moneda: primaryData[baseName]?.moneda || comparisonData[`${baseName} (Comp)`]?.moneda || '',
-          }
+        case 'ahorrosPorArea':
+            description = 'Suma de ahorros anuales estimados por área, desglosado por moneda.';
+            const ahorrosPorArea = new Map<string, { [key: string]: number }>();
+            filteredAcciones.forEach(a => {
+                if (a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro) {
+                    const areaName = a.area || 'Sin Área Asignada';
+                    const current = ahorrosPorArea.get(areaName) || {};
+                    current[a.monedaAhorro] = (current[a.monedaAhorro] || 0) + a.ahorroEstimado;
+                    ahorrosPorArea.set(areaName, current);
+                }
+            });
+            data = Array.from(ahorrosPorArea.entries()).map(([name, values]) => ({
+                name,
+                ...values,
+            }));
+            break;
+
+        case 'ahorrosPorAccion':
+        default:
+            description = 'Ahorro anual estimado por cada acción de mejora completada en el período.';
+            const processChartAcciones = (acciones: Accion[], suffix = "") => {
+                const data: { [key: string]: { ahorro: number, moneda: string } } = {};
+                acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
+                    .forEach(a => {
+                        const key = `${a.nombre}${suffix}`;
+                        data[key] = {
+                            ahorro: (data[key]?.ahorro || 0) + a.ahorroEstimado!,
+                            moneda: a.monedaAhorro!
+                        };
+                    });
+                return data;
+            };
+
+            const primaryData = processChartAcciones(filteredAcciones);
+            const comparisonData = isComparing ? processChartAcciones(comparisonAcciones, " (Comp)") : {};
+            
+            const allNames = new Set([...Object.keys(primaryData), ...Object.keys(comparisonData).map(k => k.replace(" (Comp)", ""))]);
+            
+            data = Array.from(allNames).map(name => {
+                const baseName = name.replace(" (Comp)", "");
+                return {
+                    name: baseName,
+                    'Ahorro': primaryData[baseName] ? primaryData[baseName].ahorro : 0,
+                    'Ahorro (Comp)': comparisonData[`${baseName} (Comp)`] ? comparisonData[`${baseName} (Comp)`].ahorro : 0,
+                    moneda: primaryData[baseName]?.moneda || comparisonData[`${baseName} (Comp)`]?.moneda || '',
+                }
+            });
+            break;
+    }
+    
+    const config: ChartConfig = {};
+    if (chartType === 'costos') {
+      config['Costo Uso'] = { label: 'Costo Uso', color: 'hsl(var(--chart-2))' };
+      config['Costo Licencias'] = { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' };
+    } else if (chartType === 'ahorrosPorAccion') {
+      config['Ahorro'] = { label: 'Ahorro Periodo Actual', color: 'hsl(var(--chart-1))' };
+      config['Ahorro (Comp)'] = { label: 'Ahorro Periodo Comp.', color: 'hsl(var(--chart-2))' };
+    } else { // ahorrosPorArea
+      const allCurrencies = new Set<string>();
+      data.forEach(d => {
+        Object.keys(d).forEach(k => { if(k !== 'name') allCurrencies.add(k) })
+      });
+      let i = 1;
+      allCurrencies.forEach(currency => {
+        config[currency] = { label: currency, color: `hsl(var(--chart-${i++}))` };
       });
     }
+
+    return { chartData: data, chartConfig: config, chartDescription: description };
+
   }, [chartType, filteredSystemCosts, filteredAcciones, comparisonAcciones, isComparing]);
 
-  const chartConfig: ChartConfig = useMemo(() => {
-    if (chartType === 'costos') {
-      return {
-        'Costo Uso': { label: 'Costo Uso', color: 'hsl(var(--chart-2))' },
-        'Costo Licencias': { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' },
-      };
-    } else {
-      return {
-        'Ahorro': { label: 'Ahorro Periodo Actual', color: 'hsl(var(--chart-1))' },
-        'Ahorro (Comp)': { label: 'Ahorro Periodo Comp.', color: 'hsl(var(--chart-2))' },
-      };
-    }
-  }, [chartType]);
 
   const handleExport = (type: 'sistemas' | 'mejoras') => {
     if (type === 'sistemas') {
@@ -540,7 +573,7 @@ export default function MejorasDashboardPage() {
        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro Anual Realizado</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.totalAhorroMXN, comparisonMetrics.totalAhorroMXN) : undefined)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.totalAhorroUSD, comparisonMetrics.totalAhorroUSD) : undefined)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro de Tiempo</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader>
@@ -565,18 +598,15 @@ export default function MejorasDashboardPage() {
            <div className="flex justify-between items-center">
               <CardTitle>Análisis Gráfico</CardTitle>
               <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
-                  <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                      <SelectItem value="ahorros">Ahorros por Acción</SelectItem>
+                      <SelectItem value="ahorrosPorAccion">Ahorros por Acción</SelectItem>
+                      <SelectItem value="ahorrosPorArea">Ahorros por Área</SelectItem>
                       <SelectItem value="costos">Costos de Sistemas</SelectItem>
                   </SelectContent>
               </Select>
            </div>
-            <CardDescription>
-              {chartType === 'costos'
-                  ? 'Comparativa de costos anuales (Uso vs. Licencias) por sistema y moneda.'
-                  : 'Ahorro anual estimado por cada acción de mejora completada en el período.'}
-            </CardDescription>
+            <CardDescription>{chartDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
@@ -594,11 +624,15 @@ export default function MejorasDashboardPage() {
                             <Bar dataKey="Costo Uso" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                             <Bar dataKey="Costo Licencias" stackId="a" fill="hsl(var(--chart-1))" radius={[4, 4, 4, 4]} />
                           </>
-                        ) : (
+                        ) : chartType === 'ahorrosPorAccion' ? (
                           <>
                             <Bar dataKey="Ahorro" fill="hsl(var(--chart-1))" radius={4} />
                             {isComparing && <Bar dataKey="Ahorro (Comp)" fill="hsl(var(--chart-2))" radius={4} opacity={0.6} />}
                           </>
+                        ) : (
+                           Object.keys(chartConfig).map(key => (
+                              <Bar key={key} dataKey={key} stackId="a" fill={chartConfig[key].color} radius={4} />
+                           ))
                         )}
                     </BarChart>
                 </ResponsiveContainer>

@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardCheck, AlertTriangle, TrendingUp, Loader2, FileText, CalendarRange } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateRange } from "react-day-picker";
@@ -74,6 +74,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
   return stringValue;
 };
 
+type ChartType = 'evolucion' | 'distribucion';
 
 export default function AuditoriaDashboardPage() {
   const [allAudits, setAllAudits] = useState<Audit[]>([]);
@@ -91,6 +92,7 @@ export default function AuditoriaDashboardPage() {
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
+  const [chartType, setChartType] = useState<ChartType>('evolucion');
 
 
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function AuditoriaDashboardPage() {
     
     if (range?.from) {
       const from = startOfDay(range.from);
-      const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
+      const to = range.to ? endOfDay(range.to) : endOfDay(range.to);
       filtered = filtered.filter(audit => {
           const auditDate = parseISO(audit.auditDate);
           return isValid(auditDate) && auditDate >= from && auditDate <= to;
@@ -148,7 +150,6 @@ export default function AuditoriaDashboardPage() {
           const puestoMatch = selectedPuesto === 'all' || pst.nombre === selectedPuesto;
           return areaMatch && deptoMatch && puestoMatch;
         }
-        // No filter for 'sistema' audits based on entity hierarchy
         return true;
       });
     }
@@ -174,7 +175,7 @@ export default function AuditoriaDashboardPage() {
       return processMetrics(comparisonAudits);
   }, [comparisonAudits, isComparing]);
 
-  const chartData = useMemo(() => {
+  const lineChartData = useMemo(() => {
     const processData = (audits: Audit[], suffix: string) => {
         const data: { [key: string]: { [key: string]: any } } = {};
         audits.filter(a => a.status === 'Completada').forEach(audit => {
@@ -211,13 +212,39 @@ export default function AuditoriaDashboardPage() {
     });
 }, [filteredAudits, comparisonAudits, isComparing]);
 
-  const chartConfig: ChartConfig = {
+  const lineChartConfig: ChartConfig = {
     'Auditorías Completadas': { label: 'Auditorías Completadas', color: 'hsl(var(--chart-1))' },
     'Hallazgos No Conformes': { label: 'Hallazgos No Conformes', color: 'hsl(var(--chart-5))' },
     'Oportunidades de Mejora': { label: 'Oportunidades de Mejora', color: 'hsl(var(--chart-3))' },
     'Auditorías Completadas (Comp)': { label: 'Auditorías (Comp)', color: 'hsl(var(--chart-1))' },
     'Hallazgos No Conformes (Comp)': { label: 'Hallazgos NC (Comp)', color: 'hsl(var(--chart-5))' },
     'Oportunidades de Mejora (Comp)': { label: 'Oportunidades (Comp)', color: 'hsl(var(--chart-3))' },
+  };
+
+  const pieChartData = useMemo(() => {
+    const findingsCount = {
+        'Conforme': 0,
+        'No Conforme': 0,
+        'Oportunidad de Mejora': 0,
+    };
+    filteredAudits.forEach(audit => {
+        if (audit.status === 'Completada') {
+            audit.findings.forEach(finding => {
+                findingsCount[finding.type]++;
+            });
+        }
+    });
+    return [
+        { name: 'Conforme', value: findingsCount['Conforme'], fill: 'hsl(var(--chart-2))' },
+        { name: 'No Conforme', value: findingsCount['No Conforme'], fill: 'hsl(var(--chart-5))' },
+        { name: 'Oportunidad de Mejora', value: findingsCount['Oportunidad de Mejora'], fill: 'hsl(var(--chart-3))' },
+    ].filter(d => d.value > 0);
+  }, [filteredAudits]);
+
+  const pieChartConfig: ChartConfig = {
+    'Conforme': { label: 'Conformes', color: 'hsl(var(--chart-2))' },
+    'No Conforme': { label: 'No Conformes', color: 'hsl(var(--chart-5))' },
+    'Oportunidad de Mejora': { label: 'Oportunidades de Mejora', color: 'hsl(var(--chart-3))' },
   };
   
   const availableDepartamentos = useMemo(() => {
@@ -331,34 +358,73 @@ export default function AuditoriaDashboardPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Evolución de Auditorías y Hallazgos</CardTitle>
-            <CardDescription>Tendencia de las auditorías completadas en el periodo seleccionado.</CardDescription>
+          <div className="flex justify-between items-center">
+            <CardTitle>Análisis de Auditorías</CardTitle>
+            <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="evolucion">Evolución de Auditorías</SelectItem>
+                <SelectItem value="distribucion">Distribución de Hallazgos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+            <CardDescription>
+              {chartType === 'evolucion'
+                ? 'Tendencia de las auditorías completadas en el periodo seleccionado.'
+                : 'Proporción de los tipos de hallazgos en las auditorías completadas del periodo.'
+              }
+            </CardDescription>
         </CardHeader>
         <CardContent className="min-h-[300px]">
           {isLoadingAll ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div> :
-           chartData.length > 0 ? (
-            <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
-              <ResponsiveContainer>
-                <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <Legend />
-                  <Line type="monotone" dataKey="Auditorías Completadas" stroke="var(--color-Auditorías Completadas)" />
-                  <Line type="monotone" dataKey="Hallazgos No Conformes" stroke="var(--color-Hallazgos No Conformes)" />
-                  <Line type="monotone" dataKey="Oportunidades de Mejora" stroke="var(--color-Oportunidades de Mejora)" />
-                  {isComparing && <Line type="monotone" dataKey="Auditorías Completadas (Comp)" stroke="var(--color-Auditorías Completadas (Comp))" strokeDasharray="5 5" />}
-                  {isComparing && <Line type="monotone" dataKey="Hallazgos No Conformes (Comp)" stroke="var(--color-Hallazgos No Conformes (Comp))" strokeDasharray="5 5" />}
-                  {isComparing && <Line type="monotone" dataKey="Oportunidades de Mejora (Comp)" stroke="var(--color-Oportunidades de Mejora (Comp))" strokeDasharray="5 5" />}
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-              <p className="text-muted-foreground">No hay datos de auditoría para los filtros seleccionados.</p>
-            </div>
-          )}
+            <>
+              {chartType === 'evolucion' ? (
+                lineChartData.length > 0 ? (
+                  <ChartContainer config={lineChartConfig} className="min-h-[300px] w-full">
+                    <ResponsiveContainer>
+                      <LineChart data={lineChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip content={<ChartTooltipContent />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="Auditorías Completadas" stroke="var(--color-Auditorías Completadas)" />
+                        <Line type="monotone" dataKey="Hallazgos No Conformes" stroke="var(--color-Hallazgos No Conformes)" />
+                        <Line type="monotone" dataKey="Oportunidades de Mejora" stroke="var(--color-Oportunidades de Mejora)" />
+                        {isComparing && <Line type="monotone" dataKey="Auditorías Completadas (Comp)" stroke="var(--color-Auditorías Completadas (Comp))" strokeDasharray="5 5" />}
+                        {isComparing && <Line type="monotone" dataKey="Hallazgos No Conformes (Comp)" stroke="var(--color-Hallazgos No Conformes (Comp))" strokeDasharray="5 5" />}
+                        {isComparing && <Line type="monotone" dataKey="Oportunidades de Mejora (Comp)" stroke="var(--color-Oportunidades de Mejora (Comp))" strokeDasharray="5 5" />}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
+                    <p className="text-muted-foreground">No hay datos de evolución para los filtros seleccionados.</p>
+                  </div>
+                )
+              ) : (
+                pieChartData.length > 0 ? (
+                    <ChartContainer config={pieChartConfig} className="min-h-[300px] w-full">
+                       <ResponsiveContainer>
+                          <PieChart>
+                              <Tooltip content={<ChartTooltipContent hideLabel />} />
+                              <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                                  {pieChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                              </Pie>
+                              <Legend />
+                          </PieChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                ) : (
+                   <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
+                    <p className="text-muted-foreground">No hay hallazgos para mostrar.</p>
+                  </div>
+                )
+              )}
+            </>
+          }
         </CardContent>
       </Card>
 
