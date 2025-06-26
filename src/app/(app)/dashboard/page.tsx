@@ -70,7 +70,6 @@ interface Audit {
 
 function formatDashboardCurrency(amount: number, currency: string) {
   try {
-    // Using 'code' will display "MXN", "USD", etc. instead of symbols.
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
   } catch (e) {
     return `${amount.toFixed(0)} ${currency}`;
@@ -304,8 +303,6 @@ export default function DashboardPage() {
         const selectedPuestoObject = selectedPuesto !== 'all' ? puestos.find(p => p.nombre === selectedPuesto) : null;
         const selectedDeptoObject = selectedDepartamento !== 'all' ? departamentos.find(d => d.nombre === selectedDepartamento) : null;
         
-        // This logic can be complex. Let's define the hierarchy.
-        // Puesto is most specific, then Departamento, then Area.
         if (selectedPuestoObject) {
             systemsToDisplay = sistemas.filter(s => s.scope === "Puesto" && s.scopeId === selectedPuestoObject.id);
         } else if (selectedDeptoObject) {
@@ -323,7 +320,7 @@ export default function DashboardPage() {
                 (s.scope === "Departamento" && s.scopeId && deptosInAreaIds.includes(s.scopeId)) ||
                 (s.scope === "Puesto" && s.scopeId && puestosInAreaIds.includes(s.scopeId))
             );
-        } else { // All filters are 'all'
+        } else { // All filters are 'all', show all systems
             systemsToDisplay = [...sistemas];
         }
 
@@ -1196,10 +1193,10 @@ export default function DashboardPage() {
                         <TableRow key={system.id}>
                             <TableCell className="font-medium text-xs">{system.name}</TableCell>
                             <TableCell className="text-right text-xs">
-                                {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualUsageCost, c.currency)}</div>) : <span>-</span>}
+                                {(system.costsByCurrency || []).length > 0 ? (system.costsByCurrency || []).map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualUsageCost, c.currency)}</div>) : <span>-</span>}
                             </TableCell>
                             <TableCell className="text-right text-xs">
-                                {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualLicenseCost, c.currency)}</div>) : <span>-</span>}
+                                {(system.costsByCurrency || []).length > 0 ? (system.costsByCurrency || []).map(c => <div key={c.currency}>{formatDashboardCurrency(c.annualLicenseCost, c.currency)}</div>) : <span>-</span>}
                             </TableCell>
                             <TableCell className="text-right text-xs">{system.totalLicenses > 0 ? system.totalLicenses : '-'}</TableCell>
                             <TableCell className="text-right font-semibold text-xs">
@@ -1207,7 +1204,7 @@ export default function DashboardPage() {
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <div>
-                                            {system.costsByCurrency.length > 0 ? system.costsByCurrency.map(c => <div key={c.currency}>{formatDashboardCurrency(c.totalAnnualCost, c.currency)}</div>) : <span>-</span>}
+                                            {(system.costsByCurrency || []).length > 0 ? (system.costsByCurrency || []).map(c => <div key={c.currency}>{formatDashboardCurrency(c.totalAnnualCost, c.currency)}</div>) : <span>-</span>}
                                         </div>
                                     </TooltipTrigger>
                                     {system.descriptions.length > 0 && (
