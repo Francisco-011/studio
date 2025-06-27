@@ -129,9 +129,9 @@ Ahora que todo está conectado y seguro, es hora de crear el primer usuario, que
 Este es el paso final para que tu aplicación sea accesible desde cualquier lugar a través de una URL pública.
 
 1.  **Ve a App Hosting**: En el menú de la izquierda de Firebase, ve a **"Compilación"** -> **"App Hosting"**.
-2.  **Comienza el Despliegue**: Haz clic en **"Comenzar"** y sigue el asistente en pantalla.
-3.  **Conecta tu Código**: El asistente probablemente te pedirá que conectes tu cuenta de GitHub (o el lugar donde guardes tu código). Sigue los pasos para autorizar la conexión y selecciona el repositorio de tu proyecto SIAP.
-4.  **Despliegue Automático**: Una vez conectado, Firebase se encargará de todo. Automáticamente construirá tu aplicación y la desplegará en sus servidores globales.
+2.  **Comienza el Despliegue**: Haz clic en **"Comenzar"** (o un botón similar para crear un "backend").
+3.  **Sigue el Asistente**: App Hosting te guiará con un asistente en pantalla. Te pedirá que conectes tu código fuente. Dado que estás en un entorno de desarrollo integrado como Firebase Studio, el asistente debería conectarse directamente con tu proyecto. Simplemente sigue las instrucciones que te presente. **No te preocupes si no usas GitHub; la plataforma se adaptará.**
+4.  **Despliegue Automático**: Una vez que hayas seguido los pasos del asistente, Firebase se encargará de todo. Automáticamente construirá tu aplicación y la desplegará en sus servidores globales.
 5.  **¡Tu Aplicación está en Vivo!**: Cuando el proceso termine, Firebase te dará una URL pública (algo como `tu-proyecto.web.app`). ¡Esa es la dirección de tu aplicación SIAP en vivo!
 
 ¡Y eso es todo! Has llevado SIAP de ser un prototipo a una aplicación de producción completamente funcional, segura y desplegada. ¡Enhorabuena!

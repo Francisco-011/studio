@@ -1,4 +1,3 @@
-
 # SIAP: Roadmap to Production
 
 This document outlines the necessary steps to transition the SIAP prototype into a secure, multi-user, production-ready application using the Firebase platform.
@@ -74,6 +73,5 @@ Deploy the application using **Firebase App Hosting**.
 
 **Action Items:**
 1.  **Configuration:** The `apphosting.yaml` file is already set up for a basic deployment.
-2.  **Deploy Command:** Use the Firebase CLI to deploy the application.
+2.  **Follow the Wizard**: In the Firebase console, navigate to App Hosting and follow the on-screen wizard. It will guide you through connecting your codebase and initiating the deployment.
 3.  **Benefits:** This provides secure (HTTPS), scalable, and globally-distributed hosting for the SIAP application with minimal configuration.
-
