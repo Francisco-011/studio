@@ -41,6 +41,7 @@ interface TreeNode {
 type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
+type DropTargetType = 'proceso' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto' | 'puesto';
 
 
 const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -115,7 +116,7 @@ export default function PanelJerarquicoPage() {
 
   const [dropTargetInfo, setDropTargetInfo] = useState<{ 
     id: string; 
-    type: 'proceso' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto';
+    type: DropTargetType;
     targetProcessId?: string;
     targetActivityId?: string;
   } | null>(null);
@@ -392,9 +393,24 @@ export default function PanelJerarquicoPage() {
     e.dataTransfer.setData("text/plain", itemId); 
   };
   
-  const handleDragOver = (e: DragEvent<HTMLDivElement>, targetType: 'proceso' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto', targetId?: string) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, targetType: DropTargetType, targetId?: string) => {
     e.preventDefault();
-    let allowDrop = true;
+    let allowDrop = false;
+
+    if (draggedItem?.type === 'processNodeInPuesto') {
+        if (targetType === 'processNodeInPuesto' || targetType === 'puesto') {
+            allowDrop = true;
+        }
+    } else if (draggedItem?.type.startsWith('activity')) {
+        if (targetType === 'proceso' || targetType === 'activity-in-tree' || targetType === 'pool') {
+            allowDrop = true;
+        }
+    }
+
+    if (!allowDrop) {
+        e.dataTransfer.dropEffect = "none";
+        return;
+    }
 
     const checkProcessStatus = (processId?: string) => {
         if (!processId) return true;
@@ -412,13 +428,6 @@ export default function PanelJerarquicoPage() {
         if (!checkProcessStatus(procId)) allowDrop = false;
     }
 
-    if (draggedItem?.type === 'processNodeInPuesto' && targetType !== 'processNodeInPuesto') {
-      allowDrop = false; 
-    }
-    if (draggedItem?.type !== 'processNodeInPuesto' && targetType === 'processNodeInPuesto') {
-      allowDrop = false; 
-    }
-
 
     e.dataTransfer.dropEffect = allowDrop ? "move" : "none";
   };
@@ -426,11 +435,21 @@ export default function PanelJerarquicoPage() {
   const handleDragEnter = (
     e: DragEvent<HTMLDivElement>, 
     targetId: string, 
-    targetType: 'proceso' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto',
+    targetType: DropTargetType,
     additionalTargetInfo?: { processId?: string; activityId?: string }
   ) => {
     e.preventDefault();
     let canDropOnTarget = true;
+
+    if (draggedItem?.type === 'processNodeInPuesto') {
+        if (targetType !== 'processNodeInPuesto' && targetType !== 'puesto') {
+            canDropOnTarget = false;
+        }
+    } else if (draggedItem?.type.startsWith('activity')) {
+        if (targetType !== 'proceso' && targetType !== 'activity-in-tree' && targetType !== 'pool') {
+            canDropOnTarget = false;
+        }
+    }
 
     const getProcessStatus = (processId?: string) => {
         if (!processId) return true; 
@@ -446,12 +465,6 @@ export default function PanelJerarquicoPage() {
     } else if (targetType === 'processNodeInPuesto') {
          const procId = targetId.replace('proceso-', '');
          if (!getProcessStatus(procId)) canDropOnTarget = false;
-    }
-    
-    if (draggedItem?.type === 'processNodeInPuesto') {
-      if (targetType !== 'processNodeInPuesto') {
-        canDropOnTarget = false;
-      }
     }
     
     if (canDropOnTarget) {
@@ -479,6 +492,60 @@ export default function PanelJerarquicoPage() {
 
     const { type: draggedItemType, id: draggedItemId, sourceProcessId, sourceParentPuestoNodeId } = draggedItem;
     const { type: targetType, id: dropTargetNodeId, targetProcessId: actualTargetProcessId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
+
+    // Handle moving a process to a new Puesto
+    if (draggedItemType === 'processNodeInPuesto' && targetType === 'puesto') {
+        const processId = draggedItemId;
+        const targetPuestoNodeId = dropTargetNodeId; // e.g. 'puesto-xyz'
+        const targetPuestoOriginalId = targetPuestoNodeId.replace('puesto-', '');
+
+        if (sourceParentPuestoNodeId === targetPuestoNodeId) {
+            setDraggedItem(null);
+            setDropTargetInfo(null);
+            return;
+        }
+
+        const targetPuesto = puestos.find(p => p.id === targetPuestoOriginalId);
+        if (!targetPuesto) {
+            toast({ title: "Error", description: "El puesto de destino no fue encontrado." });
+            setDraggedItem(null);
+            setDropTargetInfo(null);
+            return;
+        }
+
+        const targetArea = areas.find(a => a.id === targetPuesto.areaId);
+        const targetDepto = departamentos.find(d => d.id === targetPuesto.departamentoId);
+
+        setCapturedProcesses(prevProcesses => prevProcesses.map(proc => {
+            if (proc.id === processId) {
+                return {
+                    ...proc,
+                    puesto: targetPuesto.nombre,
+                    departamento: targetDepto?.nombre, // Can be undefined
+                    area: targetArea?.nombre || proc.area,
+                    updatedAt: Date.now()
+                };
+            }
+            return proc;
+        }));
+        
+        setPuestoProcessOrders(prevOrders => {
+            const newOrders = { ...prevOrders };
+            if (sourceParentPuestoNodeId && newOrders[sourceParentPuestoNodeId]) {
+                newOrders[sourceParentPuestoNodeId] = newOrders[sourceParentPuestoNodeId].filter(id => id !== processId);
+            }
+            const targetOrder = newOrders[targetPuestoNodeId] || [];
+            if (!targetOrder.includes(processId)) {
+                newOrders[targetPuestoNodeId] = [...targetOrder, processId];
+            }
+            return newOrders;
+        });
+        
+        toast({ title: "Proceso Movido", description: `El proceso fue movido exitosamente al puesto "${targetPuesto.nombre}".` });
+        setDraggedItem(null);
+        setDropTargetInfo(null);
+        return;
+    }
 
     if (draggedItemType === 'processNodeInPuesto' && targetType === 'processNodeInPuesto') {
         const targetProcessOriginalId = dropTargetNodeId.replace('proceso-', '');
@@ -649,97 +716,124 @@ export default function PanelJerarquicoPage() {
   };
 
   const renderTree = (nodes: TreeNode[], parentPuestoNodeId?: string): JSX.Element[] => {
-    return nodes.map(node => (
-      <div key={node.id} className="ml-4">
-        <div 
-          className={cn(
-            "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
-            node.type === 'proceso' && "border-l-2 border-transparent",
-             dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type.startsWith('activity') && "bg-primary/20 border-primary",
-            dropTargetInfo?.type === 'processNodeInPuesto' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type === 'processNodeInPuesto' && "ring-2 ring-accent",
-            node.type === 'proceso' && node.activo === false && "opacity-60"
-          )}
-          draggable={node.type === 'proceso' && node.activo !== false}
-          onDragStart={node.type === 'proceso' && node.activo !== false ? (e) => handleDragStart(e, node.originalId!, 'processNodeInPuesto', { parentPuestoNodeId: parentPuestoNodeId }) : undefined}
-          onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', node.originalId) : undefined}
-          onDrop={node.type === 'proceso' && node.activo !== false ? (e) => handleDrop(e) : undefined}
-          onDragEnter={node.type === 'proceso' && node.activo !== false ? (e) => handleDragEnter(e, node.id, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', { processId: node.originalId }) : undefined}
-          onDragLeave={handleDragLeave}
-          id={node.id}
-          title={node.type === 'proceso' && node.activo === false ? "Este proceso está inactivo" : node.name}
-        >
-          {node.type === 'proceso' && node.activo !== false && <GripVertical className="h-4 w-4 mr-1 text-muted-foreground cursor-grab" />}
-          <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
-            {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
-          </Button>
-          <span className={cn(
-              "text-sm flex-grow", 
-              node.type === 'proceso' && "font-semibold", 
-              node.type === 'area' && "font-bold",
-              node.type === 'departamento' && "font-medium text-foreground/80",
-              node.type === 'puesto' && "font-medium",
-              node.type === 'proceso' && node.activo === false && "italic text-muted-foreground"
-            )}
-          >
-            {node.name}
-            {node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}
-          </span>
-          {node.type === 'proceso' && node.originalId && (
-            <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditProcess(node.name)} title="Editar proceso">
-                    <Edit2 className="h-4 w-4 text-muted-foreground" />
+    return nodes.map(node => {
+        let nodeContent;
+        if (node.type === 'puesto') {
+            nodeContent = (
+              <div 
+                className={cn(
+                  "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
+                  dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && draggedItem?.type === 'processNodeInPuesto' && "bg-primary/20 border-2 border-dashed border-primary"
+                )}
+                onDragOver={(e) => handleDragOver(e, 'puesto', node.id)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, node.id, 'puesto')}
+                onDragLeave={handleDragLeave}
+                id={node.id}
+              >
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(capturedProcesses.find(p => p.id === node.originalId!)!, 'process')} title="Ver detalles del proceso">
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                </Button>
-            </div>
-          )}
-        </div>
-        {expandedNodes[node.id] && (
-          <>
-            {node.children && renderTree(node.children, node.type === 'puesto' ? node.id : parentPuestoNodeId)}
-            {node.activities && node.type === 'proceso' && node.originalId && (node.type !== 'proceso' || node.activo !== false) && ( 
-              <div className="ml-8 mt-1 space-y-1">
-                {node.activities.map((act, index) => {
-                  const activityInTreeId = `tree-activity-${act.id}-proc-${node.originalId!}`;
-                  return (
-                  <div 
-                    key={`${activityInTreeId}-${index}`}
-                    id={activityInTreeId}
-                    draggable={act.activa && node.activo !== false}
-                    onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, 'activityInProcess', { processId: node.originalId, indexInProcess: index }) : e.preventDefault()}
-                    onDragOver={(e) => handleDragOver(e, 'activity-in-tree', activityInTreeId)}
-                    onDrop={(e) => handleDrop(e)}
-                    onDragEnter={(e) => handleDragEnter(e, activityInTreeId, 'activity-in-tree', { processId: node.originalId, activityId: act.id })}
-                    onDragLeave={handleDragLeave}
-                    className={cn(
-                        "flex items-center p-1.5 bg-secondary/30 rounded text-xs group",
-                        (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
-                        !act.activa && "italic text-muted-foreground",
-                        dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === activityInTreeId && "ring-2 ring-primary"
-                    )}
-                    title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
-                  >
-                    <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
-                    <span className="flex-grow">{act.nombre}</span>
-                    {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
-                     <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
-                            <Edit2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                    </div>
-                  </div>
-                )})}
-                 {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
+                <span className="font-medium flex-grow">{node.name}</span>
               </div>
+            );
+        } else {
+             nodeContent = (
+              <div 
+                className={cn(
+                  "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
+                  node.type === 'proceso' && "border-l-2 border-transparent",
+                  dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type.startsWith('activity') && "bg-primary/20 border-primary",
+                  dropTargetInfo?.type === 'processNodeInPuesto' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type === 'processNodeInPuesto' && "ring-2 ring-accent",
+                  node.type === 'proceso' && node.activo === false && "opacity-60"
+                )}
+                draggable={node.type === 'proceso' && node.activo !== false}
+                onDragStart={node.type === 'proceso' && node.activo !== false ? (e) => handleDragStart(e, node.originalId!, 'processNodeInPuesto', { parentPuestoNodeId: parentPuestoNodeId }) : undefined}
+                onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', node.originalId) : undefined}
+                onDrop={node.type === 'proceso' && node.activo !== false ? (e) => handleDrop(e) : undefined}
+                onDragEnter={node.type === 'proceso' && node.activo !== false ? (e) => handleDragEnter(e, node.id, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', { processId: node.originalId }) : undefined}
+                onDragLeave={handleDragLeave}
+                id={node.id}
+                title={node.type === 'proceso' && node.activo === false ? "Este proceso está inactivo" : node.name}
+              >
+                {node.type === 'proceso' && node.activo !== false && <GripVertical className="h-4 w-4 mr-1 text-muted-foreground cursor-grab" />}
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
+                </Button>
+                <span className={cn(
+                    "text-sm flex-grow", 
+                    node.type === 'proceso' && "font-semibold", 
+                    node.type === 'area' && "font-bold",
+                    node.type === 'departamento' && "font-medium text-foreground/80",
+                    node.type === 'proceso' && node.activo === false && "italic text-muted-foreground"
+                  )}
+                >
+                  {node.name}
+                  {node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}
+                </span>
+                {node.type === 'proceso' && node.originalId && (
+                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditProcess(node.name)} title="Editar proceso">
+                          <Edit2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(capturedProcesses.find(p => p.id === node.originalId!)!, 'process')} title="Ver detalles del proceso">
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                  </div>
+                )}
+              </div>
+            );
+        }
+
+        return (
+          <div key={node.id} className="ml-4">
+            {nodeContent}
+            {expandedNodes[node.id] && (
+              <>
+                {node.children && renderTree(node.children, node.type === 'puesto' ? node.id : parentPuestoNodeId)}
+                {node.activities && node.type === 'proceso' && node.originalId && (node.type !== 'proceso' || node.activo !== false) && ( 
+                  <div className="ml-8 mt-1 space-y-1">
+                    {node.activities.map((act, index) => {
+                      const activityInTreeId = `tree-activity-${act.id}-proc-${node.originalId!}`;
+                      return (
+                      <div 
+                        key={`${activityInTreeId}-${index}`}
+                        id={activityInTreeId}
+                        draggable={act.activa && node.activo !== false}
+                        onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, 'activityInProcess', { processId: node.originalId, indexInProcess: index }) : e.preventDefault()}
+                        onDragOver={(e) => handleDragOver(e, 'activity-in-tree', activityInTreeId)}
+                        onDrop={(e) => handleDrop(e)}
+                        onDragEnter={(e) => handleDragEnter(e, activityInTreeId, 'activity-in-tree', { processId: node.originalId, activityId: act.id })}
+                        onDragLeave={handleDragLeave}
+                        className={cn(
+                            "flex items-center p-1.5 bg-secondary/30 rounded text-xs group",
+                            (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
+                            !act.activa && "italic text-muted-foreground",
+                            dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === activityInTreeId && "ring-2 ring-primary"
+                        )}
+                        title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
+                      >
+                        <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
+                        <span className="flex-grow">{act.nombre}</span>
+                        {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
+                         <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
+                                <Edit2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
+                                <Eye className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                        </div>
+                      </div>
+                    )})}
+                     {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
-    ));
+          </div>
+        );
+    });
   };
 
   const unassignedCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 0).length, [actividades]);
@@ -876,8 +970,7 @@ export default function PanelJerarquicoPage() {
             <CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle>
           </div>
           <CardDescription className="mb-4">
-            Explore la estructura organizativa y las relaciones de procesos. 
-            La vista de árbol permite arrastrar actividades activas del pool a procesos activos, moverlas entre procesos, reordenarlas, o devolverlas al pool. Los procesos activos también pueden reordenarse dentro de su puesto.
+            Explore la estructura organizativa. Arrastre actividades al árbol de procesos, muévalas entre procesos, reordénelas, o devuélvalas al pool. Arrastre un proceso a otro puesto para reasignarlo.
           </CardDescription>
         </CardHeader>
         <CardContent>
