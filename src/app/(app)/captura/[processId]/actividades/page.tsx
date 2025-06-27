@@ -50,7 +50,7 @@ export default function DefinirActividadesProcesoPage() {
   const params = useParams();
   const processId = params.processId as string;
 
-  const { actividades: globalActivities, addActividad: addGlobalActivity, updateActividad: updateGlobalActivity } = useActividades();
+  const { actividades: globalActivities, addActividad: addGlobalActivity, updateActividad: updateGlobalActivity, isLoadingActividades: isLoadingGlobalActividades } = useActividades();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos(); 
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
@@ -87,14 +87,14 @@ export default function DefinirActividadesProcesoPage() {
           const currentProcess = allProcesses.find(p => p.id === processId);
           if (currentProcess) {
             setParentProcess(currentProcess);
-             // Preload defined activities if they exist in activityOrder
-            if (currentProcess.activityOrder && currentProcess.activityOrder.length > 0) {
+             // Preload defined activities if they exist in activityOrder and global activities are loaded
+            if (currentProcess.activityOrder && currentProcess.activityOrder.length > 0 && !isLoadingGlobalActividades) {
                 const preloadedActivities: LocalActivityDefinition[] = currentProcess.activityOrder
                     .map(actId => {
                         const globalAct = globalActivities.find(ga => ga.id === actId);
                         if (globalAct) {
                             return {
-                                tempId: globalAct.id, // Use global ID as tempId for consistency if editing
+                                tempId: globalAct.id,
                                 nombre: globalAct.nombre,
                                 descripcionBreve: globalAct.descripcionBreve,
                                 sistemaUtilizado: globalAct.sistemaUtilizado,
@@ -119,7 +119,7 @@ export default function DefinirActividadesProcesoPage() {
         setIsLoading(false);
       }
     }
-  }, [processId, router, globalActivities]);
+  }, [processId, router, globalActivities, isLoadingGlobalActividades]);
 
   const availableSistemasForActivityForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || !parentProcess) return [];
@@ -244,15 +244,10 @@ export default function DefinirActividadesProcesoPage() {
     const finalActivityIdsForProcessOrder: string[] = [];
 
     try {
-      let currentGlobalActivities = [...globalActivities]; 
-
       for (const localAct of definedActivities) {
         let activityIdToLink: string;
         
-        const existingGlobalActivityByName = currentGlobalActivities.find(ga => ga.nombre.toLowerCase() === localAct.nombre.toLowerCase());
-        const existingGlobalActivityById = currentGlobalActivities.find(ga => ga.id === localAct.tempId); 
-        const existingGlobalActivity = existingGlobalActivityById || existingGlobalActivityByName;
-
+        const existingGlobalActivity = globalActivities.find(ga => ga.id === localAct.tempId);
 
         const activityDataPayload = {
           nombre: localAct.nombre,
@@ -264,8 +259,7 @@ export default function DefinirActividadesProcesoPage() {
           activityIdToLink = existingGlobalActivity.id;
           const updatedAssociatedIds = Array.from(new Set([...(existingGlobalActivity.procesosAsociadosIds || []), parentProcess.id]));
           
-          updateGlobalActivity(existingGlobalActivity.id, {
-            ...existingGlobalActivity,
+          await updateGlobalActivity(existingGlobalActivity.id, {
             ...activityDataPayload,
             procesosAsociadosIds: updatedAssociatedIds,
           });
@@ -275,9 +269,8 @@ export default function DefinirActividadesProcesoPage() {
             activa: true,
             procesosAsociadosIds: [parentProcess.id],
           };
-          const addedActivity = addGlobalActivity(newGlobalActData); 
+          const addedActivity = await addGlobalActivity(newGlobalActData); 
           activityIdToLink = addedActivity.id;
-          currentGlobalActivities.push(addedActivity); 
         }
         finalActivityIdsForProcessOrder.push(activityIdToLink);
       }
@@ -290,7 +283,7 @@ export default function DefinirActividadesProcesoPage() {
         allProcesses[processIndex] = {
           ...allProcesses[processIndex],
           activityOrder: finalActivityIdsForProcessOrder,
-          updatedAt: Date.now(), // Update parent process's updatedAt timestamp
+          updatedAt: Date.now(),
         };
         localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allProcesses));
         toast({ title: "Éxito", description: `Actividades guardadas y vinculadas al proceso '${parentProcess.proceso}'.` });
@@ -308,7 +301,7 @@ export default function DefinirActividadesProcesoPage() {
   };
 
 
-  if (isLoading || !parentProcess) {
+  if (isLoading || !parentProcess || isLoadingGlobalActividades) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />

@@ -1,10 +1,12 @@
 
-
 'use client';
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
+import { toast } from '@/hooks/use-toast';
 import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 
 export interface CambioHistorial {
@@ -20,9 +22,9 @@ export interface Actividad {
   activa: boolean;
   procesosAsociadosCount: number;
   procesosAsociadosIds?: string[];
-  createdAt: number; // Timestamp of creation
+  createdAt: number; 
   updatedAt?: number;
-  deletedAt?: number;
+  deletedAt?: number; 
   descripcionBreve?: string;
   sistemaUtilizado?: string;
   historialDeCambios?: CambioHistorial[];
@@ -31,18 +33,17 @@ export interface Actividad {
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Actividad;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => void;
-  softDeleteActividad: (id: string) => void;
-  restoreActividad: (id: string) => void;
-  toggleActividadStatus: (actividadToToggle: Actividad) => void;
+  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Promise<Actividad>;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  softDeleteActividad: (id: string) => Promise<void>;
+  restoreActividad: (id: string) => Promise<void>;
+  toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
   isLoadingActividades: boolean;
 }
 
 const ActividadesContext = createContext<ActividadesContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_ACTIVIDADES_KEY = 'proceza-actividades';
-const LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY = 'proceza-deleted-actividades';
+const ACTIVIDADES_COLLECTION = 'actividades';
 const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 export function ActividadesProvider({ children }: { children: ReactNode }) {
@@ -50,72 +51,71 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [isLoadingActividades, setIsLoadingActividades] = useState(true);
   const { addLogEntry } = useActivityLog();
-  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedActividades = localStorage.getItem(LOCAL_STORAGE_ACTIVIDADES_KEY);
-        if (savedActividades) {
-          const parsedActividades = JSON.parse(savedActividades) as Actividad[];
-          setActividades(parsedActividades.map(act => ({
-            ...act,
-            createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now() 
-          })));
-        }
-        const savedDeletedActividades = localStorage.getItem(LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY);
-        if (savedDeletedActividades) {
-          const parsedDeleted = JSON.parse(savedDeletedActividades) as Actividad[];
-           setDeletedActividades(parsedDeleted.map(act => ({
-            ...act,
-            createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now()
-          })));
-        }
-        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-        if (storedProcesses) {
-            setAllProcesses(JSON.parse(storedProcesses));
-        }
-      } catch (error) {
-        console.error("Failed to load actividades from localStorage", error);
-        setActividades([]);
-        setDeletedActividades([]);
-      } finally {
+    const q = query(collection(db, ACTIVIDADES_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const docCreatedAt = data.createdAt;
+            const docUpdatedAt = data.updatedAt;
+            const docDeletedAt = data.deletedAt;
+
+            return {
+                id: doc.id,
+                ...data,
+                procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
+                createdAt: docCreatedAt?.toMillis ? docCreatedAt.toMillis() : (typeof docCreatedAt === 'number' ? docCreatedAt : 0),
+                updatedAt: docUpdatedAt?.toMillis ? docUpdatedAt.toMillis() : (typeof docUpdatedAt === 'number' ? docUpdatedAt : undefined),
+                deletedAt: docDeletedAt?.toMillis ? docDeletedAt.toMillis() : (typeof docDeletedAt === 'number' ? docDeletedAt : undefined),
+            } as Actividad;
+        });
+        
+        setActividades(allData.filter(act => !act.deletedAt).sort((a,b) => b.createdAt - a.createdAt));
+        setDeletedActividades(allData.filter(act => !!act.deletedAt).sort((a,b) => (b.deletedAt || 0) - (a.deletedAt || 0)));
         setIsLoadingActividades(false);
-      }
-    } else {
-      setIsLoadingActividades(false);
-    }
+    }, (error) => {
+        console.error("Error fetching actividades: ", error);
+        setIsLoadingActividades(false);
+        toast({ title: "Error de Red", description: "No se pudieron cargar las actividades.", variant: "destructive" });
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingActividades) {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_ACTIVIDADES_KEY, JSON.stringify(actividades));
-        localStorage.setItem(LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY, JSON.stringify(deletedActividades));
-      } catch (error) {
-        console.error("Failed to save actividades to localStorage", error);
-      }
+  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Promise<Actividad> => {
+    try {
+      const payload = {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        activa: data.activa === undefined ? true : data.activa,
+        historialDeCambios: [],
+        deletedAt: null,
+      };
+      const docRef = await addDoc(collection(db, ACTIVIDADES_COLLECTION), payload);
+      addLogEntry({ action: 'create', entityType: 'Actividad', entityName: data.nombre, details: `Se creó la actividad "${data.nombre}".` });
+      
+      const currentTime = Date.now();
+      const newActividad: Actividad = {
+          ...data,
+          id: docRef.id,
+          createdAt: currentTime,
+          updatedAt: currentTime,
+          procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
+          historialDeCambios: [],
+      };
+      return newActividad;
+    } catch(e) {
+      console.error("Error adding actividad: ", e);
+      toast({ title: "Error", description: "No se pudo agregar la actividad.", variant: "destructive"});
+      throw e;
     }
-  }, [actividades, deletedActividades, isLoadingActividades]);
-
-  const addActividad = useCallback((data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Actividad => {
-    const currentTime = Date.now();
-    const newActividad: Actividad = {
-      ...data,
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      createdAt: currentTime,
-      procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
-      updatedAt: currentTime,
-      activa: data.activa === undefined ? true : data.activa,
-      historialDeCambios: [],
-    };
-    setActividades((prev) => [...prev, newActividad]);
-    addLogEntry({ action: 'create', entityType: 'Actividad', entityName: newActividad.nombre, details: `Se creó la actividad "${newActividad.nombre}".` });
-    return newActividad;
   }, [addLogEntry]);
 
-  const updateActividad = useCallback((id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
-    const originalActividad = actividades.find(a => a.id === id);
+  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    const allKnownActivities = [...actividades, ...deletedActividades];
+    const originalActividad = allKnownActivities.find(a => a.id === id);
     if (!originalActividad) return;
     
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
@@ -147,63 +147,74 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
          });
     }
 
-    setActividades((prev) =>
-      prev.map((act) =>
-        act.id === id ? { 
-          ...act, 
-          ...data, 
-          procesosAsociadosCount: data.procesosAsociadosIds?.length ?? act.procesosAsociadosCount, 
-          updatedAt: Date.now(),
-          historialDeCambios: [...(act.historialDeCambios || []), ...changes]
-        } : act
-      )
-    );
-  }, [actividades, addLogEntry]);
+    const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
+    try {
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+        historialDeCambios: [...(originalActividad.historialDeCambios || []), ...changes]
+      });
+    } catch(e) {
+      console.error("Error updating actividad: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar la actividad.", variant: "destructive"});
+    }
+  }, [actividades, deletedActividades, addLogEntry]);
 
-  const softDeleteActividad = useCallback((id: string) => {
+  const softDeleteActividad = useCallback(async (id: string) => {
     const activityToMove = actividades.find(act => act.id === id);
     if (activityToMove) {
-      const currentTime = Date.now();
-      setDeletedActividades(prev => [...prev, { ...activityToMove, deletedAt: currentTime, updatedAt: currentTime }]);
-      setActividades(prev => prev.filter(act => act.id !== id));
-      addLogEntry({ action: 'delete', entityType: 'Actividad', entityName: activityToMove.nombre, details: `Se eliminó la actividad "${activityToMove.nombre}".` });
+      try {
+        const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
+        await updateDoc(docRef, {
+          deletedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        addLogEntry({ action: 'delete', entityType: 'Actividad', entityName: activityToMove.nombre, details: `Se eliminó la actividad "${activityToMove.nombre}".` });
+      } catch (e) {
+        console.error("Error deleting actividad: ", e);
+        toast({ title: "Error", description: "No se pudo eliminar la actividad.", variant: "destructive"});
+      }
     }
   }, [actividades, addLogEntry]);
 
-  const restoreActividad = useCallback((id: string) => {
+  const restoreActividad = useCallback(async (id: string) => {
     const activityToRestore = deletedActividades.find(act => act.id === id);
     if (activityToRestore) {
-      const { deletedAt, ...restoredActivityBase } = activityToRestore;
-      const restoredActivity = { ...restoredActivityBase, activa: true, updatedAt: Date.now() };
-      setActividades(prev => [...prev, restoredActivity]);
-      setDeletedActividades(prev => prev.filter(act => act.id !== id));
-       addLogEntry({ action: 'restore', entityType: 'Actividad', entityName: restoredActivity.nombre, details: `Se restauró la actividad "${restoredActivity.nombre}".` });
+      try {
+        const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
+        await updateDoc(docRef, {
+            deletedAt: null,
+            activa: true,
+            updatedAt: serverTimestamp(),
+        });
+        addLogEntry({ action: 'restore', entityType: 'Actividad', entityName: activityToRestore.nombre, details: `Se restauró la actividad "${activityToRestore.nombre}".` });
+      } catch(e) {
+        console.error("Error restoring actividad: ", e);
+        toast({ title: "Error", description: "No se pudo restaurar la actividad.", variant: "destructive"});
+      }
     }
   }, [deletedActividades, addLogEntry]);
 
-  const toggleActividadStatus = useCallback((actividadToToggle: Actividad) => {
-    const findMatch = (act: Actividad) => act.id === actividadToToggle.id && act.createdAt === actividadToToggle.createdAt;
-
-    const activityInState = actividades.find(findMatch);
-
-    if (activityInState) { 
-       const change: CambioHistorial = {
-          timestamp: new Date().toISOString(),
-          field: 'activo',
-          before: activityInState.activa,
-          after: !activityInState.activa,
-      };
-      addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: activityInState.nombre, details: `El estado de la actividad "${activityInState.nombre}" cambió a ${!activityInState.activa ? 'Activa' : 'Inactiva'}.` });
-      setActividades((prev) =>
-        prev.map((act) => {
-          if (findMatch(act)) {
-            return { ...act, activa: !act.activa, updatedAt: Date.now(), historialDeCambios: [...(act.historialDeCambios || []), change] };
-          }
-          return act;
-        })
-      );
+  const toggleActividadStatus = useCallback(async (actividadToToggle: Actividad) => {
+    const change: CambioHistorial = {
+      timestamp: new Date().toISOString(),
+      field: 'activo',
+      before: actividadToToggle.activa,
+      after: !actividadToToggle.activa,
+    };
+    try {
+        const docRef = doc(db, ACTIVIDADES_COLLECTION, actividadToToggle.id);
+        await updateDoc(docRef, {
+          activa: !actividadToToggle.activa,
+          updatedAt: serverTimestamp(),
+          historialDeCambios: [...(actividadToToggle.historialDeCambios || []), change]
+        });
+        addLogEntry({ action: 'status_change', entityType: 'Actividad', entityName: actividadToToggle.nombre, details: `El estado de la actividad "${actividadToToggle.nombre}" cambió a ${!actividadToToggle.activa ? 'Activa' : 'Inactiva'}.` });
+    } catch(e) {
+        console.error("Error toggling actividad status: ", e);
+        toast({ title: "Error", description: "No se pudo cambiar el estado de la actividad.", variant: "destructive"});
     }
-  }, [actividades, addLogEntry]);
+  }, [addLogEntry]);
 
 
   return (
