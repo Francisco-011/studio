@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -73,6 +74,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 
 export interface CambioHistorial {
@@ -181,6 +183,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities, isLoadingActividades } = useActividades();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { addLogEntry } = useActivityLog();
   
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -406,12 +409,14 @@ export default function ProcesosYFlujosRegistradosPage() {
   }, [allCapturedData]);
 
   const promptDeleteProcess = (proc: CapturedProcess) => { setProcessToDelete(proc); setIsConfirmDeleteProcessOpen(true); };
+  
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
     try {
       const updatedData = allCapturedData.map(p => p.id === processToDelete.id ? { ...p, deletedAt: new Date().toISOString(), updatedAt: Date.now() } : p);
       setAllCapturedData(updatedData);
       toast({ title: "Proceso Eliminado", variant: 'destructive' });
+      addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: processToDelete.proceso, details: `Proceso "${processToDelete.proceso}" movido a la papelera.`});
     } catch (error) {
       toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive"});
     }
@@ -420,8 +425,10 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
   const handleRestoreProcess = (id: string) => {
     try {
+      let restoredProcessName = '';
       const updatedData = allCapturedData.map(p => {
         if (p.id === id) {
+          restoredProcessName = p.proceso;
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { deletedAt, ...restoredProc } = p;
           return { ...restoredProc, activo: true, updatedAt: Date.now() };
@@ -430,6 +437,7 @@ export default function ProcesosYFlujosRegistradosPage() {
       });
       setAllCapturedData(updatedData);
       toast({ title: "Proceso Restaurado" });
+      addLogEntry({ action: 'restore', entityType: 'Proceso', entityName: restoredProcessName, details: `Se restauró el proceso "${restoredProcessName}".`});
     } catch (error) {
       toast({ title: "Error al Restaurar", variant: "destructive"});
     }
@@ -449,6 +457,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     const updatedData = allCapturedData.map(p => p.id === processId ? { ...p, activo: targetStatus, updatedAt: Date.now() } : p);
     setAllCapturedData(updatedData);
     toast({ title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}` });
+    addLogEntry({ action: 'status_change', entityType: 'Proceso', entityName: processToToggle.proceso, details: `El estado del proceso "${processToToggle.proceso}" cambió a ${targetStatus ? 'Activo' : 'Inactivo'}.`});
   };
 
   const handleOpenEditDialog = (proc: CapturedProcess) => {
@@ -543,6 +552,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (changes.length > 0) {
       setAllCapturedData(dataWithChanges);
       toast({ title: "Proceso Actualizado", description: `${changes.length} campo(s) fueron modificados.` });
+      addLogEntry({ action: 'update', entityType: 'Proceso', entityName: values.proceso, details: `Se actualizó el proceso "${values.proceso}".`});
     } else {
        toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar." });
     }

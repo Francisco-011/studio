@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -36,7 +37,7 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from '@/components/ui/separator';
 import { Label } from "@/components/ui/label";
+import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -248,6 +250,7 @@ export default function UsuariosPage() {
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { addLogEntry } = useActivityLog();
   
   // Permissions Management State
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, Record<string, boolean>>>(initialRolePermissions);
@@ -295,9 +298,12 @@ export default function UsuariosPage() {
     if (editingUser) {
       setUsers(users.map((user) => (user.id === editingUser.id ? { ...user, ...data } : user)));
       toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
+      addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el usuario "${data.nombreCompleto}".` });
     } else {
-      setUsers([...users, { id: Date.now().toString(), ...data }]);
+      const newUser = { id: Date.now().toString(), ...data };
+      setUsers([...users, newUser]);
       toast({ title: 'Usuario Agregado', description: 'El nuevo usuario ha sido agregado exitosamente.' });
+      addLogEntry({ action: 'create', entityType: 'Usuario', entityName: newUser.nombreCompleto, details: `Se creó el usuario "${newUser.nombreCompleto}".` });
     }
     setEditingUser(null);
     setIsUserDialogOpen(false);
@@ -318,22 +324,28 @@ export default function UsuariosPage() {
     if (!userToDelete) return;
     setUsers(users.filter((user) => user.id !== userToDelete.id));
     toast({ title: 'Usuario Eliminado', description: `El usuario "${userToDelete.nombreCompleto}" ha sido eliminado.`, variant: 'destructive' });
+    addLogEntry({ action: 'delete', entityType: 'Usuario', entityName: userToDelete.nombreCompleto, details: `Se eliminó el usuario "${userToDelete.nombreCompleto}".` });
     setUserToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
   
   function handleToggleUserStatus(userId: string) {
+    let userActual: User | undefined;
     setUsers(
-      users.map((user) =>
-        user.id === userId ? { ...user, activo: !user.activo } : user
-      )
+      users.map((user) => {
+        if (user.id === userId) {
+          userActual = { ...user, activo: !user.activo };
+          return userActual;
+        }
+        return user;
+      })
     );
-    const userActual = users.find(user => user.id === userId);
     if (userActual) {
       toast({
-        title: `Usuario ${!userActual.activo ? 'Activado' : 'Desactivado'}`,
-        description: `El usuario "${userActual.nombreCompleto}" ha sido ${!userActual.activo ? 'activado' : 'desactivado'}.`,
+        title: `Usuario ${userActual.activo ? 'Activado' : 'Desactivado'}`,
+        description: `El usuario "${userActual.nombreCompleto}" ha sido ${userActual.activo ? 'activado' : 'desactivado'}.`,
       });
+      addLogEntry({ action: 'status_change', entityType: 'Usuario', entityName: userActual.nombreCompleto, details: `Estado del usuario "${userActual.nombreCompleto}" cambiado a ${userActual.activo ? 'Activo' : 'Inactivo'}.` });
     }
   }
 
@@ -383,6 +395,7 @@ export default function UsuariosPage() {
       title: 'Permisos Guardados',
       description: `Los permisos para el rol '${selectedRole}' han sido actualizados.`,
     });
+    addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRole, details: `Se actualizaron los permisos para el rol "${selectedRole}".` });
   };
 
 

@@ -22,6 +22,7 @@ import { toast } from '@/hooks/use-toast';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
@@ -97,6 +98,7 @@ export default function PanelJerarquicoPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, updateActividad, isLoadingActividades } = useActividades();
+  const { addLogEntry } = useActivityLog();
   
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
@@ -514,6 +516,11 @@ export default function PanelJerarquicoPage() {
 
             const targetArea = areas.find(a => a.id === targetPuesto.areaId);
             const targetDepto = departamentos.find(d => d.id === targetPuesto.departamentoId);
+            const processToUpdate = capturedProcesses.find(p => p.id === processId);
+            
+            if (!processToUpdate) return;
+            addLogEntry({ action: 'update', entityType: 'Proceso', entityName: processToUpdate.proceso, details: `Proceso movido al puesto: ${targetPuesto.nombre}.`});
+
 
             setCapturedProcesses(prevProcesses => {
                 const processToUpdate = prevProcesses.find(p => p.id === processId);
@@ -615,6 +622,7 @@ export default function PanelJerarquicoPage() {
                         updatedAt: Date.now(),
                         historialDeCambios: [...(originalProcess.historialDeCambios || []), change],
                     };
+                    addLogEntry({ action: 'update', entityType: 'Proceso', entityName: originalProcess.proceso, details: 'Se modificó el orden de las actividades.' });
                 }
             }
         };
@@ -1287,4 +1295,3 @@ export default function PanelJerarquicoPage() {
     </div>
   );
 }
-
