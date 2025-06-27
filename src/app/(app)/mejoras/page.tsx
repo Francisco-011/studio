@@ -13,6 +13,7 @@ import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } f
 import { useAcciones, type Accion, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePuestos } from '@/contexts/PuestosContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 
 const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
@@ -81,6 +82,7 @@ export default function MejorasPage() {
   const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
 
 
   const handleAnalyzeInefficiencies = async () => {
@@ -88,7 +90,8 @@ export default function MejorasPage() {
     setError(null);
     setAnalysisResult(null);
 
-    if (isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos) {
+    const isDataLoading = isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos;
+    if (isDataLoading) {
         toast({
             title: "Cargando datos de configuración",
             description: "Espere un momento mientras se cargan los datos de sistemas, puestos y costos.",
@@ -127,6 +130,8 @@ export default function MejorasPage() {
         .map(p => {
           const puestoData = puestos.find(pst => pst.nombre === p.puesto);
           const puestoInfo = puestoData ? `${p.puesto} (Número de Personas: ${puestoData.numeroPersonas || 'No especificado'})` : p.puesto;
+          
+          const deptoInfo = p.departamento ? `Departamento: ${p.departamento}\n` : '';
 
           const associatedActivitiesText = p.activityOrder?.map(actId => {
             const act = actividades.find(a => a.id === actId);
@@ -136,6 +141,7 @@ export default function MejorasPage() {
           
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
+                 deptoInfo +
                  `Puesto Principal: ${puestoInfo}\n` +
                  `Descripción: ${p.descripcion}\n` +
                  `Frecuencia: ${p.frecuencia}\n` +
@@ -164,7 +170,8 @@ export default function MejorasPage() {
           act.procesosAsociadosIds?.forEach(procId => {
             const proc = activeProcessesForAnalysis.find(p => p.id === procId);
             if (proc) {
-              associatedContexts.add(`Proceso: "${proc.proceso}" (Área: ${proc.area}, Puesto: ${proc.puesto})`);
+              const deptoContext = proc.departamento ? `, Departamento: ${proc.departamento}` : '';
+              associatedContexts.add(`Proceso: "${proc.proceso}" (Área: ${proc.area}${deptoContext}, Puesto: ${proc.puesto})`);
             }
           });
 
@@ -309,13 +316,13 @@ export default function MejorasPage() {
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos} size="lg">
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos ? (
+            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos} size="lg">
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <Sparkles className="mr-2 h-5 w-5" />
               )}
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos ? "Analizando..." : "Analizar Ineficiencias con IA"}
+              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos ? "Analizando..." : "Analizar Ineficiencias con IA"}
             </Button>
             {analysisResult && !isLoading && (
                  <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
