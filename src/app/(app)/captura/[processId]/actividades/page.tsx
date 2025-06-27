@@ -11,6 +11,7 @@ import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; 
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +54,7 @@ export default function DefinirActividadesProcesoPage() {
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos(); 
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
 
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
@@ -120,18 +122,24 @@ export default function DefinirActividadesProcesoPage() {
   }, [processId, router, globalActivities]);
 
   const availableSistemasForActivityForm = useMemo(() => {
-    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || !parentProcess) return [];
-    
+    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || !parentProcess) return [];
+
     const parentAreaObj = areas.find(a => a.nombre === parentProcess.area);
-    const parentPuestoObj = puestos.find(p => p.nombre === parentProcess.puesto);
+    const parentDeptoObj = parentAreaObj ? departamentos.find(d => d.nombre === parentProcess.departamento && d.areaId === parentAreaObj.id) : undefined;
+    const parentPuestoObj = parentAreaObj ? puestos.find(p => {
+        if (p.nombre !== parentProcess.puesto || p.areaId !== parentAreaObj.id) return false;
+        // Check for department match or no-department match
+        return p.departamentoId === (parentDeptoObj ? parentDeptoObj.id : undefined);
+    }) : undefined;
 
     return allConfiguredSistemas.filter(sistema => {
       if (sistema.scope === "Empresa") return true;
       if (sistema.scope === "Área" && parentAreaObj && sistema.scopeId === parentAreaObj.id) return true;
+      if (sistema.scope === "Departamento" && parentDeptoObj && sistema.scopeId === parentDeptoObj.id) return true;
       if (sistema.scope === "Puesto" && parentPuestoObj && sistema.scopeId === parentPuestoObj.id) return true;
       return false;
     }).sort((a,b) => a.nombre.localeCompare(b.nombre));
-  }, [allConfiguredSistemas, parentProcess, areas, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos]);
+  }, [allConfiguredSistemas, parentProcess, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos]);
 
   const openAddActivityDialog = () => {
     activityForm.reset({ 
@@ -436,19 +444,19 @@ export default function DefinirActividadesProcesoPage() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || NO_SYSTEM_SELECTED_VALUE} 
-                      disabled={isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos}
+                      disabled={isLoadingSistemasCostos || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos}
                     >
                       <FormControl>
                         <SelectTrigger>
                             <SelectValue placeholder={
-                                (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) ? "Cargando..." : 
+                                (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) ? "Cargando..." : 
                                 (availableSistemasForActivityForm.length === 0 ? "No hay sistemas aplicables" : "Seleccione un sistema")
                             } />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno / Manual</SelectItem>
-                        {(isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos) ? (
+                        {(isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) ? (
                             <SelectItem value="loading-sistemas" disabled>Cargando...</SelectItem>
                         ) : availableSistemasForActivityForm.length === 0 ? (
                             <SelectItem value="no-sistemas-available" disabled>No hay sistemas para el contexto del proceso</SelectItem>
