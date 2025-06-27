@@ -23,19 +23,21 @@ This document outlines the necessary steps to transition the SIAP prototype into
 
 ---
 
-### Step 2: User Access Control with Firebase Authentication
+### Step 2: User Access Control with Firebase Authentication - COMPLETE
 
 **The Challenge:**
-The current user management system is a simulation. There is no real login, and permissions are handled on the client-side, which is not secure.
+~~The current user management system is a simulation. There is no real login, and permissions are handled on the client-side, which is not secure.~~
 
 **The Solution:**
-Implement **Firebase Authentication** to handle user sign-up, sign-in, and session management securely.
+~~Implement **Firebase Authentication** to handle user sign-up, sign-in, and session management securely.~~
 
 **Action Items:**
-1.  **Enable Auth Provider:** In the Firebase console, enable an authentication method (e.g., Email/Password, Google Sign-In).
-2.  **Create Login Flow:** Build a dedicated login page and the UI for user registration.
-3.  **Protect Routes:** Wrap the application layout to ensure only authenticated users can access the system.
-4.  **User Profile Collection:** Create a `users` collection in Firestore. When a new user signs up via Firebase Auth, create a document for them in this collection, storing their role (`Administrador`, `Consultor`, etc.). This document's ID should be the user's UID from Firebase Auth.
+1.  **Enable Auth Provider:** ~~In the Firebase console, enable an authentication method (e.g., Email/Password, Google Sign-In).~~
+2.  **Create Login Flow:** ~~Build a dedicated login page and the UI for user registration.~~
+3.  **Protect Routes:** ~~Wrap the application layout to ensure only authenticated users can access the system.~~
+4.  **User Profile Collection:** ~~Create a `users` collection in Firestore. When a new user signs up via Firebase Auth, create a document for them in this collection, storing their role (`Administrador`, `Consultor`, etc.). This document's ID should be the user's UID from Firebase Auth.~~
+
+**Status: DONE! The application now has a full authentication flow and user profiles are stored in Firestore.**
 
 ---
 
@@ -78,5 +80,6 @@ Deploy the application using **Firebase App Hosting**.
 1.  **Configuration:** The `apphosting.yaml` file is already set up for a basic deployment.
 2.  **Deploy Command:** Use the Firebase CLI to deploy the application.
 3.  **Benefits:** This provides secure (HTTPS), scalable, and globally-distributed hosting for the SIAP application with minimal configuration.
+
 
 

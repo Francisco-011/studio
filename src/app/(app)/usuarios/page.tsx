@@ -6,6 +6,8 @@ import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -18,16 +20,6 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -50,11 +42,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { Users, Search, PlusCircle, Edit2, Trash2, AlertTriangle, ShieldCheck, Save } from "lucide-react";
+import { Users, Search, Edit2, ShieldCheck, Save, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from '@/components/ui/separator';
 import { Label } from "@/components/ui/label";
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 
@@ -62,8 +53,8 @@ import { useActivityLog } from '@/contexts/ActivityLogContext';
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
 export type UserRole = typeof userRoles[number];
 
-interface User {
-  id: string;
+export interface User {
+  id: string; // This is the UID from Firebase Auth
   nombreCompleto: string;
   email: string;
   rol: UserRole;
@@ -79,14 +70,6 @@ const userFormSchema = z.object({
 });
 type UserFormData = z.infer<typeof userFormSchema>;
 
-// Mock data and constants
-const initialMockUsers: User[] = [
-  { id: '1', nombreCompleto: 'Ana Pérez García', email: 'ana.perez@example.com', rol: 'Administrador', activo: true },
-  { id: '2', nombreCompleto: 'Luis Fernández López', email: 'luis.fernandez@example.com', rol: 'Gerente de Proyecto', activo: true },
-  { id: '3', nombreCompleto: 'Sofía Martínez Rodríguez', email: 'sofia.martinez@example.com', rol: 'Consultor', activo: false },
-  { id: '4', nombreCompleto: 'Carlos Sánchez Gómez', email: 'carlos.sanchez@example.com', rol: 'Usuario Final', activo: true },
-  { id: '5', nombreCompleto: 'Laura Torres Díaz', email: 'laura.torres@example.com', rol: 'Consultor', activo: true },
-];
 const ITEMS_PER_PAGE = 10;
 const LOCAL_STORAGE_PERMISSIONS_KEY = 'proceza-role-permissions';
 
@@ -240,24 +223,40 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
 
 
 export default function UsuariosPage() {
-  // User Management State
-  const [users, setUsers] = useState<User[]>(initialMockUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { addLogEntry } = useActivityLog();
   
-  // Permissions Management State
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, Record<string, boolean>>>(initialRolePermissions);
   const [selectedRole, setSelectedRole] = useState<UserRole>('Administrador');
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
 
-  // Load permissions from localStorage
+  useEffect(() => {
+    setIsLoadingUsers(true);
+    const q = query(collection(db, "users"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const usersData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as User));
+        setUsers(usersData);
+        setIsLoadingUsers(false);
+    }, (error) => {
+        console.error("Error fetching users: ", error);
+        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+        setIsLoadingUsers(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+
   useEffect(() => {
     try {
       const savedPermissions = localStorage.getItem(LOCAL_STORAGE_PERMISSIONS_KEY);
@@ -271,7 +270,6 @@ export default function UsuariosPage() {
     }
   }, []);
 
-  // Save permissions to localStorage
   useEffect(() => {
     if (!isLoadingPermissions) {
       localStorage.setItem(LOCAL_STORAGE_PERMISSIONS_KEY, JSON.stringify(rolePermissions));
@@ -285,29 +283,30 @@ export default function UsuariosPage() {
   });
 
   useEffect(() => {
-    if (isUserDialogOpen) {
-      if (editingUser) {
-        userForm.reset(editingUser);
-      } else {
-        userForm.reset({ nombreCompleto: '', email: '', rol: undefined, activo: true });
-      }
+    if (isUserDialogOpen && editingUser) {
+      userForm.reset(editingUser);
     }
   }, [editingUser, isUserDialogOpen, userForm]);
 
-  function handleUserSubmit(data: UserFormData) {
-    if (editingUser) {
-      setUsers(users.map((user) => (user.id === editingUser.id ? { ...user, ...data } : user)));
-      toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
-      addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el usuario "${data.nombreCompleto}".` });
-    } else {
-      const newUser = { id: Date.now().toString(), ...data };
-      setUsers([...users, newUser]);
-      toast({ title: 'Usuario Agregado', description: 'El nuevo usuario ha sido agregado exitosamente.' });
-      addLogEntry({ action: 'create', entityType: 'Usuario', entityName: newUser.nombreCompleto, details: `Se creó el usuario "${newUser.nombreCompleto}".` });
+  async function handleUserSubmit(data: UserFormData) {
+    if (!editingUser) return;
+    
+    const userDocRef = doc(db, "users", editingUser.id);
+    try {
+        await updateDoc(userDocRef, {
+            nombreCompleto: data.nombreCompleto,
+            rol: data.rol,
+            activo: data.activo,
+        });
+        toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
+        addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el rol/estado del usuario "${data.nombreCompleto}".` });
+    } catch (error) {
+        console.error("Error updating user:", error);
+        toast({ title: "Error", description: "No se pudo actualizar el usuario.", variant: "destructive"});
     }
+    
     setEditingUser(null);
     setIsUserDialogOpen(false);
-    userForm.reset();
   }
 
   function handleEditUser(user: User) {
@@ -315,37 +314,19 @@ export default function UsuariosPage() {
     setIsUserDialogOpen(true);
   }
 
-  function promptDeleteUser(user: User) {
-    setUserToDelete(user);
-    setIsConfirmDeleteDialogOpen(true);
-  }
-
-  function executeDeleteUser() {
-    if (!userToDelete) return;
-    setUsers(users.filter((user) => user.id !== userToDelete.id));
-    toast({ title: 'Usuario Eliminado', description: `El usuario "${userToDelete.nombreCompleto}" ha sido eliminado.`, variant: 'destructive' });
-    addLogEntry({ action: 'delete', entityType: 'Usuario', entityName: userToDelete.nombreCompleto, details: `Se eliminó el usuario "${userToDelete.nombreCompleto}".` });
-    setUserToDelete(null);
-    setIsConfirmDeleteDialogOpen(false);
-  }
-  
-  function handleToggleUserStatus(userId: string) {
-    let userActual: User | undefined;
-    setUsers(
-      users.map((user) => {
-        if (user.id === userId) {
-          userActual = { ...user, activo: !user.activo };
-          return userActual;
-        }
-        return user;
-      })
-    );
-    if (userActual) {
-      toast({
-        title: `Usuario ${userActual.activo ? 'Activado' : 'Desactivado'}`,
-        description: `El usuario "${userActual.nombreCompleto}" ha sido ${userActual.activo ? 'activado' : 'desactivado'}.`,
+  async function handleToggleUserStatus(userToToggle: User) {
+    const userDocRef = doc(db, "users", userToToggle.id);
+    const newStatus = !userToToggle.activo;
+    try {
+      await updateDoc(userDocRef, { activo: newStatus });
+       toast({
+        title: `Usuario ${newStatus ? 'Activado' : 'Desactivado'}`,
+        description: `El usuario "${userToToggle.nombreCompleto}" ha sido ${newStatus ? 'activado' : 'desactivado'}.`,
       });
-      addLogEntry({ action: 'status_change', entityType: 'Usuario', entityName: userActual.nombreCompleto, details: `Estado del usuario "${userActual.nombreCompleto}" cambiado a ${userActual.activo ? 'Activo' : 'Inactivo'}.` });
+      addLogEntry({ action: 'status_change', entityType: 'Usuario', entityName: userToToggle.nombreCompleto, details: `Estado del usuario "${userToToggle.nombreCompleto}" cambiado a ${newStatus ? 'Activo' : 'Inactivo'}.` });
+    } catch (error) {
+      console.error("Error toggling user status:", error);
+      toast({ title: "Error", description: "No se pudo cambiar el estado del usuario.", variant: "destructive" });
     }
   }
 
@@ -390,7 +371,6 @@ export default function UsuariosPage() {
   };
 
   const handleSavePermissions = () => {
-    // The useEffect already handles saving, so this is just for user feedback.
     toast({
       title: 'Permisos Guardados',
       description: `Los permisos para el rol '${selectedRole}' han sido actualizados.`,
@@ -458,111 +438,11 @@ export default function UsuariosPage() {
                       <SelectItem value="inactive">Inactivos</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Dialog open={isUserDialogOpen} onOpenChange={(isOpen) => {
-                    setIsUserDialogOpen(isOpen);
-                    if (!isOpen) {
-                      setEditingUser(null);
-                      userForm.reset({ nombreCompleto: '', email: '', rol: undefined, activo: true });
-                    }
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => { setEditingUser(null); userForm.reset({ nombreCompleto: '', email: '', rol: undefined, activo: true }); setIsUserDialogOpen(true); }} className="w-full sm:w-auto">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar Usuario
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>{editingUser ? 'Editar Usuario' : 'Agregar Nuevo Usuario'}</DialogTitle>
-                        <DialogDescription>
-                          {editingUser ? 'Modifica los detalles del usuario.' : 'Completa la información para agregar un nuevo usuario.'}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <Form {...userForm}>
-                        <form onSubmit={userForm.handleSubmit(handleUserSubmit)} className="space-y-4 py-4">
-                          <FormField
-                            control={userForm.control}
-                            name="nombreCompleto"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Nombre Completo</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Ej: Juan Pérez" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                           <FormField
-                            control={userForm.control}
-                            name="email"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Correo Electrónico</FormLabel>
-                                <FormControl>
-                                  <Input type="email" placeholder="Ej: juan.perez@example.com" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={userForm.control}
-                            name="rol"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Rol</FormLabel>
-                                 <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Seleccione un rol" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {userRoles.map((role) => (
-                                      <SelectItem key={role} value={role}>
-                                        {role}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={userForm.control}
-                            name="activo"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                <div className="space-y-0.5">
-                                  <FormLabel>Estado Activo</FormLabel>
-                                  <FormDescription>
-                                    Indica si el usuario puede acceder al sistema.
-                                  </FormDescription>
-                                </div>
-                                <FormControl>
-                                  <Switch
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button type="button" variant="outline" onClick={() => { setIsUserDialogOpen(false); setEditingUser(null); }}>Cancelar</Button>
-                            </DialogClose>
-                            <Button type="submit">{editingUser ? 'Guardar Cambios' : 'Agregar Usuario'}</Button>
-                          </DialogFooter>
-                        </form>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </div>
 
-              {paginatedUsers.length > 0 ? (
+              {isLoadingUsers ? (<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) :
+              paginatedUsers.length > 0 ? (
                 <>
                 <div className="rounded-md border">
                   <Table>
@@ -572,7 +452,7 @@ export default function UsuariosPage() {
                         <TableHead>Email</TableHead>
                         <TableHead className="text-center">Rol</TableHead>
                         <TableHead className="w-[120px] text-center">Estado</TableHead>
-                        <TableHead className="text-right w-[180px]">Acciones</TableHead>
+                        <TableHead className="text-right w-[140px]">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -591,15 +471,12 @@ export default function UsuariosPage() {
                            <TableCell className="text-right space-x-1">
                             <Switch
                               checked={user.activo}
-                              onCheckedChange={() => handleToggleUserStatus(user.id)}
+                              onCheckedChange={() => handleToggleUserStatus(user)}
                               aria-label={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
                               className="mr-2"
                             />
                             <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)} className="mr-1">
                               <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => promptDeleteUser(user)} className="text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -637,7 +514,7 @@ export default function UsuariosPage() {
                   <p className="text-lg font-semibold text-foreground">No se encontraron usuarios</p>
                   <p className="text-sm text-muted-foreground text-center">
                     {searchTerm || roleFilter !== 'all' || statusFilter !== 'all' ? 'Ajuste los filtros o ' : ''}
-                    Comience agregando un nuevo usuario.
+                    Los usuarios se registran a través de la página de Signup.
                   </p>
                 </div>
               )}
@@ -645,7 +522,7 @@ export default function UsuariosPage() {
 
             <TabsContent value="permissions" className="mt-4">
               <CardDescription className="mb-4">
-                Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardan automáticamente.
+                Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardan automáticamente al cambiar de rol o al presionar "Guardar".
               </CardDescription>
               <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
                 <div className="flex-grow">
@@ -666,6 +543,7 @@ export default function UsuariosPage() {
                 </Button>
               </div>
 
+              {isLoadingPermissions ? (<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : (
               <Accordion type="multiple" className="w-full" defaultValue={Object.keys(PERMISSION_CONFIG)}>
                 {(Object.keys(PERMISSION_CONFIG) as ModuleKey[]).map(moduleKey => (
                   <AccordionItem value={moduleKey} key={moduleKey}>
@@ -693,30 +571,102 @@ export default function UsuariosPage() {
                   </AccordionItem>
                 ))}
               </Accordion>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-
-      <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-                <div className="flex items-center">
-                    <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                    Confirmar Eliminación
-                </div>
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar al usuario "{userToDelete?.nombreCompleto}"? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDeleteUser} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      
+      <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogDescription>
+              Modifica los detalles del usuario. El email no se puede cambiar.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...userForm}>
+            <form onSubmit={userForm.handleSubmit(handleUserSubmit)} className="space-y-4 py-4">
+              <FormField
+                control={userForm.control}
+                name="nombreCompleto"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre Completo</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Juan Pérez" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={userForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Correo Electrónico</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} disabled />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={userForm.control}
+                name="rol"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rol</FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione un rol" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {userRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={userForm.control}
+                name="activo"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Estado Activo</FormLabel>
+                      <FormDescription>
+                        Indica si el usuario puede acceder al sistema.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" onClick={() => { setIsUserDialogOpen(false); setEditingUser(null); }}>Cancelar</Button>
+                </DialogClose>
+                <Button type="submit">Guardar Cambios</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
