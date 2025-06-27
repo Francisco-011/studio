@@ -1,11 +1,11 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp } from "lucide-react";
-import { format, parseISO, isValid } from 'date-fns';
-import { useSistemasCostos, type TipoMoneda } from '@/contexts/SistemasCostosContext';
-import { useAcciones, type Accion } from '@/contexts/AccionesContext';
+import { parseISO } from 'date-fns';
+import { useAcciones } from '@/contexts/AccionesContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -42,20 +42,18 @@ const renderMetric = (value: number | string, loading: boolean) => {
 export default function DashboardPage() {
   const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [allAudits, setAllAudits] = useState<Audit[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingLocalStorage, setIsLoadingLocalStorage] = useState(true);
 
-  const { isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
 
   useEffect(() => {
-    setIsLoadingData(true);
+    setIsLoadingLocalStorage(true);
     try {
       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
       if (storedProcesses) setAllCapturedProcesses(JSON.parse(storedProcesses));
       const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
       if (storedAudits) {
         const parsedAudits = JSON.parse(storedAudits);
-        // Add a safeguard for missing 'findings' array
         const sanitizedAudits = parsedAudits.map((audit: any) => ({
             ...audit,
             findings: audit.findings || [],
@@ -65,7 +63,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
     } finally {
-      setIsLoadingData(false);
+      setIsLoadingLocalStorage(false);
     }
   }, []);
 
@@ -75,35 +73,29 @@ export default function DashboardPage() {
     const completedAudits = allAudits.filter(a => a.status === 'Completada');
 
     const ahorroCostosMap = new Map<string, number>();
-    completedActions.forEach(a => {
-      if (a.ahorroEstimado && a.monedaAhorro) {
-        ahorroCostosMap.set(a.monedaAhorro, (ahorroCostosMap.get(a.monedaAhorro) || 0) + a.ahorroEstimado);
-      }
+    let totalMinutesSaved = 0;
+
+    completedActions.forEach(action => {
+      action.historialDeCambios?.forEach(cambio => {
+          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+          if (ahorro > 0) {
+              if (cambio.field.toLowerCase().includes('costo')) {
+                  const moneda = action.monedaAhorro || 'MXN';
+                  ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + ahorro);
+              }
+              if (cambio.field.toLowerCase().includes('tiempo')) {
+                  totalMinutesSaved += ahorro;
+              }
+          }
+      });
     });
+
     const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
       .map(([currency, total]) => formatDashboardCurrency(total, currency))
       .join(', ') || 'N/A';
 
-    const ahorroPorPeriodo = new Map<string, number>(); // Key: "Instancia", "Día", "Semana", etc. Value: total minutes
-    completedActions.forEach(a => {
-        if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
-            const parts = a.unidadTiempoAhorro.split('/');
-            const unitType = parts[0];
-            const period = parts.length > 1 ? parts[1] : 'Instancia';
-            
-            let minutes = a.ahorroTiempoEstimado;
-            if (unitType.startsWith('Horas')) {
-                minutes *= 60;
-            }
-            ahorroPorPeriodo.set(period, (ahorroPorPeriodo.get(period) || 0) + minutes);
-        }
-    });
-
-    const ahorroTiempoRealizado = Array.from(ahorroPorPeriodo.entries()).map(([period, totalMinutes]) => {
-        const formattedTime = formatMinutesToHours(totalMinutes);
-        return period !== 'Instancia' ? `${formattedTime} /${period}` : formattedTime;
-    }).join(', ') || 'N/A';
-
+    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
+    
     return {
       procesosMapeadosCount: processes.length,
       accionesCompletadasCount: completedActions.length,
@@ -114,7 +106,7 @@ export default function DashboardPage() {
     };
   }, [allCapturedProcesses, globalAcciones, allAudits]);
 
-  const isLoadingAll = isLoadingData || isLoadingAcciones || isLoadingSistemasCostos;
+  const isLoadingAll = isLoadingLocalStorage || isLoadingAcciones;
 
   return (
     <div className="container mx-auto py-8">
