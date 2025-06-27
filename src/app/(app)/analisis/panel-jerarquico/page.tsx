@@ -139,6 +139,30 @@ export default function PanelJerarquicoPage() {
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | null>(null);
   const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | null>(null);
 
+  const availableDepartamentos = useMemo(() => {
+    if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedAreaFilter);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [selectedAreaFilter, areas, departamentos, isLoadingDepartamentos]);
+
+  const availablePuestos = useMemo(() => {
+    if (isLoadingPuestos || selectedAreaFilter === 'all') return puestos;
+    const areaId = areas.find(a => a.nombre === selectedAreaFilter)?.id;
+    if (!areaId) return [];
+    
+    let areaPuestos = puestos.filter(p => p.areaId === areaId);
+
+    if (selectedDeptoFilter !== 'all') {
+      const deptoId = departamentos.find(d => d.nombre === selectedDeptoFilter && d.areaId === areaId)?.id;
+      if (deptoId) {
+        return areaPuestos.filter(p => p.departamentoId === deptoId);
+      }
+      return []; 
+    }
+    
+    return areaPuestos;
+  }, [puestos, areas, departamentos, selectedAreaFilter, selectedDeptoFilter, isLoadingPuestos]);
+
 
   useEffect(() => {
     setIsLoadingProcesses(true);
@@ -903,19 +927,19 @@ export default function PanelJerarquicoPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos los Deptos.</SelectItem>
-                        {departamentos.filter(d => d.areaId === areas.find(a => a.nombre === selectedAreaFilter)?.id).map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
+                        {availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || !!filterByActivityId}>
+                    <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || !!filterByActivityId || selectedAreaFilter === 'all'}>
                       <SelectTrigger className="w-full">
                         <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Filtrar por Puesto" />
+                        <SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos los Puestos</SelectItem>
-                        {puestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
+                        {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
