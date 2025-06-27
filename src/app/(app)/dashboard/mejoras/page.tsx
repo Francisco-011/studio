@@ -374,10 +374,22 @@ export default function MejorasDashboardPage() {
         case 'ahorrosPorArea':
             const ahorrosPorArea = new Map<string, { [key: string]: number }>();
             accionesCompletadas.forEach(a => {
-                if (a.ahorroEstimado && a.monedaAhorro) {
+                let ahorroRealizado = 0;
+                let moneda = a.monedaAhorro;
+                
+                 a.historialDeCambios?.forEach(cambio => {
+                    if (cambio.field.toLowerCase().includes('costo')) {
+                        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+                        if (ahorro > 0) {
+                            ahorroRealizado += ahorro;
+                        }
+                    }
+                });
+
+                if (ahorroRealizado > 0 && moneda) {
                     const areaName = a.area || 'Sin Área Asignada';
                     const current = ahorrosPorArea.get(areaName) || {};
-                    current[a.monedaAhorro] = (current[a.monedaAhorro] || 0) + a.ahorroEstimado;
+                    current[moneda] = (current[moneda] || 0) + ahorroRealizado;
                     ahorrosPorArea.set(areaName, current);
                 }
             });
@@ -397,21 +409,56 @@ export default function MejorasDashboardPage() {
 
         case 'ahorrosPorAccion':
         default:
-             data = accionesCompletadas
-                .filter(a => a.ahorroEstimado && a.monedaAhorro)
-                .map(a => ({
-                    name: a.nombre,
-                    Ahorro: a.ahorroEstimado!,
-                    moneda: a.monedaAhorro!,
-                }));
-            config['Ahorro'] = { label: 'Ahorro', color: 'hsl(var(--chart-1))' };
+            const ahorrosPorAccionMap = new Map<string, { ahorro: number; moneda?: string }>();
+            
+            accionesCompletadas.forEach(accion => {
+                let ahorroRealizado = 0;
+                let moneda = accion.monedaAhorro;
+
+                accion.historialDeCambios?.forEach(cambio => {
+                    if (cambio.field.toLowerCase().includes('costo')) {
+                        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+                        if (ahorro > 0) {
+                            ahorroRealizado += ahorro;
+                        }
+                    }
+                });
+                
+                if (ahorroRealizado > 0) {
+                    ahorrosPorAccionMap.set(accion.nombre, { ahorro: ahorroRealizado, moneda: moneda });
+                }
+            });
+            
+            data = Array.from(ahorrosPorAccionMap.entries()).map(([name, { ahorro, moneda }]) => ({
+                name,
+                Ahorro: ahorro,
+                moneda,
+            }));
+
+            config['Ahorro'] = { label: 'Ahorro Realizado', color: 'hsl(var(--chart-1))' };
+            
             if(isComparing) {
-                 const comparisonData = comparisonAcciones
-                    .filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
-                    .map(a => ({ name: a.nombre, AhorroComp: a.ahorroEstimado! }));
-                const comparisonMap = new Map(comparisonData.map(d => [d.name, d.AhorroComp]));
-                data.forEach(d => (d as any).AhorroComp = comparisonMap.get(d.name) || 0);
-                config['AhorroComp'] = { label: 'Ahorro (Comp)', color: 'hsl(var(--chart-2))' };
+                const comparisonAhorrosMap = new Map<string, { ahorro: number; moneda?: string }>();
+                comparisonAcciones
+                    .filter(a => a.estado === 'Completada')
+                    .forEach(accion => {
+                        let ahorroRealizado = 0;
+                        accion.historialDeCambios?.forEach(cambio => {
+                            if (cambio.field.toLowerCase().includes('costo')) {
+                                const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+                                if (ahorro > 0) {
+                                    ahorroRealizado += ahorro;
+                                }
+                            }
+                        });
+                        if (ahorroRealizado > 0) {
+                            comparisonAhorrosMap.set(accion.nombre, { ahorro: ahorroRealizado, moneda: accion.monedaAhorro });
+                        }
+                    });
+                 const comparisonData = Array.from(comparisonAhorrosMap.entries()).map(([name, { ahorro }]) => ({ name, AhorroComp: ahorro }));
+                 const comparisonMap = new Map(comparisonData.map(d => [d.name, d.AhorroComp]));
+                 data.forEach(d => (d as any).AhorroComp = comparisonMap.get(d.name) || 0);
+                 config['AhorroComp'] = { label: 'Ahorro Realizado (Comp)', color: 'hsl(var(--chart-2))' };
             }
             break;
     }
@@ -433,7 +480,7 @@ export default function MejorasDashboardPage() {
 
   const costosChartConfig: ChartConfig = {
       costoUso: { label: 'Costo por Uso', color: 'hsl(var(--chart-1))' },
-      costoLicencias: { label: 'Costo por Licencias', color: 'hsl(var(--chart-3))' },
+      costoLicencias: { label: 'Costo por Licencias', color: 'hsl(var(--chart-2))' },
   };
 
   const handleExport = (type: 'sistemas' | 'mejoras') => {
@@ -596,7 +643,7 @@ export default function MejorasDashboardPage() {
               </SelectContent>
             </Select>
           </div>
-          <CardDescription>Ahorro monetario anual estimado por cada acción de mejora completada en el período.</CardDescription>
+          <CardDescription>Ahorro monetario anual realizado por cada acción de mejora completada en el período.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
