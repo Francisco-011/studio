@@ -22,6 +22,7 @@ import {
   FolderTree, 
   UploadCloud,
   ChevronRight,
+  LifeBuoy,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -72,6 +73,7 @@ const navItems: NavItem[] = [
         ]
     },
     { href: '/usuarios', label: 'Usuarios', icon: Users },
+    { href: '/ayuda', label: 'Ayuda', icon: LifeBuoy },
 ];
 
 
