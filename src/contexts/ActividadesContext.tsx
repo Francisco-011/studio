@@ -135,7 +135,10 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     });
 
     if (data.procesosAsociadosIds && JSON.stringify(originalActividad.procesosAsociadosIds?.sort()) !== JSON.stringify(data.procesosAsociadosIds.sort())) {
-         const getProcessName = (procId: string) => allProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
+         const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+         const currentProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
+         const getProcessName = (procId: string) => currentProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
+         
          changes.push({
             timestamp: new Date().toISOString(),
             field: 'Procesos Asociados',
@@ -155,7 +158,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         } : act
       )
     );
-  }, [actividades, addLogEntry, allProcesses]);
+  }, [actividades, addLogEntry]);
 
   const softDeleteActividad = useCallback((id: string) => {
     const activityToMove = actividades.find(act => act.id === id);
