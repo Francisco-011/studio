@@ -127,6 +127,7 @@ const renderMetric = (value: number | string, loading: boolean, comparisonValue?
 }
 
 type AhorrosChartType = 'ahorrosPorAccion' | 'ahorrosPorArea';
+type AhorrosMetricType = 'costo' | 'tiempo';
 
 interface ValidatedImprovement {
     id: string;
@@ -155,7 +156,8 @@ export default function MejorasDashboardPage() {
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
   const [ahorrosChartType, setAhorrosChartType] = useState<AhorrosChartType>('ahorrosPorAccion');
-  
+  const [ahorrosMetricType, setAhorrosMetricType] = useState<AhorrosMetricType>('costo');
+
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
@@ -214,24 +216,50 @@ export default function MejorasDashboardPage() {
   const comparisonAcciones = useMemo(() => isComparing ? filterAccionesByCriteria(globalAcciones, comparisonDateRange) : [], [globalAcciones, comparisonDateRange, isComparing, selectedArea, selectedDepartamento, selectedPuesto, areas, departamentos, puestos]);
   
   const processAccionesMetrics = (accionesToProcess: Accion[]) => {
-    const completedActions = accionesToProcess.filter(acc => acc.estado === 'Completada' && acc.historialDeCambios && acc.historialDeCambios.length > 0);
+    const completedActions = accionesToProcess.filter(acc => acc.estado === 'Completada');
     
     const ahorroCostosMap = new Map<string, number>();
     let totalMinutesSaved = 0;
 
     completedActions.forEach(accion => {
-      accion.historialDeCambios?.forEach(cambio => {
-        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-        if (ahorro > 0) {
-          if (cambio.field.toLowerCase().includes('costo')) {
-            const moneda = accion.monedaAhorro || 'MXN';
-            ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + ahorro);
-          }
-          if (cambio.field.toLowerCase().includes('tiempo')) {
-            totalMinutesSaved += ahorro;
-          }
+      // Cost savings
+      const historyCostSavings = accion.historialDeCambios?.reduce((acc, cambio) => {
+        if (cambio.field.toLowerCase().includes('costo')) {
+          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+          return acc + (ahorro > 0 ? ahorro : 0);
         }
-      });
+        return acc;
+      }, 0) || 0;
+
+      let costoRealizado = 0;
+      if (historyCostSavings > 0) {
+        costoRealizado = historyCostSavings;
+      } else if (accion.ahorroEstimado && accion.ahorroEstimado > 0) {
+        costoRealizado = accion.ahorroEstimado;
+      }
+
+      if (costoRealizado > 0) {
+        const moneda = accion.monedaAhorro || 'MXN';
+        ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + costoRealizado);
+      }
+
+      // Time savings
+      const historyTimeSavings = accion.historialDeCambios?.reduce((acc, cambio) => {
+        if (cambio.field.toLowerCase().includes('tiempo')) {
+          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+          return acc + (ahorro > 0 ? ahorro : 0);
+        }
+        return acc;
+      }, 0) || 0;
+
+      let tiempoRealizado = 0;
+      if (historyTimeSavings > 0) {
+        tiempoRealizado = historyTimeSavings;
+      } else if (accion.ahorroTiempoEstimado && accion.ahorroTiempoEstimado > 0) {
+        tiempoRealizado = accion.ahorroTiempoEstimado;
+      }
+      totalMinutesSaved += tiempoRealizado;
+
     });
 
     const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
@@ -244,7 +272,7 @@ export default function MejorasDashboardPage() {
       accionesCompletadasCount: completedActions.length,
       ahorroCostosRealizado,
       ahorroTiempoRealizado,
-      totalAhorroCosto: ahorroCostosMap.get('MXN') || ahorroCostosMap.get('USD') || 0,
+      totalAhorroCosto: Array.from(ahorroCostosMap.values()).reduce((sum, current) => sum + current, 0),
       totalAhorroTiempoMinutos: totalMinutesSaved,
     };
   };
@@ -367,105 +395,81 @@ export default function MejorasDashboardPage() {
   const { ahorrosChartData, ahorrosChartConfig } = useMemo(() => {
     let data: any[] = [];
     const config: ChartConfig = {};
-    
     const accionesCompletadas = filteredAcciones.filter(a => a.estado === 'Completada');
+
+    const getSavings = (accion: Accion, metricType: AhorrosMetricType): {ahorro: number, unidad?: string} => {
+        let ahorroRealizado = 0;
+        let unidad: string | undefined;
+
+        if (metricType === 'costo') {
+            unidad = accion.monedaAhorro;
+            const historySavings = accion.historialDeCambios?.reduce((acc, cambio) => {
+                 if (cambio.field.toLowerCase().includes('costo')) {
+                    const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+                    return acc + (ahorro > 0 ? ahorro : 0);
+                }
+                return acc;
+            }, 0) || 0;
+            if (historySavings > 0) {
+                ahorroRealizado = historySavings;
+            } else if (accion.ahorroEstimado && accion.ahorroEstimado > 0) {
+                ahorroRealizado = accion.ahorroEstimado;
+            }
+        } else { // tiempo
+            unidad = accion.unidadTiempoAhorro;
+            const historySavings = accion.historialDeCambios?.reduce((acc, cambio) => {
+                 if (cambio.field.toLowerCase().includes('tiempo')) {
+                    const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+                    return acc + (ahorro > 0 ? ahorro : 0);
+                }
+                return acc;
+            }, 0) || 0;
+             if (historySavings > 0) {
+                ahorroRealizado = historySavings;
+            } else if (accion.ahorroTiempoEstimado && accion.ahorroTiempoEstimado > 0) {
+                ahorroRealizado = accion.ahorroTiempoEstimado;
+            }
+        }
+        return {ahorro: ahorroRealizado, unidad};
+    }
     
     switch (ahorrosChartType) {
         case 'ahorrosPorArea':
             const ahorrosPorArea = new Map<string, { [key: string]: number }>();
             accionesCompletadas.forEach(a => {
-                let ahorroRealizado = 0;
-                let moneda = a.monedaAhorro;
-                
-                 a.historialDeCambios?.forEach(cambio => {
-                    if (cambio.field.toLowerCase().includes('costo')) {
-                        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-                        if (ahorro > 0) {
-                            ahorroRealizado += ahorro;
-                        }
-                    }
-                });
-
-                if (ahorroRealizado > 0 && moneda) {
+                const { ahorro, unidad } = getSavings(a, ahorrosMetricType);
+                if (ahorro > 0 && unidad) {
                     const areaName = a.area || 'Sin Área Asignada';
                     const current = ahorrosPorArea.get(areaName) || {};
-                    current[moneda] = (current[moneda] || 0) + ahorroRealizado;
+                    current[unidad] = (current[unidad] || 0) + ahorro;
                     ahorrosPorArea.set(areaName, current);
                 }
             });
-            data = Array.from(ahorrosPorArea.entries()).map(([name, values]) => ({
-                name,
-                ...values,
-            }));
-            const allCurrencies = new Set<string>();
-            data.forEach(d => {
-              Object.keys(d).forEach(k => { if(k !== 'name') allCurrencies.add(k) })
-            });
+            data = Array.from(ahorrosPorArea.entries()).map(([name, values]) => ({ name, ...values }));
+            
+            const allKeys = new Set<string>();
+            data.forEach(d => { Object.keys(d).forEach(k => { if(k !== 'name') allKeys.add(k) }) });
             let i = 1;
-            allCurrencies.forEach(currency => {
-              config[currency] = { label: currency, color: `hsl(var(--chart-${i++}))` };
-            });
+            allKeys.forEach(key => { config[key] = { label: key.split('/')[0], color: `hsl(var(--chart-${i++}))` }; });
             break;
 
         case 'ahorrosPorAccion':
         default:
-            const ahorrosPorAccionMap = new Map<string, { ahorro: number; moneda?: string }>();
-            
+            const ahorrosPorAccionMap = new Map<string, { ahorro: number; unidad?: string }>();
             accionesCompletadas.forEach(accion => {
-                let ahorroRealizado = 0;
-                let moneda = accion.monedaAhorro;
-
-                accion.historialDeCambios?.forEach(cambio => {
-                    if (cambio.field.toLowerCase().includes('costo')) {
-                        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-                        if (ahorro > 0) {
-                            ahorroRealizado += ahorro;
-                        }
-                    }
-                });
-                
-                if (ahorroRealizado > 0) {
-                    ahorrosPorAccionMap.set(accion.nombre, { ahorro: ahorroRealizado, moneda: moneda });
+                const { ahorro, unidad } = getSavings(accion, ahorrosMetricType);
+                if (ahorro > 0) {
+                    ahorrosPorAccionMap.set(accion.nombre, { ahorro, unidad });
                 }
             });
-            
-            data = Array.from(ahorrosPorAccionMap.entries()).map(([name, { ahorro, moneda }]) => ({
-                name,
-                Ahorro: ahorro,
-                moneda,
-            }));
-
-            config['Ahorro'] = { label: 'Ahorro Realizado', color: 'hsl(var(--chart-1))' };
-            
-            if(isComparing) {
-                const comparisonAhorrosMap = new Map<string, { ahorro: number; moneda?: string }>();
-                comparisonAcciones
-                    .filter(a => a.estado === 'Completada')
-                    .forEach(accion => {
-                        let ahorroRealizado = 0;
-                        accion.historialDeCambios?.forEach(cambio => {
-                            if (cambio.field.toLowerCase().includes('costo')) {
-                                const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-                                if (ahorro > 0) {
-                                    ahorroRealizado += ahorro;
-                                }
-                            }
-                        });
-                        if (ahorroRealizado > 0) {
-                            comparisonAhorrosMap.set(accion.nombre, { ahorro: ahorroRealizado, moneda: accion.monedaAhorro });
-                        }
-                    });
-                 const comparisonData = Array.from(comparisonAhorrosMap.entries()).map(([name, { ahorro }]) => ({ name, AhorroComp: ahorro }));
-                 const comparisonMap = new Map(comparisonData.map(d => [d.name, d.AhorroComp]));
-                 data.forEach(d => (d as any).AhorroComp = comparisonMap.get(d.name) || 0);
-                 config['AhorroComp'] = { label: 'Ahorro Realizado (Comp)', color: 'hsl(var(--chart-2))' };
-            }
+            data = Array.from(ahorrosPorAccionMap.entries()).map(([name, { ahorro, unidad }]) => ({ name, Ahorro: ahorro, unidad, }));
+            config['Ahorro'] = { label: `Ahorro Realizado (${ahorrosMetricType})`, color: 'hsl(var(--chart-1))' };
             break;
     }
     
     return { ahorrosChartData: data, ahorrosChartConfig: config };
 
-  }, [ahorrosChartType, filteredAcciones, comparisonAcciones, isComparing]);
+  }, [ahorrosChartType, ahorrosMetricType, filteredAcciones]);
 
   const costosChartData = useMemo(() => {
       return filteredSystemCosts
@@ -633,17 +637,26 @@ export default function MejorasDashboardPage() {
       
       <Card className="shadow-lg mb-6">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <CardTitle>Análisis Gráfico de Ahorros</CardTitle>
-            <Select value={ahorrosChartType} onValueChange={(v) => setAhorrosChartType(v as AhorrosChartType)}>
-              <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ahorrosPorAccion">Ahorros Monetarios por Acción</SelectItem>
-                <SelectItem value="ahorrosPorArea">Ahorros Monetarios por Área</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+                <Select value={ahorrosChartType} onValueChange={(v) => setAhorrosChartType(v as AhorrosChartType)}>
+                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ahorrosPorAccion">Por Acción</SelectItem>
+                    <SelectItem value="ahorrosPorArea">Por Área</SelectItem>
+                  </SelectContent>
+                </Select>
+                 <Select value={ahorrosMetricType} onValueChange={(v) => setAhorrosMetricType(v as AhorrosMetricType)}>
+                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="costo">Ahorro Monetario</SelectItem>
+                    <SelectItem value="tiempo">Ahorro de Tiempo</SelectItem>
+                  </SelectContent>
+                </Select>
+            </div>
           </div>
-          <CardDescription>Ahorro monetario anual realizado por cada acción de mejora completada en el período.</CardDescription>
+          <CardDescription>Visualización del ahorro realizado por cada acción de mejora completada en el período.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
@@ -660,12 +673,16 @@ export default function MejorasDashboardPage() {
                       <ChartTooltipContent
                         formatter={(value, name, item) => {
                             const { payload } = item;
-                            const currency = payload.moneda || (typeof name === 'string' ? name : null) || 'N/A';
+                            const unidad = payload.unidad || (typeof name === 'string' ? name : null) || 'N/A';
+                            const formattedValue = ahorrosMetricType === 'costo'
+                                ? formatDashboardCurrency(value as number, unidad)
+                                : formatMinutesToHours(value as number);
+
                             return (
                                 <div className="flex w-full justify-between items-center">
                                     <span>{ahorrosChartConfig[name as string]?.label || name}</span>
                                     <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                      {formatDashboardCurrency(value as number, currency)}
+                                      {formattedValue}
                                     </span>
                                 </div>
                             );
@@ -676,10 +693,7 @@ export default function MejorasDashboardPage() {
                   />
                   <Legend />
                   {ahorrosChartType === 'ahorrosPorAccion' ? (
-                    <>
-                      <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
-                      {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
-                    </>
+                    <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
                   ) : (
                     Object.keys(ahorrosChartConfig).map(key => (
                       <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
