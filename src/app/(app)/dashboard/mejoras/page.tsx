@@ -3,8 +3,8 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, CheckCircle2, TrendingUp, Activity as ActivityIcon, FileSearch2, Clock, Loader2, FileText, CalendarRange } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { DollarSign, CheckCircle2, TrendingUp, Activity as ActivityIcon, FileSearch2, Clock, Loader2, FileText, CalendarRange, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import {
   Table,
   TableBody,
@@ -83,7 +83,7 @@ function calculateAllSystemAnnualCosts(
 
     return {
       id: system.id,
-      name: system.name,
+      name: system.name || '',
       costsByCurrency: Array.from(costsByCurrency.entries()).map(([currency, { annualUsageCost, annualLicenseCost }]) => ({ currency, annualUsageCost, annualLicenseCost })),
       descriptions,
     };
@@ -214,34 +214,40 @@ export default function MejorasDashboardPage() {
   const comparisonAcciones = useMemo(() => isComparing ? filterAccionesByCriteria(globalAcciones, comparisonDateRange) : [], [globalAcciones, comparisonDateRange, isComparing, selectedArea, selectedDepartamento, selectedPuesto, areas, departamentos, puestos]);
   
   const processAccionesMetrics = (accionesToProcess: Accion[]) => {
-      const completedActions = accionesToProcess.filter(acc => acc.estado === 'Completada');
-      const ahorroCostosMap = new Map<string, number>();
-      completedActions.forEach(a => {
-        if (a.ahorroEstimado && a.monedaAhorro) {
-          ahorroCostosMap.set(a.monedaAhorro, (ahorroCostosMap.get(a.monedaAhorro) || 0) + a.ahorroEstimado);
+    const completedActions = accionesToProcess.filter(acc => acc.estado === 'Completada' && acc.historialDeCambios && acc.historialDeCambios.length > 0);
+    
+    const ahorroCostosMap = new Map<string, number>();
+    let totalMinutesSaved = 0;
+
+    completedActions.forEach(accion => {
+      accion.historialDeCambios?.forEach(cambio => {
+        const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+        if (ahorro > 0) {
+          if (cambio.field.toLowerCase().includes('costo')) {
+            const moneda = accion.monedaAhorro || 'MXN';
+            ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + ahorro);
+          }
+          if (cambio.field.toLowerCase().includes('tiempo')) {
+            totalMinutesSaved += ahorro;
+          }
         }
       });
-      
-      let totalMinutesSaved = 0;
-      completedActions.forEach(a => {
-        if (a.ahorroTiempoEstimado && a.unidadTiempoAhorro) {
-            let valueInMinutes = a.ahorroTiempoEstimado;
-            if (a.unidadTiempoAhorro.startsWith('Horas')) {
-                valueInMinutes *= 60;
-            }
-            totalMinutesSaved += valueInMinutes;
-        }
-      });
-      const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
-      
-      return {
-        accionesCompletadasCount: completedActions.length,
-        ahorroCostosRealizado: Array.from(ahorroCostosMap.entries()).map(([currency, total]) => formatDashboardCurrency(total, currency)).join(', ') || 'N/A',
-        ahorroTiempoRealizado,
-        totalAhorroMXN: ahorroCostosMap.get('MXN') || 0,
-        totalAhorroUSD: ahorroCostosMap.get('USD') || 0,
-      };
-  }
+    });
+
+    const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
+      .map(([currency, total]) => formatDashboardCurrency(total, currency))
+      .join(', ') || 'N/A';
+
+    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
+    
+    return {
+      accionesCompletadasCount: completedActions.length,
+      ahorroCostosRealizado,
+      ahorroTiempoRealizado,
+      totalAhorroCosto: ahorroCostosMap.get('MXN') || ahorroCostosMap.get('USD') || 0,
+      totalAhorroTiempoMinutos: totalMinutesSaved,
+    };
+  };
 
   const dashboardMetrics = useMemo(() => {
     if (isLoadingAcciones) {
@@ -251,8 +257,8 @@ export default function MejorasDashboardPage() {
         accionesEnProgresoCount: 0,
         ahorroCostosRealizado: 'N/A',
         ahorroTiempoRealizado: 'N/A',
-        totalAhorroMXN: 0,
-        totalAhorroUSD: 0,
+        totalAhorroCosto: 0,
+        totalAhorroTiempoMinutos: 0,
       };
     }
     const metrics = processAccionesMetrics(filteredAcciones);
@@ -357,16 +363,17 @@ export default function MejorasDashboardPage() {
       return mejoras;
   }, [filteredAcciones, allCapturedProcesses]);
   
-  const { ahorrosChartData, ahorrosChartConfig, ahorrosChartDescription } = useMemo(() => {
-    let data: any[] = [], description = '';
+  const { ahorrosChartData, ahorrosChartConfig } = useMemo(() => {
+    let data: any[] = [];
     const config: ChartConfig = {};
+    
+    const accionesCompletadas = filteredAcciones.filter(a => a.estado === 'Completada');
     
     switch (ahorrosChartType) {
         case 'ahorrosPorArea':
-            description = 'Suma de ahorros anuales estimados por área, desglosado por moneda.';
             const ahorrosPorArea = new Map<string, { [key: string]: number }>();
-            filteredAcciones.forEach(a => {
-                if (a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro) {
+            accionesCompletadas.forEach(a => {
+                if (a.ahorroEstimado && a.monedaAhorro) {
                     const areaName = a.area || 'Sin Área Asignada';
                     const current = ahorrosPorArea.get(areaName) || {};
                     current[a.monedaAhorro] = (current[a.monedaAhorro] || 0) + a.ahorroEstimado;
@@ -389,36 +396,26 @@ export default function MejorasDashboardPage() {
 
         case 'ahorrosPorAccion':
         default:
-            description = 'Ahorro monetario anual estimado por cada acción de mejora completada en el período.';
-            const processChartAcciones = (acciones: Accion[]) => {
-                const dataMap = new Map<string, { ahorro: number, moneda: string }>();
-                acciones.filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
-                    .forEach(a => {
-                        const current = dataMap.get(a.nombre) || { ahorro: 0, moneda: a.monedaAhorro! };
-                        current.ahorro += a.ahorroEstimado!;
-                        dataMap.set(a.nombre, current);
-                    });
-                return dataMap;
-            };
-
-            const primaryData = processChartAcciones(filteredAcciones);
-            const comparisonData = isComparing ? processChartAcciones(comparisonAcciones) : new Map();
-            
-            const allNames = new Set([...primaryData.keys(), ...comparisonData.keys()]);
-            
-            data = Array.from(allNames).map(name => ({
-                name,
-                Ahorro: primaryData.get(name)?.ahorro || 0,
-                AhorroComp: comparisonData.get(name)?.ahorro || 0,
-                moneda: primaryData.get(name)?.moneda || comparisonData.get(name)?.moneda || '',
-            }));
-            
-            config['Ahorro'] = { label: 'Ahorro Periodo Actual', color: 'hsl(var(--chart-1))' };
-            config['AhorroComp'] = { label: 'Ahorro Periodo Comp.', color: 'hsl(var(--chart-2))' };
+             data = accionesCompletadas
+                .filter(a => a.ahorroEstimado && a.monedaAhorro)
+                .map(a => ({
+                    name: a.nombre,
+                    Ahorro: a.ahorroEstimado!,
+                    moneda: a.monedaAhorro!,
+                }));
+            config['Ahorro'] = { label: 'Ahorro', color: 'hsl(var(--chart-1))' };
+            if(isComparing) {
+                 const comparisonData = comparisonAcciones
+                    .filter(a => a.estado === 'Completada' && a.ahorroEstimado && a.monedaAhorro)
+                    .map(a => ({ name: a.nombre, AhorroComp: a.ahorroEstimado! }));
+                const comparisonMap = new Map(comparisonData.map(d => [d.name, d.AhorroComp]));
+                data.forEach(d => (d as any).AhorroComp = comparisonMap.get(d.name) || 0);
+                config['AhorroComp'] = { label: 'Ahorro (Comp)', color: 'hsl(var(--chart-2))' };
+            }
             break;
     }
     
-    return { ahorrosChartData: data, ahorrosChartConfig: config, ahorrosChartDescription: description };
+    return { ahorrosChartData: data, ahorrosChartConfig: config };
 
   }, [ahorrosChartType, filteredAcciones, comparisonAcciones, isComparing]);
 
@@ -427,14 +424,14 @@ export default function MejorasDashboardPage() {
           .filter(sys => sys.currency !== 'N/A')
           .map(sys => ({
               name: `${sys.name} (${sys.currency})`,
-              CostoUso: sys.annualUsageCost,
-              CostoLicencias: sys.annualLicenseCost,
+              'Costo por Uso': sys.annualUsageCost,
+              'Costo por Licencias': sys.annualLicenseCost,
           }));
   }, [filteredSystemCosts]);
 
   const costosChartConfig: ChartConfig = {
-      CostoUso: { label: 'Costo Uso', color: 'hsl(var(--chart-2))' },
-      CostoLicencias: { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' },
+      'Costo por Uso': { label: 'Costo por Uso', color: 'hsl(var(--chart-2))' },
+      'Costo por Licencias': { label: 'Costo por Licencias', color: 'hsl(var(--chart-1))' },
   };
 
   const handleExport = (type: 'sistemas' | 'mejoras') => {
@@ -565,11 +562,11 @@ export default function MejorasDashboardPage() {
        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro Anual Realizado</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.totalAhorroUSD, comparisonMetrics.totalAhorroUSD) : undefined)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroCostosRealizado, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.totalAhorroCosto, comparisonMetrics.totalAhorroCosto) : undefined)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Ahorro de Tiempo</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroTiempoRealizado, isLoadingAll)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
+            <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.ahorroTiempoRealizado, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.totalAhorroTiempoMinutos, comparisonMetrics.totalAhorroTiempoMinutos) : undefined)}</div><p className="text-xs text-muted-foreground">De acciones completadas</p></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Acciones Completadas</CardTitle><CheckCircle2 className="h-4 w-4 text-muted-foreground" /></CardHeader>
@@ -584,78 +581,6 @@ export default function MejorasDashboardPage() {
             <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.accionesEnRevisionCount, isLoadingAll)}</div><p className="text-xs text-muted-foreground">Pendientes de aprobación</p></CardContent>
         </Card>
       </div>
-      
-      <Card className="shadow-lg mb-8">
-        <CardHeader>
-           <div className="flex justify-between items-center">
-              <CardTitle>Análisis Gráfico de Ahorros</CardTitle>
-              <Select value={ahorrosChartType} onValueChange={(v) => setAhorrosChartType(v as AhorrosChartType)}>
-                  <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                      <SelectItem value="ahorrosPorAccion">Ahorros Monetarios por Acción</SelectItem>
-                      <SelectItem value="ahorrosPorArea">Ahorros Monetarios por Área</SelectItem>
-                  </SelectContent>
-              </Select>
-           </div>
-            <CardDescription>{ahorrosChartDescription}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
-          ahorrosChartData.length > 0 ? (
-            <ChartContainer config={ahorrosChartConfig} className="min-h-[300px] w-full">
-                <ResponsiveContainer>
-                    <BarChart data={ahorrosChartData} layout="vertical">
-                        <CartesianGrid horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
-                        <Tooltip
-                            cursor={{ fill: "hsl(var(--muted))" }}
-                            content={
-                                <ChartTooltipContent
-                                    formatter={(value, name, item) => {
-                                        const { payload } = item;
-                                        const currency = payload.moneda || name || 'N/A';
-                                        return (
-                                            <div className="flex w-full justify-between items-center">
-                                                <span>{ahorrosChartConfig[name]?.label || name}</span>
-                                                <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                                  {formatDashboardCurrency(value as number, currency)}
-                                                </span>
-                                            </div>
-                                        );
-                                    }}
-                                    labelClassName="font-bold"
-                                />
-                            }
-                        />
-                        <Legend />
-                        {(() => {
-                            switch (ahorrosChartType) {
-                                case 'ahorrosPorAccion':
-                                    return (
-                                        <>
-                                            <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
-                                            {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
-                                        </>
-                                    );
-                                case 'ahorrosPorArea':
-                                    return Object.keys(ahorrosChartConfig).map(key => (
-                                        <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
-                                    ));
-                                default:
-                                    return null;
-                            }
-                        })()}
-                    </BarChart>
-                </ResponsiveContainer>
-            </ChartContainer>
-          ) : (
-              <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-                  <p className="text-muted-foreground">No hay datos de ahorros para graficar con los filtros seleccionados.</p>
-              </div>
-          )}
-        </CardContent>
-      </Card>
       
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="shadow-lg">
@@ -704,6 +629,72 @@ export default function MejorasDashboardPage() {
         </Card>
 
         <Card className="shadow-lg">
+          <CardHeader>
+           <div className="flex justify-between items-center">
+              <CardTitle>Análisis Gráfico de Ahorros</CardTitle>
+              <Select value={ahorrosChartType} onValueChange={(v) => setAhorrosChartType(v as AhorrosChartType)}>
+                  <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="ahorrosPorAccion">Ahorros Monetarios por Acción</SelectItem>
+                      <SelectItem value="ahorrosPorArea">Ahorros Monetarios por Área</SelectItem>
+                  </SelectContent>
+              </Select>
+           </div>
+            <CardDescription>Ahorro monetario anual estimado por cada acción de mejora completada en el período.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
+            ahorrosChartData.length > 0 ? (
+              <ChartContainer config={ahorrosChartConfig} className="min-h-[300px] w-full">
+                  <ResponsiveContainer>
+                      <BarChart data={ahorrosChartData} layout="vertical">
+                          <CartesianGrid horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
+                          <Tooltip
+                              cursor={{ fill: "hsl(var(--muted))" }}
+                              content={
+                                  <ChartTooltipContent
+                                      formatter={(value, name, item) => {
+                                          const { payload } = item;
+                                          const currency = payload.moneda || name || 'N/A';
+                                          return (
+                                              <div className="flex w-full justify-between items-center">
+                                                  <span>{ahorrosChartConfig[name]?.label || name}</span>
+                                                  <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                    {formatDashboardCurrency(value as number, currency)}
+                                                  </span>
+                                              </div>
+                                          );
+                                      }}
+                                      labelClassName="font-bold"
+                                  />
+                              }
+                          />
+                          <Legend />
+                          {ahorrosChartType === 'ahorrosPorAccion' ? (
+                            <>
+                              <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
+                              {isComparing && <Bar dataKey="AhorroComp" fill="var(--color-AhorroComp)" radius={4} opacity={0.6} />}
+                            </>
+                          ) : (
+                            Object.keys(ahorrosChartConfig).map(key => (
+                              <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
+                            ))
+                          )}
+                      </BarChart>
+                  </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+                <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
+                    <p className="text-muted-foreground">No hay datos de ahorros para graficar.</p>
+                </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-lg mt-6">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Análisis de Costos de Sistemas</CardTitle>
@@ -714,8 +705,7 @@ export default function MejorasDashboardPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            : (
+            {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> :
               <>
                 <div className="min-h-[250px] mb-4">
                   {costosChartData.length > 0 ? (
@@ -740,12 +730,12 @@ export default function MejorasDashboardPage() {
                                   }} />}
                               />
                               <Legend />
-                              <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="Costo por Uso" stackId="a" fill="var(--color-Costo por Uso)" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey="Costo por Licencias" stackId="a" fill="var(--color-Costo por Licencias)" radius={[4, 4, 0, 0]} />
                           </BarChart>
                       </ResponsiveContainer>
                     </ChartContainer>
-                  ) : <p className="text-muted-foreground text-sm flex items-center justify-center h-full min-h-[250px]">No hay datos de costos para graficar.</p>}
+                  ) : <div className="flex items-center justify-center min-h-[250px]"><p className="text-muted-foreground text-sm">No hay datos de costos para graficar.</p></div>}
                 </div>
                 <div className="max-h-[200px] overflow-y-auto">
                   <Table>
@@ -785,11 +775,9 @@ export default function MejorasDashboardPage() {
                   </Table>
                 </div>
               </>
-            )}
+            }
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
-
