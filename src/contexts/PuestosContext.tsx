@@ -4,6 +4,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { toast } from '@/hooks/use-toast';
 
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -16,21 +19,22 @@ export interface Puesto {
   jefeInmediato?: string; 
   nivelOrganizacional: NivelOrganizacional;
   numeroPersonas?: number;
+  createdAt?: any;
 }
 
-export type PuestoCreationData = Omit<Puesto, 'id'>;
+export type PuestoCreationData = Omit<Puesto, 'id' | 'createdAt'>;
 
 interface PuestosContextType {
   puestos: Puesto[];
-  addPuesto: (data: PuestoCreationData) => void;
-  updatePuesto: (id: string, data: PuestoCreationData) => void;
-  deletePuesto: (id: string) => void;
+  addPuesto: (data: PuestoCreationData) => Promise<void>;
+  updatePuesto: (id: string, data: PuestoCreationData) => Promise<void>;
+  deletePuesto: (id: string) => Promise<void>;
   isLoadingPuestos: boolean;
 }
 
 const PuestosContext = createContext<PuestosContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_PUESTOS_KEY = 'proceza-puestos';
+const PUESTOS_COLLECTION = 'puestos';
 
 export function PuestosProvider({ children }: { children: ReactNode }) {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
@@ -38,58 +42,61 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedPuestos = localStorage.getItem(LOCAL_STORAGE_PUESTOS_KEY);
-        if (savedPuestos) {
-          setPuestos(JSON.parse(savedPuestos));
-        }
-      } catch (error) {
-        console.error("Failed to load puestos from localStorage", error);
-        setPuestos([]); 
-      } finally {
-        setIsLoadingPuestos(false);
-      }
-    } else {
+    const q = query(collection(db, PUESTOS_COLLECTION), orderBy("nombre", "asc"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const puestosData: Puesto[] = [];
+      querySnapshot.forEach((doc) => {
+        puestosData.push({ id: doc.id, ...doc.data() } as Puesto);
+      });
+      setPuestos(puestosData);
       setIsLoadingPuestos(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingPuestos) {
-        try {
-            localStorage.setItem(LOCAL_STORAGE_PUESTOS_KEY, JSON.stringify(puestos));
-        } catch (error) {
-            console.error("Failed to save puestos to localStorage", error);
-        }
-    }
-  }, [puestos, isLoadingPuestos]);
-
-
-  const addPuesto = useCallback((data: PuestoCreationData) => {
-    const newPuesto = { ...data, id: Date.now().toString() };
-    setPuestos((prevPuestos) => [...prevPuestos, newPuesto]);
-    addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
-  }, [addLogEntry]);
-
-  const updatePuesto = useCallback((id: string, data: PuestoCreationData) => {
-    let originalName = '';
-    setPuestos((prevPuestos) => {
-      const original = prevPuestos.find(p => p.id === id);
-      if (original) originalName = original.nombre;
-      return prevPuestos.map((puesto) => (puesto.id === id ? { ...data, id } : puesto));
+    }, (error) => {
+      console.error("Error fetching puestos from Firestore: ", error);
+      setIsLoadingPuestos(false);
     });
 
-    if (originalName && originalName !== data.nombre) {
-       addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `El puesto "${originalName}" fue renombrado a "${data.nombre}".` });
+    return () => unsubscribe();
+  }, []);
+
+  const addPuesto = useCallback(async (data: PuestoCreationData) => {
+    try {
+      await addDoc(collection(db, PUESTOS_COLLECTION), {
+        ...data,
+        createdAt: serverTimestamp(),
+      });
+      addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
+    } catch(e) {
+      console.error("Error adding puesto: ", e);
+      toast({ title: "Error", description: "No se pudo agregar el puesto.", variant: "destructive"});
     }
   }, [addLogEntry]);
 
-  const deletePuesto = useCallback((id: string) => {
+  const updatePuesto = useCallback(async (id: string, data: PuestoCreationData) => {
+    const puestoDocRef = doc(db, PUESTOS_COLLECTION, id);
+    const originalPuesto = puestos.find(p => p.id === id);
+    try {
+      // Ensure no undefined fields are sent, which Firestore might reject
+      const updateData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+      await updateDoc(puestoDocRef, updateData);
+      if (originalPuesto && originalPuesto.nombre !== data.nombre) {
+        addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `El puesto "${originalPuesto.nombre}" fue renombrado a "${data.nombre}".` });
+      }
+    } catch(e) {
+      console.error("Error updating puesto: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar el puesto.", variant: "destructive"});
+    }
+  }, [puestos, addLogEntry]);
+
+  const deletePuesto = useCallback(async (id: string) => {
     const puestoToDelete = puestos.find(p => p.id === id);
-    if(puestoToDelete) {
-      setPuestos(prevPuestos => prevPuestos.filter((puesto) => puesto.id !== id));
+    if (!puestoToDelete) return;
+    try {
+      await deleteDoc(doc(db, PUESTOS_COLLECTION, id));
       addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
+      toast({ title: "Puesto Eliminado", variant: "destructive" });
+    } catch(e) {
+      console.error("Error deleting puesto: ", e);
+      toast({ title: "Error", description: "No se pudo eliminar el puesto.", variant: "destructive" });
     }
   }, [puestos, addLogEntry]);
 

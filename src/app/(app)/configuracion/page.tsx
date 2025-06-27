@@ -192,9 +192,9 @@ export default function ConfiguracionPage() {
     if (editingDepto) await updateDepartamento(editingDepto.id, data.nombre, data.areaId); else await addDepartamento(data.nombre, data.areaId);
     setIsDeptoDialogOpen(false);
   }
-  function handlePuestoSubmit(data: PuestoFormData) {
+  async function handlePuestoSubmit(data: PuestoFormData) {
     const puestoData: PuestoCreationData = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId };
-    if (editingPuesto) updatePuesto(editingPuesto.id, puestoData); else addPuesto(puestoData);
+    if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData);
     setIsPuestoDialogOpen(false);
   }
   function handleSistemaSubmit(data: SistemaFormData) {
@@ -221,19 +221,16 @@ export default function ConfiguracionPage() {
     switch (type) {
         case 'area':
             const isUsedInDeptos = departamentos.some(d => d.areaId === id);
-            const isUsedInPuestos = puestos.some(p => p.areaId === id);
-            isUsed = isUsedInDeptos || isUsedInPuestos;
+            const isUsedInPuestosForArea = puestos.some(p => p.areaId === id);
+            isUsed = isUsedInDeptos || isUsedInPuestosForArea;
             if (isUsed) {
-                usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestos ? 'Puestos' : '');
+                usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestosForArea ? 'Puestos' : '');
                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
             } else {
                 await deleteArea(id);
             }
             break;
         case 'departamento':
-            // Check usage in Puestos. In a Firestore world, this would be a query.
-            // For now, we simulate this with the context data.
-            // This will be updated when Puestos are migrated.
             const isDeptoUsedInPuestos = puestos.some(p => p.departamentoId === id);
              if (isDeptoUsedInPuestos) {
                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por Puestos y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
@@ -247,7 +244,7 @@ export default function ConfiguracionPage() {
                 usageMessage = allProcesses.some(p => p.puesto === itemToDelete.name) ? 'Procesos Capturados' : 'Acciones de Mejora';
                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
             } else {
-                deletePuesto(id);
+                await deletePuesto(id);
             }
             break;
         case 'sistema':
