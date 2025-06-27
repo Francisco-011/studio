@@ -89,104 +89,110 @@ const ITEMS_PER_PAGE = 10;
 const LOCAL_STORAGE_PERMISSIONS_KEY = 'proceza-role-permissions';
 
 const PERMISSION_CONFIG = {
-  dashboard: { 
-    label: 'Dashboards', 
-    permissions: { 
+  dashboard: {
+    label: 'Dashboards',
+    permissions: {
       view_resumen: 'Ver Resumen Ejecutivo',
       view_procesos: 'Ver Dash. Procesos',
       view_mejoras: 'Ver Dash. Mejoras',
       view_auditoria: 'Ver Dash. Auditoría',
-    } 
+    },
   },
-  captura: { 
-    label: 'Captura de Procesos', 
-    permissions: { 
-      create: 'Iniciar Nueva Captura' 
-    } 
+  captura: {
+    label: 'Captura de Procesos',
+    permissions: {
+      create_process: 'Iniciar Nueva Captura de Proceso',
+      define_activities: 'Definir/Editar Actividades de Proceso',
+    },
   },
-  procesosRegistrados: { 
-    label: 'Procesos Registrados', 
-    permissions: { 
-      view: 'Ver Procesos', 
-      edit: 'Editar Procesos', 
-      toggle_status: 'Activar/Inactivar', 
-      delete: 'Eliminar', 
-      restore: 'Recuperar Eliminados',
-      export: 'Exportar CSV'
-    } 
+  procesosRegistrados: {
+    label: 'Procesos Registrados',
+    permissions: {
+      view: 'Ver Lista de Procesos',
+      edit: 'Editar Procesos',
+      toggle_status: 'Activar/Inactivar Procesos',
+      delete: 'Eliminar Procesos',
+      restore: 'Recuperar Procesos Eliminados',
+      export: 'Exportar CSV de Procesos',
+      view_history: 'Ver Historial de Cambios de Proceso',
+    },
   },
-  actividades: { 
-    label: 'Actividades', 
-    permissions: { 
-      view: 'Ver Actividades',
-      create: 'Crear', 
-      edit: 'Editar', 
-      toggle_status: 'Activar/Inactivar', 
-      delete: 'Eliminar', 
-      restore: 'Recuperar Eliminados',
-      export: 'Exportar CSV' 
-    } 
+  actividades: {
+    label: 'Actividades',
+    permissions: {
+      view: 'Ver Lista de Actividades',
+      create: 'Crear Actividades',
+      edit: 'Editar Actividades',
+      toggle_status: 'Activar/Inactivar Actividades',
+      delete: 'Eliminar Actividades',
+      restore: 'Recuperar Actividades Eliminadas',
+      export: 'Exportar CSV de Actividades',
+      view_history: 'Ver Historial de Cambios de Actividad',
+    },
   },
-  panelJerarquico: { 
-    label: 'Panel Jerárquico', 
-    permissions: { 
-      view: 'Ver Panel', 
-      manage: 'Gestionar Flujos (Drag & Drop)', 
-      export: 'Exportar Vista' 
-    } 
+  panelJerarquico: {
+    label: 'Panel Jerárquico',
+    permissions: {
+      view: 'Ver Panel',
+      manage_flows: 'Gestionar Flujos (Drag & Drop)',
+      export: 'Exportar Vista a CSV',
+      view_details: 'Ver Detalles de Elementos',
+    },
   },
-  analisis_ia: { 
-    label: 'Análisis IA (Oportunidades)', 
-    permissions: { 
-      view: 'Ver Página', 
-      analyze: 'Ejecutar Análisis con IA', 
-      generate_actions: 'Generar Acciones Propuestas' 
-    } 
+  analisis_ia: {
+    label: 'Análisis IA (Oportunidades)',
+    permissions: {
+      view: 'Ver Página de Análisis',
+      analyze: 'Ejecutar Análisis con IA',
+      generate_actions: 'Generar Acciones Propuestas desde IA',
+    },
   },
-  acciones: { 
-    label: 'Acciones de Mejora', 
-    permissions: { 
-      view: 'Ver Acciones', 
-      create: 'Crear', 
-      edit: 'Editar', 
-      delete: 'Eliminar',
-      export: 'Exportar CSV'
-    } 
+  acciones: {
+    label: 'Acciones de Mejora',
+    permissions: {
+      view: 'Ver Acciones',
+      create: 'Crear Acciones',
+      edit: 'Editar Acciones',
+      delete: 'Eliminar Acciones',
+      export: 'Exportar CSV de Acciones',
+      view_history: 'Ver Historial de Cambios de Acción',
+    },
   },
-  auditoria: { 
-    label: 'Auditoría y Registro', 
-    permissions: { 
-      view_history: 'Ver Historial de Auditorías', 
-      perform: 'Realizar Nuevas Auditorías', 
-      view_log: 'Ver Registro de Actividad del Sistema' 
-    } 
+  auditoria: {
+    label: 'Auditoría y Cumplimiento',
+    permissions: {
+      view_history: 'Ver Historial de Auditorías',
+      perform: 'Realizar Nuevas Auditorías',
+      delete: 'Eliminar Auditorías',
+      view_log: 'Ver Registro de Actividad del Sistema',
+    },
   },
-  configuracion_maestros: { 
-    label: 'Configuración - Maestros', 
-    permissions: { 
-      view: 'Ver Maestros', 
-      manage_areas: 'Gestionar Áreas', 
-      manage_deptos: 'Gestionar Departamentos', 
-      manage_puestos: 'Gestionar Puestos', 
-      manage_sistemas: 'Gestionar Sistemas y Costos' 
-    } 
+  configuracion_maestros: {
+    label: 'Configuración - Maestros',
+    permissions: {
+      view: 'Ver Página de Maestros',
+      manage_areas: 'Gestionar Áreas',
+      manage_deptos: 'Gestionar Departamentos',
+      manage_puestos: 'Gestionar Puestos',
+      manage_sistemas: 'Gestionar Sistemas y Costos',
+    },
   },
-  configuracion_cargamasiva: { 
-    label: 'Configuración - Carga Masiva', 
-    permissions: { 
-      view: 'Ver Carga Masiva', 
-      execute: 'Ejecutar Cargas' 
-    } 
+  configuracion_cargamasiva: {
+    label: 'Configuración - Carga Masiva',
+    permissions: {
+      view: 'Ver Página de Carga Masiva',
+      execute: 'Ejecutar Cargas Masivas',
+    },
   },
-  usuarios: { 
-    label: 'Gestión de Usuarios', 
-    permissions: { 
-      view: 'Ver Usuarios', 
-      create: 'Crear', 
-      edit: 'Editar', 
-      delete: 'Eliminar', 
-      manage_permissions: 'Gestionar Permisos de Roles' 
-    } 
+  usuarios: {
+    label: 'Gestión de Usuarios',
+    permissions: {
+      view: 'Ver Lista de Usuarios',
+      create: 'Crear Usuarios',
+      edit: 'Editar Usuarios',
+      delete: 'Eliminar Usuarios',
+      manage_permissions: 'Gestionar Permisos de Roles',
+    },
   },
 };
 type ModuleKey = keyof typeof PERMISSION_CONFIG;
@@ -194,40 +200,28 @@ type ModuleKey = keyof typeof PERMISSION_CONFIG;
 // Default permissions state
 const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
   Administrador: Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
-  'Gerente de Proyecto': {
-    ...Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
-    'configuracion_maestros:manage_areas': false,
-    'configuracion_maestros:manage_deptos': false,
-    'configuracion_maestros:manage_puestos': false,
-    'configuracion_maestros:manage_sistemas': false,
-    'configuracion_cargamasiva:execute': false,
-    'usuarios:delete': false,
-    'usuarios:manage_permissions': false,
-  },
+  'Gerente de Proyecto': Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => {
+    const modulePermissions = Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true]));
+    if (mod === 'configuracion_maestros' || mod === 'configuracion_cargamasiva' || mod === 'usuarios') {
+        Object.keys(modulePermissions).forEach(key => {
+            if (!key.endsWith(':view')) {
+                modulePermissions[key] = false;
+            }
+        });
+    }
+    if (mod === 'usuarios') modulePermissions[`${mod}:manage_permissions`] = false;
+    if (mod === 'auditoria') modulePermissions[`${mod}:delete`] = false;
+    return { ...acc, ...modulePermissions };
+  }, {}),
   Consultor: {
-    'dashboard:view_resumen': true,
-    'dashboard:view_procesos': true,
-    'dashboard:view_mejoras': true,
-    'dashboard:view_auditoria': true,
-    'captura:create': true,
-    'procesosRegistrados:view': true,
-    'procesosRegistrados:edit': true,
-    'actividades:view': true,
-    'actividades:create': true,
-    'actividades:edit': true,
-    'panelJerarquico:view': true,
-    'panelJerarquico:manage': true,
-    'panelJerarquico:export': true,
-    'analisis_ia:view': true,
-    'analisis_ia:analyze': true,
-    'analisis_ia:generate_actions': true,
-    'acciones:view': true,
-    'acciones:create': true,
-    'acciones:edit': true,
-    'acciones:export': true,
-    'auditoria:view_history': true,
-    'auditoria:perform': true,
-    'auditoria:view_log': true,
+    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true,
+    'captura:create_process': true, 'captura:define_activities': true,
+    'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
+    'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
+    'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
+    'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
+    'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
+    'auditoria:view_history': true, 'auditoria:perform': true,
     'configuracion_maestros:view': true,
   },
   'Usuario Final': {
@@ -236,6 +230,9 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'procesosRegistrados:view': true,
     'actividades:view': true,
     'panelJerarquico:view': true,
+    'panelJerarquico:view_details': true,
+    'acciones:view': true,
+    'auditoria:view_history': true,
   },
 };
 
