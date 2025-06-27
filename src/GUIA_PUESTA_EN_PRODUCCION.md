@@ -132,7 +132,7 @@ Este es el paso final para que tu aplicación sea accesible desde cualquier luga
 2.  **Comienza el Despliegue**: Haz clic en el botón azul para crear tu primer backend (puede decir "Comenzar", "Crear backend", etc.).
 3.  **Sigue el Asistente Inicial**:
     *   Verás un asistente como el que se muestra en la imagen. Primero, te pedirá **Elegir una región principal**. Selecciona la que esté más cerca de ti y haz clic en **"Siguiente"**.
-    *   **¡Paso Importante!** El asistente te pedirá **"Importa un repositorio de GitHub"**. Este flujo está diseñado para proyectos en GitHub. Como tu proyecto está en este entorno, vamos a ignorar el resto del asistente en la web y usaremos un método más directo.
+    *   **¡Paso Importante!** El asistente te pedirá **"Conecta e implementa"**, obligándote a usar GitHub. Este es el flujo estándar, pero como tu proyecto está en este entorno, usaremos un método más directo.
 4.  **Busca los Comandos de la Terminal**:
     *   En esa misma pantalla, busca un enlace o botón que diga algo como **"Configurar manualmente"** o **"Implementar desde la CLI"**. A veces puede estar menos visible. Haz clic ahí.
 5.  **Copia los Comandos de la Terminal**: Al seleccionar la configuración manual, la consola de Firebase te mostrará una serie de **comandos para ejecutar en tu terminal**. Estos son los pasos que debes seguir:
