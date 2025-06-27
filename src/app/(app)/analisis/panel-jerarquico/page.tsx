@@ -17,7 +17,7 @@ import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import type { CapturedProcess, CambioHistorial } from '../../procesos-y-flujos-registrados/page';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
@@ -148,6 +148,7 @@ export default function PanelJerarquicoPage() {
 
   const availablePuestos = useMemo(() => {
     if (isLoadingPuestos || selectedAreaFilter === 'all') return puestos;
+
     const areaId = areas.find(a => a.nombre === selectedAreaFilter)?.id;
     if (!areaId) return [];
     
@@ -492,179 +493,172 @@ export default function PanelJerarquicoPage() {
 
     const { type: draggedItemType, id: draggedItemId, sourceProcessId, sourceParentPuestoNodeId } = draggedItem;
     const { type: targetType, id: dropTargetNodeId, targetProcessId: actualTargetProcessId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
+    
+    if (draggedItemType === 'processNodeInPuesto') {
+        if (targetType === 'puesto') { // Moving a process to a new Puesto
+            const processId = draggedItemId;
+            const targetPuestoNodeId = dropTargetNodeId;
+            const targetPuestoOriginalId = targetPuestoNodeId.replace('puesto-', '');
 
-    // Handle moving a process to a new Puesto
-    if (draggedItemType === 'processNodeInPuesto' && targetType === 'puesto') {
-        const processId = draggedItemId;
-        const targetPuestoNodeId = dropTargetNodeId; // e.g. 'puesto-xyz'
-        const targetPuestoOriginalId = targetPuestoNodeId.replace('puesto-', '');
-
-        if (sourceParentPuestoNodeId === targetPuestoNodeId) {
-            setDraggedItem(null);
-            setDropTargetInfo(null);
-            return;
-        }
-
-        const targetPuesto = puestos.find(p => p.id === targetPuestoOriginalId);
-        if (!targetPuesto) {
-            toast({ title: "Error", description: "El puesto de destino no fue encontrado." });
-            setDraggedItem(null);
-            setDropTargetInfo(null);
-            return;
-        }
-
-        const targetArea = areas.find(a => a.id === targetPuesto.areaId);
-        const targetDepto = departamentos.find(d => d.id === targetPuesto.departamentoId);
-
-        setCapturedProcesses(prevProcesses => prevProcesses.map(proc => {
-            if (proc.id === processId) {
-                return {
-                    ...proc,
-                    puesto: targetPuesto.nombre,
-                    departamento: targetDepto?.nombre, // Can be undefined
-                    area: targetArea?.nombre || proc.area,
-                    updatedAt: Date.now()
-                };
+            if (sourceParentPuestoNodeId === targetPuestoNodeId) {
+                setDraggedItem(null);
+                setDropTargetInfo(null);
+                return;
             }
-            return proc;
-        }));
-        
-        setPuestoProcessOrders(prevOrders => {
-            const newOrders = { ...prevOrders };
-            if (sourceParentPuestoNodeId && newOrders[sourceParentPuestoNodeId]) {
-                newOrders[sourceParentPuestoNodeId] = newOrders[sourceParentPuestoNodeId].filter(id => id !== processId);
-            }
-            const targetOrder = newOrders[targetPuestoNodeId] || [];
-            if (!targetOrder.includes(processId)) {
-                newOrders[targetPuestoNodeId] = [...targetOrder, processId];
-            }
-            return newOrders;
-        });
-        
-        toast({ title: "Proceso Movido", description: `El proceso fue movido exitosamente al puesto "${targetPuesto.nombre}".` });
-        setDraggedItem(null);
-        setDropTargetInfo(null);
-        return;
-    }
 
-    if (draggedItemType === 'processNodeInPuesto' && targetType === 'processNodeInPuesto') {
-        const targetProcessOriginalId = dropTargetNodeId.replace('proceso-', '');
-        
-        let parentPuestoNodeOfTarget: TreeNode | undefined;
-        const findPuestoNode = (nodes: TreeNode[]): TreeNode | undefined => {
-            for (const node of nodes) {
-                if (node.type === 'puesto' && node.children?.some(child => child.id === dropTargetNodeId)) {
-                    return node;
+            const targetPuesto = puestos.find(p => p.id === targetPuestoOriginalId);
+            if (!targetPuesto) {
+                toast({ title: "Error", description: "El puesto de destino no fue encontrado." });
+                setDraggedItem(null); setDropTargetInfo(null); return;
+            }
+
+            const targetArea = areas.find(a => a.id === targetPuesto.areaId);
+            const targetDepto = departamentos.find(d => d.id === targetPuesto.departamentoId);
+
+            setCapturedProcesses(prevProcesses => {
+                const processToUpdate = prevProcesses.find(p => p.id === processId);
+                if (!processToUpdate) return prevProcesses;
+
+                const changes: CambioHistorial[] = [];
+                if (processToUpdate.area !== (targetArea?.nombre || processToUpdate.area)) {
+                    changes.push({ timestamp: new Date().toISOString(), field: 'area', before: processToUpdate.area, after: targetArea?.nombre || processToUpdate.area });
                 }
-                if (node.children) {
-                    const found = findPuestoNode(node.children);
-                    if (found) return found;
+                if (processToUpdate.departamento !== (targetDepto?.nombre)) {
+                    changes.push({ timestamp: new Date().toISOString(), field: 'departamento', before: processToUpdate.departamento || 'N/A', after: targetDepto?.nombre || 'N/A' });
                 }
+                if (processToUpdate.puesto !== targetPuesto.nombre) {
+                    changes.push({ timestamp: new Date().toISOString(), field: 'puesto', before: processToUpdate.puesto, after: targetPuesto.nombre });
+                }
+
+                return prevProcesses.map(proc =>
+                    proc.id === processId ? {
+                        ...proc,
+                        puesto: targetPuesto.nombre,
+                        departamento: targetDepto?.nombre,
+                        area: targetArea?.nombre || proc.area,
+                        updatedAt: Date.now(),
+                        historialDeCambios: [...(proc.historialDeCambios || []), ...changes],
+                    } : proc
+                );
+            });
+            
+            setPuestoProcessOrders(prevOrders => {
+                const newOrders = { ...prevOrders };
+                if (sourceParentPuestoNodeId && newOrders[sourceParentPuestoNodeId]) {
+                    newOrders[sourceParentPuestoNodeId] = newOrders[sourceParentPuestoNodeId].filter(id => id !== processId);
+                }
+                const targetOrder = newOrders[targetPuestoNodeId] || [];
+                if (!targetOrder.includes(processId)) {
+                    newOrders[targetPuestoNodeId] = [...targetOrder, processId];
+                }
+                return newOrders;
+            });
+            
+            toast({ title: "Proceso Movido", description: `El proceso fue movido exitosamente al puesto "${targetPuesto.nombre}".` });
+
+        } else if (targetType === 'processNodeInPuesto') { // Reordering a process within the same Puesto
+            const targetProcessOriginalId = dropTargetNodeId.replace('proceso-', '');
+            
+            let parentPuestoNodeOfTarget: TreeNode | undefined;
+            const findPuestoNode = (nodes: TreeNode[]): TreeNode | undefined => {
+                for (const node of nodes) {
+                    if (node.type === 'puesto' && node.children?.some(child => child.id === dropTargetNodeId)) { return node; }
+                    if (node.children) { const found = findPuestoNode(node.children); if (found) return found; }
+                }
+                return undefined;
+            };
+            parentPuestoNodeOfTarget = findPuestoNode(treeData);
+            
+            if (!parentPuestoNodeOfTarget || sourceParentPuestoNodeId !== parentPuestoNodeOfTarget.id) {
+                toast({ title: "Movimiento no válido", description: "Los procesos solo se pueden reordenar dentro del mismo puesto." });
+                setDraggedItem(null); setDropTargetInfo(null); return;
             }
-            return undefined;
-        };
-        parentPuestoNodeOfTarget = findPuestoNode(treeData);
-        
-        if (!parentPuestoNodeOfTarget || sourceParentPuestoNodeId !== parentPuestoNodeOfTarget.id) {
-            toast({ title: "Movimiento no válido", description: "Los procesos solo se pueden reordenar dentro del mismo puesto." });
-            setDraggedItem(null);
-            setDropTargetInfo(null);
-            return;
+            const currentPuestoNodeId = parentPuestoNodeOfTarget.id;
+            const currentOrder = puestoProcessOrders[currentPuestoNodeId] || parentPuestoNodeOfTarget.children?.map(c => c.originalId!) || [];
+            
+            const newOrder = [...currentOrder];
+            const draggedIndex = newOrder.indexOf(draggedItemId);
+            if (draggedIndex > -1) newOrder.splice(draggedIndex, 1);
+
+            const targetIndex = newOrder.indexOf(targetProcessOriginalId);
+            newOrder.splice(targetIndex > -1 ? targetIndex : newOrder.length, 0, draggedItemId);
+
+            setPuestoProcessOrders(prev => ({ ...prev, [currentPuestoNodeId]: newOrder }));
+            toast({ title: "Proceso Reordenado", description: "El orden del proceso ha sido actualizado." });
         }
-        const currentPuestoNodeId = parentPuestoNodeOfTarget.id;
-        const currentOrder = puestoProcessOrders[currentPuestoNodeId] || parentPuestoNodeOfTarget.children?.map(c => c.originalId!) || [];
-        
-        const newOrder = [...currentOrder];
-        const draggedIndex = newOrder.indexOf(draggedItemId);
-        if (draggedIndex > -1) newOrder.splice(draggedIndex, 1);
-
-        const targetIndex = newOrder.indexOf(targetProcessOriginalId);
-        if (targetIndex > -1) {
-            newOrder.splice(targetIndex, 0, draggedItemId);
-        } else {
-            newOrder.push(draggedItemId);
-        }
-
-        setPuestoProcessOrders(prev => ({ ...prev, [currentPuestoNodeId]: newOrder }));
-        toast({ title: "Proceso Reordenado", description: "El orden del proceso ha sido actualizado." });
-        setDraggedItem(null);
-        setDropTargetInfo(null);
-        return;
-    }
-
-    if (draggedItemType === 'activityFromPool' || draggedItemType === 'activityInProcess') {
+    
+    } else if (draggedItemType.startsWith('activity')) {
         const activity = actividades.find(a => a.id === draggedItemId);
         if (!activity || !activity.activa) {
             toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
-            setDraggedItem(null);
-            setDropTargetInfo(null);
-            return;
+            setDraggedItem(null); setDropTargetInfo(null); return;
         }
+    
+        const handleProcessUpdate = (processId: string, updateFn: (order: string[]) => string[], allProcesses: CapturedProcess[]) => {
+            const index = allProcesses.findIndex(p => p.id === processId);
+            if (index > -1) {
+                const originalProcess = allProcesses[index];
+                const originalOrder = originalProcess.activityOrder || [];
+                const newOrder = updateFn(originalOrder);
+
+                if (JSON.stringify(originalOrder) !== JSON.stringify(newOrder)) {
+                     const change: CambioHistorial = {
+                        timestamp: new Date().toISOString(),
+                        field: 'activityOrder',
+                        before: originalOrder.map(id => actividades.find(a => a.id === id)?.nombre || id).join(', ') || 'Ninguna',
+                        after: newOrder.map(id => actividades.find(a => a.id === id)?.nombre || id).join(', ') || 'Ninguna',
+                    };
+
+                    allProcesses[index] = {
+                        ...originalProcess,
+                        activityOrder: newOrder,
+                        updatedAt: Date.now(),
+                        historialDeCambios: [...(originalProcess.historialDeCambios || []), change],
+                    };
+                }
+            }
+        };
 
         if (targetType === 'pool') { 
-            if (!sourceProcessId) { 
-              setDraggedItem(null);
-              setDropTargetInfo(null);
-              return;
-            }
+            if (!sourceProcessId) { setDraggedItem(null); setDropTargetInfo(null); return; }
+            
             const newProcesosAsociadosIds = (activity.procesosAsociadosIds || []).filter(id => id !== sourceProcessId);
             updateActividad(draggedItemId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
-            setCapturedProcesses(prevProcesses => prevProcesses.map(proc => {
-                if (proc.id === sourceProcessId) {
-                    return { ...proc, activityOrder: (proc.activityOrder || []).filter(id => id !== draggedItemId) };
-                }
-                return proc;
-            }));
+            
+            setCapturedProcesses(prevProcesses => {
+                let newProcesses = [...prevProcesses];
+                handleProcessUpdate(sourceProcessId, (order) => order.filter(id => id !== draggedItemId), newProcesses);
+                return newProcesses;
+            });
             toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" desasignada del proceso.` });
+
         } else if ((targetType === 'proceso' || targetType === 'activity-in-tree') && actualTargetProcessId) {
              const targetProcess = capturedProcesses.find(p => p.id === actualTargetProcessId);
              if (targetProcess && targetProcess.activo === false) {
                  toast({ title: "Acción no permitida", description: "No se pueden asignar actividades a procesos inactivos.", variant: "default" });
-                 setDraggedItem(null);
-                 setDropTargetInfo(null);
-                 return;
+                 setDraggedItem(null); setDropTargetInfo(null); return;
              }
-
-            let newProcesosAsociadosIds = [...(activity.procesosAsociadosIds || [])];
-            let finalCapturedProcesses = [...capturedProcesses];
-
-            if (sourceProcessId) {
-                finalCapturedProcesses = finalCapturedProcesses.map(proc => {
-                    if (proc.id === sourceProcessId) {
-                        return { ...proc, activityOrder: (proc.activityOrder || []).filter(id => id !== draggedItemId) };
-                    }
-                    return proc;
-                });
-                if (sourceProcessId !== actualTargetProcessId) {
-                    newProcesosAsociadosIds = newProcesosAsociadosIds.filter(id => id !== sourceProcessId);
-                }
-            }
-
-            finalCapturedProcesses = finalCapturedProcesses.map(proc => {
-                if (proc.id === actualTargetProcessId) {
-                    let newOrder = (proc.activityOrder || []).filter(id => id !== draggedItemId); 
-                    
-                    if (actualTargetActivityId) { 
-                        const targetIdx = newOrder.indexOf(actualTargetActivityId);
-                        if (targetIdx !== -1) {
-                            newOrder.splice(targetIdx, 0, draggedItemId);
-                        } else {
-                            newOrder.push(draggedItemId); 
-                        }
-                    } else { 
-                        newOrder.push(draggedItemId); 
-                    }
-                    return { ...proc, activityOrder: newOrder };
-                }
-                return proc;
-            });
             
-            if (!newProcesosAsociadosIds.includes(actualTargetProcessId)) {
-                newProcesosAsociadosIds.push(actualTargetProcessId);
-            }
-            
+            const newProcesosAsociadosIds = Array.from(new Set([...(activity.procesosAsociadosIds || []), actualTargetProcessId]));
             updateActividad(draggedItemId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
-            setCapturedProcesses(finalCapturedProcesses);
+            
+            setCapturedProcesses(prevProcesses => {
+                let newProcesses = [...prevProcesses];
+                if (sourceProcessId && sourceProcessId !== actualTargetProcessId) {
+                    handleProcessUpdate(sourceProcessId, (order) => order.filter(id => id !== draggedItemId), newProcesses);
+                }
+                handleProcessUpdate(actualTargetProcessId, (order) => {
+                    const tempOrder = order.filter(id => id !== draggedItemId);
+                    if (actualTargetActivityId) {
+                        const dropIndex = tempOrder.indexOf(actualTargetActivityId);
+                        tempOrder.splice(dropIndex !== -1 ? dropIndex : tempOrder.length, 0, draggedItemId);
+                    } else {
+                        tempOrder.push(draggedItemId);
+                    }
+                    return tempOrder;
+                }, newProcesses);
+                return newProcesses;
+            });
             toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada en proceso.` });
         }
     }
@@ -672,6 +666,7 @@ export default function PanelJerarquicoPage() {
     setDraggedItem(null);
     setDropTargetInfo(null);
   };
+
 
   const handleActivityBadgeClick = (activity: Actividad) => {
     if (filterByActivityId === activity.id) {
@@ -1292,3 +1287,4 @@ export default function PanelJerarquicoPage() {
     </div>
   );
 }
+

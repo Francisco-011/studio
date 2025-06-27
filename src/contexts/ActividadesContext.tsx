@@ -1,9 +1,11 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -41,12 +43,14 @@ const ActividadesContext = createContext<ActividadesContextType | undefined>(und
 
 const LOCAL_STORAGE_ACTIVIDADES_KEY = 'proceza-actividades';
 const LOCAL_STORAGE_DELETED_ACTIVIDADES_KEY = 'proceza-deleted-actividades';
+const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 export function ActividadesProvider({ children }: { children: ReactNode }) {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [isLoadingActividades, setIsLoadingActividades] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -66,6 +70,10 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
             ...act,
             createdAt: act.createdAt || act.updatedAt || parseInt(act.id, 10) || Date.now()
           })));
+        }
+        const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
+        if (storedProcesses) {
+            setAllProcesses(JSON.parse(storedProcesses));
         }
       } catch (error) {
         console.error("Failed to load actividades from localStorage", error);
@@ -110,7 +118,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     const originalActividad = actividades.find(a => a.id === id);
     if (!originalActividad) return;
     
-    // Perform side effects BEFORE setState
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
@@ -128,11 +135,12 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     });
 
     if (data.procesosAsociadosIds && JSON.stringify(originalActividad.procesosAsociadosIds?.sort()) !== JSON.stringify(data.procesosAsociadosIds.sort())) {
+         const getProcessName = (procId: string) => allProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
          changes.push({
             timestamp: new Date().toISOString(),
-            field: 'procesosAsociadosIds',
-            before: originalActividad.procesosAsociadosIds?.join(', ') || 'N/A',
-            after: data.procesosAsociadosIds.join(', ') || 'N/A'
+            field: 'Procesos Asociados',
+            before: (originalActividad.procesosAsociadosIds || []).map(getProcessName).join(', ') || 'Ninguno',
+            after: data.procesosAsociadosIds.map(getProcessName).join(', ') || 'Ninguno'
          });
     }
 
@@ -147,7 +155,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         } : act
       )
     );
-  }, [actividades, addLogEntry]);
+  }, [actividades, addLogEntry, allProcesses]);
 
   const softDeleteActividad = useCallback((id: string) => {
     const activityToMove = actividades.find(act => act.id === id);
