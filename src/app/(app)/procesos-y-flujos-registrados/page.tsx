@@ -311,6 +311,32 @@ export default function ProcesosYFlujosRegistradosPage() {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const availableDepartamentos = useMemo(() => {
+    if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedAreaFilter);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [selectedAreaFilter, areas, departamentos, isLoadingDepartamentos]);
+
+  const availablePuestosForFilter = useMemo(() => {
+    if (isLoadingPuestos || selectedAreaFilter === 'all') return puestos;
+
+    const areaId = areas.find(a => a.nombre === selectedAreaFilter)?.id;
+    if (!areaId) return [];
+    
+    let areaPuestos = puestos.filter(p => p.areaId === areaId);
+
+    if (selectedDeptoFilter !== 'all') {
+      const deptoId = departamentos.find(d => d.nombre === selectedDeptoFilter && d.areaId === areaId)?.id;
+      if (deptoId) {
+        return areaPuestos.filter(p => p.departamentoId === deptoId);
+      }
+      return []; 
+    }
+    
+    return areaPuestos;
+  }, [puestos, areas, departamentos, selectedAreaFilter, selectedDeptoFilter, isLoadingPuestos]);
+
+
   const sortedAndFilteredData = useMemo(() => {
     setCurrentPage(1);
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
@@ -711,8 +737,19 @@ export default function ProcesosYFlujosRegistradosPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
               <div className="relative xl:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
               <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
-              <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={(v) => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger id="depto-filter"><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : (isLoadingDepartamentos ? "Cargando..." : "Todos")} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{departamentos.filter(d => d.areaId === areas.find(a => a.nombre === selectedAreaFilter)?.id).map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
-              <div className="w-full"><Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label><Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos}><SelectTrigger id="puesto-filter"><SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Todos"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{puestos.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={(v) => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger id="depto-filter"><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : (isLoadingDepartamentos ? "Cargando..." : "Todos")} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
+              <div className="w-full">
+                <Label htmlFor="puesto-filter" className="text-xs font-medium text-muted-foreground ml-1">Puesto</Label>
+                <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}>
+                  <SelectTrigger id="puesto-filter">
+                    <SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : (isLoadingPuestos ? "Cargando..." : "Todos")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los Puestos</SelectItem>
+                    {availablePuestosForFilter.map(puesto => <SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mt-4 items-end">
                <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado del Proceso</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
