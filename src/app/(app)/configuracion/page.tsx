@@ -188,8 +188,8 @@ export default function ConfiguracionPage() {
     if (editingArea) await updateArea(editingArea.id, data.nombre); else await addArea(data.nombre);
     setIsAreaDialogOpen(false);
   }
-  function handleDeptoSubmit(data: DepartamentoFormData) {
-    if (editingDepto) updateDepartamento(editingDepto.id, data.nombre, data.areaId); else addDepartamento(data.nombre, data.areaId);
+  async function handleDeptoSubmit(data: DepartamentoFormData) {
+    if (editingDepto) await updateDepartamento(editingDepto.id, data.nombre, data.areaId); else await addDepartamento(data.nombre, data.areaId);
     setIsDeptoDialogOpen(false);
   }
   function handlePuestoSubmit(data: PuestoFormData) {
@@ -211,49 +211,64 @@ export default function ConfiguracionPage() {
   function handleEdit<T>(item: T, setEditing: (item: T | null) => void, setOpen: (open: boolean) => void) { setEditing(item); setOpen(true); }
   
   // Delete Logic
-  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema') { setItemToDelete({ id, name, type }); setIsConfirmDeleteDialogOpen(true); }
   async function executeDelete() {
     if (!itemToDelete) return;
-    const { id, name, type } = itemToDelete;
+    const { id, type } = itemToDelete;
+
     let isUsed = false;
     let usageMessage = '';
-
+    
     switch (type) {
         case 'area':
             const isUsedInDeptos = departamentos.some(d => d.areaId === id);
             const isUsedInPuestos = puestos.some(p => p.areaId === id);
             isUsed = isUsedInDeptos || isUsedInPuestos;
-            usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestos ? 'Puestos' : '');
-            if (!isUsed) await deleteArea(id);
+            if (isUsed) {
+                usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestos ? 'Puestos' : '');
+                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
+            } else {
+                await deleteArea(id);
+            }
             break;
         case 'departamento':
-            isUsed = puestos.some(p => p.departamentoId === id);
-            usageMessage = 'Puestos';
-            if (!isUsed) deleteDepartamento(id);
+            // Check usage in Puestos. In a Firestore world, this would be a query.
+            // For now, we simulate this with the context data.
+            // This will be updated when Puestos are migrated.
+            const isDeptoUsedInPuestos = puestos.some(p => p.departamentoId === id);
+             if (isDeptoUsedInPuestos) {
+                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por Puestos y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
+            } else {
+               await deleteDepartamento(id);
+            }
             break;
         case 'puesto':
-            isUsed = allProcesses.some(p => p.puesto === name) || acciones.some(a => a.puesto === name);
-            usageMessage = allProcesses.some(p => p.puesto === name) ? 'Procesos Capturados' : 'Acciones de Mejora';
-            if (!isUsed) deletePuesto(id);
+            isUsed = allProcesses.some(p => p.puesto === itemToDelete.name) || acciones.some(a => a.puesto === itemToDelete.name);
+             if(isUsed) {
+                usageMessage = allProcesses.some(p => p.puesto === itemToDelete.name) ? 'Procesos Capturados' : 'Acciones de Mejora';
+                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
+            } else {
+                deletePuesto(id);
+            }
             break;
         case 'sistema':
-            isUsed = allProcesses.some(p => p.sistemas?.includes(name)) || actividades.some(a => a.sistemaUtilizado === name);
-            usageMessage = allProcesses.some(p => p.sistemas?.includes(name)) ? 'Procesos Capturados' : 'Actividades';
-            if (!isUsed) deleteSistema(id);
+            isUsed = allProcesses.some(p => p.sistemas?.includes(itemToDelete.name)) || actividades.some(a => a.sistemaUtilizado === itemToDelete.name);
+             if (isUsed) {
+                usageMessage = allProcesses.some(p => p.sistemas?.includes(itemToDelete.name)) ? 'Procesos Capturados' : 'Actividades';
+                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
+            } else {
+              deleteSistema(id);
+            }
             break;
         case 'costoSistema':
             deleteCostoSistema(id);
             break;
     }
     
-    if (isUsed) {
-        toast({ title: "Eliminación Bloqueada", description: `"${name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
-    } else {
-        toast({ title: 'Elemento Eliminado', variant: "destructive" });
-    }
     setItemToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
+
+  function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema') { setItemToDelete({ id, name, type }); setIsConfirmDeleteDialogOpen(true); }
 
   const watchedPuestoArea = puestoForm.watch('areaId');
   const filteredDeptosForPuestoForm = useMemo(() => departamentos.filter(d => d.areaId === watchedPuestoArea), [departamentos, watchedPuestoArea]);

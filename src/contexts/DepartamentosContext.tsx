@@ -4,24 +4,30 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { toast } from '@/hooks/use-toast';
+import { usePuestos } from './PuestosContext';
+
 
 export interface Departamento {
   id: string;
   nombre: string;
   areaId: string;
+  createdAt?: any;
 }
 
 interface DepartamentosContextType {
   departamentos: Departamento[];
-  addDepartamento: (nombre: string, areaId: string) => void;
-  updateDepartamento: (id: string, nombre: string, areaId: string) => void;
-  deleteDepartamento: (id: string) => void;
+  addDepartamento: (nombre: string, areaId: string) => Promise<void>;
+  updateDepartamento: (id: string, nombre: string, areaId: string) => Promise<void>;
+  deleteDepartamento: (id: string) => Promise<void>;
   isLoading: boolean;
 }
 
 const DepartamentosContext = createContext<DepartamentosContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_DEPARTAMENTOS_KEY = 'proceza-departamentos';
+const DEPARTAMENTOS_COLLECTION = 'departamentos';
 
 export function DepartamentosProvider({ children }: { children: ReactNode }) {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -29,57 +35,76 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedData = localStorage.getItem(LOCAL_STORAGE_DEPARTAMENTOS_KEY);
-        if (savedData) {
-          setDepartamentos(JSON.parse(savedData));
-        }
-      } catch (error) {
-        console.error("Failed to load departamentos from localStorage", error);
-        setDepartamentos([]);
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-        setIsLoading(false);
-    }
-  }, []);
+    const q = query(collection(db, DEPARTAMENTOS_COLLECTION), orderBy("nombre", "asc"));
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-       try {
-        localStorage.setItem(LOCAL_STORAGE_DEPARTAMENTOS_KEY, JSON.stringify(departamentos));
-      } catch (error) {
-        console.error("Failed to save departamentos to localStorage", error);
-      }
-    }
-  }, [departamentos, isLoading]);
-
-  const addDepartamento = useCallback((nombre: string, areaId: string) => {
-    const newDepartamento = { id: Date.now().toString(), nombre, areaId };
-    setDepartamentos((prev) => [...prev, newDepartamento]);
-    addLogEntry({ action: 'create', entityType: 'Departamento', entityName: nombre, details: `Se creó el departamento "${nombre}".` });
-  }, [addLogEntry]);
-
-  const updateDepartamento = useCallback((id: string, nombre: string, areaId: string) => {
-    let originalName = '';
-    setDepartamentos(prev => {
-        const original = prev.find(d => d.id === id);
-        if (original) originalName = original.nombre;
-        return prev.map((dep) => (dep.id === id ? { ...dep, nombre, areaId } : dep));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const deparamentosData: Departamento[] = [];
+      querySnapshot.forEach((doc) => {
+        deparamentosData.push({ id: doc.id, ...doc.data() } as Departamento);
+      });
+      setDepartamentos(deparamentosData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching departamentos from Firestore: ", error);
+      setIsLoading(false);
     });
 
-    if (originalName && originalName !== nombre) {
-       addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `El departamento "${originalName}" fue renombrado a "${nombre}".` });
+    return () => unsubscribe();
+  }, []);
+  
+  const addDepartamento = useCallback(async (nombre: string, areaId: string) => {
+    try {
+      await addDoc(collection(db, DEPARTAMENTOS_COLLECTION), {
+        nombre,
+        areaId,
+        createdAt: serverTimestamp(),
+      });
+      addLogEntry({ action: 'create', entityType: 'Departamento', entityName: nombre, details: `Se creó el departamento "${nombre}".` });
+    } catch(e) {
+      console.error("Error adding departamento: ", e);
+      toast({ title: "Error", description: "No se pudo agregar el departamento.", variant: "destructive"});
     }
   }, [addLogEntry]);
 
-  const deleteDepartamento = useCallback((id: string) => {
+  const updateDepartamento = useCallback(async (id: string, nombre: string, areaId: string) => {
+    const deptoDocRef = doc(db, DEPARTAMENTOS_COLLECTION, id);
+    const originalDepto = departamentos.find(d => d.id === id);
+    try {
+      await updateDoc(deptoDocRef, { nombre, areaId });
+      if (originalDepto && originalDepto.nombre !== nombre) {
+       addLogEntry({ action: 'update', entityType: 'Departamento', entityName: nombre, details: `El departamento "${originalDepto.nombre}" fue renombrado a "${nombre}".` });
+      }
+    } catch(e) {
+      console.error("Error updating departamento: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar el departamento.", variant: "destructive"});
+    }
+  }, [departamentos, addLogEntry]);
+
+  const deleteDepartamento = useCallback(async (id: string) => {
     const deptoToDelete = departamentos.find(d => d.id === id);
+    
+    // Check if any puesto is using this department
+    const puestosQuery = query(collection(db, 'puestos'), where('departamentoId', '==', id));
+    const puestosSnapshot = await getDocs(puestosQuery);
+    if (!puestosSnapshot.empty) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `El departamento "${deptoToDelete?.nombre}" está en uso por ${puestosSnapshot.size} puesto(s) y no puede ser eliminado.`,
+            variant: "destructive",
+            duration: 7000
+        });
+        return;
+    }
+
     if(deptoToDelete){
-      setDepartamentos(prev => prev.filter(dep => dep.id !== id));
-      addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: deptoToDelete.nombre, details: `Se eliminó el departamento "${deptoToDelete.nombre}".` });
+      try {
+        await deleteDoc(doc(db, DEPARTAMENTOS_COLLECTION, id));
+        addLogEntry({ action: 'delete', entityType: 'Departamento', entityName: deptoToDelete.nombre, details: `Se eliminó el departamento "${deptoToDelete.nombre}".` });
+        toast({ title: "Departamento Eliminado", variant: "destructive"});
+      } catch(e) {
+        console.error("Error deleting departamento: ", e);
+        toast({ title: "Error", description: "No se pudo eliminar el departamento.", variant: "destructive"});
+      }
     }
   }, [departamentos, addLogEntry]);
 
