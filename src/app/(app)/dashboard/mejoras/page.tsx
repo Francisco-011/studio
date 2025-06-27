@@ -301,7 +301,7 @@ export default function MejorasDashboardPage() {
           (system.costsByCurrency && system.costsByCurrency.length > 0)
               ? system.costsByCurrency.map(cost => ({
                   id: `${system.id}-${cost.currency}`,
-                  name: system.name || '',
+                  name: system.name,
                   currency: cost.currency,
                   annualUsageCost: cost.annualUsageCost,
                   annualLicenseCost: cost.annualLicenseCost,
@@ -309,7 +309,7 @@ export default function MejorasDashboardPage() {
               }))
               : [{
                   id: system.id,
-                  name: system.name || '',
+                  name: system.name,
                   currency: 'N/A',
                   annualUsageCost: 0,
                   annualLicenseCost: 0,
@@ -424,14 +424,14 @@ export default function MejorasDashboardPage() {
           .filter(sys => sys.currency !== 'N/A')
           .map(sys => ({
               name: `${sys.name} (${sys.currency})`,
-              'Costo por Uso': sys.annualUsageCost,
-              'Costo por Licencias': sys.annualLicenseCost,
+              costoUso: sys.annualUsageCost,
+              costoLicencias: sys.annualLicenseCost,
           }));
   }, [filteredSystemCosts]);
 
   const costosChartConfig: ChartConfig = {
-      'Costo por Uso': { label: 'Costo por Uso', color: 'hsl(var(--chart-2))' },
-      'Costo por Licencias': { label: 'Costo por Licencias', color: 'hsl(var(--chart-1))' },
+      costoUso: { label: 'Costo por Uso', color: 'hsl(var(--chart-2))' },
+      costoLicencias: { label: 'Costo por Licencias', color: 'hsl(var(--chart-1))' },
   };
 
   const handleExport = (type: 'sistemas' | 'mejoras') => {
@@ -721,7 +721,7 @@ export default function MejorasDashboardPage() {
                                       const currency = item.payload.name.match(/\(([^)]+)\)/)?.[1] || 'N/A';
                                       return (
                                           <div className="flex w-full justify-between items-center">
-                                              <span>{costosChartConfig[name]?.label || name}</span>
+                                              <span>{costosChartConfig[name as keyof typeof costosChartConfig]?.label || name}</span>
                                               <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
                                                   {formatDashboardCurrency(value as number, currency)}
                                               </span>
@@ -730,8 +730,8 @@ export default function MejorasDashboardPage() {
                                   }} />}
                               />
                               <Legend />
-                              <Bar dataKey="Costo por Uso" stackId="a" fill="var(--color-Costo por Uso)" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey="Costo por Licencias" stackId="a" fill="var(--color-Costo por Licencias)" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="costoUso" stackId="a" fill="var(--color-costoUso)" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey="costoLicencias" stackId="a" fill="var(--color-costoLicencias)" radius={[4, 4, 0, 0]} />
                           </BarChart>
                       </ResponsiveContainer>
                     </ChartContainer>
