@@ -5,6 +5,10 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Lightbulb, Sparkles, AlertTriangle, Loader2, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
@@ -84,41 +88,52 @@ export default function MejorasPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
 
+  const [isSelectionDialogOpen, setIsSelectionDialogOpen] = useState(false);
+  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
 
-  const handleAnalyzeInefficiencies = async () => {
+  const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const [selectedSystemIds, setSelectedSystemIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isSelectionDialogOpen) {
+      setIsLoadingProcesses(true);
+      try {
+        const storedProcessesData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
+        const allProcs: CapturedProcess[] = storedProcessesData ? JSON.parse(storedProcessesData) : [];
+        setAllProcesses(allProcs.filter(p => !p.deletedAt && p.activo !== false));
+      } catch (e) {
+        console.error("Error loading processes for selection", e);
+        toast({ title: "Error al cargar procesos", variant: "destructive" });
+      } finally {
+        setIsLoadingProcesses(false);
+      }
+    }
+  }, [isSelectionDialogOpen]);
+
+
+  const runAnalysis = async () => {
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
+    setIsSelectionDialogOpen(false);
 
-    const isDataLoading = isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos;
-    if (isDataLoading) {
+    if (selectedProcessIds.length === 0 && selectedActivityIds.length === 0 && selectedSystemIds.length === 0) {
         toast({
-            title: "Cargando datos de configuración",
-            description: "Espere un momento mientras se cargan los datos de sistemas, puestos y costos.",
+            title: "Nada seleccionado",
+            description: "Por favor, seleccione al menos un elemento para analizar.",
             variant: "default",
         });
         setIsLoading(false);
         return;
     }
-
+    
     try {
-      // Load captured processes
-      const storedProcessesData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      const allCapturedProcesses: CapturedProcess[] = storedProcessesData ? JSON.parse(storedProcessesData) : [];
-      // Filter for non-deleted and active processes
-      const activeProcessesForAnalysis = allCapturedProcesses.filter(p => !p.deletedAt && p.activo !== false);
+      const activeProcessesForAnalysis = allProcesses.filter(p => selectedProcessIds.includes(p.id));
+      const activitiesForAnalysis = actividades.filter(a => selectedActivityIds.includes(a.id));
+      const systemsForAnalysis = sistemas.filter(s => selectedSystemIds.includes(s.id));
 
-
-      if (activeProcessesForAnalysis.length === 0) {
-        toast({
-          title: "No hay procesos activos para analizar",
-          description: "Por favor, asegúrese de tener procesos activos registrados en 'Procesos y Flujos Registrados'.",
-          variant: "default",
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       const relevantActions = allAcciones.filter(a => 
         ['Pendiente', 'En Progreso', 'En Revisión'].includes(a.estado)
       );
@@ -158,21 +173,15 @@ export default function MejorasPage() {
         })
         .join('\n\n---\n\n');
 
-      const allSystemsUsedInProcesses = new Set<string>();
-      activeProcessesForAnalysis.forEach(p => {
-        if (p.sistemas) {
-          p.sistemas.forEach(sys => allSystemsUsedInProcesses.add(sys));
-        }
-      });
-      const systemUsageText = `Sistemas informáticos utilizados en los procesos documentados: ${
-        allSystemsUsedInProcesses.size > 0 ? Array.from(allSystemsUsedInProcesses).join(', ') : 'No se especificaron sistemas en los procesos.'
+      const systemUsageText = `Sistemas informáticos utilizados en los procesos seleccionados: ${
+        systemsForAnalysis.length > 0 ? systemsForAnalysis.map(s => s.nombre).join(', ') : 'No se seleccionaron sistemas.'
       }`;
 
-      const allActivitiesText = actividades
+      const allActivitiesText = activitiesForAnalysis
         .map(act => {
           const associatedContexts = new Set<string>();
           act.procesosAsociadosIds?.forEach(procId => {
-            const proc = activeProcessesForAnalysis.find(p => p.id === procId);
+            const proc = allProcesses.find(p => p.id === procId);
             if (proc) {
               const deptoContext = proc.departamento ? `, Departamento: ${proc.departamento}` : '';
               associatedContexts.add(`Proceso: "${proc.proceso}" (Área: ${proc.area}${deptoContext}, Puesto: ${proc.puesto})`);
@@ -186,9 +195,9 @@ export default function MejorasPage() {
         .join('\n\n---\n\n');
       
       let systemCostInformationText = "";
-      if (sistemas.length > 0) {
+      if (systemsForAnalysis.length > 0) {
         systemCostInformationText = "Detalles de Costos de Sistemas:\n";
-        sistemas.forEach(sistema => {
+        systemsForAnalysis.forEach(sistema => {
           const { cost, currency, details } = calculateSystemAnnualCost(sistema.id, costosSistemas, sistemas);
           systemCostInformationText += `Sistema: ${sistema.nombre}\n`;
           if (currency) {
@@ -199,13 +208,13 @@ export default function MejorasPage() {
           systemCostInformationText += `  Costos Registrados:\n    - ${details.join('\n    - ')}\n\n`;
         });
       } else {
-        systemCostInformationText = "No se encontró información de costos de sistemas configurada.";
+        systemCostInformationText = "No se seleccionó información de costos de sistemas para analizar.";
       }
 
       const result = await analyzeProcesses({
-        processDescriptions: processDescriptionsText,
+        processDescriptions: processDescriptionsText || "No se seleccionaron procesos para analizar.",
         systemUsage: systemUsageText,
-        allActivities: allActivitiesText,
+        allActivities: allActivitiesText || "No se seleccionaron actividades para analizar.",
         systemCostInformation: systemCostInformationText,
         existingActions: existingActionsText,
       });
@@ -213,7 +222,7 @@ export default function MejorasPage() {
       setAnalysisResult(result);
       toast({
         title: "Análisis Completado",
-        description: "Se han identificado posibles mejoras y redundancias, considerando la información de costos y acciones existentes.",
+        description: "Se han identificado posibles mejoras y redundancias.",
       });
 
     } catch (err) {
@@ -316,17 +325,13 @@ export default function MejorasPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados para detectar automáticamente duplicidades y oportunidades de mejora. Solo se considerarán procesos marcados como activos y se ignorarán temas ya cubiertos por acciones en revisión/progreso.
+            Utilice la IA para analizar los procesos y sistemas registrados para detectar automáticamente duplicidades y oportunidades de mejora. Seleccione los elementos que desea analizar para obtener resultados más precisos.
           </CardDescription>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            <Button onClick={handleAnalyzeInefficiencies} disabled={isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos} size="lg">
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-5 w-5" />
-              )}
-              {isLoading || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos ? "Analizando..." : "Analizar Ineficiencias con IA"}
+            <Button onClick={() => setIsSelectionDialogOpen(true)} disabled={isLoading} size="lg">
+              <Sparkles className="mr-2 h-5 w-5" />
+              Analizar Ineficiencias con IA
             </Button>
             {analysisResult && !isLoading && (
                  <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
@@ -335,6 +340,13 @@ export default function MejorasPage() {
                 </Button>
             )}
           </div>
+          
+          {isLoading && (
+              <div className="flex items-center justify-center p-8">
+                  <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
+                  <p className="text-lg text-muted-foreground">Analizando, por favor espere...</p>
+              </div>
+          )}
 
           {error && (
             <Alert variant="destructive" className="mb-6">
@@ -425,6 +437,104 @@ export default function MejorasPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isSelectionDialogOpen} onOpenChange={setIsSelectionDialogOpen}>
+          <DialogContent className="sm:max-w-3xl">
+              <DialogHeader>
+                  <DialogTitle>Seleccionar Elementos para Análisis de IA</DialogTitle>
+                  <DialogDescription>
+                      Elija qué procesos, actividades y sistemas desea incluir en el análisis para obtener resultados más precisos.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                  <Tabs defaultValue="procesos">
+                      <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="procesos">Procesos</TabsTrigger>
+                          <TabsTrigger value="actividades">Actividades</TabsTrigger>
+                          <TabsTrigger value="sistemas">Sistemas</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="procesos">
+                          <div className="flex justify-end my-2">
+                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds(allProcesses.map(p => p.id))}>Seleccionar Todos</Button>
+                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds([])}>Deseleccionar Todos</Button>
+                          </div>
+                          <ScrollArea className="h-[400px] border rounded-md p-2">
+                            {isLoadingProcesses ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
+                              <div className="space-y-2">
+                                {allProcesses.map(proc => (
+                                  <div key={proc.id} className="flex items-start space-x-2">
+                                    <Checkbox
+                                      id={`proc-${proc.id}`}
+                                      checked={selectedProcessIds.includes(proc.id)}
+                                      onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))}
+                                      className="mt-1"
+                                    />
+                                    <label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                                      {proc.proceso}
+                                      <span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span>
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            }
+                          </ScrollArea>
+                      </TabsContent>
+                       <TabsContent value="actividades">
+                           <div className="flex justify-end my-2">
+                              <Button variant="link" size="sm" onClick={() => setSelectedActivityIds(actividades.filter(a=>a.activa).map(a => a.id))}>Seleccionar Todas</Button>
+                              <Button variant="link" size="sm" onClick={() => setSelectedActivityIds([])}>Deseleccionar Todas</Button>
+                          </div>
+                          <ScrollArea className="h-[400px] border rounded-md p-2">
+                            {isLoadingActividades ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
+                              <div className="space-y-2">
+                                {actividades.filter(a => a.activa).map(act => (
+                                  <div key={act.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`act-${act.id}`}
+                                      checked={selectedActivityIds.includes(act.id)}
+                                      onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}
+                                    />
+                                    <label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                                      {act.nombre}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            }
+                          </ScrollArea>
+                      </TabsContent>
+                      <TabsContent value="sistemas">
+                          <div className="flex justify-end my-2">
+                              <Button variant="link" size="sm" onClick={() => setSelectedSystemIds(sistemas.map(s => s.id))}>Seleccionar Todos</Button>
+                              <Button variant="link" size="sm" onClick={() => setSelectedSystemIds([])}>Deseleccionar Todos</Button>
+                          </div>
+                          <ScrollArea className="h-[400px] border rounded-md p-2">
+                             {isLoadingSistemasCostos ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
+                              <div className="space-y-2">
+                                {sistemas.map(sys => (
+                                  <div key={sys.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`sys-${sys.id}`}
+                                      checked={selectedSystemIds.includes(sys.id)}
+                                      onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}
+                                    />
+                                    <label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                                      {sys.nombre}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            }
+                          </ScrollArea>
+                      </TabsContent>
+                  </Tabs>
+              </div>
+              <DialogFooter>
+                  <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                  <Button onClick={runAnalysis}>Analizar Selección ({selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length})</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
