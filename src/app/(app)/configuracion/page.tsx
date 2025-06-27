@@ -184,8 +184,8 @@ export default function ConfiguracionPage() {
   const filteredSistemas = useMemo(() => sistemas.filter(s => s.nombre.toLowerCase().includes(sistemaSearchTerm.toLowerCase())), [sistemas, sistemaSearchTerm]);
 
   // Submit Handlers
-  function handleAreaSubmit(data: AreaFormData) {
-    if (editingArea) updateArea(editingArea.id, data.nombre); else addArea(data.nombre);
+  async function handleAreaSubmit(data: AreaFormData) {
+    if (editingArea) await updateArea(editingArea.id, data.nombre); else await addArea(data.nombre);
     setIsAreaDialogOpen(false);
   }
   function handleDeptoSubmit(data: DepartamentoFormData) {
@@ -212,7 +212,7 @@ export default function ConfiguracionPage() {
   
   // Delete Logic
   function promptDelete(id: string, name: string, type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema') { setItemToDelete({ id, name, type }); setIsConfirmDeleteDialogOpen(true); }
-  function executeDelete() {
+  async function executeDelete() {
     if (!itemToDelete) return;
     const { id, name, type } = itemToDelete;
     let isUsed = false;
@@ -224,7 +224,7 @@ export default function ConfiguracionPage() {
             const isUsedInPuestos = puestos.some(p => p.areaId === id);
             isUsed = isUsedInDeptos || isUsedInPuestos;
             usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestos ? 'Puestos' : '');
-            if (!isUsed) deleteArea(id);
+            if (!isUsed) await deleteArea(id);
             break;
         case 'departamento':
             isUsed = puestos.some(p => p.departamentoId === id);
@@ -583,4 +583,3 @@ export default function ConfiguracionPage() {
     </div>
   );
 }
-
