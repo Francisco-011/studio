@@ -88,18 +88,106 @@ const initialMockUsers: User[] = [
 const ITEMS_PER_PAGE = 10;
 const LOCAL_STORAGE_PERMISSIONS_KEY = 'proceza-role-permissions';
 
-// Permissions configuration
 const PERMISSION_CONFIG = {
-  dashboard: { label: 'Dashboard', permissions: { view: 'Ver Dashboard' } },
-  captura: { label: 'Captura de Procesos', permissions: { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar' } },
-  procesosRegistrados: { label: 'Procesos Registrados', permissions: { view: 'Ver', edit: 'Editar', delete: 'Eliminar' } },
-  actividades: { label: 'Actividades', permissions: { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar' } },
-  panelJerarquico: { label: 'Panel Jerárquico', permissions: { view: 'Ver', manage: 'Gestionar (Mover/Asignar)' } },
-  mejoras: { label: 'Oportunidades de Mejora', permissions: { view: 'Ver', analyze: 'Analizar con IA' } },
-  acciones: { label: 'Acciones de Mejora', permissions: { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar' } },
-  auditoria: { label: 'Auditoría', permissions: { view: 'Ver', perform: 'Realizar Auditorías' } },
-  configuracion: { label: 'Configuración', permissions: { view: 'Ver', edit: 'Editar Maestros', bulk_upload: 'Carga Masiva' } },
-  usuarios: { label: 'Gestión de Usuarios', permissions: { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar', manage_permissions: 'Gestionar Permisos' } },
+  dashboard: { 
+    label: 'Dashboards', 
+    permissions: { 
+      view_resumen: 'Ver Resumen Ejecutivo',
+      view_procesos: 'Ver Dash. Procesos',
+      view_mejoras: 'Ver Dash. Mejoras',
+      view_auditoria: 'Ver Dash. Auditoría',
+    } 
+  },
+  captura: { 
+    label: 'Captura de Procesos', 
+    permissions: { 
+      create: 'Iniciar Nueva Captura' 
+    } 
+  },
+  procesosRegistrados: { 
+    label: 'Procesos Registrados', 
+    permissions: { 
+      view: 'Ver Procesos', 
+      edit: 'Editar Procesos', 
+      toggle_status: 'Activar/Inactivar', 
+      delete: 'Eliminar', 
+      restore: 'Recuperar Eliminados',
+      export: 'Exportar CSV'
+    } 
+  },
+  actividades: { 
+    label: 'Actividades', 
+    permissions: { 
+      view: 'Ver Actividades',
+      create: 'Crear', 
+      edit: 'Editar', 
+      toggle_status: 'Activar/Inactivar', 
+      delete: 'Eliminar', 
+      restore: 'Recuperar Eliminados',
+      export: 'Exportar CSV' 
+    } 
+  },
+  panelJerarquico: { 
+    label: 'Panel Jerárquico', 
+    permissions: { 
+      view: 'Ver Panel', 
+      manage: 'Gestionar Flujos (Drag & Drop)', 
+      export: 'Exportar Vista' 
+    } 
+  },
+  analisis_ia: { 
+    label: 'Análisis IA (Oportunidades)', 
+    permissions: { 
+      view: 'Ver Página', 
+      analyze: 'Ejecutar Análisis con IA', 
+      generate_actions: 'Generar Acciones Propuestas' 
+    } 
+  },
+  acciones: { 
+    label: 'Acciones de Mejora', 
+    permissions: { 
+      view: 'Ver Acciones', 
+      create: 'Crear', 
+      edit: 'Editar', 
+      delete: 'Eliminar',
+      export: 'Exportar CSV'
+    } 
+  },
+  auditoria: { 
+    label: 'Auditoría y Registro', 
+    permissions: { 
+      view_history: 'Ver Historial de Auditorías', 
+      perform: 'Realizar Nuevas Auditorías', 
+      view_log: 'Ver Registro de Actividad del Sistema' 
+    } 
+  },
+  configuracion_maestros: { 
+    label: 'Configuración - Maestros', 
+    permissions: { 
+      view: 'Ver Maestros', 
+      manage_areas: 'Gestionar Áreas', 
+      manage_deptos: 'Gestionar Departamentos', 
+      manage_puestos: 'Gestionar Puestos', 
+      manage_sistemas: 'Gestionar Sistemas y Costos' 
+    } 
+  },
+  configuracion_cargamasiva: { 
+    label: 'Configuración - Carga Masiva', 
+    permissions: { 
+      view: 'Ver Carga Masiva', 
+      execute: 'Ejecutar Cargas' 
+    } 
+  },
+  usuarios: { 
+    label: 'Gestión de Usuarios', 
+    permissions: { 
+      view: 'Ver Usuarios', 
+      create: 'Crear', 
+      edit: 'Editar', 
+      delete: 'Eliminar', 
+      manage_permissions: 'Gestionar Permisos de Roles' 
+    } 
+  },
 };
 type ModuleKey = keyof typeof PERMISSION_CONFIG;
 
@@ -108,15 +196,46 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
   Administrador: Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
   'Gerente de Proyecto': {
     ...Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
-    'usuarios:delete': false, 'usuarios:manage_permissions': false, 'configuracion:edit': false, 'configuracion:bulk_upload': false,
+    'configuracion_maestros:manage_areas': false,
+    'configuracion_maestros:manage_deptos': false,
+    'configuracion_maestros:manage_puestos': false,
+    'configuracion_maestros:manage_sistemas': false,
+    'configuracion_cargamasiva:execute': false,
+    'usuarios:delete': false,
+    'usuarios:manage_permissions': false,
   },
   Consultor: {
-    'dashboard:view': true, 'captura:view': true, 'captura:create': true, 'procesosRegistrados:view': true, 'actividades:view': true,
-    'panelJerarquico:view': true, 'mejoras:view': true, 'mejoras:analyze': true, 'acciones:view': true, 'acciones:create': true,
-    'auditoria:view': true, 'auditoria:perform': true,
+    'dashboard:view_resumen': true,
+    'dashboard:view_procesos': true,
+    'dashboard:view_mejoras': true,
+    'dashboard:view_auditoria': true,
+    'captura:create': true,
+    'procesosRegistrados:view': true,
+    'procesosRegistrados:edit': true,
+    'actividades:view': true,
+    'actividades:create': true,
+    'actividades:edit': true,
+    'panelJerarquico:view': true,
+    'panelJerarquico:manage': true,
+    'panelJerarquico:export': true,
+    'analisis_ia:view': true,
+    'analisis_ia:analyze': true,
+    'analisis_ia:generate_actions': true,
+    'acciones:view': true,
+    'acciones:create': true,
+    'acciones:edit': true,
+    'acciones:export': true,
+    'auditoria:view_history': true,
+    'auditoria:perform': true,
+    'auditoria:view_log': true,
+    'configuracion_maestros:view': true,
   },
   'Usuario Final': {
-    'dashboard:view': true, 'procesosRegistrados:view': true, 'actividades:view': true,
+    'dashboard:view_resumen': true,
+    'dashboard:view_procesos': true,
+    'procesosRegistrados:view': true,
+    'actividades:view': true,
+    'panelJerarquico:view': true,
   },
 };
 
