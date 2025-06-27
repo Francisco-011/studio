@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -68,7 +67,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
 import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/contexts/ActivityLogContext';
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -76,7 +75,6 @@ import { cn, formatMinutesToHours } from '@/lib/utils';
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info } from "lucide-react";
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
@@ -159,8 +157,8 @@ export default function AuditoriaPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
+  const { procesos: allProcesses, isLoadingProcesos } = useProcesos();
 
-  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
   const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
 
@@ -206,10 +204,6 @@ export default function AuditoriaPage() {
   useEffect(() => {
     setIsLoading(true);
     try {
-      const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedProcesses) {
-        setAllProcesses(JSON.parse(storedProcesses).filter((p: any) => !p.deletedAt && p.activo !== false));
-      }
       const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
       if (storedAudits) {
         setPastAudits(JSON.parse(storedAudits));
@@ -513,8 +507,8 @@ export default function AuditoriaPage() {
             valA = a.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
             valB = b.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
         } else {
-          valA = a[auditSortConfig.key];
-          valB = b[auditSortConfig.key];
+          valA = a[auditSortConfig.key as keyof Audit];
+          valB = b[auditSortConfig.key as keyof Audit];
         }
 
         if (auditSortConfig.key === 'auditDate') {
@@ -567,8 +561,8 @@ export default function AuditoriaPage() {
 
     if (logSortConfig !== null) {
       filtered.sort((a, b) => {
-        let valA = a[logSortConfig.key];
-        let valB = b[logSortConfig.key];
+        let valA = a[logSortConfig.key as keyof ActivityLogEntry];
+        let valB = b[logSortConfig.key as keyof ActivityLogEntry];
 
         if (logSortConfig.key === 'timestamp') {
           valA = a.timestamp;
@@ -605,7 +599,7 @@ export default function AuditoriaPage() {
     return logSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos;
+  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos;
 
   if (isLoadingAllData) {
     return (

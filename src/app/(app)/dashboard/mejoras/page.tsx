@@ -30,10 +30,8 @@ import type { ChartConfig } from '@/components/ui/chart';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { Label } from '@/components/ui/label';
-
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 function formatDashboardCurrency(amount: number, currency: string) {
   if (currency === 'N/A' || !currency) return amount.toLocaleString('es-MX');
@@ -148,8 +146,8 @@ export default function MejorasDashboardPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { procesos: allCapturedProcesses, isLoadingProcesos } = useProcesos();
   
-  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -163,20 +161,9 @@ export default function MejorasDashboardPage() {
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
 
   useEffect(() => {
-    setIsLoadingData(isLoadingSistemasCostos || isLoadingAcciones || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos);
-  }, [isLoadingSistemasCostos, isLoadingAcciones, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos]);
+    setIsLoadingData(isLoadingSistemasCostos || isLoadingAcciones || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingProcesos);
+  }, [isLoadingSistemasCostos, isLoadingAcciones, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos, isLoadingProcesos]);
   
-  useEffect(() => {
-    try {
-        const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-        if (storedProcesses) {
-            setAllCapturedProcesses(JSON.parse(storedProcesses));
-        }
-    } catch(e) {
-        console.error("Error loading processes for mejoras dashboard", e);
-    }
-  }, []);
-
   const filterAccionesByCriteria = (accionesToFilter: Accion[], range?: DateRange): Accion[] => {
       let filtered = accionesToFilter;
       
@@ -308,7 +295,7 @@ export default function MejorasDashboardPage() {
   const filteredSystemCosts = useMemo(() => {
       if (isLoadingSistemasCostos || isLoadingAll) return [];
       
-      let processesToConsider = allCapturedProcesses.filter(p => !p.deletedAt);
+      let processesToConsider = allCapturedProcesses.filter(p => p.activo !== false && !p.deletedAt);
       if (selectedArea !== 'all') {
           processesToConsider = processesToConsider.filter(p => p.area === selectedArea);
       }

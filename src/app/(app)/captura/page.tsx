@@ -42,6 +42,7 @@ import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
 
 
@@ -92,7 +93,6 @@ const capturaFormSchema = z.object({
 
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -125,9 +125,8 @@ export default function CapturaPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { procesos: allProcesses, addProceso, isLoadingProcesos } = useProcesos();
 
-  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
   
   const isMounted = useRef(false);
@@ -185,23 +184,6 @@ export default function CapturaPage() {
       return false;
     });
   }, [allConfiguredSistemas, watchedAreaName, watchedDepartamentoName, form, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
-
-
-  useEffect(() => {
-    setIsLoadingProcesses(true);
-    try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        setAllProcesses(parsedData.filter(p => !p.deletedAt));
-      }
-    } catch (error) {
-      console.error("Error loading all processes from localStorage for dropdowns:", error);
-      toast({ title: "Error al Cargar Procesos", description: "No se pudieron cargar los procesos para las listas de selección.", variant: "destructive" });
-    } finally {
-      setIsLoadingProcesses(false);
-    }
-  }, []);
   
   useEffect(() => {
     if (watchedProcessName && allProcesses.length > 0) {
@@ -244,12 +226,8 @@ export default function CapturaPage() {
   }, [watchedDepartamentoName, setValue]);
 
 
-  function onSubmit(values: CapturaFormData) {
+  async function onSubmit(values: CapturaFormData) {
     try {
-      const existingDataString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      let existingData: CapturedProcess[] = existingDataString ? JSON.parse(existingDataString) : [];
-      const currentTime = new Date().getTime();
-
       const dataToSave: CapturaFormData = {
         ...values,
         departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
@@ -258,23 +236,20 @@ export default function CapturaPage() {
         activityOrder: values.activityOrder || [],
       };
       
-      const newProcess: CapturedProcess = {
-        ...dataToSave,
-        id: Date.now().toString(),
-        capturedAt: new Date().toISOString(),
-        updatedAt: currentTime,
-        activo: true, 
-      };
-      existingData.push(newProcess);
-      localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(existingData));
-      toast({
-        title: "Proceso Registrado",
-        description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
-      });
-      router.push(`/captura/${newProcess.id}/actividades`);
+      const newProcess = await addProceso(dataToSave);
+
+      if (newProcess) {
+        toast({
+          title: "Proceso Registrado",
+          description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
+        });
+        router.push(`/captura/${newProcess.id}/actividades`);
+      } else {
+        throw new Error("La función addProceso no retornó un proceso nuevo.");
+      }
 
     } catch (error) {
-      console.error("Error saving to localStorage:", error);
+      console.error("Error saving process:", error);
       toast({
         title: "Error al Guardar",
         description: "No se pudo guardar el proceso. Revise la consola para más detalles.",

@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext'; 
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
@@ -30,8 +30,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2 } from "lucide-react";
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
 
 const activityCaptureFormSchema = z.object({
@@ -50,7 +48,8 @@ export default function DefinirActividadesProcesoPage() {
   const params = useParams();
   const processId = params.processId as string;
 
-  const { actividades: globalActivities, addActividad: addGlobalActivity, updateActividad: updateGlobalActivity, isLoadingActividades: isLoadingGlobalActividades } = useActividades();
+  const { actividades: globalActivities, addActividad, updateActividad: updateGlobalActivity, isLoadingActividades: isLoadingGlobalActividades } = useActividades();
+  const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos(); 
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
@@ -79,47 +78,34 @@ export default function DefinirActividadesProcesoPage() {
   const watchedActivityName = activityForm.watch('nombre');
 
   useEffect(() => {
-    if (processId) {
-      try {
-        const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-        if (storedData) {
-          const allProcesses: CapturedProcess[] = JSON.parse(storedData);
-          const currentProcess = allProcesses.find(p => p.id === processId);
-          if (currentProcess) {
-            setParentProcess(currentProcess);
-             // Preload defined activities if they exist in activityOrder and global activities are loaded
-            if (currentProcess.activityOrder && currentProcess.activityOrder.length > 0 && !isLoadingGlobalActividades) {
-                const preloadedActivities: LocalActivityDefinition[] = currentProcess.activityOrder
-                    .map(actId => {
-                        const globalAct = globalActivities.find(ga => ga.id === actId);
-                        if (globalAct) {
-                            return {
-                                tempId: globalAct.id,
-                                nombre: globalAct.nombre,
-                                descripcionBreve: globalAct.descripcionBreve,
-                                sistemaUtilizado: globalAct.sistemaUtilizado,
-                            };
-                        }
-                        return null;
-                    })
-                    .filter((act): act is LocalActivityDefinition => act !== null);
-                setDefinedActivities(preloadedActivities);
-            }
-
-          } else {
-            toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive" });
-            router.push('/captura');
-          }
+    if (processId && !isLoadingProcesos) {
+      const currentProcess = procesos.find(p => p.id === processId);
+      if (currentProcess) {
+        setParentProcess(currentProcess);
+        if (currentProcess.activityOrder && currentProcess.activityOrder.length > 0 && !isLoadingGlobalActividades) {
+            const preloadedActivities: LocalActivityDefinition[] = currentProcess.activityOrder
+                .map(actId => {
+                    const globalAct = globalActivities.find(ga => ga.id === actId);
+                    if (globalAct) {
+                        return {
+                            tempId: globalAct.id,
+                            nombre: globalAct.nombre,
+                            descripcionBreve: globalAct.descripcionBreve,
+                            sistemaUtilizado: globalAct.sistemaUtilizado,
+                        };
+                    }
+                    return null;
+                })
+                .filter((act): act is LocalActivityDefinition => act !== null);
+            setDefinedActivities(preloadedActivities);
         }
-      } catch (error) {
-        console.error("Error loading parent process:", error);
-        toast({ title: "Error al Cargar Proceso", variant: "destructive" });
-        router.push('/captura');
-      } finally {
-        setIsLoading(false);
+      } else {
+        toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive" });
+        router.push('/procesos-y-flujos-registrados');
       }
+      setIsLoading(false);
     }
-  }, [processId, router, globalActivities, isLoadingGlobalActividades]);
+  }, [processId, router, procesos, globalActivities, isLoadingGlobalActividades, isLoadingProcesos]);
 
   const availableSistemasForActivityForm = useMemo(() => {
     if (isLoadingSistemasCostos || isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || !parentProcess) return [];
@@ -128,7 +114,6 @@ export default function DefinirActividadesProcesoPage() {
     const parentDeptoObj = parentAreaObj ? departamentos.find(d => d.nombre === parentProcess.departamento && d.areaId === parentAreaObj.id) : undefined;
     const parentPuestoObj = parentAreaObj ? puestos.find(p => {
         if (p.nombre !== parentProcess.puesto || p.areaId !== parentAreaObj.id) return false;
-        // Check for department match or no-department match
         return p.departamentoId === (parentDeptoObj ? parentDeptoObj.id : undefined);
     }) : undefined;
 
@@ -177,9 +162,7 @@ export default function DefinirActividadesProcesoPage() {
         });
 
         if (existingActivity) {
-            const processContext = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-            const allProcesses: CapturedProcess[] = processContext ? JSON.parse(processContext) : [];
-            const associatedProcess = allProcesses.find(p => existingActivity.procesosAsociadosIds?.includes(p.id));
+            const associatedProcess = procesos.find(p => existingActivity.procesosAsociadosIds?.includes(p.id));
             
             let contextMessage = "en otro proceso.";
             if (associatedProcess) {
@@ -193,7 +176,7 @@ export default function DefinirActividadesProcesoPage() {
     } else {
         setSimilarActivityWarning(null);
     }
-  }, [watchedActivityName, globalActivities, editingActivity]);
+  }, [watchedActivityName, globalActivities, editingActivity, procesos]);
 
   const handleActivityFormSubmit = (data: ActivityCaptureFormData) => {
     const activityDataForStorage: Omit<LocalActivityDefinition, 'tempId'> = {
@@ -262,7 +245,7 @@ export default function DefinirActividadesProcesoPage() {
           await updateGlobalActivity(existingGlobalActivity.id, {
             ...activityDataPayload,
             procesosAsociadosIds: updatedAssociatedIds,
-          });
+          }, procesos);
         } else {
           const newGlobalActData = {
             ...activityDataPayload,
@@ -275,23 +258,13 @@ export default function DefinirActividadesProcesoPage() {
         finalActivityIdsForProcessOrder.push(activityIdToLink);
       }
 
-      const storedProcessesString = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      let allProcesses: CapturedProcess[] = storedProcessesString ? JSON.parse(storedProcessesString) : [];
-      const processIndex = allProcesses.findIndex(p => p.id === parentProcess.id);
+      await updateProceso(parentProcess.id, {
+        activityOrder: finalActivityIdsForProcessOrder,
+        updatedAt: Date.now(),
+      });
 
-      if (processIndex !== -1) {
-        allProcesses[processIndex] = {
-          ...allProcesses[processIndex],
-          activityOrder: finalActivityIdsForProcessOrder,
-          updatedAt: Date.now(),
-        };
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allProcesses));
-        toast({ title: "Éxito", description: `Actividades guardadas y vinculadas al proceso '${parentProcess.proceso}'.` });
-        router.push('/procesos-y-flujos-registrados');
-      } else {
-        throw new Error("Proceso padre no encontrado en localStorage al momento de guardar orden de actividades.");
-      }
-
+      toast({ title: "Éxito", description: `Actividades guardadas y vinculadas al proceso '${parentProcess.proceso}'.` });
+      router.push('/procesos-y-flujos-registrados');
     } catch (e) {
       console.error("Error saving process activities:", e);
       toast({ title: "Error al Guardar", description: "No se pudieron guardar las actividades del proceso. Revise la consola.", variant: "destructive" });
@@ -301,7 +274,7 @@ export default function DefinirActividadesProcesoPage() {
   };
 
 
-  if (isLoading || !parentProcess || isLoadingGlobalActividades) {
+  if (isLoading || !parentProcess || isLoadingGlobalActividades || isLoadingProcesos) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />

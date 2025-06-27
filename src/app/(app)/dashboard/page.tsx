@@ -6,13 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp } from "lucide-react";
 import { parseISO } from 'date-fns';
 import { useAcciones } from '@/contexts/AccionesContext';
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatMinutesToHours } from '@/lib/utils';
-
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 interface AuditFinding {
   type: "Conforme" | "No Conforme" | "Oportunidad de Mejora";
@@ -23,6 +20,8 @@ interface Audit {
   status: 'En Progreso' | 'Completada' | 'Cancelada';
   findings: AuditFinding[];
 }
+
+const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 function formatDashboardCurrency(amount: number, currency: string) {
   try {
@@ -40,17 +39,15 @@ const renderMetric = (value: number | string, loading: boolean) => {
 }
 
 export default function DashboardPage() {
-  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
   const [allAudits, setAllAudits] = useState<Audit[]>([]);
   const [isLoadingLocalStorage, setIsLoadingLocalStorage] = useState(true);
 
+  const { procesos, isLoadingProcesos } = useProcesos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
 
   useEffect(() => {
     setIsLoadingLocalStorage(true);
     try {
-      const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedProcesses) setAllCapturedProcesses(JSON.parse(storedProcesses));
       const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
       if (storedAudits) {
         const parsedAudits = JSON.parse(storedAudits);
@@ -68,7 +65,7 @@ export default function DashboardPage() {
   }, []);
 
   const dashboardMetrics = useMemo(() => {
-    const processes = allCapturedProcesses.filter(p => p.activo !== false && !p.deletedAt);
+    const activeProcesses = procesos.filter(p => p.activo !== false && !p.deletedAt);
     const completedActions = globalAcciones.filter(acc => acc.estado === 'Completada');
     const completedAudits = allAudits.filter(a => a.status === 'Completada');
 
@@ -97,16 +94,16 @@ export default function DashboardPage() {
     const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
     
     return {
-      procesosMapeadosCount: processes.length,
+      procesosMapeadosCount: activeProcesses.length,
       accionesCompletadasCount: completedActions.length,
       auditoriasCompletadasCount: completedAudits.length,
       hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + audit.findings.filter(f => f.type === 'No Conforme').length, 0),
       ahorroCostosRealizado,
       ahorroTiempoRealizado,
     };
-  }, [allCapturedProcesses, globalAcciones, allAudits]);
+  }, [procesos, globalAcciones, allAudits]);
 
-  const isLoadingAll = isLoadingLocalStorage || isLoadingAcciones;
+  const isLoadingAll = isLoadingLocalStorage || isLoadingAcciones || isLoadingProcesos;
 
   return (
     <div className="container mx-auto py-8">

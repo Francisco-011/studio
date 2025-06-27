@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
@@ -32,8 +32,6 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 
-
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) {
@@ -75,7 +73,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 
 
 export default function ProcesosDashboardPage() {
-  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const { procesos: allCapturedProcesses, isLoadingProcesos } = useProcesos();
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const { actividades: globalActividades, isLoadingActividades } = useActividades();
@@ -98,20 +96,9 @@ export default function ProcesosDashboardPage() {
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
 
-
    useEffect(() => {
-    setIsLoadingData(true);
-    try {
-      const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedProcesses) {
-        setAllCapturedProcesses(JSON.parse(storedProcesses));
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error);
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, []);
+    setIsLoadingData(isLoadingProcesos);
+  }, [isLoadingProcesos]);
 
   const filteredProcesses = useMemo(() => {
     let processes = allCapturedProcesses;
@@ -246,7 +233,7 @@ export default function ProcesosDashboardPage() {
       if (selectedDepartamento !== 'all') {
           const depto = departamentos.find(d => d.nombre === selectedDepartamento);
           if (depto) {
-              scopedPuestos = scopedPuestos.filter(p => p.departamentoId === depto.id);
+             scopedPuestos = scopedPuestos.filter(p => p.departamentoId === depto.id);
           } else {
              return [];
           }

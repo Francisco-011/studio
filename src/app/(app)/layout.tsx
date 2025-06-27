@@ -8,6 +8,7 @@ import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
 import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
 import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
+import { ProcesosProvider } from '@/contexts/ProcesosContext';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -21,9 +22,11 @@ export default function AuthenticatedAppLayout({
           <PuestosProvider>
             <SistemasCostosProvider>
               <ActividadesProvider>
-                <AccionesProvider>
-                  <AppLayout>{children}</AppLayout>
-                </AccionesProvider>
+                <ProcesosProvider>
+                  <AccionesProvider>
+                    <AppLayout>{children}</AppLayout>
+                  </AccionesProvider>
+                </ProcesosProvider>
               </ActividadesProvider>
             </SistemasCostosProvider>
           </PuestosProvider>

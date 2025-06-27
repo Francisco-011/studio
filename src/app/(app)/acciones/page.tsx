@@ -11,7 +11,7 @@ import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, ty
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -39,7 +39,6 @@ import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon,
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
 const NO_ELEMENTO_SELECTED = "__NO_ELEMENTO_SELECTED__";
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 
 const accionFormSchema = z.object({
@@ -136,9 +135,7 @@ export default function AccionesPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
-  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
-
+  const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccionEstado | 'all'>('all');
@@ -178,20 +175,6 @@ export default function AccionesPage() {
     return String(value);
   }
 
-
-  useEffect(() => {
-    setIsLoadingProcesses(true);
-    try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        setCapturedProcesses(JSON.parse(storedData).filter((p: any) => !p.deletedAt && p.activo !== false));
-      }
-    } catch (e) {
-      console.error("Error loading processes for dropdown:", e);
-    } finally {
-      setIsLoadingProcesses(false);
-    }
-  }, []);
 
   const accionForm = useForm<AccionFormData>({
     resolver: zodResolver(accionFormSchema),
@@ -319,6 +302,35 @@ export default function AccionesPage() {
     if (!actionToComplete) return;
 
     const { id, data } = actionToComplete;
+    const { applyTimeSaving, applyCostSaving } = completionOptions;
+    
+    const cambios: CambioHistorial[] = [];
+    if (data.procesoId && (applyCostSaving || applyTimeSaving)) {
+        const targetProcess = capturedProcesses.find(p => p.id === data.procesoId);
+        if (targetProcess) {
+            const updatesForProcess: Partial<CapturedProcess> = {};
+            
+            if (applyTimeSaving && data.ahorroTiempoEstimado && data.unidadTiempoAhorro === 'Minutos/Instancia') {
+                if (targetProcess.tiempoEstimado !== undefined) {
+                    updatesForProcess.tiempoEstimado = Math.max(0, targetProcess.tiempoEstimado - data.ahorroTiempoEstimado);
+                    cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: targetProcess.tiempoEstimado, after: updatesForProcess.tiempoEstimado });
+                }
+            }
+            
+            if (applyCostSaving && data.ahorroEstimado) {
+                 if (targetProcess.costoEstimado !== undefined) {
+                    updatesForProcess.costoEstimado = Math.max(0, targetProcess.costoEstimado - data.ahorroEstimado);
+                    cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: targetProcess.costoEstimado, after: updatesForProcess.costoEstimado });
+                }
+            }
+
+            if (Object.keys(updatesForProcess).length > 0) {
+                 await updateProceso(data.procesoId, updatesForProcess);
+                 toast({ title: "Mejora Aplicada", description: `Se aplicaron ${cambios.length} cambio(s) al proceso asociado.`});
+            }
+        }
+    }
+    
     const dataToSave = {
         ...data,
         area: data.area || undefined,
@@ -329,9 +341,9 @@ export default function AccionesPage() {
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
     };
     
-    await updateAccion(id, dataToSave, completionOptions);
+    await updateAccion(id, dataToSave, cambios);
 
-    toast({ title: 'Acción Completada', description: 'La acción y sus mejoras asociadas han sido aplicadas según selección.' });
+    toast({ title: 'Acción Completada', description: 'La acción y sus mejoras asociadas han sido aplicadas.' });
 
     setIsCompleteConfirmDialogOpen(false);
     setActionToComplete(null);
@@ -517,7 +529,7 @@ export default function AccionesPage() {
   };
 
 
-  if (isLoadingAcciones || isLoadingProcesses || isLoadingActividades) {
+  if (isLoadingAcciones || isLoadingProcesos || isLoadingActividades) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -624,7 +636,7 @@ export default function AccionesPage() {
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
-                                    {capturedProcesses.map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
+                                    {capturedProcesses.filter(p => p.activo !== false).map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />

@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -37,7 +37,6 @@ interface Audit {
 }
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -78,7 +77,7 @@ type ChartType = 'evolucion' | 'distribucion';
 
 export default function AuditoriaDashboardPage() {
   const [allAudits, setAllAudits] = useState<Audit[]>([]);
-  const [allCapturedProcesses, setAllCapturedProcesses] = useState<CapturedProcess[]>([]);
+  const { procesos: allCapturedProcesses, isLoadingProcesos } = useProcesos();
   const [isLoadingData, setIsLoadingData] = useState(true);
   
   const { areas, isLoading: isLoadingAreas } = useAreas();
@@ -106,10 +105,6 @@ export default function AuditoriaDashboardPage() {
             findings: audit.findings || [],
         }));
         setAllAudits(sanitizedAudits);
-      }
-       const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedProcesses) {
-        setAllCapturedProcesses(JSON.parse(storedProcesses));
       }
     } catch (error) {
       console.error("Error loading data from localStorage:", error);
@@ -268,7 +263,7 @@ export default function AuditoriaDashboardPage() {
   }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
 
-  const isLoadingAll = isLoadingData || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
+  const isLoadingAll = isLoadingData || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
 
   const handleExport = () => {
     if (filteredAudits.length === 0) {

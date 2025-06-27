@@ -12,10 +12,8 @@ import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos, type PuestoCreationData } from '@/contexts/PuestosContext';
 import { useSistemasCostos, type SistemaCreationData } from '@/contexts/SistemasCostosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import type { CapturedProcess } from '../../procesos-y-flujos-registrados/page';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import type { CapturaFormData } from '../../captura/page';
-
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 
 interface ImportResult {
     success: number;
@@ -68,6 +66,7 @@ export default function CargaMasivaPage() {
     const { puestos, addPuesto, isLoadingPuestos } = usePuestos();
     const { sistemas, addSistema, isLoadingSistemasCostos } = useSistemasCostos();
     const { actividades, addActividad, isLoadingActividades } = useActividades();
+    const { procesos, addProceso: addContextProceso } = useProcesos();
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>, entity: EntityKey) => {
         const file = e.target.files?.[0] || null;
@@ -121,60 +120,60 @@ export default function CargaMasivaPage() {
             // This is a simplified import logic. A real-world app would need more robust validation.
             switch (entity) {
                 case 'areas':
-                    data.forEach(row => {
+                    for (const row of data) {
                         const nombre = row.nombre?.trim();
                         if (!nombre) {
                             result.failed++;
                             result.errors.push(`Fila inválida, falta el nombre: ${JSON.stringify(row)}`);
-                            return;
+                            continue;
                         }
                         if (areas.some(a => a.nombre.toLowerCase() === nombre.toLowerCase())) {
                             result.skipped++;
                         } else {
-                            addArea(nombre);
+                            await addArea(nombre);
                             result.success++;
                         }
-                    });
+                    }
                     break;
                 case 'puestos':
-                    data.forEach(row => {
+                    for (const row of data) {
                         const nombre = row.nombre?.trim();
                         if (!nombre || !row.nivelOrganizacional) {
                             result.failed++;
                             result.errors.push(`Fila inválida, faltan datos requeridos (nombre, nivelOrganizacional): ${JSON.stringify(row)}`);
-                            return;
+                            continue;
                         }
                         const area = areas.find(a => a.nombre === row.areaNombre);
                         const jefe = puestos.find(p => p.nombre === row.jefePuestoNombre);
 
                         if(puestos.some(p => p.nombre.toLowerCase() === nombre.toLowerCase())) {
                             result.skipped++;
-                            return;
+                            continue;
                         }
 
                         const newPuesto: PuestoCreationData = {
                             nombre,
-                            areaId: area?.id,
+                            areaId: area?.id || '',
                             jefeInmediato: jefe?.id,
                             nivelOrganizacional: row.nivelOrganizacional as any,
                             numeroPersonas: row.numeroPersonas ? parseInt(row.numeroPersonas) : undefined
                         };
-                        addPuesto(newPuesto);
+                        await addPuesto(newPuesto);
                         result.success++;
-                    });
+                    }
                     break;
                 case 'sistemas':
-                    data.forEach(row => {
+                    for (const row of data) {
                         const nombre = row.nombre?.trim();
                         if (!nombre || !row.scope) {
                             result.failed++;
                             result.errors.push(`Fila inválida, faltan datos requeridos (nombre, scope): ${JSON.stringify(row)}`);
-                            return;
+                            continue;
                         }
 
                         if(sistemas.some(s => s.nombre.toLowerCase() === nombre.toLowerCase())) {
                             result.skipped++;
-                            return;
+                            continue;
                         }
 
                         let scopeId: string | undefined;
@@ -189,65 +188,54 @@ export default function CargaMasivaPage() {
                             scope: row.scope as any,
                             scopeId,
                         };
-                        addSistema(newSistema);
+                        await addSistema(newSistema);
                         result.success++;
-                    });
+                    }
                     break;
                 case 'actividades':
-                     data.forEach(row => {
+                     for (const row of data) {
                         const nombre = row.nombre?.trim();
                         if (!nombre) {
                             result.failed++;
                             result.errors.push(`Fila inválida, falta nombre: ${JSON.stringify(row)}`);
-                            return;
+                            continue;
                         }
 
                         if(actividades.some(a => a.nombre.toLowerCase() === nombre.toLowerCase())) {
                             result.skipped++;
-                            return;
+                            continue;
                         }
                         
                         const newActividad: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> = {
                             nombre,
                             descripcionBreve: row.descripcionBreve,
                             sistemaUtilizado: row.sistemaUtilizado,
-                            tiempoEstimadoActividad: row.tiempoEstimadoActividad ? parseInt(row.tiempoEstimadoActividad) : undefined,
-                            tiempoIdealActividad: row.tiempoIdealActividad ? parseInt(row.tiempoIdealActividad) : undefined,
-                            costoEstimadoActividad: row.costoEstimadoActividad ? parseFloat(row.costoEstimadoActividad) : undefined,
-                            costoIdealActividad: row.costoIdealActividad ? parseFloat(row.costoIdealActividad) : undefined,
-                            monedaCostoActividad: row.monedaCostoActividad as any,
-                            frecuenciaActividad: row.frecuenciaActividad,
                             activa: true,
                             procesosAsociadosIds: [],
                         };
-                        addActividad(newActividad);
+                        await addActividad(newActividad);
                         result.success++;
-                    });
+                    }
                     break;
                 case 'procesos':
-                    const storedProcesses = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-                    let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
-                    
-                    data.forEach(row => {
+                    for (const row of data) {
                          const nombreProceso = row.proceso?.trim();
                          if (!nombreProceso || !row.area || !row.puesto || !row.descripcion || !row.frecuencia) {
                              result.failed++;
                              result.errors.push(`Fila de proceso inválida, faltan datos requeridos: ${JSON.stringify(row)}`);
-                             return;
+                             continue;
                          }
 
-                         if (allProcesses.some(p => p.proceso.toLowerCase() === nombreProceso.toLowerCase())) {
+                         if (procesos.some(p => p.proceso.toLowerCase() === nombreProceso.toLowerCase())) {
                              result.skipped++;
-                             return;
+                             continue;
                          }
                          
-                         const newProcess: CapturedProcess = {
-                             id: Date.now().toString() + Math.random().toString(16).slice(2),
-                             capturedAt: new Date().toISOString(),
-                             updatedAt: Date.now(),
+                         const newProcess: CapturaFormData = {
                              proceso: nombreProceso,
                              area: row.area,
                              puesto: row.puesto,
+                             departamento: row.departamento || undefined,
                              descripcion: row.descripcion,
                              frecuencia: row.frecuencia as any,
                              tiempoEstimado: row.tiempoEstimado ? parseInt(row.tiempoEstimado) : undefined,
@@ -261,12 +249,10 @@ export default function CargaMasivaPage() {
                              informacionEntrega: row.informacionEntrega,
                              procesosSalida: row.procesosSalida?.split(';').map(s => s.trim()).filter(Boolean) || [],
                              activityOrder: [],
-                             activo: true,
                          };
-                         allProcesses.push(newProcess);
+                         await addContextProceso(newProcess);
                          result.success++;
-                    });
-                    localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allProcesses));
+                    }
                     break;
                 default:
                     toast({ title: "Tipo de entidad no soportado", variant: "destructive" });
@@ -353,4 +339,3 @@ export default function CargaMasivaPage() {
         </div>
     );
 }
-

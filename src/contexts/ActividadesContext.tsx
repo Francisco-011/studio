@@ -34,7 +34,7 @@ interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
   addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Promise<Actividad>;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>, allProcesses?: CapturedProcess[]) => Promise<void>;
   softDeleteActividad: (id: string) => Promise<void>;
   restoreActividad: (id: string) => Promise<void>;
   toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
@@ -44,7 +44,6 @@ interface ActividadesContextType {
 const ActividadesContext = createContext<ActividadesContextType | undefined>(undefined);
 
 const ACTIVIDADES_COLLECTION = 'actividades';
-const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data';
 
 export function ActividadesProvider({ children }: { children: ReactNode }) {
   const [actividades, setActividades] = useState<Actividad[]>([]);
@@ -113,7 +112,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>, allProcesses: CapturedProcess[] = []) => {
     const allKnownActivities = [...actividades, ...deletedActividades];
     const originalActividad = allKnownActivities.find(a => a.id === id);
     if (!originalActividad) return;
@@ -135,9 +134,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     });
 
     if (data.procesosAsociadosIds && JSON.stringify(originalActividad.procesosAsociadosIds?.sort()) !== JSON.stringify(data.procesosAsociadosIds.sort())) {
-         const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-         const currentProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
-         const getProcessName = (procId: string) => currentProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
+         const getProcessName = (procId: string) => allProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
          
          changes.push({
             timestamp: new Date().toISOString(),

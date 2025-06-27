@@ -4,10 +4,10 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
 
 
 export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada", "En Revisión"] as const;
@@ -52,7 +52,7 @@ export interface Accion {
 interface AccionesContextType {
   acciones: Accion[];
   addAccion: (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => Promise<void>;
-  updateAccion: (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => Promise<void>;
+  updateAccion: (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, historial?: CambioHistorial[]) => Promise<void>;
   deleteAccion: (id: string) => Promise<void>;
   isLoadingAcciones: boolean;
 }
@@ -60,7 +60,6 @@ interface AccionesContextType {
 const AccionesContext = createContext<AccionesContextType | undefined>(undefined);
 
 const ACCIONES_COLLECTION = 'acciones';
-const LOCAL_STORAGE_PROCESOS_KEY = 'proceza-captured-data'; // This will remain for now
 
 export function AccionesProvider({ children }: { children: ReactNode }) {
   const [acciones, setAcciones] = useState<Accion[]>([]);
@@ -108,7 +107,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updateAccion = useCallback(async (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, options?: { applyTimeSaving?: boolean; applyCostSaving?: boolean }) => {
+  const updateAccion = useCallback(async (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, historial: CambioHistorial[] = []) => {
     const originalAccion = acciones.find(a => a.id === id);
     if (!originalAccion) {
       toast({ title: "Error", description: "No se pudo encontrar la acción a actualizar.", variant: "destructive" });
@@ -117,89 +116,18 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
 
     const accionDocRef = doc(db, ACCIONES_COLLECTION, id);
     const dataToUpdate: any = { ...data, updatedAt: serverTimestamp() };
-    
-    addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: data.nombre || originalAccion.nombre, details: `Se actualizó la acción "${originalAccion.nombre}".` });
 
-    if (data.estado === 'Completada' && originalAccion.estado !== 'Completada') {
-      const cambios: CambioHistorial[] = [];
-      
-      try {
-        const timeSavingInMinutes = (options?.applyTimeSaving && data.ahorroTiempoEstimado && data.unidadTiempoAhorro === 'Minutos/Instancia')
-          ? data.ahorroTiempoEstimado
-          : 0;
-
-        const costSaving = (options?.applyCostSaving && data.ahorroEstimado !== undefined)
-          ? data.ahorroEstimado
-          : 0;
-
-        if (data.procesoId && (timeSavingInMinutes > 0 || costSaving > 0)) {
-          const storedProcesses = localStorage.getItem(LOCAL_STORAGE_PROCESOS_KEY);
-          let allProcesses: CapturedProcess[] = storedProcesses ? JSON.parse(storedProcesses) : [];
-          const processIndex = allProcesses.findIndex(p => p.id === data.procesoId);
-
-          if (processIndex !== -1) {
-            const targetProcess = {...allProcesses[processIndex]};
-            let processWasUpdated = false;
-            
-            if (timeSavingInMinutes > 0 && targetProcess.tiempoEstimado !== undefined) {
-              const antes = targetProcess.tiempoEstimado;
-              const despues = Math.max(0, antes - timeSavingInMinutes);
-              cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: antes, after: despues });
-              targetProcess.tiempoEstimado = despues;
-              processWasUpdated = true;
-            }
-            if (costSaving > 0 && targetProcess.costoEstimado !== undefined) {
-              const antes = targetProcess.costoEstimado;
-              const despues = Math.max(0, antes - costSaving);
-              cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: antes, after: despues });
-              targetProcess.costoEstimado = despues;
-              processWasUpdated = true;
-            }
-            
-            if(processWasUpdated) {
-              targetProcess.updatedAt = Date.now();
-              allProcesses[processIndex] = targetProcess;
-              localStorage.setItem(LOCAL_STORAGE_PROCESOS_KEY, JSON.stringify(allProcesses));
-            }
-          }
-        }
-
-        if(data.unidadTiempoAhorro && data.unidadTiempoAhorro !== 'Minutos/Instancia' && options?.applyTimeSaving){
-          toast({
-              title: "Mejora de tiempo no aplicada",
-              description: `La unidad (${data.unidadTiempoAhorro}) no es 'por instancia' y no se pudo aplicar.`,
-              variant: "default",
-              duration: 7000
-          });
-        }
-
-        dataToUpdate.historialDeCambios = [...(originalAccion.historialDeCambios || []), ...cambios];
-        
-        if(cambios.length > 0) {
-          toast({
-            title: "Mejora Aplicada",
-            description: `Se aplicaron ${cambios.length} cambio(s) al elemento asociado.`,
-          });
-           addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: originalAccion.nombre, details: `Se completó la acción "${originalAccion.nombre}" y se aplicaron mejoras automáticas.` });
-        }
-
-      } catch (e) {
-        console.error("Error al aplicar cambios de la acción completada:", e);
-        toast({
-          title: "Error al aplicar mejora",
-          description: "No se pudieron actualizar los datos del proceso/actividad asociado.",
-          variant: "destructive",
-        });
-      }
+    if (historial.length > 0) {
+        dataToUpdate.historialDeCambios = [...(originalAccion.historialDeCambios || []), ...historial];
     }
     
     try {
       await updateDoc(accionDocRef, dataToUpdate);
+      addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: data.nombre || originalAccion.nombre, details: `Se actualizó la acción "${originalAccion.nombre}".` });
     } catch(e) {
       console.error("Error updating accion:", e);
       toast({ title: "Error", description: "No se pudo actualizar la acción de mejora.", variant: "destructive" });
     }
-
   }, [acciones, addLogEntry]);
 
 
