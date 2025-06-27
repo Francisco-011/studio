@@ -126,7 +126,7 @@ const renderMetric = (value: number | string, loading: boolean, comparisonValue?
   );
 }
 
-type ChartType = 'costos' | 'ahorrosPorAccion' | 'ahorrosPorArea';
+type AhorrosChartType = 'ahorrosPorAccion' | 'ahorrosPorArea';
 
 interface ValidatedImprovement {
     id: string;
@@ -154,7 +154,7 @@ export default function MejorasDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonDateRange, setComparisonDateRange] = useState<DateRange | undefined>(undefined);
-  const [chartType, setChartType] = useState<ChartType>('ahorrosPorAccion');
+  const [ahorrosChartType, setAhorrosChartType] = useState<AhorrosChartType>('ahorrosPorAccion');
   
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
@@ -295,7 +295,7 @@ export default function MejorasDashboardPage() {
           (system.costsByCurrency && system.costsByCurrency.length > 0)
               ? system.costsByCurrency.map(cost => ({
                   id: `${system.id}-${cost.currency}`,
-                  name: system.name,
+                  name: system.name || '',
                   currency: cost.currency,
                   annualUsageCost: cost.annualUsageCost,
                   annualLicenseCost: cost.annualLicenseCost,
@@ -303,7 +303,7 @@ export default function MejorasDashboardPage() {
               }))
               : [{
                   id: system.id,
-                  name: system.name,
+                  name: system.name || '',
                   currency: 'N/A',
                   annualUsageCost: 0,
                   annualLicenseCost: 0,
@@ -357,24 +357,11 @@ export default function MejorasDashboardPage() {
       return mejoras;
   }, [filteredAcciones, allCapturedProcesses]);
   
-  const { chartData, chartConfig, chartDescription } = useMemo(() => {
+  const { ahorrosChartData, ahorrosChartConfig, ahorrosChartDescription } = useMemo(() => {
     let data: any[] = [], description = '';
     const config: ChartConfig = {};
     
-    switch (chartType) {
-        case 'costos':
-            description = 'Comparativa de costos anuales (Uso vs. Licencias) por sistema y moneda.';
-            data = filteredSystemCosts
-                .filter(sys => sys.currency !== 'N/A')
-                .map(sys => ({
-                    name: `${sys.name} (${sys.currency})`,
-                    CostoUso: sys.annualUsageCost,
-                    CostoLicencias: sys.annualLicenseCost,
-                }));
-            config['CostoUso'] = { label: 'Costo Uso', color: 'hsl(var(--chart-2))' };
-            config['CostoLicencias'] = { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' };
-            break;
-
+    switch (ahorrosChartType) {
         case 'ahorrosPorArea':
             description = 'Suma de ahorros anuales estimados por área, desglosado por moneda.';
             const ahorrosPorArea = new Map<string, { [key: string]: number }>();
@@ -431,10 +418,24 @@ export default function MejorasDashboardPage() {
             break;
     }
     
-    return { chartData: data, chartConfig: config, chartDescription: description };
+    return { ahorrosChartData: data, ahorrosChartConfig: config, ahorrosChartDescription: description };
 
-  }, [chartType, filteredSystemCosts, filteredAcciones, comparisonAcciones, isComparing]);
+  }, [ahorrosChartType, filteredAcciones, comparisonAcciones, isComparing]);
 
+  const costosChartData = useMemo(() => {
+      return filteredSystemCosts
+          .filter(sys => sys.currency !== 'N/A')
+          .map(sys => ({
+              name: `${sys.name} (${sys.currency})`,
+              CostoUso: sys.annualUsageCost,
+              CostoLicencias: sys.annualLicenseCost,
+          }));
+  }, [filteredSystemCosts]);
+
+  const costosChartConfig: ChartConfig = {
+      CostoUso: { label: 'Costo Uso', color: 'hsl(var(--chart-2))' },
+      CostoLicencias: { label: 'Costo Licencias', color: 'hsl(var(--chart-1))' },
+  };
 
   const handleExport = (type: 'sistemas' | 'mejoras') => {
     if (type === 'sistemas') {
@@ -587,24 +588,23 @@ export default function MejorasDashboardPage() {
       <Card className="shadow-lg mb-8">
         <CardHeader>
            <div className="flex justify-between items-center">
-              <CardTitle>Análisis Gráfico</CardTitle>
-              <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
+              <CardTitle>Análisis Gráfico de Ahorros</CardTitle>
+              <Select value={ahorrosChartType} onValueChange={(v) => setAhorrosChartType(v as AhorrosChartType)}>
                   <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                       <SelectItem value="ahorrosPorAccion">Ahorros Monetarios por Acción</SelectItem>
                       <SelectItem value="ahorrosPorArea">Ahorros Monetarios por Área</SelectItem>
-                      <SelectItem value="costos">Costos Anuales de Sistemas</SelectItem>
                   </SelectContent>
               </Select>
            </div>
-            <CardDescription>{chartDescription}</CardDescription>
+            <CardDescription>{ahorrosChartDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
-          chartData.length > 0 ? (
-            <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+          ahorrosChartData.length > 0 ? (
+            <ChartContainer config={ahorrosChartConfig} className="min-h-[300px] w-full">
                 <ResponsiveContainer>
-                    <BarChart data={chartData} layout="vertical">
+                    <BarChart data={ahorrosChartData} layout="vertical">
                         <CartesianGrid horizontal={false} />
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
@@ -613,28 +613,16 @@ export default function MejorasDashboardPage() {
                             content={
                                 <ChartTooltipContent
                                     formatter={(value, name, item) => {
-                                        try {
-                                          const { payload } = item;
-                                          let currency = 'N/A';
-
-                                          if (chartType === 'costos') {
-                                              const match = payload.name.match(/\(([^)]+)\)/);
-                                              if (match) currency = match[1];
-                                          } else if (chartType === 'ahorrosPorAccion') {
-                                              currency = payload.moneda || 'N/A';
-                                          } else if (chartType === 'ahorrosPorArea') {
-                                              currency = name || 'N/A';
-                                          }
-                                          const formattedValue = formatDashboardCurrency(value as number, currency);
-                                          return (
-                                              <div className="flex w-full justify-between items-center">
-                                                  <span>{chartConfig[name]?.label || name}</span>
-                                                  <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                                      {formattedValue}
-                                                  </span>
-                                              </div>
-                                          );
-                                        } catch(e) { return null; }
+                                        const { payload } = item;
+                                        const currency = payload.moneda || name || 'N/A';
+                                        return (
+                                            <div className="flex w-full justify-between items-center">
+                                                <span>{ahorrosChartConfig[name]?.label || name}</span>
+                                                <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                  {formatDashboardCurrency(value as number, currency)}
+                                                </span>
+                                            </div>
+                                        );
                                     }}
                                     labelClassName="font-bold"
                                 />
@@ -642,14 +630,7 @@ export default function MejorasDashboardPage() {
                         />
                         <Legend />
                         {(() => {
-                            switch (chartType) {
-                                case 'costos':
-                                    return (
-                                        <>
-                                            <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
-                                            <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 4, 4]} />
-                                        </>
-                                    );
+                            switch (ahorrosChartType) {
                                 case 'ahorrosPorAccion':
                                     return (
                                         <>
@@ -658,7 +639,7 @@ export default function MejorasDashboardPage() {
                                         </>
                                     );
                                 case 'ahorrosPorArea':
-                                    return Object.keys(chartConfig).map(key => (
+                                    return Object.keys(ahorrosChartConfig).map(key => (
                                         <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
                                     ));
                                 default:
@@ -670,12 +651,12 @@ export default function MejorasDashboardPage() {
             </ChartContainer>
           ) : (
               <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
-                  <p className="text-muted-foreground">No hay datos para graficar con los filtros seleccionados.</p>
+                  <p className="text-muted-foreground">No hay datos de ahorros para graficar con los filtros seleccionados.</p>
               </div>
           )}
         </CardContent>
       </Card>
-
+      
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -725,7 +706,7 @@ export default function MejorasDashboardPage() {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle>Costos de Sistemas (Filtrado)</CardTitle>
+              <CardTitle>Análisis de Costos de Sistemas</CardTitle>
               <CardDescription className="text-xs mt-1">Costos anuales de sistemas usados por procesos que cumplen los filtros.</CardDescription>
             </div>
             <Button variant="outline" onClick={() => handleExport('sistemas')} disabled={filteredSystemCosts.length === 0}>
@@ -734,15 +715,45 @@ export default function MejorasDashboardPage() {
           </CardHeader>
           <CardContent>
             {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            : filteredSystemCosts.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos de costos para los filtros seleccionados.</p>
             : (
-                <div className="max-h-[400px] overflow-y-auto">
+              <>
+                <div className="min-h-[250px] mb-4">
+                  {costosChartData.length > 0 ? (
+                    <ChartContainer config={costosChartConfig} className="min-h-[250px] w-full">
+                       <ResponsiveContainer>
+                          <BarChart data={costosChartData} layout="vertical">
+                              <CartesianGrid horizontal={false} />
+                              <XAxis type="number" hide />
+                              <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
+                              <Tooltip
+                                  cursor={{ fill: "hsl(var(--muted))" }}
+                                  content={<ChartTooltipContent formatter={(value, name, item) => {
+                                      const currency = item.payload.name.match(/\(([^)]+)\)/)?.[1] || 'N/A';
+                                      return (
+                                          <div className="flex w-full justify-between items-center">
+                                              <span>{costosChartConfig[name]?.label || name}</span>
+                                              <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                  {formatDashboardCurrency(value as number, currency)}
+                                              </span>
+                                          </div>
+                                      );
+                                  }} />}
+                              />
+                              <Legend />
+                              <Bar dataKey="CostoUso" stackId="a" fill="var(--color-CostoUso)" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey="CostoLicencias" stackId="a" fill="var(--color-CostoLicencias)" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : <p className="text-muted-foreground text-sm flex items-center justify-center h-full min-h-[250px]">No hay datos de costos para graficar.</p>}
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
                   <Table>
                     <TableHeader><TableRow>
                         <TableHead>Sistema</TableHead>
                         <TableHead className="text-right">Costo Anual (Uso)</TableHead>
                         <TableHead className="text-right">Costo Anual (Licencias)</TableHead>
-                        <TableHead className="text-right font-bold">Costo Anual (Total)</TableHead>
+                        <TableHead className="text-right font-bold">Total</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                         {filteredSystemCosts.map((system) => (
@@ -750,7 +761,7 @@ export default function MejorasDashboardPage() {
                             <TableCell className="font-medium">
                                 <TooltipProvider><UiTooltip>
                                     <TooltipTrigger asChild><span className="cursor-default">{system.name}</span></TooltipTrigger>
-                                    {system.descriptions.length > 0 && (<TooltipContent><p className="font-bold">Detalle de Costos:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>)}
+                                    {system.descriptions.length > 0 && (<TooltipContent><p className="font-bold">Detalle:</p><ul className="list-disc pl-4 text-left">{system.descriptions.map((d, i) => <li key={i}>{d}</li>)}</ul></TooltipContent>)}
                                 </UiTooltip></TooltipProvider>
                             </TableCell>
                             <TableCell className="text-right">{formatDashboardCurrency(system.annualUsageCost, system.currency)}</TableCell>
@@ -773,6 +784,7 @@ export default function MejorasDashboardPage() {
                     )}
                   </Table>
                 </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -780,3 +792,4 @@ export default function MejorasDashboardPage() {
     </div>
   );
 }
+
