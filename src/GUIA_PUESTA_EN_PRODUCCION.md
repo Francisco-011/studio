@@ -126,12 +126,25 @@ Ahora que todo está conectado y seguro, es hora de crear el primer usuario, que
 
 ### **Paso 6: Desplegar la Aplicación (Ponerla en Internet)**
 
-Este es el paso final para que tu aplicación sea accesible desde cualquier lugar a través de una URL pública.
+Este es el paso final para que tu aplicación sea accesible desde cualquier lugar a través de una URL pública. El despliegue se realiza mediante comandos en la terminal de tu entorno de desarrollo (como la terminal integrada en Firebase Studio).
 
 1.  **Ve a App Hosting**: En el menú de la izquierda de Firebase, ve a **"Compilación"** -> **"App Hosting"**.
-2.  **Comienza el Despliegue**: Haz clic en **"Comenzar"** (o un botón similar para crear un "backend").
-3.  **Sigue el Asistente**: App Hosting te guiará con un asistente en pantalla. Te pedirá que conectes tu código fuente. Dado que estás en un entorno de desarrollo integrado como Firebase Studio, el asistente debería conectarse directamente con tu proyecto. Simplemente sigue las instrucciones que te presente. **No te preocupes si no usas GitHub; la plataforma se adaptará.**
-4.  **Despliegue Automático**: Una vez que hayas seguido los pasos del asistente, Firebase se encargará de todo. Automáticamente construirá tu aplicación y la desplegará en sus servidores globales.
-5.  **¡Tu Aplicación está en Vivo!**: Cuando el proceso termine, Firebase te dará una URL pública (algo como `tu-proyecto.web.app`). ¡Esa es la dirección de tu aplicación SIAP en vivo!
+2.  **Comienza el Despliegue**: Haz clic en el botón azul para crear tu primer backend (puede decir "Comenzar", "Crear backend", etc.).
+3.  **Sigue el Asistente Inicial**:
+    *   Se te pedirá que **habilites algunas APIs**. Haz clic en "Continuar".
+    *   Te pedirá que selecciones un **repositorio de código**. Aquí viene la parte importante: **Ignora las opciones de GitHub/GitLab**. Busca un enlace o texto que diga **"Configurar manualmente"** o **"Implementar desde la CLI"**.
+4.  **Copia los Comandos de la Terminal**: Al seleccionar la configuración manual, la consola de Firebase te mostrará una serie de **comandos para ejecutar en tu terminal**. Estos son los pasos que debes seguir:
+    *   **Comando 1: `gcloud auth login`**
+        *   Copia este comando y pégalo en tu terminal.
+        *   Se abrirá una ventana del navegador pidiéndote que inicies sesión con tu cuenta de Google. Hazlo.
+        *   Al terminar, vuelve a la terminal.
+    *   **Comando 2: `gcloud config set project [ID-DE-TU-PROYECTO]`**
+        *   **¡Importante!** La consola te dará este comando con tu ID de proyecto ya incluido.
+        *   Copia el comando completo (con tu ID) y pégalo en la terminal.
+    *   **Comando 3: `gcloud apphosting backends deploy [NOMBRE-DEL-BACKEND] --source=.`**
+        *   Este es el comando final. La consola te lo proporcionará con el nombre correcto de tu backend.
+        *   Copia el comando completo y pégalo en la terminal.
+5.  **Espera el Despliegue**: Este último comando comenzará a subir tu código, a construir la aplicación en la nube y a desplegarla. Este proceso puede tardar varios minutos. Verás mucho texto en tu terminal; es normal.
+6.  **¡Tu Aplicación está en Vivo!**: Una vez que la terminal termine el proceso, la consola de Firebase se actualizará y te mostrará la URL pública de tu aplicación (algo como `tu-proyecto.web.app`). ¡Esa es la dirección de tu aplicación SIAP en vivo!
 
 ¡Y eso es todo! Has llevado SIAP de ser un prototipo a una aplicación de producción completamente funcional, segura y desplegada. ¡Enhorabuena!
