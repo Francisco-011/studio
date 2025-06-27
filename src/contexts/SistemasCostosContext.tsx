@@ -5,6 +5,9 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where, writeBatch, getDocs } from 'firebase/firestore';
+
 
 // Types for Systems and Costs
 export const formasDePagoOptions = ["Transferencia", "Efectivo", "Tarjeta", "Otros"] as const;
@@ -46,20 +49,20 @@ export interface SistemaUpdateData extends Partial<Omit<Sistema, 'id'>> {}
 interface SistemasCostosContextType {
   sistemas: Sistema[];
   costosSistemas: SistemaCosto[];
-  addSistema: (data: SistemaCreationData) => Sistema;
-  updateSistema: (id: string, data: SistemaUpdateData) => void;
-  deleteSistema: (id: string) => void;
-  addCostoSistema: (costoData: Omit<SistemaCosto, 'id'>) => void;
-  updateCostoSistema: (id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => void;
-  deleteCostoSistema: (id: string) => void;
+  addSistema: (data: SistemaCreationData) => Promise<void>;
+  updateSistema: (id: string, data: SistemaUpdateData) => Promise<void>;
+  deleteSistema: (id: string) => Promise<void>;
+  addCostoSistema: (costoData: Omit<SistemaCosto, 'id'>) => Promise<void>;
+  updateCostoSistema: (id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => Promise<void>;
+  deleteCostoSistema: (id: string) => Promise<void>;
   isLoadingSistemasCostos: boolean;
   getCostsForSystem: (sistemaId: string) => SistemaCosto[];
 }
 
 const SistemasCostosContext = createContext<SistemasCostosContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_SISTEMAS_KEY = 'proceza-sistemas';
-const LOCAL_STORAGE_COSTOS_SISTEMAS_KEY = 'proceza-costos-sistemas';
+const SISTEMAS_COLLECTION = 'sistemas';
+const COSTOS_SISTEMAS_COLLECTION = 'sistemas_costos';
 
 export function SistemasCostosProvider({ children }: { children: ReactNode }) {
   const [sistemas, setSistemas] = useState<Sistema[]>([]);
@@ -68,126 +71,136 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsLoadingSistemasCostos(true);
-      try {
-        const savedSistemas = localStorage.getItem(LOCAL_STORAGE_SISTEMAS_KEY);
-        if (savedSistemas) {
-          // Migrate existing data: old systems won't have scope, default to "Empresa"
-          const parsedSistemas: Sistema[] = JSON.parse(savedSistemas).map((s: any) => ({
-            ...s,
-            scope: s.scope || "Empresa",
-          }));
-          setSistemas(parsedSistemas);
-        }
-        const savedCostosSistemas = localStorage.getItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY);
-        if (savedCostosSistemas) {
-          const parsedCostos = JSON.parse(savedCostosSistemas).map((c: any) => {
-            if (c.tipoCosto) { // Migration for old data
-              delete c.tipoCosto;
-            }
-            return c;
-          });
-          setCostosSistemas(parsedCostos);
-        }
-      } catch (error) {
-        console.error("Failed to load sistemas/costos from localStorage", error);
-        toast({ title: "Error al cargar datos de sistemas", description: "No se pudieron cargar los datos de sistemas y costos.", variant: "destructive" });
-        setSistemas([]);
-        setCostosSistemas([]);
-      } finally {
-        setIsLoadingSistemasCostos(false);
-      }
-    } else {
-      setIsLoadingSistemasCostos(false);
-    }
+    setIsLoadingSistemasCostos(true);
+    const qSistemas = query(collection(db, SISTEMAS_COLLECTION), orderBy("nombre", "asc"));
+    const qCostos = query(collection(db, COSTOS_SISTEMAS_COLLECTION));
+
+    const unsubSistemas = onSnapshot(qSistemas, (snapshot) => {
+        setSistemas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sistema)));
+        // We can set loading to false here or after both are loaded
+    }, (error) => console.error("Error fetching sistemas: ", error));
+
+    const unsubCostos = onSnapshot(qCostos, (snapshot) => {
+        setCostosSistemas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SistemaCosto)));
+    }, (error) => console.error("Error fetching costos: ", error));
+    
+    // Set loading to false once both listeners have likely attached or fired once
+    // A more robust solution might use Promise.all if we were doing getDocs instead of onSnapshot
+    const timer = setTimeout(() => setIsLoadingSistemasCostos(false), 1500); // Simple heuristic
+
+    return () => {
+        unsubSistemas();
+        unsubCostos();
+        clearTimeout(timer);
+    };
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingSistemasCostos) {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_SISTEMAS_KEY, JSON.stringify(sistemas));
-      } catch (error) {
-        console.error("Failed to save sistemas to localStorage", error);
-      }
+  const addSistema = useCallback(async (data: SistemaCreationData) => {
+    try {
+       await addDoc(collection(db, SISTEMAS_COLLECTION), {
+          nombre: data.nombre,
+          scope: data.scope || "Empresa",
+          scopeId: data.scope === "Empresa" ? null : data.scopeId,
+          createdAt: serverTimestamp(),
+      });
+      addLogEntry({ action: 'create', entityType: 'Sistema', entityName: data.nombre, details: `Se creó el sistema "${data.nombre}".` });
+    } catch (e) {
+      console.error("Error adding sistema: ", e);
+      toast({ title: "Error", description: "No se pudo agregar el sistema.", variant: "destructive" });
     }
-  }, [sistemas, isLoadingSistemasCostos]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingSistemasCostos) {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_COSTOS_SISTEMAS_KEY, JSON.stringify(costosSistemas));
-      } catch (error) {
-        console.error("Failed to save costosSistemas to localStorage", error);
-      }
-    }
-  }, [costosSistemas, isLoadingSistemasCostos]);
-
-  const addSistema = useCallback((data: SistemaCreationData): Sistema => {
-    const newSistema: Sistema = { 
-        id: Date.now().toString(), 
-        nombre: data.nombre,
-        scope: data.scope || "Empresa",
-        scopeId: data.scope === "Empresa" ? undefined : data.scopeId,
-    };
-    setSistemas((prev) => [...prev, newSistema]);
-    addLogEntry({ action: 'create', entityType: 'Sistema', entityName: data.nombre, details: `Se creó el sistema "${data.nombre}".` });
-    return newSistema;
   }, [addLogEntry]);
 
-  const updateSistema = useCallback((id: string, data: SistemaUpdateData) => {
+  const updateSistema = useCallback(async (id: string, data: SistemaUpdateData) => {
+    const sistemaDocRef = doc(db, SISTEMAS_COLLECTION, id);
     const originalSistema = sistemas.find(s => s.id === id);
-    setSistemas((prev) =>
-      prev.map((sistema) => (sistema.id === id ? { 
-        ...sistema, 
-        ...data,
-        scopeId: data.scope === "Empresa" ? undefined : (data.scopeId !== undefined ? data.scopeId : sistema.scopeId)
-      } : sistema))
-    );
-    if(originalSistema) {
-       addLogEntry({ action: 'update', entityType: 'Sistema', entityName: data.nombre || originalSistema.nombre, details: `Se actualizó el sistema "${originalSistema.nombre}".` });
-    }
-  }, [addLogEntry, sistemas]);
-
-  const deleteSistema = useCallback((id: string) => {
-    const sistemaToDelete = sistemas.find(s => s.id === id);
-    setCostosSistemas((prevCostos) => prevCostos.filter(costo => costo.sistemaId !== id));
-    setSistemas((prevSistemas) => prevSistemas.filter((sistema) => sistema.id !== id));
-    if(sistemaToDelete){
-        addLogEntry({ action: 'delete', entityType: 'Sistema', entityName: sistemaToDelete.nombre, details: `Se eliminó el sistema "${sistemaToDelete.nombre}" y sus costos asociados.` });
-    }
-  }, [addLogEntry, sistemas]);
-
-  const addCostoSistema = useCallback((costoData: Omit<SistemaCosto, 'id'>) => {
-    const newCosto: SistemaCosto = { ...costoData, id: Date.now().toString() };
-    const sistema = sistemas.find(s => s.id === costoData.sistemaId);
-    setCostosSistemas((prev) => [...prev, newCosto]);
-    if(sistema) {
-      addLogEntry({ action: 'create', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se agregó un costo al sistema "${sistema.nombre}".` });
-    }
-  }, [addLogEntry, sistemas]);
-
-  const updateCostoSistema = useCallback((id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => {
-    const originalCosto = costosSistemas.find(c => c.id === id);
-    setCostosSistemas((prev) =>
-      prev.map((costo) => (costo.id === id ? { ...costo, ...costoData } : costo))
-    );
-     if(originalCosto) {
-        const sistema = sistemas.find(s => s.id === originalCosto.sistemaId);
-        if(sistema) {
-          addLogEntry({ action: 'update', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se actualizó un costo del sistema "${sistema.nombre}".` });
+    try {
+        const updateData = { ...data };
+        if (data.scope === 'Empresa') {
+            updateData.scopeId = undefined; // Or null if you prefer
         }
+        await updateDoc(sistemaDocRef, updateData);
+        if(originalSistema) {
+          addLogEntry({ action: 'update', entityType: 'Sistema', entityName: data.nombre || originalSistema.nombre, details: `Se actualizó el sistema "${originalSistema.nombre}".` });
+        }
+    } catch (e) {
+      console.error("Error updating sistema: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar el sistema.", variant: "destructive" });
     }
+  }, [sistemas, addLogEntry]);
+
+  const deleteSistema = useCallback(async (id: string) => {
+    const sistemaToDelete = sistemas.find(s => s.id === id);
+    if (!sistemaToDelete) return;
+    try {
+      const batch = writeBatch(db);
+      
+      // Delete the system itself
+      const sistemaDocRef = doc(db, SISTEMAS_COLLECTION, id);
+      batch.delete(sistemaDocRef);
+      
+      // Find and delete all associated costs
+      const costosQuery = query(collection(db, COSTOS_SISTEMAS_COLLECTION), where("sistemaId", "==", id));
+      const costosSnapshot = await getDocs(costosQuery);
+      costosSnapshot.forEach((costDoc) => {
+          batch.delete(costDoc.ref);
+      });
+      
+      await batch.commit();
+
+      addLogEntry({ action: 'delete', entityType: 'Sistema', entityName: sistemaToDelete.nombre, details: `Se eliminó el sistema "${sistemaToDelete.nombre}" y sus costos asociados.` });
+      toast({ title: "Sistema Eliminado", description: `El sistema "${sistemaToDelete.nombre}" y todos sus costos han sido eliminados.`, variant: "destructive"});
+    } catch(e) {
+       console.error("Error deleting sistema and its costs: ", e);
+       toast({ title: "Error", description: "No se pudo eliminar el sistema.", variant: "destructive" });
+    }
+  }, [sistemas, addLogEntry]);
+
+  const addCostoSistema = useCallback(async (costoData: Omit<SistemaCosto, 'id'>) => {
+    const sistema = sistemas.find(s => s.id === costoData.sistemaId);
+    try {
+      await addDoc(collection(db, COSTOS_SISTEMAS_COLLECTION), {
+        ...costoData,
+        createdAt: serverTimestamp(),
+      });
+      if(sistema) {
+        addLogEntry({ action: 'create', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se agregó un costo al sistema "${sistema.nombre}".` });
+      }
+    } catch (e) {
+       console.error("Error adding costo: ", e);
+       toast({ title: "Error", description: "No se pudo agregar el costo.", variant: "destructive" });
+    }
+  }, [addLogEntry, sistemas]);
+
+  const updateCostoSistema = useCallback(async (id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => {
+     const costoDocRef = doc(db, COSTOS_SISTEMAS_COLLECTION, id);
+     const originalCosto = costosSistemas.find(c => c.id === id);
+     try {
+       await updateDoc(costoDocRef, costoData);
+       if(originalCosto) {
+          const sistema = sistemas.find(s => s.id === originalCosto.sistemaId);
+          if(sistema) {
+            addLogEntry({ action: 'update', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se actualizó un costo del sistema "${sistema.nombre}".` });
+          }
+       }
+     } catch (e) {
+       console.error("Error updating costo: ", e);
+       toast({ title: "Error", description: "No se pudo actualizar el costo.", variant: "destructive" });
+     }
   }, [addLogEntry, costosSistemas, sistemas]);
 
-  const deleteCostoSistema = useCallback((id: string) => {
+  const deleteCostoSistema = useCallback(async (id: string) => {
     const costoToDelete = costosSistemas.find(c => c.id === id);
-    setCostosSistemas((prev) => prev.filter((costo) => costo.id !== id));
-    if(costoToDelete){
-       const sistema = sistemas.find(s => s.id === costoToDelete.sistemaId);
+    if (!costoToDelete) return;
+    try {
+      await deleteDoc(doc(db, COSTOS_SISTEMAS_COLLECTION, id));
+      const sistema = sistemas.find(s => s.id === costoToDelete.sistemaId);
        if(sistema){
            addLogEntry({ action: 'delete', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se eliminó un costo del sistema "${sistema.nombre}".` });
        }
+       toast({ title: "Costo Eliminado", variant: "destructive"});
+    } catch (e) {
+       console.error("Error deleting costo: ", e);
+       toast({ title: "Error", description: "No se pudo eliminar el costo.", variant: "destructive" });
     }
   }, [addLogEntry, costosSistemas, sistemas]);
 

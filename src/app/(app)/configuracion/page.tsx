@@ -197,13 +197,13 @@ export default function ConfiguracionPage() {
     if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData);
     setIsPuestoDialogOpen(false);
   }
-  function handleSistemaSubmit(data: SistemaFormData) {
-    if (editingSistema) updateSistema(editingSistema.id, data); else addSistema(data);
+  async function handleSistemaSubmit(data: SistemaFormData) {
+    if (editingSistema) await updateSistema(editingSistema.id, data); else await addSistema(data);
     setIsSistemaDialogOpen(false);
   }
-  function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
+  async function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
     const costoData = { ...data };
-    if (editingCosto) updateCostoSistema(editingCosto.id, costoData); else addCostoSistema(costoData);
+    if (editingCosto) await updateCostoSistema(editingCosto.id, costoData); else await addCostoSistema(costoData);
     setIsCostoDialogOpen(false);
   }
 
@@ -253,11 +253,11 @@ export default function ConfiguracionPage() {
                 usageMessage = allProcesses.some(p => p.sistemas?.includes(itemToDelete.name)) ? 'Procesos Capturados' : 'Actividades';
                  toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
             } else {
-              deleteSistema(id);
+              await deleteSistema(id);
             }
             break;
         case 'costoSistema':
-            deleteCostoSistema(id);
+            await deleteCostoSistema(id);
             break;
     }
     
