@@ -167,10 +167,10 @@ const PERMISSION_CONFIG = {
       view_log: 'Ver Registro de Actividad del Sistema',
     },
   },
-  configuracion_maestros: {
-    label: 'Configuración - Maestros',
+  configuracion_catalogos: {
+    label: 'Configuración - Catálogos',
     permissions: {
-      view: 'Ver Página de Maestros',
+      view: 'Ver Página de Catálogos',
       manage_areas: 'Gestionar Áreas',
       manage_deptos: 'Gestionar Departamentos',
       manage_puestos: 'Gestionar Puestos',
@@ -202,7 +202,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
   Administrador: Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
   'Gerente de Proyecto': Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => {
     const modulePermissions = Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true]));
-    if (mod === 'configuracion_maestros' || mod === 'configuracion_cargamasiva' || mod === 'usuarios') {
+    if (mod === 'configuracion_catalogos' || mod === 'configuracion_cargamasiva' || mod === 'usuarios') {
         Object.keys(modulePermissions).forEach(key => {
             if (!key.endsWith(':view')) {
                 modulePermissions[key] = false;
@@ -222,7 +222,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
     'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
     'auditoria:view_history': true, 'auditoria:perform': true,
-    'configuracion_maestros:view': true,
+    'configuracion_catalogos:view': true,
   },
   'Usuario Final': {
     'dashboard:view_resumen': true,

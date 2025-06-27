@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
         href: '/configuracion',
         matchPrefix: true,
         subItems: [
-            { href: '/configuracion', label: 'Maestros' },
+            { href: '/configuracion', label: 'Catálogos' },
             { href: '/configuracion/carga-masiva', label: 'Carga Masiva' },
         ]
     },
