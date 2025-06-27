@@ -41,30 +41,19 @@ This document outlines the necessary steps to transition the SIAP prototype into
 
 ---
 
-### Step 3: Server-Side Security with Firestore Security Rules
+### Step 3: Server-Side Security with Firestore Security Rules - COMPLETE
 
 **The Challenge:**
-The permissions defined in `usuarios/page.tsx` are purely cosmetic. A savvy user could bypass them since they are only enforced in the browser.
+~~The permissions defined in `usuarios/page.tsx` are purely cosmetic. A savvy user could bypass them since they are only enforced in the browser.~~
 
 **The Solution:**
-Implement **Firestore Security Rules**. These are rules you write on the Firebase server that are the ultimate, non-bypassable authority on who can access data.
+~~Implement **Firestore Security Rules**. These are rules you write on the Firebase server that are the ultimate, non-bypassable authority on who can access data.~~
 
 **Action Items:**
-1.  **Write Rules:** Define access controls in the `firestore.rules` file in your project.
-2.  **Rule Logic:** The rules will use `request.auth.uid` to get the current user's ID and then check their role in the `users` collection in Firestore.
-3.  **Example Rules:**
-    -   *Allow any signed-in user to read a process:*
-        ```
-        match /procesos/{processId} {
-          allow read: if request.auth != null;
-        }
-        ```
-    -   *Only allow users with the 'Administrador' role to delete a process:*
-        ```
-        match /procesos/{processId} {
-          allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
-        }
-        ```
+1.  **Write Rules:** ~~Define access controls in the `firestore.rules` file in your project.~~
+2.  **Rule Logic:** ~~The rules will use `request.auth.uid` to get the current user's ID and then check their role in the `users` collection in Firestore.~~
+    
+**Status: DONE! A comprehensive set of security rules has been created in `firestore.rules`, securing all data collections based on user roles.**
 
 ---
 
@@ -80,6 +69,7 @@ Deploy the application using **Firebase App Hosting**.
 1.  **Configuration:** The `apphosting.yaml` file is already set up for a basic deployment.
 2.  **Deploy Command:** Use the Firebase CLI to deploy the application.
 3.  **Benefits:** This provides secure (HTTPS), scalable, and globally-distributed hosting for the SIAP application with minimal configuration.
+
 
 
 

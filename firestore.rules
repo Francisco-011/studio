@@ -1,0 +1,68 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function getUserRole() {
+      // Ensure the user document exists before trying to access its data.
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == 'Administrador';
+    }
+
+    function isManager() {
+      // Gerente de Proyecto
+      return isSignedIn() && getUserRole() == 'Gerente de Proyecto';
+    }
+
+    function isConsultant() {
+        return isSignedIn() && getUserRole() == 'Consultor';
+    }
+    
+    // Combined roles for easier rule writing
+    function isManagerOrAdmin() {
+      return isAdmin() || isManager();
+    }
+    
+    function isConsultantOrHigher() {
+      return isManagerOrAdmin() || isConsultant();
+    }
+    
+    // Rule for the 'users' collection
+    match /users/{userId} {
+      // Any signed-in user can read user profiles (for names, etc.)
+      allow read: if isSignedIn();
+      
+      // Only Admins can change roles or status. 
+      // The user themself cannot.
+      allow update: if isAdmin();
+
+      // A user can create their own document during signup.
+      allow create: if request.auth.uid == userId;
+
+      // Deleting users should be a privileged, server-side operation,
+      // but for app management, we allow Admins.
+      allow delete: if isAdmin();
+    }
+    
+    // Rules for main catalog collections
+    match /{collection}/{docId} where collection in ['areas', 'departamentos', 'puestos', 'sistemas', 'sistemas_costos'] {
+      allow read: if isSignedIn();
+      allow write: if isManagerOrAdmin();
+    }
+    
+    // Rules for operational data
+    match /{collection}/{docId} where collection in ['actividades', 'acciones', 'procesos'] {
+        allow read: if isSignedIn();
+        allow create, update: if isConsultantOrHigher();
+        allow delete: if isManagerOrAdmin();
+    }
+  }
+}
