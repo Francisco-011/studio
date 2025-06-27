@@ -82,31 +82,31 @@ const analyzeProcessesPrompt = ai.definePrompt({
   output: {schema: AnalyzeProcessesOutputSchema},
   prompt: `Eres un analista de negocios experto en optimización de procesos, impulsado por IA. Tu misión es identificar duplicidades y oportunidades de ahorro cuantificables.
 
-Se te proporcionan descripciones detalladas de procesos (incluyendo sus IDs), una lista de todas las actividades, uso de sistemas y, opcionalmente, costos detallados de esos sistemas y una lista de acciones de mejora ya en curso.
+Se te proporcionan descripciones detalladas de procesos (incluyendo sus IDs, entradas, salidas y actividades), una lista de todas las actividades, uso de sistemas y, opcionalmente, costos detallados de esos sistemas y una lista de acciones de mejora ya en curso.
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
 Tu análisis debe centrarse en TRES áreas clave y debes devolver la salida en el formato JSON estructurado solicitado. Para cada hallazgo, DEBES incluir el contexto completo de 'área', 'departamento' (si aplica) y 'puesto' del proceso principal relacionado. También DEBES devolver el ID del proceso/actividad asociado ('processId', 'activityId', etc.).
 
-1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes, subutilizados o particularmente caros. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'departamento', 'puesto' y 'processId' del proceso principal donde se detectó.
+1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes. **Un sistema NO es redundante solo por usarse en muchos procesos**. La redundancia real ocurre cuando **sistemas diferentes se usan para lograr el mismo resultado de negocio en contextos similares**. Por ejemplo, si se usa "Sistema CRM A" en Ventas y "Sistema CRM B" en Marketing para gestionar clientes, podría ser una redundancia. Pero usar un CRM en Ventas y un ERP en Finanzas no lo es, aunque ambos manejen datos de clientes. Analiza la función que cumplen. Pobla el array 'redundantSystems', asegurándote de incluir el 'annualCost' y 'currency' si la información de costos fue proporcionada, y el 'area', 'departamento', 'puesto' y 'processId' del proceso principal donde se detectó.
 
 **Análisis de Duplicados (CRÍTICO):**
 Tu tarea más importante es diferenciar entre **variaciones legítimas** y **duplicaciones reales**. Tu análisis debe ser estricto.
 
-- Una **variación legítima** es cuando dos procesos o actividades tienen nombres o acciones similares (ej: "bajar información"), pero su propósito de negocio y contexto (área, departamento, puesto, proceso) son claramente diferentes. Por ejemplo, "Bajar información del sistema" por un agente de cobranza (para contactar clientes) y "Bajar información del sistema" por un analista de inventarios (para análisis de stock) son variaciones, **NO son duplicados**. **NO DEBES reportar variaciones como duplicados, incluso si usan el mismo sistema.**
+- Una **variación legítima** es cuando dos procesos o actividades tienen nombres o acciones similares (ej: "bajar información"), pero su propósito de negocio, entradas, salidas y contexto (área, departamento, puesto, proceso) son claramente diferentes. Por ejemplo, "Bajar información del sistema" por un agente de cobranza (para contactar clientes) y "Bajar información del sistema" por un analista de inventarios (para análisis de stock) son variaciones, **NO son duplicados**. **NO DEBES reportar variaciones como duplicados, incluso si usan el mismo sistema.**
 
-- Una **duplicación real** ocurre solo cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el **mismo trabajo** y producen un **resultado de negocio idéntico o casi idéntico**. Esto representa un esfuerzo redundante que se podría consolidar. Por ejemplo, "Generar reporte de ventas semanal" en un área y "Crear informe de ventas de la semana" en otra, si ambos reportes son idénticos.
+- Una **duplicación real** ocurre solo cuando dos procesos o actividades, a pesar de tener nombres potencialmente diferentes, describen funcionalmente el **mismo trabajo** (mismas entradas, misma transformación, mismas salidas) y producen un **resultado de negocio idéntico o casi idéntico**. Esto representa un esfuerzo redundante que se podría consolidar. Por ejemplo, "Generar reporte de ventas semanal" en un área y "Crear informe de ventas de la semana" en otra, si ambos reportes son idénticos.
 
 Para los arrays 'duplicateProcesses' y 'duplicateActivities', solo incluye las **duplicaciones reales y probadas**. En el campo 'reason', explica claramente por qué son funcionalmente idénticos y no solo una variación contextual.
 
-2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'departamentoA', 'puestoA', 'areaB', 'departamentoB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
+2.  **Procesos Duplicados (duplicateProcesses)**: Analiza las descripciones de los procesos, sus entradas, salidas y actividades para encontrar superposiciones funcionales o redundancias. Pobla el array 'duplicateProcesses' con los pares de procesos que parecen ser redundantes, incluyendo el 'areaA', 'departamentoA', 'puestoA', 'areaB', 'departamentoB', 'puestoB' y sus IDs ('processA_Id', 'processB_Id').
 
-3.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades. Tu objetivo es encontrar **duplicaciones funcionales genuinas**, no simples similitudes en la descripción. **Pondera fuertemente el contexto completo**: el nombre de la actividad, su descripción detallada, el área, el departamento, el puesto y los procesos a los que está asociada. Si el contexto (área, departamento, puesto, descripción del proceso) es diferente, **NO lo reportes como duplicado**, a menos que las descripciones detalladas y los resultados de negocio sean **idénticos**.
+3.  **Actividades Duplicadas (duplicateActivities)**: Analiza la lista completa de actividades. Tu objetivo es encontrar **duplicaciones funcionales genuinas**, no simples similitudes en la descripción. **Pondera fuertemente el contexto completo**: el nombre de la actividad, su descripción detallada, el área, el departamento, el puesto y los procesos a los que está asociada. Si el contexto (área, departamento, puesto, descripción del proceso, entradas/salidas del proceso) es diferente, **NO lo reportes como duplicado**, a menos que las descripciones detalladas y los resultados de negocio sean **idénticos**.
 
 
 **Datos de Entrada:**
 
-**Descripciones de Procesos (con métricas de área, departamento, puesto e IDs):**
+**Descripciones de Procesos (con métricas de área, departamento, puesto, entradas, salidas e IDs):**
 {{{processDescriptions}}}
 
 **Lista Completa de Actividades y su Contexto (Área/Departamento/Puesto):**

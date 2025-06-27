@@ -150,6 +150,10 @@ export default function MejorasPage() {
                  `Costo Estimado: ${p.costoEstimado !== undefined ? `${p.costoEstimado} ${p.monedaCosto || ''}` : 'No especificado'}\n`+
                  `Costo Ideal: ${p.costoIdeal !== undefined ? `${p.costoIdeal} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
                  `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}\n` +
+                 `Información de Entrada: ${p.informacionRecibe}\n` +
+                 `Procesos de Entrada: ${p.procesosEntrada && p.procesosEntrada.length > 0 ? p.procesosEntrada.join(', ') : 'Ninguno'}\n` +
+                 `Información de Salida: ${p.informacionEntrega}\n` +
+                 `Procesos de Salida: ${p.procesosSalida && p.procesosSalida.length > 0 ? p.procesosSalida.join(', ') : 'Ninguno'}\n` +
                  (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
         })
         .join('\n\n---\n\n');
