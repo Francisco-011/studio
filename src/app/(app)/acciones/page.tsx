@@ -281,7 +281,7 @@ export default function AccionesPage() {
     }
   }, [editingAccion, isAccionDialogOpen, accionForm]);
 
-  function handleAccionSubmit(data: AccionFormData) {
+  async function handleAccionSubmit(data: AccionFormData) {
     const isCompleting = editingAccion && data.estado === 'Completada' && editingAccion.estado !== 'Completada';
     const hasSavings = data.ahorroEstimado || data.ahorroTiempoEstimado;
 
@@ -304,10 +304,10 @@ export default function AccionesPage() {
     };
 
     if (editingAccion) {
-      updateAccion(editingAccion.id, dataToSave);
+      await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
     } else {
-      addAccion(dataToSave);
+      await addAccion(dataToSave);
       toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
     }
     setEditingAccion(null);
@@ -315,7 +315,7 @@ export default function AccionesPage() {
     accionForm.reset();
   }
 
-  function handleConfirmCompletion() {
+  async function handleConfirmCompletion() {
     if (!actionToComplete) return;
 
     const { id, data } = actionToComplete;
@@ -329,7 +329,7 @@ export default function AccionesPage() {
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
     };
     
-    updateAccion(id, dataToSave, completionOptions);
+    await updateAccion(id, dataToSave, completionOptions);
 
     toast({ title: 'Acción Completada', description: 'La acción y sus mejoras asociadas han sido aplicadas según selección.' });
 
@@ -355,9 +355,9 @@ export default function AccionesPage() {
     setIsConfirmDeleteDialogOpen(true);
   }
 
-  function executeDeleteAccion() {
+  async function executeDeleteAccion() {
     if (!accionToDelete) return;
-    deleteAccion(accionToDelete.id);
+    await deleteAccion(accionToDelete.id);
     toast({ title: 'Acción Eliminada', description: `La acción "${accionToDelete.nombre}" ha sido eliminada.`, variant: 'destructive' });
     setAccionToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
@@ -396,8 +396,8 @@ export default function AccionesPage() {
         }
 
         if (['fechaObjetivo', 'updatedAt'].includes(sortConfig.key)) {
-            valA = valA ? (isValid(parseISO(valA)) ? parseISO(valA).getTime() : 0) : 0;
-            valB = valB ? (isValid(parseISO(valB)) ? parseISO(valB).getTime() : 0) : 0;
+            valA = valA ? (isValid(parseISO(valA)) ? parseISO(valA).getTime() : (typeof valA === 'number' ? valA : 0)) : 0;
+            valB = valB ? (isValid(parseISO(valB)) ? parseISO(valB).getTime() : (typeof valB === 'number' ? valB : 0)) : 0;
         }
 
         if (typeof valA === 'string' && typeof valB === 'string') {
