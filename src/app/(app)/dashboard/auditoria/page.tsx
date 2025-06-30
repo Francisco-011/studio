@@ -300,7 +300,7 @@ export default function AuditoriaDashboardPage() {
      <div className="container mx-auto py-8">
        <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Cumplimiento y Auditoría</h1>
+          <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Auditoría</h1>
           <p className="text-muted-foreground">Monitoree el estado de las auditorías y el cumplimiento general de los procesos.</p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">

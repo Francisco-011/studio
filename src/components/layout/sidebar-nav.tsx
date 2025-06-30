@@ -54,18 +54,19 @@ const navItems: NavItem[] = [
         icon: LayoutDashboard, 
         matchPrefix: true,
         href: '/dashboard',
-        subItemPermissions: ['dashboard:view_resumen', 'dashboard:view_procesos', 'dashboard:view_mejoras', 'dashboard:view_auditoria'],
+        subItemPermissions: ['dashboard:view_resumen', 'dashboard:view_procesos', 'dashboard:view_mejoras', 'dashboard:view_auditoria', 'dashboard:view_politicas'],
         subItems: [
             { href: '/dashboard', label: 'Resumen Ejecutivo', permission: 'dashboard:view_resumen' },
             { href: '/dashboard/procesos', label: 'Procesos y Eficiencia', permission: 'dashboard:view_procesos' },
             { href: '/dashboard/mejoras', label: 'Impacto y Mejoras', permission: 'dashboard:view_mejoras' },
-            { href: '/dashboard/auditoria', label: 'Cumplimiento y Auditoría', permission: 'dashboard:view_auditoria' },
+            { href: '/dashboard/politicas', label: 'Políticas y Cumplimiento', permission: 'dashboard:view_politicas'},
+            { href: '/dashboard/auditoria', label: 'Auditoría', permission: 'dashboard:view_auditoria' },
         ]
     },
     { href: '/captura', label: 'Captura', icon: ClipboardEdit, permission: 'captura:create_process' },
     { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database, permission: 'procesosRegistrados:view' },
     { href: '/actividades', label: 'Actividades', icon: ListChecks, permission: 'actividades:view' },
-    { href: '/politicas', label: 'Políticas', icon: FileText, permission: 'politicas:view' }, // <-- NUEVO
+    { href: '/politicas', label: 'Políticas', icon: FileText, permission: 'politicas:view' },
     { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree, matchPrefix: true, permission: 'panelJerarquico:view' },
     { href: '/mejoras', label: 'Análisis IA', icon: TrendingUp, permission: 'analisis_ia:view' },
     { href: '/consulta-ia', label: 'Consulta IA', icon: MessageCircleQuestion, permission: 'consulta_ia:view' },

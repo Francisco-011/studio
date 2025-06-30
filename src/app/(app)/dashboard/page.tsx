@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp } from "lucide-react";
+import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp, FileText } from "lucide-react";
 import { parseISO } from 'date-fns';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
@@ -146,7 +146,7 @@ export default function DashboardPage() {
             Profundice en los datos utilizando los paneles especializados para un análisis más detallado.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/dashboard/procesos">
             <Button variant="outline" className="w-full h-24 flex-col gap-2">
                 <Factory className="h-6 w-6 text-primary"/>
@@ -159,10 +159,16 @@ export default function DashboardPage() {
                 <span className="text-base">Impacto y Mejoras</span>
             </Button>
           </Link>
+           <Link href="/dashboard/politicas">
+            <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                <FileText className="h-6 w-6 text-primary"/>
+                <span className="text-base">Políticas y Cumplimiento</span>
+            </Button>
+          </Link>
           <Link href="/dashboard/auditoria">
             <Button variant="outline" className="w-full h-24 flex-col gap-2">
                 <ClipboardCheck className="h-6 w-6 text-primary"/>
-                <span className="text-base">Cumplimiento y Auditoría</span>
+                <span className="text-base">Auditoría</span>
             </Button>
           </Link>
         </CardContent>
