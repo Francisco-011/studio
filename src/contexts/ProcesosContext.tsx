@@ -44,6 +44,7 @@ export const capturaFormSchema = z.object({
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   procesosSalida: z.array(z.string()).optional().default([]),
   activityOrder: z.array(z.string()).optional().default([]),
+  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 }).refine(data => {
   if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
     return false;
@@ -65,6 +66,7 @@ export interface CambioHistorial {
 
 export interface CapturedProcess extends CapturaFormData {
   id: string;
+  codigo: string;
   capturedAt: string;
   updatedAt?: number;
   deletedAt?: string;
@@ -121,17 +123,20 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
 
   const addProceso = useCallback(async (data: CapturaFormData): Promise<CapturedProcess | null> => {
     try {
+        const codigo = `PR-${Date.now().toString().slice(-6)}`;
         const docRef = await addDoc(collection(db, PROCESOS_COLLECTION), {
           ...data,
+          codigo,
           capturedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           activo: true,
           historialDeCambios: [],
         });
-        addLogEntry({ action: 'create', entityType: 'Proceso', entityName: data.proceso, details: `Se capturó el nuevo proceso "${data.proceso}".` });
+        addLogEntry({ action: 'create', entityType: 'Proceso', entityName: data.proceso, details: `Se capturó el nuevo proceso "${data.proceso}" (${codigo}).` });
         return {
             ...data,
             id: docRef.id,
+            codigo,
             capturedAt: new Date().toISOString(),
             updatedAt: Date.now(),
             activo: true,

@@ -10,6 +10,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -79,6 +80,7 @@ const actividadFormSchema = z.object({
   sistemaUtilizado: z.string().optional(),
   activa: z.boolean().default(true),
   procesosAsociadosIds: z.array(z.string()).optional().default([]),
+  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
@@ -122,6 +124,7 @@ export default function ActividadesPage() {
     isLoadingActividades
   } = useActividades();
   const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
+  const { politicas, isLoadingPoliticas } = usePoliticas();
 
   const searchParams = useSearchParams();
   const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
@@ -175,6 +178,7 @@ export default function ActividadesPage() {
       sistemaUtilizado: undefined,
       activa: true,
       procesosAsociadosIds: [],
+      politicasAsociadasIds: [],
     },
   });
 
@@ -187,7 +191,8 @@ export default function ActividadesPage() {
           descripcionBreve: editingActividad.descripcionBreve || '',
           sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           activa: editingActividad.activa,
-          procesosAsociadosIds: editingActividad.procesosAsociadosIds || []
+          procesosAsociadosIds: editingActividad.procesosAsociadosIds || [],
+          politicasAsociadasIds: editingActividad.politicasAsociadasIds || [],
         });
       } else {
         actividadForm.reset({
@@ -195,7 +200,8 @@ export default function ActividadesPage() {
           descripcionBreve: '',
           sistemaUtilizado: undefined,
           activa: true,
-          procesosAsociadosIds: []
+          procesosAsociadosIds: [],
+          politicasAsociadasIds: [],
         });
       }
     }
@@ -664,6 +670,59 @@ export default function ActividadesPage() {
                       />
                       <FormField
                         control={actividadForm.control}
+                        name="politicasAsociadasIds"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Políticas Asociadas</FormLabel>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between font-normal">
+                                  <span className="truncate">
+                                    {field.value && field.value.length > 0
+                                      ? `${field.value.length} política(s) seleccionada(s)`
+                                      : "Seleccionar políticas..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+                                <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {isLoadingPoliticas ? (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando políticas...</div>
+                                ) : politicas.length === 0 ? (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    No hay políticas creadas.
+                                  </div>
+                                ) : (
+                                  politicas.map((politica) => (
+                                    <DropdownMenuCheckboxItem
+                                      key={politica.id}
+                                      checked={field.value?.includes(politica.id)}
+                                      onCheckedChange={(checked) => {
+                                        const currentSelected = field.value || [];
+                                        if (checked) {
+                                          field.onChange([...currentSelected, politica.id]);
+                                        } else {
+                                          field.onChange(currentSelected.filter((id) => id !== politica.id));
+                                        }
+                                      }}
+                                    >
+                                      {politica.codigo} - {politica.titulo}
+                                    </DropdownMenuCheckboxItem>
+                                  ))
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                             <FormDescription>
+                              Vincule esta actividad a una o más políticas.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={actividadForm.control}
                         name="activa"
                         render={({ field }) => (
                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
@@ -701,6 +760,9 @@ export default function ActividadesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('codigo')}>
+                      <div className="flex items-center">Código {getSortIcon('codigo')}</div>
+                    </TableHead>
                     <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
                       <div className="flex items-center">Nombre Actividad {getSortIcon('nombre')}</div>
                     </TableHead>
@@ -727,6 +789,7 @@ export default function ActividadesPage() {
                         .join(', ') || "No asociada a procesos.";
                     return (
                     <TableRow key={`${actividad.id}-${actividad.createdAt}-${index}`}>
+                      <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-center text-xs">{actividad.sistemaUtilizado || '-'}</TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">

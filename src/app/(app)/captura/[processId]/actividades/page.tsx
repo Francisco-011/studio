@@ -12,6 +12,7 @@ import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +27,17 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2 } from "lucide-react";
+import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTriangle, Loader2, ChevronDown } from "lucide-react";
 
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
 
@@ -36,6 +45,7 @@ const activityCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre de la actividad es requerido (mínimo 3 caracteres).'),
   descripcionBreve: z.string().optional(),
   sistemaUtilizado: z.string().optional(), 
+  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ActivityCaptureFormData = z.infer<typeof activityCaptureFormSchema>;
 
@@ -54,6 +64,7 @@ export default function DefinirActividadesProcesoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { politicas, isLoadingPoliticas } = usePoliticas();
 
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
@@ -72,6 +83,7 @@ export default function DefinirActividadesProcesoPage() {
       nombre: '',
       descripcionBreve: '',
       sistemaUtilizado: undefined, 
+      politicasAsociadasIds: [],
     },
   });
 
@@ -92,6 +104,7 @@ export default function DefinirActividadesProcesoPage() {
                             nombre: globalAct.nombre,
                             descripcionBreve: globalAct.descripcionBreve,
                             sistemaUtilizado: globalAct.sistemaUtilizado,
+                            politicasAsociadasIds: globalAct.politicasAsociadasIds || [],
                         };
                     }
                     return null;
@@ -131,6 +144,7 @@ export default function DefinirActividadesProcesoPage() {
         nombre: '',
         descripcionBreve: '',
         sistemaUtilizado: undefined,
+        politicasAsociadasIds: [],
     });
     setEditingActivity(null);
     setIsActivityFormOpen(true);
@@ -141,6 +155,7 @@ export default function DefinirActividadesProcesoPage() {
         nombre: activity.nombre,
         descripcionBreve: activity.descripcionBreve,
         sistemaUtilizado: activity.sistemaUtilizado || NO_SYSTEM_SELECTED_VALUE,
+        politicasAsociadasIds: activity.politicasAsociadasIds,
     });
     setEditingActivity({ ...activity, index });
     setIsActivityFormOpen(true);
@@ -236,6 +251,7 @@ export default function DefinirActividadesProcesoPage() {
           nombre: localAct.nombre,
           descripcionBreve: localAct.descripcionBreve,
           sistemaUtilizado: localAct.sistemaUtilizado,
+          politicasAsociadasIds: localAct.politicasAsociadasIds,
         };
 
         if (existingGlobalActivity) {
@@ -434,6 +450,56 @@ export default function DefinirActividadesProcesoPage() {
                       </SelectContent>
                     </Select>
                      <FormDescription>Sistemas filtrados por el ámbito del proceso padre.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={activityForm.control}
+                name="politicasAsociadasIds"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Políticas Asociadas (Opcional)</FormLabel>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between font-normal">
+                          <span className="truncate">
+                            {field.value && field.value.length > 0
+                              ? `${field.value.length} política(s) seleccionada(s)`
+                              : "Seleccionar políticas..."}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
+                        <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {isLoadingPoliticas ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
+                        ) : politicas.length === 0 ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay políticas creadas.</div>
+                        ) : (
+                          politicas.map((politica) => (
+                            <DropdownMenuCheckboxItem
+                              key={politica.id}
+                              checked={field.value?.includes(politica.id)}
+                              onCheckedChange={(checked) => {
+                                const currentSelected = field.value || [];
+                                if (checked) {
+                                  field.onChange([...currentSelected, politica.id]);
+                                } else {
+                                  field.onChange(currentSelected.filter((id) => id !== politica.id));
+                                }
+                              }}
+                            >
+                              {politica.codigo} - {politica.titulo}
+                            </DropdownMenuCheckboxItem>
+                          ))
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <FormDescription>Vincule esta actividad a una o más políticas.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -18,10 +18,12 @@ export interface CambioHistorial {
 
 export interface Actividad {
   id: string;
+  codigo: string;
   nombre: string;
   activa: boolean;
   procesosAsociadosCount: number;
   procesosAsociadosIds?: string[];
+  politicasAsociadasIds?: string[];
   createdAt: number; 
   updatedAt?: number;
   deletedAt?: number; 
@@ -33,8 +35,8 @@ export interface Actividad {
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }) => Promise<Actividad>;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>, allProcesses?: CapturedProcess[]) => Promise<void>;
+  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount' | 'codigo'> & { procesosAsociadosIds?: string[] }) => Promise<Actividad>;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>, allProcesses?: CapturedProcess[]) => Promise<void>;
   softDeleteActividad: (id: string) => Promise<void>;
   restoreActividad: (id: string) => Promise<void>;
   toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
@@ -82,10 +84,12 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount'> & { procesosAsociadosIds?: string[] }): Promise<Actividad> => {
+  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount' | 'codigo'> & { procesosAsociadosIds?: string[] }): Promise<Actividad> => {
     try {
+      const codigo = `AC-${Date.now().toString().slice(-6)}`;
       const payload = {
         ...data,
+        codigo,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         activa: data.activa === undefined ? true : data.activa,
@@ -93,12 +97,13 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         deletedAt: null,
       };
       const docRef = await addDoc(collection(db, ACTIVIDADES_COLLECTION), payload);
-      addLogEntry({ action: 'create', entityType: 'Actividad', entityName: data.nombre, details: `Se creó la actividad "${data.nombre}".` });
+      addLogEntry({ action: 'create', entityType: 'Actividad', entityName: data.nombre, details: `Se creó la actividad "${data.nombre}" (${codigo}).` });
       
       const currentTime = Date.now();
       const newActividad: Actividad = {
           ...data,
           id: docRef.id,
+          codigo,
           createdAt: currentTime,
           updatedAt: currentTime,
           procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
@@ -112,7 +117,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt'>>, allProcesses: CapturedProcess[] = []) => {
+  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>, allProcesses: CapturedProcess[] = []) => {
     const allKnownActivities = [...actividades, ...deletedActividades];
     const originalActividad = allKnownActivities.find(a => a.id === id);
     if (!originalActividad) return;
@@ -120,7 +125,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadasIds'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {
