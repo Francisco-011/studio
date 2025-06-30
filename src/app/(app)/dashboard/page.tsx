@@ -10,6 +10,7 @@ import { useProcesos } from '@/contexts/ProcesosContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatMinutesToHours } from '@/lib/utils';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 interface AuditFinding {
   type: "Conforme" | "No Conforme" | "Oportunidad de Mejora";
@@ -44,6 +45,7 @@ export default function DashboardPage() {
 
   const { procesos, isLoadingProcesos } = useProcesos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
     setIsLoadingLocalStorage(true);
@@ -147,30 +149,38 @@ export default function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/dashboard/procesos">
-            <Button variant="outline" className="w-full h-24 flex-col gap-2">
-                <Factory className="h-6 w-6 text-primary"/>
-                <span className="text-base">Procesos y Eficiencia</span>
-            </Button>
-          </Link>
-          <Link href="/dashboard/mejoras">
-            <Button variant="outline" className="w-full h-24 flex-col gap-2">
-                <TrendingUp className="h-6 w-6 text-primary"/>
-                <span className="text-base">Impacto y Mejoras</span>
-            </Button>
-          </Link>
-           <Link href="/dashboard/politicas">
-            <Button variant="outline" className="w-full h-24 flex-col gap-2">
-                <FileText className="h-6 w-6 text-primary"/>
-                <span className="text-base">Políticas y Cumplimiento</span>
-            </Button>
-          </Link>
-          <Link href="/dashboard/auditoria">
-            <Button variant="outline" className="w-full h-24 flex-col gap-2">
-                <ClipboardCheck className="h-6 w-6 text-primary"/>
-                <span className="text-base">Auditoría</span>
-            </Button>
-          </Link>
+          {hasPermission('dashboard:view_procesos') && (
+            <Link href="/dashboard/procesos">
+              <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                  <Factory className="h-6 w-6 text-primary"/>
+                  <span className="text-base">Procesos y Eficiencia</span>
+              </Button>
+            </Link>
+          )}
+          {hasPermission('dashboard:view_mejoras') && (
+            <Link href="/dashboard/mejoras">
+              <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                  <TrendingUp className="h-6 w-6 text-primary"/>
+                  <span className="text-base">Impacto y Mejoras</span>
+              </Button>
+            </Link>
+          )}
+          {hasPermission('dashboard:view_politicas') && (
+            <Link href="/dashboard/politicas">
+              <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                  <FileText className="h-6 w-6 text-primary"/>
+                  <span className="text-base">Políticas y Cumplimiento</span>
+              </Button>
+            </Link>
+          )}
+          {hasPermission('dashboard:view_auditoria') && (
+            <Link href="/dashboard/auditoria">
+              <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                  <ClipboardCheck className="h-6 w-6 text-primary"/>
+                  <span className="text-base">Auditoría</span>
+              </Button>
+            </Link>
+          )}
         </CardContent>
       </Card>
     </div>
