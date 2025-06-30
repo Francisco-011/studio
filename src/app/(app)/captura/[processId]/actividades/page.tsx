@@ -252,7 +252,7 @@ export default function DefinirActividadesProcesoPage() {
             activa: true,
             procesosAsociadosIds: [parentProcess.id],
           };
-          const addedActivity = await addGlobalActivity(newGlobalActData); 
+          const addedActivity = await addActividad(newGlobalActData); 
           activityIdToLink = addedActivity.id;
         }
         finalActivityIdsForProcessOrder.push(activityIdToLink);

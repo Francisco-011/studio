@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -42,56 +41,8 @@ import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { useProcesos } from '@/contexts/ProcesosContext';
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
 
-
-export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
-export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
-export type Moneda = typeof monedaOptions[number];
-
-const capturaFormSchema = z.object({
-  area: z.string().min(1, "El área es requerida."),
-  departamento: z.string().optional(),
-  puesto: z.string().min(1, "El puesto es requerido."),
-  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
-  descripcion: z.string().min(1, "La descripción del proceso es requerida."),
-  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
-  tiempoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
-  ),
-  tiempoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
-  ),
-  costoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
-  ),
-  costoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
-  ),
-  monedaCosto: z.enum(monedaOptions).optional(),
-  sistemas: z.array(z.string()).optional().default([]),
-  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
-  procesosEntrada: z.array(z.string()).optional().default([]),
-  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
-  procesosSalida: z.array(z.string()).optional().default([]),
-  activityOrder: z.array(z.string()).optional().default([]),
-}).refine(data => {
-  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debe seleccionar una moneda si especifica un costo.",
-  path: ["monedaCosto"],
-});
-
-
-export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
@@ -474,14 +425,14 @@ export default function CapturaPage() {
                     <FormItem>
                       <FormLabel>Frecuencia</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione la frecuencia" /></SelectTrigger></FormControl>
-                        <SelectContent>{frecuenciaOptions.map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
+                        <SelectContent>{(frecuenciaOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
                       </Select>
                       <FormDescription>Periodicidad con la que se realiza este proceso.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                 <FormField control={form.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda de Costos</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl><SelectContent>{monedaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormDescription>Moneda para los costos del proceso.</FormDescription><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda de Costos</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormDescription>Moneda para los costos del proceso.</FormDescription><FormMessage /></FormItem>)} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                  <FormField control={form.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><div className="relative"><Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl></div><FormMessage /></FormItem>)} />
@@ -509,9 +460,9 @@ export default function CapturaPage() {
               </div>
 
               <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso recibe como entrada..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle qué información es necesaria para iniciar o ejecutar el proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, isLoadingProcesses, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso genera o entrega como resultado..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle cuál es el producto o resultado informativo del proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, isLoadingProcesses, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
                 <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Actividades</Button>

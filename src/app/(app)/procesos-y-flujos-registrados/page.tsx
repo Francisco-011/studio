@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -8,7 +7,6 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -65,7 +63,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-import type { CapturaFormData } from '../captura/page';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
@@ -75,7 +72,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useActivityLog } from '@/contexts/ActivityLogContext';
-
+import { capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -97,52 +94,6 @@ const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
-
-
-const frecuenciaOptions: readonly string[] = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"];
-const monedaOptions: readonly string[] = ["USD", "MXN", "EUR", "CAD", "GBP"];
-
-
-const capturaFormSchema = z.object({
-  area: z.string().min(1, "El área es requerida."),
-  departamento: z.string().optional(),
-  puesto: z.string().min(1, "El puesto es requerido."),
-  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
-  descripcion: z.string().min(1, "La descripción del proceso es requerida."),
-  frecuencia: z.enum(frecuenciaOptions as [string, ...string[]], { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
-  tiempoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
-  ),
-  tiempoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
-  ),
-  costoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
-  ),
-  costoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
-  ),
-  monedaCosto: z.enum(monedaOptions as [string, ...string[]]).optional(),
-  sistemas: z.array(z.string()).optional().default([]),
-  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
-  procesosEntrada: z.array(z.string()).optional().default([]),
-  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
-  procesosSalida: z.array(z.string()).optional().default([]),
-  activityOrder: z.array(z.string()).optional().default([]),
-}).refine(data => {
-  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debe seleccionar una moneda si especifica un costo.",
-  path: ["monedaCosto"],
-});
-
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
 type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';

@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -5,8 +6,53 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import type { CapturaFormData } from '@/app/(app)/captura/page';
 import { useActivityLog } from './ActivityLogContext';
+import { z } from 'zod';
+
+export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
+export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
+
+export const capturaFormSchema = z.object({
+  area: z.string().min(1, "El área es requerida."),
+  departamento: z.string().optional(),
+  puesto: z.string().min(1, "El puesto es requerido."),
+  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
+  descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
+  tiempoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
+  ),
+  tiempoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
+  ),
+  costoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
+  ),
+  costoIdeal: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
+  ),
+  monedaCosto: z.enum(monedaOptions as [string, ...string[]]).optional(),
+  sistemas: z.array(z.string()).optional().default([]),
+  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
+  procesosEntrada: z.array(z.string()).optional().default([]),
+  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
+  procesosSalida: z.array(z.string()).optional().default([]),
+  activityOrder: z.array(z.string()).optional().default([]),
+}).refine(data => {
+  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Debe seleccionar una moneda si especifica un costo.",
+  path: ["monedaCosto"],
+});
+export type CapturaFormData = z.infer<typeof capturaFormSchema>;
+
 
 export interface CambioHistorial {
   timestamp: string;
