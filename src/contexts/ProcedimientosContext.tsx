@@ -1,0 +1,131 @@
+
+'use client';
+
+import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { toast } from '@/hooks/use-toast';
+import { useActivityLog } from './ActivityLogContext';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+
+export interface Procedimiento {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  procesoId: string;
+  activityOrder: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt'>;
+
+interface ProcedimientosContextType {
+  procedimientos: Procedimiento[];
+  addProcedimiento: (data: ProcedimientoCreationData) => Promise<Procedimiento | null>;
+  updateProcedimiento: (id: string, data: Partial<ProcedimientoCreationData>) => Promise<void>;
+  deleteProcedimiento: (id: string) => Promise<void>;
+  isLoadingProcedimientos: boolean;
+}
+
+const ProcedimientosContext = createContext<ProcedimientosContextType | undefined>(undefined);
+
+const PROCEDIMIENTOS_COLLECTION = 'procedimientos';
+
+export function ProcedimientosProvider({ children }: { children: ReactNode }) {
+  const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
+  const [isLoadingProcedimientos, setIsLoadingProcedimientos] = useState(true);
+  const { addLogEntry } = useActivityLog();
+
+  useEffect(() => {
+    const q = query(collection(db, PROCEDIMIENTOS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            return {
+                id: doc.id,
+                ...docData,
+                createdAt: (docData.createdAt as Timestamp)?.toMillis() || 0,
+                updatedAt: (docData.updatedAt as Timestamp)?.toMillis() || 0,
+            } as Procedimiento;
+        });
+        setProcedimientos(data);
+        setIsLoadingProcedimientos(false);
+    }, (error) => {
+        console.error("Error fetching procedimientos: ", error);
+        toast({ title: "Error de Red", description: "No se pudieron cargar los procedimientos.", variant: "destructive" });
+        setIsLoadingProcedimientos(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const addProcedimiento = useCallback(async (data: ProcedimientoCreationData): Promise<Procedimiento | null> => {
+    try {
+        const codigo = `PC-${Date.now().toString().slice(-6)}`;
+        const docRef = await addDoc(collection(db, PROCEDIMIENTOS_COLLECTION), {
+          ...data,
+          codigo,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        addLogEntry({ action: 'create', entityType: 'Procedimiento', entityName: data.nombre, details: `Se creó el procedimiento "${data.nombre}" (${codigo}).` });
+        
+        const currentTime = Date.now();
+        return {
+            ...data,
+            id: docRef.id,
+            codigo,
+            createdAt: currentTime,
+            updatedAt: currentTime,
+        };
+    } catch(e) {
+        console.error("Error adding procedimiento:", e);
+        toast({ title: "Error", description: "No se pudo agregar el procedimiento.", variant: "destructive"});
+        return null;
+    }
+  }, [addLogEntry]);
+
+  const updateProcedimiento = useCallback(async (id: string, data: Partial<ProcedimientoCreationData>) => {
+    const procedimientoDocRef = doc(db, PROCEDIMIENTOS_COLLECTION, id);
+    const originalProcedimiento = procedimientos.find(p => p.id === id);
+    if (!originalProcedimiento) return;
+
+    try {
+      await updateDoc(procedimientoDocRef, { ...data, updatedAt: serverTimestamp() });
+      addLogEntry({ action: 'update', entityType: 'Procedimiento', entityName: data.nombre || originalProcedimiento.nombre, details: `Se actualizó el procedimiento "${originalProcedimiento.nombre}".` });
+    } catch (e) {
+      console.error("Error updating procedimiento: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar el procedimiento.", variant: "destructive"});
+    }
+  }, [procedimientos, addLogEntry]);
+  
+  const deleteProcedimiento = useCallback(async (id: string) => {
+    const procedimientoToDelete = procedimientos.find(p => p.id === id);
+    if (!procedimientoToDelete) return;
+
+    try {
+        await deleteDoc(doc(db, PROCEDIMIENTOS_COLLECTION, id));
+        addLogEntry({ action: 'delete', entityType: 'Procedimiento', entityName: procedimientoToDelete.nombre, details: `Se eliminó el procedimiento "${procedimientoToDelete.nombre}".` });
+        toast({ title: "Procedimiento Eliminado", variant: "destructive"});
+    } catch(e) {
+        console.error("Error deleting procedimiento: ", e);
+        toast({ title: "Error", description: "No se pudo eliminar el procedimiento.", variant: "destructive"});
+    }
+  }, [procedimientos, addLogEntry]);
+
+  return (
+    <ProcedimientosContext.Provider value={{ procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, isLoadingProcedimientos }}>
+      {children}
+    </ProcedimientosContext.Provider>
+  );
+}
+
+export function useProcedimientos(): ProcedimientosContextType {
+  const context = useContext(ProcedimientosContext);
+  if (context === undefined) {
+    throw new Error('useProcedimientos must be used within a ProcedimientosProvider');
+  }
+  return context;
+}

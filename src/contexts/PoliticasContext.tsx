@@ -24,6 +24,7 @@ export interface Politica {
   fechaVigencia: string; // ISO string
   fechaRevision: string; // ISO string
   procesosAsociadosIds: string[];
+  procedimientosAsociadosIds: string[];
   actividadesAsociadasIds: string[];
   createdAt: number;
   updatedAt: number;

@@ -43,7 +43,7 @@ export const capturaFormSchema = z.object({
   procesosEntrada: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   procesosSalida: z.array(z.string()).optional().default([]),
-  activityOrder: z.array(z.string()).optional().default([]),
+  procedimientoOrder: z.array(z.string()).optional().default([]),
   politicasAsociadasIds: z.array(z.string()).optional().default([]),
 }).refine(data => {
   if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {

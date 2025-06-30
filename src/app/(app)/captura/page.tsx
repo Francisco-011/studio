@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -67,7 +67,8 @@ const defaultFormValues: Partial<CapturaFormData> = {
   procesosEntrada: [],
   informacionEntrega: "",
   procesosSalida: [],
-  activityOrder: [],
+  procedimientoOrder: [],
+  politicasAsociadasIds: [],
 };
 
 
@@ -185,7 +186,7 @@ export default function CapturaPage() {
         departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
         procesosEntrada: values.procesosEntrada || [],
         procesosSalida: values.procesosSalida || [],
-        activityOrder: values.activityOrder || [],
+        procedimientoOrder: values.procedimientoOrder || [],
       };
       
       const newProcess = await addProceso(dataToSave);
@@ -193,9 +194,9 @@ export default function CapturaPage() {
       if (newProcess) {
         toast({
           title: "Proceso Registrado",
-          description: "El proceso ha sido guardado. Defina sus actividades a continuación.",
+          description: "El proceso ha sido guardado. Defina sus procedimientos a continuación.",
         });
-        router.push(`/captura/${newProcess.id}/actividades`);
+        router.push(`/captura/${newProcess.id}/procedimientos`);
       } else {
         throw new Error("La función addProceso no retornó un proceso nuevo.");
       }
@@ -312,9 +313,9 @@ export default function CapturaPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground mb-6">
-            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus actividades.
-          </p>
+          <CardDescription className="mb-6">
+            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus procedimientos y actividades.
+          </CardDescription>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -482,7 +483,7 @@ export default function CapturaPage() {
               <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
-                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Actividades</Button>
+                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Procedimientos</Button>
               </div>
             </form>
           </Form>

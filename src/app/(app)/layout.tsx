@@ -14,6 +14,7 @@ import { AccionesProvider } from '@/contexts/AccionesContext';
 import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
 import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
 import { ProcesosProvider } from '@/contexts/ProcesosContext';
+import { ProcedimientosProvider } from '@/contexts/ProcedimientosContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
@@ -52,11 +53,13 @@ export default function AuthenticatedAppLayout({
               <PoliticasProvider>
                 <ActividadesProvider>
                   <ProcesosProvider>
-                    <AccionesProvider>
-                      <PermissionsProvider>
-                        <AppLayout>{children}</AppLayout>
-                      </PermissionsProvider>
-                    </AccionesProvider>
+                    <ProcedimientosProvider>
+                      <AccionesProvider>
+                        <PermissionsProvider>
+                          <AppLayout>{children}</AppLayout>
+                        </PermissionsProvider>
+                      </AccionesProvider>
+                    </ProcedimientosProvider>
                   </ProcesosProvider>
                 </ActividadesProvider>
               </PoliticasProvider>

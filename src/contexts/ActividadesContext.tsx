@@ -7,7 +7,7 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import type { CapturedProcess } from '@/contexts/ProcesosContext';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -21,8 +21,7 @@ export interface Actividad {
   codigo: string;
   nombre: string;
   activa: boolean;
-  procesosAsociadosCount: number;
-  procesosAsociadosIds?: string[];
+  procedimientoId?: string;
   politicasAsociadasIds?: string[];
   createdAt: number; 
   updatedAt?: number;
@@ -35,8 +34,8 @@ export interface Actividad {
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount' | 'codigo'> & { procesosAsociadosIds?: string[] }) => Promise<Actividad>;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>, allProcesses?: CapturedProcess[]) => Promise<void>;
+  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>) => Promise<Actividad>;
+  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>) => Promise<void>;
   softDeleteActividad: (id: string) => Promise<void>;
   restoreActividad: (id: string) => Promise<void>;
   toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
@@ -65,7 +64,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
             return {
                 id: doc.id,
                 ...data,
-                procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
                 createdAt: docCreatedAt?.toMillis ? docCreatedAt.toMillis() : (typeof docCreatedAt === 'number' ? docCreatedAt : 0),
                 updatedAt: docUpdatedAt?.toMillis ? docUpdatedAt.toMillis() : (typeof docUpdatedAt === 'number' ? docUpdatedAt : undefined),
                 deletedAt: docDeletedAt?.toMillis ? docDeletedAt.toMillis() : (typeof docDeletedAt === 'number' ? docDeletedAt : undefined),
@@ -84,7 +82,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'procesosAsociadosCount' | 'codigo'> & { procesosAsociadosIds?: string[] }): Promise<Actividad> => {
+  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>): Promise<Actividad> => {
     try {
       const codigo = `AC-${Date.now().toString().slice(-6)}`;
       const payload = {
@@ -106,7 +104,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
           codigo,
           createdAt: currentTime,
           updatedAt: currentTime,
-          procesosAsociadosCount: data.procesosAsociadosIds?.length || 0,
           historialDeCambios: [],
       };
       return newActividad;
@@ -117,7 +114,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>, allProcesses: CapturedProcess[] = []) => {
+  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>) => {
     const allKnownActivities = [...actividades, ...deletedActividades];
     const originalActividad = allKnownActivities.find(a => a.id === id);
     if (!originalActividad) return;
@@ -125,7 +122,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadasIds'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadasIds', 'procedimientoId'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {
@@ -137,17 +134,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
              });
         }
     });
-
-    if (data.procesosAsociadosIds && JSON.stringify(originalActividad.procesosAsociadosIds?.sort()) !== JSON.stringify(data.procesosAsociadosIds.sort())) {
-         const getProcessName = (procId: string) => allProcesses.find(p => p.id === procId)?.proceso || `ID: ${procId}`;
-         
-         changes.push({
-            timestamp: new Date().toISOString(),
-            field: 'Procesos Asociados',
-            before: (originalActividad.procesosAsociadosIds || []).map(getProcessName).join(', ') || 'Ninguno',
-            after: data.procesosAsociadosIds.map(getProcessName).join(', ') || 'Ninguno'
-         });
-    }
 
     const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
     try {
