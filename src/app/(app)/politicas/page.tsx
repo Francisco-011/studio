@@ -8,10 +8,10 @@ import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { usePoliticas, type Politica, type NivelCompliance, nivelesCompliance } from '@/contexts/PoliticasContext';
+import { usePoliticas, type Politica, type NivelCompliance, nivelesCompliance, type PoliticaCreationData } from '@/contexts/PoliticasContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
-import { useActividades } from '@/contexts/ActividadesContext';
+import { useActividades, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { clasificacionOptions } from '@/contexts/ProcesosContext';
@@ -31,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, ChevronDown, Check, ShieldAlert } from "lucide-react";
+import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, ChevronDown, History } from "lucide-react";
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -49,6 +49,8 @@ const politicaFormSchema = z.object({
   procesosAsociadosIds: z.array(z.string()).optional().default([]),
   procedimientosAsociadosIds: z.array(z.string()).optional().default([]),
   actividadesAsociadasIds: z.array(z.string()).optional().default([]),
+  consecuenciasIncumplimiento: z.string().optional(),
+  referenciasLegales: z.string().optional(),
 }).refine(data => data.fechaRevision > data.fechaVigencia, {
   message: "La fecha de revisión debe ser posterior a la fecha de vigencia.",
   path: ["fechaRevision"],
@@ -69,6 +71,9 @@ export default function PoliticasPage() {
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [politicaToDelete, setPoliticaToDelete] = useState<Politica | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [politicaForHistory, setPoliticaForHistory] = useState<Politica | null>(null);
+
 
   const form = useForm<PoliticaFormData>({
     resolver: zodResolver(politicaFormSchema),
@@ -101,13 +106,15 @@ export default function PoliticasPage() {
           procesosAsociadosIds: [],
           procedimientosAsociadosIds: [],
           actividadesAsociadasIds: [],
+          consecuenciasIncumplimiento: '',
+          referenciasLegales: '',
         });
       }
     }
   }, [editingPolitica, isDialogOpen, form]);
 
   async function handleSubmit(data: PoliticaFormData) {
-    const dataToSave = {
+    const dataToSave: PoliticaCreationData = {
       ...data,
       departamentoResponsable: data.departamentoResponsable === NO_DEPARTAMENTO_SELECTED ? undefined : data.departamentoResponsable,
       fechaVigencia: data.fechaVigencia.toISOString(),
@@ -115,10 +122,8 @@ export default function PoliticasPage() {
     };
     if (editingPolitica) {
       await updatePolitica(editingPolitica.id, dataToSave);
-      toast({ title: "Política Actualizada", description: "La política ha sido actualizada." });
     } else {
       await addPolitica(dataToSave);
-      toast({ title: "Política Creada", description: "La nueva política ha sido registrada." });
     }
     setIsDialogOpen(false);
     setEditingPolitica(null);
@@ -127,6 +132,11 @@ export default function PoliticasPage() {
   function handleEdit(politica: Politica) {
     setEditingPolitica(politica);
     setIsDialogOpen(true);
+  }
+  
+  function handleViewHistory(politica: Politica) {
+    setPoliticaForHistory(politica);
+    setIsHistoryDialogOpen(true);
   }
 
   function promptDelete(politica: Politica) {
@@ -201,6 +211,9 @@ export default function PoliticasPage() {
                       <FormField control={form.control} name="fechaRevision" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Próxima Revisión</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className="w-full pl-3 text-left font-normal">{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
                     </div>
                     
+                     <FormField control={form.control} name="consecuenciasIncumplimiento" render={({ field }) => (<FormItem><FormLabel>Consecuencias por Incumplimiento</FormLabel><FormControl><Textarea placeholder="Describa las consecuencias..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="referenciasLegales" render={({ field }) => (<FormItem><FormLabel>Referencias Legales/Regulatorias</FormLabel><FormControl><Textarea placeholder="Ej: Ley Federal de Protección de Datos, ISO 27001..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+
                     <div className="space-y-2">
                         <Label>Vincular a Elementos</Label>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -237,6 +250,7 @@ export default function PoliticasPage() {
                       <TableCell><Badge variant="outline" className={politica.nivelCompliance === 'Obligatorio' ? 'border-amber-500 text-amber-600' : ''}>{politica.nivelCompliance}</Badge></TableCell>
                       <TableCell>{format(parseISO(politica.fechaRevision), 'dd MMM, yyyy', { locale: es })}</TableCell>
                       <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleViewHistory(politica)} disabled={!politica.historialDeCambios || politica.historialDeCambios.length === 0}><History className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(politica)}><Edit2 className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => promptDelete(politica)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
@@ -267,6 +281,45 @@ export default function PoliticasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Cambios para: {politicaForHistory?.titulo}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {politicaForHistory?.historialDeCambios && politicaForHistory.historialDeCambios.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Campo Modificado</TableHead>
+                    <TableHead>Valor Anterior</TableHead>
+                    <TableHead>Valor Nuevo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {politicaForHistory.historialDeCambios
+                    .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .map((cambio, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
+                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-center">No hay historial de cambios registrado.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

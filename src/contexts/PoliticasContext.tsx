@@ -8,6 +8,7 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { clasificacionOptions } from './ProcesosContext';
+import type { CambioHistorial } from './ActividadesContext';
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -28,9 +29,12 @@ export interface Politica {
   actividadesAsociadasIds: string[];
   createdAt: number;
   updatedAt: number;
+  consecuenciasIncumplimiento?: string;
+  referenciasLegales?: string;
+  historialDeCambios?: CambioHistorial[];
 }
 
-export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' | 'updatedAt'>;
+export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
 
 interface PoliticasContextType {
   politicas: Politica[];
@@ -59,6 +63,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
                 ...data,
                 createdAt: (data.createdAt as Timestamp)?.toMillis() || 0,
                 updatedAt: (data.updatedAt as Timestamp)?.toMillis() || 0,
+                historialDeCambios: data.historialDeCambios || [],
             } as Politica;
         });
         setPoliticas(politicasData);
@@ -80,6 +85,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
           codigo,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          historialDeCambios: [],
         });
         addLogEntry({ action: 'create', entityType: 'Política', entityName: data.titulo, details: `Se creó la política "${data.titulo}" (${codigo}).` });
     } catch(e) {
@@ -93,12 +99,55 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     const originalPolitica = politicas.find(p => p.id === id);
     if (!originalPolitica) return;
 
-    try {
-      await updateDoc(politicaDocRef, { ...data, updatedAt: serverTimestamp() });
-      addLogEntry({ action: 'update', entityType: 'Política', entityName: data.titulo || originalPolitica.titulo, details: `Se actualizó la política "${originalPolitica.titulo}".` });
-    } catch(e) {
-      console.error("Error updating política:", e);
-      toast({ title: "Error", description: "No se pudo actualizar la política.", variant: "destructive" });
+    const changes: CambioHistorial[] = [];
+    const fieldsToCompare: (keyof PoliticaCreationData)[] = [
+      'titulo', 'descripcion', 'areaResponsable', 'departamentoResponsable',
+      'clasificacion', 'nivelCompliance', 'fechaVigencia', 'fechaRevision',
+      'consecuenciasIncumplimiento', 'referenciasLegales'
+    ];
+
+    fieldsToCompare.forEach(key => {
+        const originalValue = originalPolitica[key as keyof Politica] ?? '';
+        const newValue = data[key as keyof PoliticaCreationData] ?? '';
+        if (originalValue !== newValue) {
+            changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: String(originalValue),
+                after: String(newValue),
+            });
+        }
+    });
+
+    const arrayFields: (keyof PoliticaCreationData)[] = ['procesosAsociadosIds', 'procedimientosAsociadosIds', 'actividadesAsociadasIds'];
+    arrayFields.forEach(key => {
+        const originalArray = (originalPolitica[key as keyof Politica] as string[] | undefined)?.sort() || [];
+        const newArray = (data[key as keyof PoliticaCreationData] as string[] | undefined)?.sort() || [];
+        if(JSON.stringify(originalArray) !== JSON.stringify(newArray)) {
+            changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: originalArray.join(', ') || 'Ninguno',
+                after: newArray.join(', ') || 'Ninguno',
+            });
+        }
+    });
+
+    if (changes.length > 0) {
+      try {
+        await updateDoc(politicaDocRef, {
+          ...data,
+          updatedAt: serverTimestamp(),
+          historialDeCambios: [...(originalPolitica.historialDeCambios || []), ...changes]
+        });
+        addLogEntry({ action: 'update', entityType: 'Política', entityName: data.titulo || originalPolitica.titulo, details: `Se actualizó la política "${originalPolitica.titulo}".` });
+        toast({ title: "Política Actualizada", description: `${changes.length} campo(s) fueron modificados.` });
+      } catch(e) {
+        console.error("Error updating política: ", e);
+        toast({ title: "Error", description: "No se pudo actualizar la política.", variant: "destructive" });
+      }
+    } else {
+      toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar.", variant: "default" });
     }
   }, [politicas, addLogEntry]);
 

@@ -73,6 +73,7 @@ import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -134,6 +135,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities, isLoadingActividades } = useActividades();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
   const { addLogEntry } = useActivityLog();
   
   const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
@@ -749,6 +751,10 @@ export default function ProcesosYFlujosRegistradosPage() {
                         if (activityStatusFilter === 'inactive') return !act.activa;
                         return true;
                     });
+                
+                const linkedPolicies = proc.politicasAsociadasIds
+                  ?.map(id => allPoliticas.find(p => p.id === id)?.titulo)
+                  .filter(Boolean);
 
                 return (
                 <React.Fragment key={proc.id}>
@@ -789,6 +795,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                               <DetailDisplay title="Descripción" value={proc.descripcion} isTextarea />
                               <DetailDisplay title="Frecuencia" value={proc.frecuencia} />
                               <DetailDisplay title="Sistemas" value={proc.sistemas} isList />
+                              <DetailDisplay title="Políticas Vinculadas" value={linkedPolicies} isList />
                               <DetailDisplay title="Entradas" value={proc.informacionRecibe} isTextarea />
                               <DetailDisplay title="Salidas" value={proc.informacionEntrega} isTextarea />
                               <DetailDisplay title="Procesos de Entrada" value={proc.procesosEntrada} isList />

@@ -15,6 +15,7 @@ export interface Procedimiento {
   descripcion?: string;
   procesoId: string;
   activityOrder: string[];
+  politicasAsociadasIds?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -64,12 +65,14 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const addProcedimiento = useCallback(async (data: ProcedimientoCreationData): Promise<Procedimiento | null> => {
     try {
         const codigo = `PC-${Date.now().toString().slice(-6)}`;
-        const docRef = await addDoc(collection(db, PROCEDIMIENTOS_COLLECTION), {
-          ...data,
-          codigo,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        const payload = {
+            ...data,
+            codigo,
+            politicasAsociadasIds: data.politicasAsociadasIds || [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+        const docRef = await addDoc(collection(db, PROCEDIMIENTOS_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Procedimiento', entityName: data.nombre, details: `Se creó el procedimiento "${data.nombre}" (${codigo}).` });
         
         const currentTime = Date.now();
@@ -77,6 +80,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
             ...data,
             id: docRef.id,
             codigo,
+            politicasAsociadasIds: data.politicasAsociadasIds || [],
             createdAt: currentTime,
             updatedAt: currentTime,
         };

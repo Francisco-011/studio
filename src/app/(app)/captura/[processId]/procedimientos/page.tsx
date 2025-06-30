@@ -2,12 +2,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams, usePathname } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useProcedimientos, type Procedimiento, type ProcedimientoCreationData } from '@/contexts/ProcedimientosContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -15,13 +16,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, Loader2, ListOrdered } from "lucide-react";
+import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, Loader2, ListOrdered, ChevronDown } from "lucide-react";
 
 const procedimientoCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre del procedimiento es requerido (mínimo 3 caracteres).'),
   descripcion: z.string().optional(),
+  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ProcedimientoCaptureFormData = z.infer<typeof procedimientoCaptureFormSchema>;
 
@@ -36,6 +39,7 @@ export default function DefinirProcedimientosPage() {
 
   const { procedimientos: globalProcedimientos, addProcedimiento, updateProcedimiento: updateGlobalProcedimiento, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
+  const { politicas, isLoadingPoliticas } = usePoliticas();
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
   const [definedProcedimientos, setDefinedProcedimientos] = useState<LocalProcedimientoDefinition[]>([]);
@@ -47,7 +51,7 @@ export default function DefinirProcedimientosPage() {
 
   const form = useForm<ProcedimientoCaptureFormData>({
     resolver: zodResolver(procedimientoCaptureFormSchema),
-    defaultValues: { nombre: '', descripcion: '' },
+    defaultValues: { nombre: '', descripcion: '', politicasAsociadasIds: [] },
   });
 
   useEffect(() => {
@@ -60,7 +64,12 @@ export default function DefinirProcedimientosPage() {
                 .map(procId => {
                     const globalProc = globalProcedimientos.find(gp => gp.id === procId);
                     if (globalProc) {
-                        return { tempId: globalProc.id, nombre: globalProc.nombre, descripcion: globalProc.descripcion };
+                        return { 
+                          tempId: globalProc.id, 
+                          nombre: globalProc.nombre, 
+                          descripcion: globalProc.descripcion,
+                          politicasAsociadasIds: globalProc.politicasAsociadasIds || [],
+                        };
                     }
                     return null;
                 })
@@ -76,7 +85,7 @@ export default function DefinirProcedimientosPage() {
   }, [processId, router, procesos, globalProcedimientos, isLoadingProcedimientos, isLoadingProcesos]);
 
   const openAddDialog = () => {
-    form.reset({ nombre: '', descripcion: '' });
+    form.reset({ nombre: '', descripcion: '', politicasAsociadasIds: [] });
     setEditingProcedimiento(null);
     setIsFormOpen(true);
   };
@@ -124,6 +133,7 @@ export default function DefinirProcedimientosPage() {
           descripcion: localProc.descripcion,
           procesoId: parentProcess.id,
           activityOrder: existingGlobal?.activityOrder || [],
+          politicasAsociadasIds: localProc.politicasAsociadasIds || [],
         };
 
         if (existingGlobal) {
@@ -196,6 +206,45 @@ export default function DefinirProcedimientosPage() {
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-4">
               <FormField control={form.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField
+                  control={form.control}
+                  name="politicasAsociadasIds"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Políticas Asociadas (Opcional)</FormLabel>
+                          <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-between font-normal">
+                                      {field.value?.length || 0} seleccionadas
+                                      <ChevronDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                  <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {isLoadingPoliticas ? <DropdownMenuCheckboxItem disabled>Cargando...</DropdownMenuCheckboxItem>
+                                  : politicas.map(p => (
+                                      <DropdownMenuCheckboxItem
+                                          key={p.id}
+                                          checked={field.value?.includes(p.id)}
+                                          onCheckedChange={checked => {
+                                              const currentSelected = field.value || [];
+                                              if (checked) {
+                                                  field.onChange([...currentSelected, p.id]);
+                                              } else {
+                                                  field.onChange(currentSelected.filter(id => id !== p.id));
+                                              }
+                                          }}
+                                      >
+                                          {p.codigo} - {p.titulo}
+                                      </DropdownMenuCheckboxItem>
+                                  ))}
+                              </DropdownMenuContent>
+                          </DropdownMenu>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
               <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingProcedimiento ? 'Actualizar' : 'Agregar'}</Button></DialogFooter>
             </form>
           </Form>
