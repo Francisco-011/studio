@@ -23,6 +23,7 @@ import {
   UploadCloud,
   ChevronRight,
   LifeBuoy,
+  MessageCircleQuestion,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -60,6 +61,7 @@ const navItems: NavItem[] = [
     { href: '/actividades', label: 'Actividades', icon: ListChecks },
     { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree, matchPrefix: true },
     { href: '/mejoras', label: 'Análisis IA', icon: TrendingUp },
+    { href: '/consulta-ia', label: 'Consulta IA', icon: MessageCircleQuestion },
     { href: '/acciones', label: 'Acciones', icon: Target },
     { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
     { 
