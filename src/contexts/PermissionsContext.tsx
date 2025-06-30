@@ -1,8 +1,7 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import type { UserRole } from '@/app/(app)/usuarios/page';
 
