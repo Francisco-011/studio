@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -105,7 +106,7 @@ export default function ConsultaIaPage() {
             <CardTitle className="text-2xl font-headline">Consulta con Asistente IA</CardTitle>
           </div>
           <CardDescription>
-            Haga preguntas en lenguaje natural sobre los procesos y actividades registrados en SIAP.
+            Haga preguntas en lenguaje natural sobre los procesos, procedimientos, actividades y políticas registrados en SIAP.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col p-4">
@@ -118,7 +119,7 @@ export default function ConsultaIaPage() {
                   <p className="text-sm">
                     Puedes preguntar, por ejemplo: <br/>
                     "¿Cuál es el propósito del proceso de cierre contable?" <br/>
-                    "¿Quién es el responsable del proceso de gestión de pedidos?" <br/>
+                    "¿Qué políticas aplican al procedimiento de facturación?" <br/>
                     "Describe la actividad de 'Aprobar Factura'."
                   </p>
                 </div>

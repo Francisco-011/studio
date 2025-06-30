@@ -7,7 +7,6 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import type { CapturedProcess } from '@/contexts/ProcesosContext';
 
 export interface CambioHistorial {
   timestamp: string;

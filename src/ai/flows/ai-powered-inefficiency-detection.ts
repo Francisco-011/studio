@@ -15,7 +15,7 @@ import {z} from 'genkit';
 const AnalyzeProcessesInputSchema = z.object({
   processDescriptions: z.string().describe('Una lista de descripciones de procesos para analizar, incluyendo IDs, área, puesto y sistemas.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
-  allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y los procesos, áreas y puestos a los que están asociadas.'),
+  allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y el procedimiento al que están asociadas.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
   existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
   policyData: z.string().optional().describe('Una lista de todas las políticas, incluyendo su título, descripción, fecha de revisión y los procesos/procedimientos/actividades a los que están vinculadas.'),

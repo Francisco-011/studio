@@ -17,32 +17,34 @@ import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import type { CapturedProcess, CambioHistorial } from '../../procesos-y-flujos-registrados/page';
-import { toast } from '@/hooks/use-toast';
+import { useProcesos, type CapturedProcess, type CambioHistorial } from '@/contexts/ProcesosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
+
+import { toast } from "@/hooks/use-toast";
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY = 'proceza-puesto-process-order';
 
 
 interface TreeNode {
   id: string;
   name: string;
-  type: 'area' | 'departamento' | 'puesto' | 'proceso';
+  type: 'area' | 'departamento' | 'puesto' | 'proceso' | 'procedimiento' | 'actividad' | 'politica';
   children?: TreeNode[];
   originalId?: string; 
-  activities?: Actividad[]; 
   activo?: boolean; 
+  payload?: any;
 }
 
-type AssignmentCountFilterType = 'all' | 'unassigned' | 'assigned_once' | 'assigned_multiple';
+type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
-type DropTargetType = 'proceso' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto' | 'puesto';
+type DropTargetType = 'procedimiento' | 'activity-in-tree' | 'pool' | 'processNodeInPuesto' | 'puesto';
 
 
 const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -96,12 +98,13 @@ export default function PanelJerarquicoPage() {
   const router = useRouter();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, isLoadingPuestos } = usePuestos();
-  const { actividades, updateActividad, isLoadingActividades } = useActividades();
+  const { puestos, isLoading: isLoadingPuestos } = usePuestos();
+  const { actividades, updateActividad: updateGlobalActivity, isLoadingActividades } = useActividades();
+  const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
+  const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
+  const { politicas, isLoading: isLoadingPoliticas } = usePoliticas();
   const { addLogEntry } = useActivityLog();
   
-  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
   const [puestoProcessOrders, setPuestoProcessOrders] = useState<Record<string, string[]>>({});
 
 
@@ -109,17 +112,17 @@ export default function PanelJerarquicoPage() {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   
   const [draggedItem, setDraggedItem] = useState<{ 
-    type: 'activityFromPool' | 'activityInProcess' | 'processNodeInPuesto';
+    type: 'activityFromPool' | 'activityInProcedure';
     id: string; 
-    sourceProcessId?: string; 
-    sourceIndexInProcess?: number;
+    sourceProcedureId?: string; 
+    sourceIndexInProcedure?: number;
     sourceParentPuestoNodeId?: string;
   } | null>(null);
 
   const [dropTargetInfo, setDropTargetInfo] = useState<{ 
     id: string; 
     type: DropTargetType;
-    targetProcessId?: string;
+    targetProcedureId?: string;
     targetActivityId?: string;
   } | null>(null);
 
@@ -132,15 +135,14 @@ export default function PanelJerarquicoPage() {
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
   const [selectedDeptoFilter, setSelectedDeptoFilter] = useState<string>('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
-  const [treeActivitySearchTerm, setTreeActivitySearchTerm] = useState('');
-  const [filterByActivityId, setFilterByActivityId] = useState<string | null>(null);
-  const [filteredByActivityName, setFilteredByActivityName] = useState<string | null>(null);
+  const [treeGeneralSearchTerm, setTreeGeneralSearchTerm] = useState('');
+  const [policySearchTerm, setPolicySearchTerm] = useState('');
   const [treeProcessStatusFilter, setTreeProcessStatusFilter] = useState<ProcessStatusFilterType>('active');
 
 
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | null>(null);
-  const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | null>(null);
+  const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | Procedimiento | Politica | null>(null);
+  const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | 'procedure' | 'policy' | null>(null);
 
   const availableDepartamentos = useMemo(() => {
     if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
@@ -169,66 +171,17 @@ export default function PanelJerarquicoPage() {
 
 
   useEffect(() => {
-    setIsLoadingProcesses(true);
     try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        const dataWithStatusAndOrder = parsedData.map(proc => ({
-          ...proc,
-          activo: proc.activo === undefined ? true : proc.activo,
-          activityOrder: proc.activityOrder || [],
-        }));
-        setCapturedProcesses(dataWithStatusAndOrder.filter(p => !p.deletedAt));
-      }
       const storedPuestoOrders = localStorage.getItem(PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY);
       if (storedPuestoOrders) {
         setPuestoProcessOrders(JSON.parse(storedPuestoOrders));
       }
     } catch (error) {
-      console.error("Error loading data from localStorage:", error);
-      toast({ title: "Error al cargar datos", variant: "destructive" });
-    } finally {
-      setIsLoadingProcesses(false);
+      console.error("Error loading puesto order from localStorage:", error);
     }
   }, []);
   
-  const isLoadingAllData = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingProcesses || isLoadingActividades;
-
-  useEffect(() => {
-    if (!isLoadingAllData) {
-      const synchronizedProcesses = capturedProcesses.map(proc => {
-        const associatedActivityIds = actividades
-          .filter(act => act.procesosAsociadosIds?.includes(proc.id))
-          .map(act => act.id);
-  
-        let currentActivityOrder = proc.activityOrder || [];
-        const validOrderedIds = currentActivityOrder.filter(id => associatedActivityIds.includes(id));
-        const orderedSet = new Set(validOrderedIds);
-        associatedActivityIds.forEach(id => {
-          if (!orderedSet.has(id)) {
-            validOrderedIds.push(id);
-          }
-        });
-        return { ...proc, activityOrder: validOrderedIds };
-      });
-      
-      if (JSON.stringify(synchronizedProcesses) !== JSON.stringify(capturedProcesses)) {
-        setCapturedProcesses(synchronizedProcesses);
-      }
-    }
-  }, [actividades, capturedProcesses, isLoadingAllData]);
-
-
-  useEffect(() => {
-    if (!isLoadingAllData && capturedProcesses.length > 0) { 
-        try {
-            localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(capturedProcesses));
-        } catch (error) {
-            console.error("Error saving processes to localStorage from Panel Jerarquico:", error);
-        }
-    }
-  }, [capturedProcesses, isLoadingAllData]);
+  const isLoadingAllData = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingProcesos || isLoadingActividades || isLoadingProcedimientos || isLoadingPoliticas;
 
   useEffect(() => {
     if (!isLoadingAllData && Object.keys(puestoProcessOrders).length > 0) {
@@ -253,14 +206,6 @@ export default function PanelJerarquicoPage() {
             (treeProcessStatusFilter === 'active' && proc.activo !== false) || 
             (treeProcessStatusFilter === 'inactive' && proc.activo === false)
         );
-
-        if (filterByActivityId) {
-            const targetActivity = actividades.find(act => act.id === filterByActivityId);
-            if (targetActivity) {
-                const relevantProcessIds = new Set(targetActivity.procesosAsociadosIds || []);
-                filteredProcesses = filteredProcesses.filter(proc => relevantProcessIds.has(proc.id));
-            }
-        }
         
         let areasToDisplay = selectedAreaFilter === 'all' ? areas : areas.filter(a => a.nombre === selectedAreaFilter);
         
@@ -271,17 +216,9 @@ export default function PanelJerarquicoPage() {
             const deptoObj = departamentos.find(d => d.nombre === proc.departamento && d.areaId === areaObj?.id);
             if (selectedDeptoFilter !== 'all' && proc.departamento !== selectedDeptoFilter) return;
 
-            const puestoObj = puestos.find(p => p.nombre === proc.puesto && p.departamentoId === deptoObj?.id && p.areaId === areaObj?.id);
+            const puestoObj = puestos.find(p => p.nombre === proc.puesto && p.areaId === areaObj?.id);
             if (selectedPuestoFilter !== 'all' && proc.puesto !== selectedPuestoFilter) return;
             
-            const searchTermLower = treeActivitySearchTerm.toLowerCase();
-            if (treeActivitySearchTerm) {
-                const processNameMatches = proc.proceso.toLowerCase().includes(searchTermLower);
-                const activitiesInOrder = (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act);
-                const anyActivityNameMatches = activitiesInOrder.some(act => act.nombre.toLowerCase().includes(searchTermLower));
-                if (!processNameMatches && !anyActivityNameMatches) return;
-            }
-
             const areaId = areaObj?.id || 'unassigned-area';
             if (!areaNodesMap[areaId]) {
                 areaNodesMap[areaId] = { id: `area-${areaId}`, name: areaObj?.nombre || 'Sin Área', type: 'area', originalId: areaId, deptosMap: {} };
@@ -305,25 +242,82 @@ export default function PanelJerarquicoPage() {
             Object.values(areaNode.deptosMap).forEach(deptoNode => {
                 let puestoChildren: TreeNode[] = [];
                 Object.values(deptoNode.puestosMap).forEach(puestoNode => {
-                    const processTreeNodes = puestoNode.processList.map(proc => {
-                        let activitiesForNode = (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act);
-                        if (filterByActivityId) {
-                            activitiesForNode = activitiesForNode.filter(act => act.id === filterByActivityId);
-                        }
-                        if (treeActivitySearchTerm && !proc.proceso.toLowerCase().includes(treeActivitySearchTerm.toLowerCase())) {
-                            activitiesForNode = activitiesForNode.filter(act => act.nombre.toLowerCase().includes(treeActivitySearchTerm.toLowerCase()));
-                        }
-                        return { id: `proceso-${proc.id}`, name: proc.proceso, type: 'proceso', originalId: proc.id, activities: activitiesForNode, activo: proc.activo };
+
+                    let processTreeNodes = puestoNode.processList.map(proc => {
+                        const processPolicies = (proc.politicasAsociadasIds || [])
+                            .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
+                            .map(p => ({
+                                id: `politica-${p.id}-proc-${proc.id}`,
+                                name: `${p.codigo} - ${p.titulo}`,
+                                type: 'politica' as const, originalId: p.id, payload: p,
+                            }));
+
+                        const procedureNodes = (proc.procedimientoOrder || [])
+                            .map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p)
+                            .map(procedure => {
+                                const procedurePolicies = (procedure.politicasAsociadasIds || [])
+                                  .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
+                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo} - ${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
+                                
+                                const activityNodes = (procedure.activityOrder || [])
+                                  .map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a)
+                                  .map(activity => {
+                                      const activityPolicies = (activity.politicasAsociadasIds || [])
+                                        .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
+                                        .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.codigo} - ${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p }));
+                                      return {
+                                        id: `activity-${activity.id}-from-procedure-${procedure.id}`,
+                                        name: activity.nombre, type: 'actividad' as const, originalId: activity.id, activo: activity.activa,
+                                        children: activityPolicies, payload: activity
+                                      };
+                                  });
+                                return {
+                                  id: `procedure-${procedure.id}`,
+                                  name: procedure.nombre, type: 'procedimiento' as const, originalId: procedure.id, activo: true,
+                                  children: [...procedurePolicies, ...activityNodes], payload: procedure
+                                };
+                            });
+                        
+                        return {
+                            id: `proceso-${proc.id}`,
+                            name: proc.proceso, type: 'proceso' as const, originalId: proc.id, activo: proc.activo,
+                            children: [...processPolicies, ...procedureNodes], payload: proc
+                        };
                     });
                     
+                    if (treeGeneralSearchTerm) {
+                        const lowerTerm = treeGeneralSearchTerm.toLowerCase();
+                        processTreeNodes = processTreeNodes.filter(procNode => {
+                            if (procNode.name.toLowerCase().includes(lowerTerm)) return true;
+                            procNode.children = (procNode.children || []).filter(procedureNode => {
+                                if (procedureNode.name.toLowerCase().includes(lowerTerm)) return true;
+                                if (procedureNode.type === 'procedimiento') {
+                                    procedureNode.children = (procedureNode.children || []).filter(activityNode => {
+                                        return activityNode.name.toLowerCase().includes(lowerTerm);
+                                    });
+                                    return procedureNode.children.length > 0;
+                                }
+                                return false;
+                            });
+                            return procNode.children.length > 0;
+                        });
+                    }
+
+                    if (policySearchTerm) {
+                        const lowerTerm = policySearchTerm.toLowerCase();
+                        processTreeNodes = processTreeNodes.filter(procNode => {
+                            const hasMatchingPolicy = (node: TreeNode) => {
+                                if (node.type === 'politica' && (node.name.toLowerCase().includes(lowerTerm) || node.payload.codigo.toLowerCase().includes(lowerTerm))) return true;
+                                return (node.children || []).some(hasMatchingPolicy);
+                            };
+                            return hasMatchingPolicy(procNode);
+                        });
+                    }
+
                     const orderForThisPuesto = puestoProcessOrders[puestoNode.id];
                     let sortedProcessNodes = orderForThisPuesto 
                         ? processTreeNodes.sort((a,b) => orderForThisPuesto.indexOf(a.originalId!) - orderForThisPuesto.indexOf(b.originalId!))
                         : processTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
-                    
-                    if (filterByActivityId || treeActivitySearchTerm) {
-                        sortedProcessNodes = sortedProcessNodes.filter(p => p.activities && p.activities.length > 0);
-                    }
                     
                     if (sortedProcessNodes.length > 0) {
                         puestoNode.children = sortedProcessNodes;
@@ -344,11 +338,27 @@ export default function PanelJerarquicoPage() {
         return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
     };
 
-    setTreeData(buildTree());
+    const newTreeData = buildTree();
+    setTreeData(newTreeData);
+
+    if (policySearchTerm && newTreeData.length > 0) {
+        const allNodeIds: Record<string, boolean> = {};
+        const expand = (nodes: TreeNode[]) => {
+            nodes.forEach(node => {
+                allNodeIds[node.id] = true;
+                if (node.children) expand(node.children);
+            });
+        };
+        expand(newTreeData);
+        setExpandedNodes(allNodeIds);
+    } else if (!policySearchTerm) {
+        setExpandedNodes({});
+    }
+
 }, [
-    areas, departamentos, puestos, capturedProcesses, actividades, 
+    areas, departamentos, puestos, capturedProcesses, procedimientos, actividades, politicas,
     isLoadingAllData, 
-    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeActivitySearchTerm, filterByActivityId, treeProcessStatusFilter,
+    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, policySearchTerm, treeProcessStatusFilter,
     puestoProcessOrders
 ]);
 
@@ -360,37 +370,21 @@ export default function PanelJerarquicoPage() {
   const handleDragStart = (
     e: DragEvent<HTMLDivElement>, 
     itemId: string, 
-    itemType: 'activityFromPool' | 'activityInProcess' | 'processNodeInPuesto',
-    sourceDetails?: { processId?: string; indexInProcess?: number; parentPuestoNodeId?: string }
+    itemType: 'activityFromPool' | 'activityInProcedure',
+    sourceDetails?: { procedureId?: string; indexInProcedure?: number }
   ) => {
     const activity = itemType.startsWith('activity') ? actividades.find(a => a.id === itemId) : null;
-    if (itemType.startsWith('activity') && activity && !activity.activa) { 
+    if (activity && !activity.activa) { 
         e.preventDefault();
         toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar o mover.", variant: "default" });
         return;
     }
-    if (itemType === 'activityInProcess' && sourceDetails?.processId) {
-        const process = capturedProcesses.find(p => p.id === sourceDetails.processId);
-        if (process && process.activo === false) {
-            e.preventDefault();
-            toast({ title: "Acción no permitida", description: "No se pueden mover actividades de procesos inactivos.", variant: "default" });
-            return;
-        }
-    }
-    if (itemType === 'processNodeInPuesto') {
-        const processNode = capturedProcesses.find(p => p.id === itemId);
-        if (processNode && processNode.activo === false) {
-            e.preventDefault();
-            toast({ title: "Acción no permitida", description: "No se pueden reordenar procesos inactivos.", variant: "default"});
-            return;
-        }
-    }
+    
     setDraggedItem({ 
         type: itemType, 
         id: itemId, 
-        sourceProcessId: sourceDetails?.processId, 
-        sourceIndexInProcess: sourceDetails?.indexInProcess,
-        sourceParentPuestoNodeId: sourceDetails?.parentPuestoNodeId
+        sourceProcedureId: sourceDetails?.procedureId, 
+        sourceIndexInProcedure: sourceDetails?.indexInProcedure
     });
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", itemId); 
@@ -400,12 +394,8 @@ export default function PanelJerarquicoPage() {
     e.preventDefault();
     let allowDrop = false;
 
-    if (draggedItem?.type === 'processNodeInPuesto') {
-        if (targetType === 'processNodeInPuesto' || targetType === 'puesto') {
-            allowDrop = true;
-        }
-    } else if (draggedItem?.type.startsWith('activity')) {
-        if (targetType === 'proceso' || targetType === 'activity-in-tree' || targetType === 'pool') {
+    if (draggedItem?.type.startsWith('activity')) {
+        if (targetType === 'procedimiento' || targetType === 'activity-in-tree' || targetType === 'pool') {
             allowDrop = true;
         }
     }
@@ -414,24 +404,7 @@ export default function PanelJerarquicoPage() {
         e.dataTransfer.dropEffect = "none";
         return;
     }
-
-    const checkProcessStatus = (processId?: string) => {
-        if (!processId) return true;
-        const process = capturedProcesses.find(p => p.id === processId);
-        return process ? process.activo !== false : true;
-    };
-
-    if (targetType === 'proceso' && targetId) {
-        if (!checkProcessStatus(targetId.replace('proceso-', ''))) allowDrop = false;
-    } else if (targetType === 'activity-in-tree' && targetId) {
-        const procId = targetId.split('-proc-').pop();
-        if (!checkProcessStatus(procId)) allowDrop = false;
-    } else if (targetType === 'processNodeInPuesto' && targetId) {
-        const procId = targetId.replace('proceso-', '');
-        if (!checkProcessStatus(procId)) allowDrop = false;
-    }
-
-
+    
     e.dataTransfer.dropEffect = allowDrop ? "move" : "none";
   };
   
@@ -439,42 +412,22 @@ export default function PanelJerarquicoPage() {
     e: DragEvent<HTMLDivElement>, 
     targetId: string, 
     targetType: DropTargetType,
-    additionalTargetInfo?: { processId?: string; activityId?: string }
+    additionalTargetInfo?: { procedureId?: string; activityId?: string }
   ) => {
     e.preventDefault();
     let canDropOnTarget = true;
 
-    if (draggedItem?.type === 'processNodeInPuesto') {
-        if (targetType !== 'processNodeInPuesto' && targetType !== 'puesto') {
+    if (draggedItem?.type.startsWith('activity')) {
+        if (targetType !== 'procedimiento' && targetType !== 'activity-in-tree' && targetType !== 'pool') {
             canDropOnTarget = false;
         }
-    } else if (draggedItem?.type.startsWith('activity')) {
-        if (targetType !== 'proceso' && targetType !== 'activity-in-tree' && targetType !== 'pool') {
-            canDropOnTarget = false;
-        }
-    }
-
-    const getProcessStatus = (processId?: string) => {
-        if (!processId) return true; 
-        const process = capturedProcesses.find(p => p.id === processId);
-        return process ? process.activo !== false : true; 
-    };
-    
-    if (targetType === 'proceso') {
-        if (!getProcessStatus(targetId.replace('proceso-', ''))) canDropOnTarget = false;
-    } else if (targetType === 'activity-in-tree') {
-        const procId = targetId.split('-proc-').pop();
-        if (!getProcessStatus(procId)) canDropOnTarget = false;
-    } else if (targetType === 'processNodeInPuesto') {
-         const procId = targetId.replace('proceso-', '');
-         if (!getProcessStatus(procId)) canDropOnTarget = false;
     }
     
     if (canDropOnTarget) {
       setDropTargetInfo({ 
         id: targetId, 
         type: targetType,
-        targetProcessId: additionalTargetInfo?.processId,
+        targetProcedureId: additionalTargetInfo?.procedureId,
         targetActivityId: additionalTargetInfo?.activityId
       });
     } else {
@@ -489,185 +442,53 @@ export default function PanelJerarquicoPage() {
     }
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (!draggedItem || !dropTargetInfo) return;
 
-    const { type: draggedItemType, id: draggedItemId, sourceProcessId, sourceParentPuestoNodeId } = draggedItem;
-    const { type: targetType, id: dropTargetNodeId, targetProcessId: actualTargetProcessId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
+    const { type: draggedItemType, id: draggedItemId, sourceProcedureId } = draggedItem;
+    const { type: targetType, id: dropTargetNodeId, targetProcedureId: actualTargetProcedureId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
     
-    if (draggedItemType === 'processNodeInPuesto') {
-        if (targetType === 'puesto') { // Moving a process to a new Puesto
-            const processId = draggedItemId;
-            const targetPuestoNodeId = dropTargetNodeId;
-            const targetPuestoOriginalId = targetPuestoNodeId.replace('puesto-', '');
-
-            if (sourceParentPuestoNodeId === targetPuestoNodeId) {
-                setDraggedItem(null);
-                setDropTargetInfo(null);
-                return;
-            }
-
-            const targetPuesto = puestos.find(p => p.id === targetPuestoOriginalId);
-            if (!targetPuesto) {
-                toast({ title: "Error", description: "El puesto de destino no fue encontrado." });
-                setDraggedItem(null); setDropTargetInfo(null); return;
-            }
-
-            const targetArea = areas.find(a => a.id === targetPuesto.areaId);
-            const targetDepto = departamentos.find(d => d.id === targetPuesto.departamentoId);
-            const processToUpdate = capturedProcesses.find(p => p.id === processId);
-            
-            if (!processToUpdate) return;
-            addLogEntry({ action: 'update', entityType: 'Proceso', entityName: processToUpdate.proceso, details: `Proceso movido al puesto: ${targetPuesto.nombre}.`});
-
-
-            setCapturedProcesses(prevProcesses => {
-                const processToUpdate = prevProcesses.find(p => p.id === processId);
-                if (!processToUpdate) return prevProcesses;
-
-                const changes: CambioHistorial[] = [];
-                if (processToUpdate.area !== (targetArea?.nombre || processToUpdate.area)) {
-                    changes.push({ timestamp: new Date().toISOString(), field: 'area', before: processToUpdate.area, after: targetArea?.nombre || processToUpdate.area });
-                }
-                if (processToUpdate.departamento !== (targetDepto?.nombre)) {
-                    changes.push({ timestamp: new Date().toISOString(), field: 'departamento', before: processToUpdate.departamento || 'N/A', after: targetDepto?.nombre || 'N/A' });
-                }
-                if (processToUpdate.puesto !== targetPuesto.nombre) {
-                    changes.push({ timestamp: new Date().toISOString(), field: 'puesto', before: processToUpdate.puesto, after: targetPuesto.nombre });
-                }
-
-                return prevProcesses.map(proc =>
-                    proc.id === processId ? {
-                        ...proc,
-                        puesto: targetPuesto.nombre,
-                        departamento: targetDepto?.nombre,
-                        area: targetArea?.nombre || proc.area,
-                        updatedAt: Date.now(),
-                        historialDeCambios: [...(proc.historialDeCambios || []), ...changes],
-                    } : proc
-                );
-            });
-            
-            setPuestoProcessOrders(prevOrders => {
-                const newOrders = { ...prevOrders };
-                if (sourceParentPuestoNodeId && newOrders[sourceParentPuestoNodeId]) {
-                    newOrders[sourceParentPuestoNodeId] = newOrders[sourceParentPuestoNodeId].filter(id => id !== processId);
-                }
-                const targetOrder = newOrders[targetPuestoNodeId] || [];
-                if (!targetOrder.includes(processId)) {
-                    newOrders[targetPuestoNodeId] = [...targetOrder, processId];
-                }
-                return newOrders;
-            });
-            
-            toast({ title: "Proceso Movido", description: `El proceso fue movido exitosamente al puesto "${targetPuesto.nombre}".` });
-
-        } else if (targetType === 'processNodeInPuesto') { // Reordering a process within the same Puesto
-            const targetProcessOriginalId = dropTargetNodeId.replace('proceso-', '');
-            
-            let parentPuestoNodeOfTarget: TreeNode | undefined;
-            const findPuestoNode = (nodes: TreeNode[]): TreeNode | undefined => {
-                for (const node of nodes) {
-                    if (node.type === 'puesto' && node.children?.some(child => child.id === dropTargetNodeId)) { return node; }
-                    if (node.children) { const found = findPuestoNode(node.children); if (found) return found; }
-                }
-                return undefined;
-            };
-            parentPuestoNodeOfTarget = findPuestoNode(treeData);
-            
-            if (!parentPuestoNodeOfTarget || sourceParentPuestoNodeId !== parentPuestoNodeOfTarget.id) {
-                toast({ title: "Movimiento no válido", description: "Los procesos solo se pueden reordenar dentro del mismo puesto." });
-                setDraggedItem(null); setDropTargetInfo(null); return;
-            }
-            const currentPuestoNodeId = parentPuestoNodeOfTarget.id;
-            const currentOrder = puestoProcessOrders[currentPuestoNodeId] || parentPuestoNodeOfTarget.children?.map(c => c.originalId!) || [];
-            
-            const newOrder = [...currentOrder];
-            const draggedIndex = newOrder.indexOf(draggedItemId);
-            if (draggedIndex > -1) newOrder.splice(draggedIndex, 1);
-
-            const targetIndex = newOrder.indexOf(targetProcessOriginalId);
-            newOrder.splice(targetIndex > -1 ? targetIndex : newOrder.length, 0, draggedItemId);
-
-            setPuestoProcessOrders(prev => ({ ...prev, [currentPuestoNodeId]: newOrder }));
-            toast({ title: "Proceso Reordenado", description: "El orden del proceso ha sido actualizado." });
-        }
-    
-    } else if (draggedItemType.startsWith('activity')) {
+    if (draggedItemType.startsWith('activity')) {
         const activity = actividades.find(a => a.id === draggedItemId);
         if (!activity || !activity.activa) {
             toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
             setDraggedItem(null); setDropTargetInfo(null); return;
         }
     
-        const handleProcessUpdate = (processId: string, updateFn: (order: string[]) => string[], allProcesses: CapturedProcess[]) => {
-            const index = allProcesses.findIndex(p => p.id === processId);
-            if (index > -1) {
-                const originalProcess = allProcesses[index];
-                const originalOrder = originalProcess.activityOrder || [];
-                const newOrder = updateFn(originalOrder);
-
-                if (JSON.stringify(originalOrder) !== JSON.stringify(newOrder)) {
-                     const change: CambioHistorial = {
-                        timestamp: new Date().toISOString(),
-                        field: 'activityOrder',
-                        before: originalOrder.map(id => actividades.find(a => a.id === id)?.nombre || id).join(', ') || 'Ninguna',
-                        after: newOrder.map(id => actividades.find(a => a.id === id)?.nombre || id).join(', ') || 'Ninguna',
-                    };
-
-                    allProcesses[index] = {
-                        ...originalProcess,
-                        activityOrder: newOrder,
-                        updatedAt: Date.now(),
-                        historialDeCambios: [...(originalProcess.historialDeCambios || []), change],
-                    };
-                    addLogEntry({ action: 'update', entityType: 'Proceso', entityName: originalProcess.proceso, details: 'Se modificó el orden de las actividades.' });
-                }
+        const handleProcedureUpdate = async (procedureId: string, updateFn: (order: string[]) => string[]) => {
+            const originalProcedure = procedimientos.find(p => p.id === procedureId);
+            if (originalProcedure) {
+                const newOrder = updateFn(originalProcedure.activityOrder || []);
+                await updateProcedimiento(procedureId, { activityOrder: newOrder });
             }
         };
 
         if (targetType === 'pool') { 
-            if (!sourceProcessId) { setDraggedItem(null); setDropTargetInfo(null); return; }
+            if (!sourceProcedureId) { setDraggedItem(null); setDropTargetInfo(null); return; }
             
-            const newProcesosAsociadosIds = (activity.procesosAsociadosIds || []).filter(id => id !== sourceProcessId);
-            updateActividad(draggedItemId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
-            
-            setCapturedProcesses(prevProcesses => {
-                let newProcesses = [...prevProcesses];
-                handleProcessUpdate(sourceProcessId, (order) => order.filter(id => id !== draggedItemId), newProcesses);
-                return newProcesses;
-            });
-            toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" desasignada del proceso.` });
+            await updateGlobalActivity(draggedItemId, { procedimientoId: undefined });
+            await handleProcedureUpdate(sourceProcedureId, (order) => order.filter(id => id !== draggedItemId));
+            toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" desasignada.` });
 
-        } else if ((targetType === 'proceso' || targetType === 'activity-in-tree') && actualTargetProcessId) {
-             const targetProcess = capturedProcesses.find(p => p.id === actualTargetProcessId);
-             if (targetProcess && targetProcess.activo === false) {
-                 toast({ title: "Acción no permitida", description: "No se pueden asignar actividades a procesos inactivos.", variant: "default" });
-                 setDraggedItem(null); setDropTargetInfo(null); return;
-             }
+        } else if ((targetType === 'procedimiento' || targetType === 'activity-in-tree') && actualTargetProcedureId) {
             
-            const newProcesosAsociadosIds = Array.from(new Set([...(activity.procesosAsociadosIds || []), actualTargetProcessId]));
-            updateActividad(draggedItemId, { ...activity, procesosAsociadosIds: newProcesosAsociadosIds });
-            
-            setCapturedProcesses(prevProcesses => {
-                let newProcesses = [...prevProcesses];
-                if (sourceProcessId && sourceProcessId !== actualTargetProcessId) {
-                    handleProcessUpdate(sourceProcessId, (order) => order.filter(id => id !== draggedItemId), newProcesses);
+            await updateGlobalActivity(draggedItemId, { procedimientoId: actualTargetProcedureId });
+
+            if (sourceProcedureId && sourceProcedureId !== actualTargetProcedureId) {
+                await handleProcedureUpdate(sourceProcedureId, (order) => order.filter(id => id !== draggedItemId));
+            }
+            await handleProcedureUpdate(actualTargetProcedureId, (order) => {
+                const tempOrder = order.filter(id => id !== draggedItemId);
+                if (actualTargetActivityId) {
+                    const dropIndex = tempOrder.indexOf(actualTargetActivityId);
+                    tempOrder.splice(dropIndex !== -1 ? dropIndex : tempOrder.length, 0, draggedItemId);
+                } else {
+                    tempOrder.push(draggedItemId);
                 }
-                handleProcessUpdate(actualTargetProcessId, (order) => {
-                    const tempOrder = order.filter(id => id !== draggedItemId);
-                    if (actualTargetActivityId) {
-                        const dropIndex = tempOrder.indexOf(actualTargetActivityId);
-                        tempOrder.splice(dropIndex !== -1 ? dropIndex : tempOrder.length, 0, draggedItemId);
-                    } else {
-                        tempOrder.push(draggedItemId);
-                    }
-                    return tempOrder;
-                }, newProcesses);
-                return newProcesses;
+                return tempOrder;
             });
-            toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada en proceso.` });
+            toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada.` });
         }
     }
     
@@ -675,173 +496,21 @@ export default function PanelJerarquicoPage() {
     setDropTargetInfo(null);
   };
 
-
-  const handleActivityBadgeClick = (activity: Actividad) => {
-    if (filterByActivityId === activity.id) {
-        setFilterByActivityId(null);
-        setFilteredByActivityName(null);
-    } else {
-        setFilterByActivityId(activity.id);
-        setFilteredByActivityName(activity.nombre);
-        setSelectedAreaFilter('all');
-        setSelectedDeptoFilter('all');
-        setSelectedPuestoFilter('all');
-        setTreeActivitySearchTerm('');
-        setTreeProcessStatusFilter('active'); 
-    }
-  };
-   useEffect(() => {
-    if (filterByActivityId && treeData.length > 0) {
-        const allNodeIds: Record<string, boolean> = {};
-        const expand = (nodes: TreeNode[]) => {
-            nodes.forEach(node => {
-                allNodeIds[node.id] = true;
-                if (node.children) expand(node.children);
-            });
-        };
-        expand(treeData);
-        setExpandedNodes(allNodeIds);
-    }
-  }, [filterByActivityId, treeData]);
-
-  const openDetailDialog = (item: CapturedProcess | Actividad, type: 'process' | 'activity') => {
+  const openDetailDialog = (item: any, type: 'process' | 'activity' | 'procedure' | 'policy') => {
     setSelectedItemForDetail(item);
     setDetailItemType(type);
     setIsDetailDialogOpen(true);
   };
 
-  const handleEditProcess = (processName: string) => {
-    router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(processName)}`);
+  const handleEditItem = (item: any, type: 'process' | 'activity' | 'procedure' | 'policy') => {
+    if (type === 'process') router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(item.proceso)}`);
+    if (type === 'activity') router.push(`/actividades?search=${encodeURIComponent(item.nombre)}`);
+    if (type === 'procedure') router.push(`/procesos-y-flujos-registrados`); // No direct link yet
+    if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
   };
 
-  const handleEditActivity = (activityName: string) => {
-    router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
-  };
-
-  const renderTree = (nodes: TreeNode[], parentPuestoNodeId?: string): JSX.Element[] => {
-    return nodes.map(node => {
-        let nodeContent;
-        if (node.type === 'puesto') {
-            nodeContent = (
-              <div 
-                className={cn(
-                  "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
-                  dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && draggedItem?.type === 'processNodeInPuesto' && "bg-primary/20 border-2 border-dashed border-primary"
-                )}
-                onDragOver={(e) => handleDragOver(e, 'puesto', node.id)}
-                onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, node.id, 'puesto')}
-                onDragLeave={handleDragLeave}
-                id={node.id}
-              >
-                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
-                  {node.children ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
-                </Button>
-                <span className="font-medium flex-grow">{node.name}</span>
-              </div>
-            );
-        } else {
-             nodeContent = (
-              <div 
-                className={cn(
-                  "flex items-center py-1 px-2 rounded group hover:bg-muted/50",
-                  node.type === 'proceso' && "border-l-2 border-transparent",
-                  dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type.startsWith('activity') && "bg-primary/20 border-primary",
-                  dropTargetInfo?.type === 'processNodeInPuesto' && dropTargetInfo.id === node.id && node.activo !== false && draggedItem?.type === 'processNodeInPuesto' && "ring-2 ring-accent",
-                  node.type === 'proceso' && node.activo === false && "opacity-60"
-                )}
-                draggable={node.type === 'proceso' && node.activo !== false}
-                onDragStart={node.type === 'proceso' && node.activo !== false ? (e) => handleDragStart(e, node.originalId!, 'processNodeInPuesto', { parentPuestoNodeId: parentPuestoNodeId }) : undefined}
-                onDragOver={node.type === 'proceso' && node.activo !== false ? (e) => handleDragOver(e, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', node.originalId) : undefined}
-                onDrop={node.type === 'proceso' && node.activo !== false ? (e) => handleDrop(e) : undefined}
-                onDragEnter={node.type === 'proceso' && node.activo !== false ? (e) => handleDragEnter(e, node.id, draggedItem?.type === 'processNodeInPuesto' ? 'processNodeInPuesto' : 'proceso', { processId: node.originalId }) : undefined}
-                onDragLeave={handleDragLeave}
-                id={node.id}
-                title={node.type === 'proceso' && node.activo === false ? "Este proceso está inactivo" : node.name}
-              >
-                {node.type === 'proceso' && node.activo !== false && <GripVertical className="h-4 w-4 mr-1 text-muted-foreground cursor-grab" />}
-                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
-                  {node.children || node.activities ? (expandedNodes[node.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="w-4 inline-block"></span>}
-                </Button>
-                <span className={cn(
-                    "text-sm flex-grow", 
-                    node.type === 'proceso' && "font-semibold", 
-                    node.type === 'area' && "font-bold",
-                    node.type === 'departamento' && "font-medium text-foreground/80",
-                    node.type === 'proceso' && node.activo === false && "italic text-muted-foreground"
-                  )}
-                >
-                  {node.name}
-                  {node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}
-                </span>
-                {node.type === 'proceso' && node.originalId && (
-                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditProcess(node.name)} title="Editar proceso">
-                          <Edit2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(capturedProcesses.find(p => p.id === node.originalId!)!, 'process')} title="Ver detalles del proceso">
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                  </div>
-                )}
-              </div>
-            );
-        }
-
-        return (
-          <div key={node.id} className="ml-4">
-            {nodeContent}
-            {expandedNodes[node.id] && (
-              <>
-                {node.children && renderTree(node.children, node.type === 'puesto' ? node.id : parentPuestoNodeId)}
-                {node.activities && node.type === 'proceso' && node.originalId && (node.type !== 'proceso' || node.activo !== false) && ( 
-                  <div className="ml-8 mt-1 space-y-1">
-                    {node.activities.map((act, index) => {
-                      const activityInTreeId = `tree-activity-${act.id}-proc-${node.originalId!}`;
-                      return (
-                      <div 
-                        key={`${activityInTreeId}-${index}`}
-                        id={activityInTreeId}
-                        draggable={act.activa && node.activo !== false}
-                        onDragStart={(e) => (act.activa && node.activo !== false) ? handleDragStart(e, act.id, 'activityInProcess', { processId: node.originalId, indexInProcess: index }) : e.preventDefault()}
-                        onDragOver={(e) => handleDragOver(e, 'activity-in-tree', activityInTreeId)}
-                        onDrop={(e) => handleDrop(e)}
-                        onDragEnter={(e) => handleDragEnter(e, activityInTreeId, 'activity-in-tree', { processId: node.originalId, activityId: act.id })}
-                        onDragLeave={handleDragLeave}
-                        className={cn(
-                            "flex items-center p-1.5 bg-secondary/30 rounded text-xs group",
-                            (act.activa && node.activo !== false) ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-70",
-                            !act.activa && "italic text-muted-foreground",
-                            dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === activityInTreeId && "ring-2 ring-primary"
-                        )}
-                        title={!act.activa ? "Esta actividad está inactiva" : (node.activo === false ? "El proceso padre está inactivo" : act.nombre)}
-                      >
-                        <GripVertical className={cn("h-3 w-3 mr-1.5", (act.activa && node.activo !== false) ? "text-muted-foreground" : "text-transparent")}/>
-                        <span className="flex-grow">{act.nombre}</span>
-                        {!act.activa && <Ban className="h-3 w-3 ml-auto text-destructive" />}
-                         <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
-                                <Edit2 className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
-                                <Eye className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                        </div>
-                      </div>
-                    )})}
-                     {node.activities.length === 0 && <p className="text-xs text-muted-foreground italic pl-2">Ninguna actividad asignada (o visible con filtros)</p>}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        );
-    });
-  };
-
-  const unassignedCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 0).length, [actividades]);
-  const assignedOnceCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) === 1).length, [actividades]);
-  const assignedMultipleCount = useMemo(() => actividades.filter(a => a.activa && (a.procesosAsociadosCount || 0) > 1).length, [actividades]);
+  const unassignedCount = useMemo(() => actividades.filter(a => a.activa && !a.procedimientoId).length, [actividades]);
+  const assignedCount = useMemo(() => actividades.filter(a => a.activa && !!a.procedimientoId).length, [actividades]);
   
   const activeActivitiesCount = useMemo(() => actividades.filter(a => a.activa).length, [actividades]);
   const inactiveActivitiesCount = useMemo(() => actividades.filter(a => !a.activa).length, [actividades]);
@@ -857,94 +526,14 @@ export default function PanelJerarquicoPage() {
           return false;
         }
 
-        const count = a.procesosAsociadosCount || 0;
-        if (assignmentCountFilter === 'unassigned' && count !== 0) return false;
-        if (assignmentCountFilter === 'assigned_once' && count !== 1) return false;
-        if (assignmentCountFilter === 'assigned_multiple' && count <= 1) return false;
+        if (assignmentCountFilter === 'unassigned' && a.procedimientoId) return false;
+        if (assignmentCountFilter === 'assigned' && !a.procedimientoId) return false;
         
         return true;
       })
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter]);
-
-  const getProcessNamesForActivity = (activity: Actividad): string => {
-    if (!activity.procesosAsociadosIds || activity.procesosAsociadosIds.length === 0) {
-      return "No asignada a procesos.";
-    }
-    return activity.procesosAsociadosIds
-      .map(procId => {
-          const proc = capturedProcesses.find(cp => cp.id === procId);
-          return proc ? `${proc.proceso}${proc.activo === false ? ' (Inactivo)' : ''}` : `ID: ${procId} (no encontrado)`;
-      })
-      .join(', ');
-  };
-
-  const handleExportTreeDataToCsv = () => {
-    if (isLoadingAllData || treeData.length === 0) {
-      toast({ title: "Nada que exportar", description: "No hay datos en el árbol para exportar o los datos aún están cargando.", variant: "default" });
-      return;
-    }
-
-    const csvRows: string[][] = [];
-    const headers = [
-      "ID Área", "Nombre Área", "ID Depto", "Nombre Depto", "ID Puesto", "Nombre Puesto", 
-      "ID Proceso", "Nombre Proceso", "Estado Proceso", 
-      "Orden Actividad", "ID Actividad", "Nombre Actividad", "Estado Actividad"
-    ];
-    csvRows.push(headers);
-
-    treeData.forEach(areaNode => {
-        (areaNode.children || []).forEach(deptoNode => {
-            (deptoNode.children || []).forEach(puestoNode => {
-                (puestoNode.children || []).forEach(procesoNode => {
-                    const proc = capturedProcesses.find(p => p.id === procesoNode.originalId);
-                    if ((procesoNode.activities || []).length === 0) {
-                        csvRows.push([
-                            escapeCsvCell(areaNode.originalId), escapeCsvCell(areaNode.name),
-                            escapeCsvCell(deptoNode.originalId), escapeCsvCell(deptoNode.name),
-                            escapeCsvCell(puestoNode.originalId), escapeCsvCell(puestoNode.name),
-                            escapeCsvCell(procesoNode.originalId), escapeCsvCell(procesoNode.name),
-                            escapeCsvCell(proc ? (proc.activo !== false ? 'Activo' : 'Inactivo') : 'N/A'),
-                            '', '', '', ''
-                        ]);
-                    } else {
-                        procesoNode.activities?.forEach((act, index) => {
-                            const actOriginal = actividades.find(a => a.id === act.id);
-                            csvRows.push([
-                                escapeCsvCell(areaNode.originalId), escapeCsvCell(areaNode.name),
-                                escapeCsvCell(deptoNode.originalId), escapeCsvCell(deptoNode.name),
-                                escapeCsvCell(puestoNode.originalId), escapeCsvCell(puestoNode.name),
-                                escapeCsvCell(procesoNode.originalId), escapeCsvCell(procesoNode.name),
-                                escapeCsvCell(proc ? (proc.activo !== false ? 'Activo' : 'Inactivo') : 'N/A'),
-                                escapeCsvCell(index + 1), escapeCsvCell(act.id), escapeCsvCell(act.nombre),
-                                escapeCsvCell(actOriginal ? (actOriginal.activa ? 'Activa' : 'Inactiva') : 'N/A')
-                            ]);
-                        });
-                    }
-                });
-            });
-        });
-    });
-
-    const csvString = csvRows.map(row => row.join(',')).join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `panel_jerarquico_export_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast({ title: "Exportación Iniciada", description: "El archivo CSV del árbol jerárquico se está descargando." });
-    } else {
-      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
-    }
-  };
-
-
+  
   if (isLoadingAllData) {
     return (
         <div className="container mx-auto py-8">
@@ -964,334 +553,143 @@ export default function PanelJerarquicoPage() {
     );
   }
 
+  const renderTree = (nodes: TreeNode[]): JSX.Element[] => {
+    return nodes.map(node => {
+        let nodeContent;
+        const baseClasses = "flex items-center py-1 px-2 rounded group hover:bg-muted/50";
+        switch (node.type) {
+          case 'procedimiento':
+             nodeContent = (
+              <div 
+                className={cn(baseClasses, "ml-4 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary")}
+                onDragOver={(e) => handleDragOver(e, 'procedimiento', node.originalId)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, node.id, 'procedimiento', { procedureId: node.originalId })}
+                onDragLeave={handleDragLeave}
+                id={node.id}
+              >
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
+                <span className="font-medium text-sm flex-grow">{node.name}</span>
+                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'procedure')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                </div>
+              </div>
+            );
+            break;
+          case 'actividad':
+            nodeContent = (
+              <div 
+                id={`activity-in-tree-${node.originalId}`}
+                draggable={node.activo} 
+                onDragStart={(e) => node.activo ? handleDragStart(e, node.originalId!, 'activityInProcedure', { procedureId: node.payload.procedimientoId }) : e.preventDefault()}
+                onDragOver={(e) => handleDragOver(e, 'activity-in-tree', `activity-in-tree-${node.originalId}`)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, `activity-in-tree-${node.originalId}`, 'activity-in-tree', { procedureId: node.payload.procedimientoId, activityId: node.originalId })}
+                onDragLeave={handleDragLeave}
+                className={cn(baseClasses, "ml-8 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.targetActivityId === node.originalId && "ring-2 ring-primary")}
+                title={!node.activo ? "Esta actividad está inactiva" : node.name}
+              >
+                <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground" : "text-transparent")}/>
+                <span className="flex-grow text-xs">{node.name}</span>
+                 {!node.activo && <Ban className="h-3 w-3 ml-auto text-destructive" />}
+                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'activity')} title="Editar"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'activity')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                </div>
+              </div>
+            );
+            break;
+          case 'politica':
+             nodeContent = (
+              <div className={cn(baseClasses, "ml-8 text-xs text-muted-foreground cursor-pointer")} onClick={() => openDetailDialog(node.payload, 'policy')}>
+                <FileText className="h-3 w-3 mr-1.5 shrink-0" />
+                <span className="flex-grow truncate">{node.name}</span>
+              </div>
+            );
+            break;
+          default: // Puesto, Area, Depto, Proceso
+            nodeContent = (
+              <div 
+                className={cn(baseClasses, node.type === 'proceso' && "border-l-2 border-transparent", node.type === 'proceso' && node.activo === false && "opacity-60",
+                {'ml-4': node.type === 'departamento', 'ml-8': node.type === 'puesto' || node.type === 'proceso'}
+                )}
+                id={node.id}
+              >
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
+                </Button>
+                <span className={cn( "flex-grow", 
+                    { 'font-bold': node.type === 'area', 'font-medium': node.type === 'departamento' || node.type === 'puesto', 'font-semibold text-sm': node.type === 'proceso', 'italic text-muted-foreground': node.activo === false }
+                )}>{node.name}{node.type === 'proceso' && node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
+                 {node.type === 'proceso' && node.originalId && (
+                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'process')} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'process')} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                  </div>
+                )}
+              </div>
+            );
+        }
+
+        return (
+          <div key={node.id}>
+            {nodeContent}
+            {expandedNodes[node.id] && node.children && renderTree(node.children)}
+          </div>
+        );
+    });
+  };
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
         <CardHeader>
-          <div className="flex items-center gap-2 mb-1">
-            <FolderTree className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle>
-          </div>
-          <CardDescription className="mb-4">
-            Explore la estructura organizativa. Arrastre actividades al árbol de procesos, muévalas entre procesos, reordénelas, o devuélvalas al pool. Arrastre un proceso a otro puesto para reasignarlo.
-          </CardDescription>
+          <div className="flex items-center gap-2 mb-1"><FolderTree className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Panel de Análisis Interconectado</CardTitle></div>
+          <CardDescription className="mb-4">Explore la estructura organizativa y de procesos. Arrastre actividades al árbol para asignarlas a un procedimiento.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="arbol" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 mb-4">
-              <TabsTrigger value="arbol"><ListTreeIcon className="mr-2 h-4 w-4"/>Vista de Árbol</TabsTrigger>
-              <TabsTrigger value="diagrama"><Share2 className="mr-2 h-4 w-4"/>Diagrama de Relaciones</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="arbol">
               <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <CardTitle className="text-lg">Filtros del Árbol de Procesos</CardTitle>
-                        <CardDescription className="text-xs">Filtre la vista de árbol. Procesos inactivos se muestran atenuados y no permiten interacciones.</CardDescription>
-                    </div>
-                    <Button onClick={handleExportTreeDataToCsv} variant="outline" size="sm" disabled={isLoadingAllData || treeData.length === 0}>
-                        <FileText className="mr-2 h-4 w-4" /> Exportar Vista CSV
-                    </Button>
-                </div>
-                {filteredByActivityName && (
-                  <div className="p-2 text-sm text-primary border-b bg-primary/10 rounded-md flex items-center justify-between">
-                    <span>Filtrando por actividad: <strong>{filteredByActivityName}</strong></span>
-                    <Button variant="ghost" size="sm" className="p-1 h-auto text-primary hover:bg-primary/20" onClick={() => handleActivityBadgeClick({id: filterByActivityId!} as Actividad)}>
-                        <XCircle className="h-4 w-4 mr-1" /> Limpiar
-                    </Button>
-                  </div>
-                )}
+                <div className="flex justify-between items-center"><CardTitle className="text-lg">Filtros del Árbol</CardTitle></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div>
-                    <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas || !!filterByActivityId}>
-                      <SelectTrigger className="w-full">
-                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Filtrar por Área" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las Áreas</SelectItem>
-                        {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                   <div>
-                    <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || !!filterByActivityId || selectedAreaFilter === 'all'}>
-                      <SelectTrigger className="w-full">
-                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los Deptos.</SelectItem>
-                        {availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || !!filterByActivityId || selectedAreaFilter === 'all'}>
-                      <SelectTrigger className="w-full">
-                        <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los Puestos</SelectItem>
-                        {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Filtrar por Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent></Select>
+                  <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent></Select>
+                  <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent></Select>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)} disabled={!!filterByActivityId}>
-                      <SelectTrigger className="w-full">
-                          <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <SelectValue placeholder="Filtrar por estado del proceso" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Procesos Activos</SelectItem>
-                          <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Procesos Inactivos</SelectItem>
-                          <SelectItem value="all">Todos los Estados</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        type="search"
-                        placeholder="Buscar actividad o proceso en árbol..."
-                        value={treeActivitySearchTerm}
-                        onChange={(e) => setTreeActivitySearchTerm(e.target.value)}
-                        className="w-full pl-9"
-                        disabled={!!filterByActivityId}
-                    />
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Estado del proceso" /></SelectTrigger><SelectContent><SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 text-green-500" />Procesos Activos</SelectItem><SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 text-red-500" />Procesos Inactivos</SelectItem><SelectItem value="all">Todos los Estados</SelectItem></SelectContent></Select>
+                  <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar en árbol..." value={treeGeneralSearchTerm} onChange={(e) => setTreeGeneralSearchTerm(e.target.value)} className="w-full pl-9"/></div>
+                  <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar por política..." value={policySearchTerm} onChange={(e) => setPolicySearchTerm(e.target.value)} className="w-full pl-9"/></div>
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Árbol de Procesos</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">
-                      {treeData.length > 0 ? renderTree(treeData) : 
-                        <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                          <FolderTree className="h-12 w-12 text-muted-foreground mb-2"/>
-                          <p className="text-muted-foreground">No hay procesos para mostrar.</p>
-                          <p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p>
-                        </div>
-                      }
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
+                <Card><CardHeader><CardTitle className="text-lg">Árbol de Procesos, Procedimientos y Políticas</CardTitle></CardHeader><CardContent><ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">{treeData.length > 0 ? renderTree(treeData) : <div className="flex flex-col items-center justify-center h-full text-center p-4"><FolderTree className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay procesos para mostrar.</p><p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p></div>}</ScrollArea></CardContent></Card>
                 
-                <Card 
-                  id="activity-pool"
-                  className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")}
-                  onDragOver={(e) => handleDragOver(e, 'pool')}
-                  onDrop={(e) => handleDrop(e)}
-                  onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')}
-                  onDragLeave={handleDragLeave}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-lg">Pool de Actividades</CardTitle>
-                    <CardDescription className="text-xs">Actividades disponibles para asignar. Filtre o busque. Las inactivas no se pueden arrastrar.</CardDescription>
+                <Card id="activity-pool" className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")} onDragOver={(e) => handleDragOver(e, 'pool')} onDrop={(e) => handleDrop(e)} onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')} onDragLeave={handleDragLeave}>
+                  <CardHeader><CardTitle className="text-lg">Pool de Actividades</CardTitle><CardDescription className="text-xs">Actividades disponibles para asignar. Las inactivas no se pueden arrastrar.</CardDescription>
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="relative">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="search"
-                          placeholder="Buscar actividad..."
-                          value={activitySearchTerm}
-                          onChange={(e) => setActivitySearchTerm(e.target.value)}
-                          className="w-full pl-9"
-                        />
-                      </div>
-                      <div>
-                        <Select value={activityStatusFilter} onValueChange={(value) => setActivityStatusFilter(value as ActivityStatusFilterType)}>
-                          <SelectTrigger className="w-full">
-                              <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                              <SelectValue placeholder="Filtrar por estado actividad" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">Todas ({actividades.length})</SelectItem>
-                              <SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 inline-block text-green-500" /> Activas ({activeActivitiesCount})</SelectItem>
-                              <SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 inline-block text-red-500" /> Inactivas ({inactiveActivitiesCount})</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="sm:col-span-2"> 
-                        <Select value={assignmentCountFilter} onValueChange={(value) => setAssignmentCountFilter(value as AssignmentCountFilterType)}>
-                          <SelectTrigger className="w-full">
-                            <FilterIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <SelectValue placeholder="Filtrar por asignación" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todas (Asignación) ({actividades.filter(a => a.activa || activityStatusFilter !== 'active').length})</SelectItem>
-                            <SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem>
-                            <SelectItem value="assigned_once">Asignadas a 1 proc. ({assignedOnceCount})</SelectItem>
-                            <SelectItem value="assigned_multiple">Asignadas a 2+ proc. ({assignedMultipleCount})</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" /><Input type="search" placeholder="Buscar actividad..." value={activitySearchTerm} onChange={(e) => setActivitySearchTerm(e.target.value)} className="w-full pl-9"/></div>
+                      <Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as ActivityStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas ({actividades.length})</SelectItem><SelectItem value="active">Activas ({activeActivitiesCount})</SelectItem><SelectItem value="inactive">Inactivas ({inactiveActivitiesCount})</SelectItem></SelectContent></Select>
+                      <div className="sm:col-span-2"> <Select value={assignmentCountFilter} onValueChange={(v) => setAssignmentCountFilter(v as AssignmentCountFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas (Asignación)</SelectItem><SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem><SelectItem value="assigned">Asignadas ({assignedCount})</SelectItem></SelectContent></Select></div>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-grow flex flex-col">
-                    <ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md"> 
-                      {availableActivities.length > 0 ? (
-                        <div className="space-y-2">
-                          {availableActivities.map((act, index) => (
-                            <div 
-                              key={`${act.id}-${index}`} 
-                              draggable={act.activa} 
-                              onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()}
-                              className={cn(
-                                  "flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", 
-                                  act.activa ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60",
-                                  !act.activa && "italic text-muted-foreground"
-                              )}
-                              title={!act.activa ? "Esta actividad está inactiva. Actívela para asignarla." : (act.procesosAsociadosCount > 0 ? `Asignada a: ${getProcessNamesForActivity(act)}` : 'No asignada a procesos')}
-                            >
-                              <GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/>
-                              <span className="flex-grow">{act.nombre}</span> 
-                              {!act.activa && <Ban className="h-3 w-3 ml-1 text-destructive" />}
-                              <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditActivity(act.nombre)} title="Editar actividad">
-                                    <Edit2 className="h-4 w-4 text-muted-foreground" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(act, 'activity')} title="Ver detalles de la actividad">
-                                    <Eye className="h-4 w-4 text-muted-foreground" />
-                                </Button>
-                              </div>
-                              {act.procesosAsociadosCount > 0 && 
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className={cn(
-                                    "p-1 h-auto text-xs ml-1", 
-                                    filterByActivityId === act.id && "bg-primary/20 text-primary border-primary"
-                                  )} 
-                                  onClick={() => handleActivityBadgeClick(act)}
-                                  title={`Filtrar árbol por esta actividad (${act.procesosAsociadosCount} procesos)`}
-                                >
-                                  {act.procesosAsociadosCount}P
-                                </Button>
-                              }
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                          <ListChecks className="h-12 w-12 text-muted-foreground mb-2"/>
-                          <p className="text-muted-foreground">
-                            {activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all'
-                              ? "No hay actividades que coincidan con los filtros."
-                              : "No hay actividades disponibles."
-                            }
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {!(activitySearchTerm || assignmentCountFilter !== 'all' || activityStatusFilter !== 'all') && "Agréguelas en 'Gestión de Actividades'."}
-                          </p>
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
+                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act, index) => (<div key={`${act.id}-${index}`} draggable={act.activa} onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : (act.procedimientoId ? `Asignada a: ${procedimientos.find(p=>p.id===act.procedimientoId)?.nombre}` : 'No asignada')}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span> {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
                 </Card>
               </div>
-            </TabsContent>
-
-            <TabsContent value="diagrama">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Diagrama de Relaciones de Procesos</CardTitle>
-                  <CardDescription>Visualización gráfica de las interconexiones entre áreas, puestos, procesos y actividades.</CardDescription>
-                </CardHeader>
-                <CardContent className="min-h-[calc(60vh)]">
-                  <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center h-full bg-muted/20">
-                      <Share2 className="h-16 w-16 text-muted-foreground mb-4" />
-                      <p className="text-lg font-semibold text-foreground">Visualización de Diagrama (Conceptual)</p>
-                      <p className="text-sm text-muted-foreground text-center max-w-md">
-                          Esta sección está diseñada para mostrar un diagrama interactivo de las relaciones entre entidades (áreas, puestos, procesos, actividades).
-                          La implementación de un componente de diagramación dinámica (ej: usando bibliotecas como React Flow o Mermaid.js)
-                          requiere desarrollo adicional y está fuera del alcance de las modificaciones actuales.
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2">Un futuro desarrollo podría permitir filtrar y visualizar flujos de trabajo interconectados aquí.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
 
-      {/* Detail Dialog */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Detalles de {detailItemType === 'process' ? 'Proceso' : 'Actividad'}: {selectedItemForDetail?.nombre}
-            </DialogTitle>
-            <DialogDescription>
-              Información completa del elemento seleccionado.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>Detalles de {detailItemType}: {selectedItemForDetail?.nombre || (selectedItemForDetail as Politica)?.titulo}</DialogTitle><DialogDescription>Información completa del elemento seleccionado.</DialogDescription></DialogHeader>
           <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-            {selectedItemForDetail && detailItemType === 'process' && (() => {
-              const process = selectedItemForDetail as CapturedProcess;
-              const processActivities = (process.activityOrder || [])
-                .map(actId => actividades.find(a => a.id === actId)?.nombre)
-                .filter(Boolean) as string[];
-              return (
-                <>
-                  <DetailSectionDisplay title="Nombre del Proceso" value={process.proceso} />
-                  <DetailSectionDisplay title="Área" value={process.area} />
-                  <DetailSectionDisplay title="Departamento" value={process.departamento} />
-                  <DetailSectionDisplay title="Puesto Principal" value={process.puesto} />
-                  <DetailSectionDisplay title="Descripción Detallada" value={process.descripcion} isTextarea />
-                  <DetailSectionDisplay title="Tiempo Estimado" value={process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : undefined} />
-                  <DetailSectionDisplay title="Frecuencia" value={process.frecuencia} />
-                  <DetailSectionDisplay title="Sistemas Utilizados" value={process.sistemas} isList />
-                  <DetailSectionDisplay title="Información que Recibe (Entradas)" value={process.informacionRecibe} isTextarea />
-                  <DetailSectionDisplay title="Procesos de Entradas" value={process.procesosEntrada} isList />
-                  <DetailSectionDisplay title="Información que Entrega (Salidas)" value={process.informacionEntrega} isTextarea />
-                  <DetailSectionDisplay title="Procesos de Salida" value={process.procesosSalida} isList />
-                  <DetailSectionDisplay title="Estado" value={process.activo !== false ? 'Activo' : 'Inactivo'} />
-                  <DetailSectionDisplay title="Actividades en Orden" value={processActivities} isList />
-                  <DetailSectionDisplay title="Fecha de Captura" value={process.capturedAt && isValid(parseISO(process.capturedAt)) ? format(parseISO(process.capturedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                  <DetailSectionDisplay title="Última Modificación" value={process.updatedAt && isValid(new Date(process.updatedAt)) ? format(new Date(process.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                </>
-              );
-            })()}
-            {selectedItemForDetail && detailItemType === 'activity' && (() => {
-              const activity = selectedItemForDetail as Actividad;
-              const associatedProcessNames = (activity.procesosAsociadosIds || [])
-                .map(procId => capturedProcesses.find(cp => cp.id === procId)?.proceso)
-                .filter(Boolean);
-              return (
-                <>
-                  <DetailSectionDisplay title="Nombre de la Actividad" value={activity.nombre} />
-                  <DetailSectionDisplay title="Descripción Breve" value={activity.descripcionBreve} isTextarea />
-                  <DetailSectionDisplay title="Sistema Utilizado" value={activity.sistemaUtilizado} />
-                  <DetailSectionDisplay title="Estado" value={activity.activa ? 'Activa' : 'Inactiva'} />
-                  <DetailSectionDisplay title="Procesos Asociados" value={associatedProcessNames} isList />
-                  <DetailSectionDisplay title="Fecha de Creación" value={activity.createdAt && isValid(new Date(activity.createdAt)) ? format(new Date(activity.createdAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                  <DetailSectionDisplay title="Última Modificación" value={activity.updatedAt && isValid(new Date(activity.updatedAt)) ? format(new Date(activity.updatedAt), 'dd MMMM yyyy, HH:mm', { locale: es }) : undefined} />
-                </>
-              );
-            })()}
+            {detailItemType === 'process' && selectedItemForDetail && <DetailSectionDisplay title="Área" value={(selectedItemForDetail as CapturedProcess).area} />}
+            {detailItemType === 'policy' && selectedItemForDetail && <DetailSectionDisplay title="Código" value={(selectedItemForDetail as Politica).codigo} />}
+            {/* Add more details as needed */}
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cerrar</Button>
-            </DialogClose>
-          </DialogFooter>
+          <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose></DialogFooter>
         </DialogContent>
       </Dialog>
-
-       <div className="mt-4 text-xs text-muted-foreground text-center">
-        Nota: La funcionalidad de arrastrar y soltar (drag & drop) se implementa con HTML5 nativo.
-      </div>
     </div>
   );
 }
+

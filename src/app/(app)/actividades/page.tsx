@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -6,11 +7,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -64,13 +66,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, CalendarClock, Link2, ChevronDown, Lock, Loader2, Clock, Repeat, Server, ArrowUp, ArrowDown, ChevronsUpDown, FileText, DollarSign, History } from "lucide-react";
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
+const NO_PROCEDIMIENTO_SELECTED_VALUE = "__NO_PROCEDIMIENTO__";
 
 
 const actividadFormSchema = z.object({
@@ -79,12 +80,12 @@ const actividadFormSchema = z.object({
   descripcionBreve: z.string().optional(),
   sistemaUtilizado: z.string().optional(),
   activa: z.boolean().default(true),
-  procesosAsociadosIds: z.array(z.string()).optional().default([]),
+  procedimientoId: z.string().optional(),
   politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Actividad | 'procesosAsociadosCount';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'procedimientoAsociado';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -125,14 +126,13 @@ export default function ActividadesPage() {
   } = useActividades();
   const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
   const { politicas, isLoadingPoliticas } = usePoliticas();
+  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
 
   const searchParams = useSearchParams();
-  const [capturedProcesses, setCapturedProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingCapturedProcesses, setIsLoadingCapturedProcesses] = useState(true);
-
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [usageFilter, setUsageFilter] = useState<'all' | 'inUse' | 'notInUse'>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
 
   const [isActividadDialogOpen, setIsActividadDialogOpen] = useState(false);
   const [editingActividad, setEditingActividad] = useState<Actividad | null>(null);
@@ -148,22 +148,6 @@ export default function ActividadesPage() {
 
 
   useEffect(() => {
-    setIsLoadingCapturedProcesses(true);
-    try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        const parsedData: CapturedProcess[] = JSON.parse(storedData);
-        setCapturedProcesses(parsedData.filter(p => !p.deletedAt));
-      }
-    } catch (error) {
-      console.error("Error loading captured processes from localStorage:", error);
-      toast({ title: "Error al cargar procesos", description: "No se pudieron cargar los procesos para asociar.", variant: "destructive" });
-    } finally {
-        setIsLoadingCapturedProcesses(false);
-    }
-  }, []);
-
-  useEffect(() => {
     const searchQuery = searchParams.get('search');
     if (searchQuery) {
         setSearchTerm(searchQuery);
@@ -177,7 +161,7 @@ export default function ActividadesPage() {
       descripcionBreve: '',
       sistemaUtilizado: undefined,
       activa: true,
-      procesosAsociadosIds: [],
+      procedimientoId: undefined,
       politicasAsociadasIds: [],
     },
   });
@@ -191,7 +175,7 @@ export default function ActividadesPage() {
           descripcionBreve: editingActividad.descripcionBreve || '',
           sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           activa: editingActividad.activa,
-          procesosAsociadosIds: editingActividad.procesosAsociadosIds || [],
+          procedimientoId: editingActividad.procedimientoId || undefined,
           politicasAsociadasIds: editingActividad.politicasAsociadasIds || [],
         });
       } else {
@@ -200,7 +184,7 @@ export default function ActividadesPage() {
           descripcionBreve: '',
           sistemaUtilizado: undefined,
           activa: true,
-          procesosAsociadosIds: [],
+          procedimientoId: undefined,
           politicasAsociadasIds: [],
         });
       }
@@ -213,6 +197,7 @@ export default function ActividadesPage() {
     const activityDataForStorage = {
       ...activityDataFromForm,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
+      procedimientoId: data.procedimientoId === NO_PROCEDIMIENTO_SELECTED_VALUE ? undefined : data.procedimientoId,
     };
 
     if (editingActividad && id) {
@@ -238,10 +223,10 @@ export default function ActividadesPage() {
   }
 
   function promptDeleteActividad(actividad: Actividad) {
-    if (actividad.procesosAsociadosCount > 0) {
+    if (actividad.procedimientoId) {
       toast({
         title: 'Eliminación Bloqueada',
-        description: `La actividad "${actividad.nombre}" está asociada a ${actividad.procesosAsociadosCount} proceso(s) y no puede ser eliminada. Desvincúlela primero.`,
+        description: `La actividad "${actividad.nombre}" está asociada a un procedimiento y no puede ser eliminada. Desvincúlela primero.`,
         variant: 'destructive',
         duration: 5000,
       });
@@ -253,10 +238,10 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-    if (activityToDelete.procesosAsociadosCount > 0) {
+    if (activityToDelete.procedimientoId) {
         toast({
             title: 'Error en Eliminación',
-            description: `La actividad "${activityToDelete.nombre}" sigue asociada a procesos.`,
+            description: `La actividad "${activityToDelete.nombre}" sigue asociada a un procedimiento.`,
             variant: 'destructive',
         });
         setIsConfirmDeleteDialogOpen(false);
@@ -292,15 +277,23 @@ export default function ActividadesPage() {
         (statusFilter === 'inactive' && !actividad.activa);
       const matchesUsage =
         usageFilter === 'all' ||
-        (usageFilter === 'inUse' && actividad.procesosAsociadosCount > 0) ||
-        (usageFilter === 'notInUse' && actividad.procesosAsociadosCount === 0);
+        (usageFilter === 'assigned' && !!actividad.procedimientoId) ||
+        (usageFilter === 'unassigned' && !actividad.procedimientoId);
       return matchesSearchTerm && matchesStatus && matchesUsage;
     });
 
     if (sortConfig !== null) {
       filtered.sort((a, b) => {
-        let valA: any = a[sortConfig.key as keyof Actividad];
-        let valB: any = b[sortConfig.key as keyof Actividad];
+        let valA: any;
+        let valB: any;
+
+        if (sortConfig.key === 'procedimientoAsociado') {
+            valA = a.procedimientoId ? (procedimientos.find(p => p.id === a.procedimientoId)?.nombre || '') : '';
+            valB = b.procedimientoId ? (procedimientos.find(p => p.id === b.procedimientoId)?.nombre || '') : '';
+        } else {
+            valA = a[sortConfig.key as keyof Actividad];
+            valB = b[sortConfig.key as keyof Actividad];
+        }
 
         if (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt') {
           valA = valA || 0;
@@ -331,7 +324,7 @@ export default function ActividadesPage() {
       filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
     return filtered;
-  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig]);
+  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, procedimientos]);
 
   const totalPages = Math.ceil(sortedAndFilteredActividades.length / ITEMS_PER_PAGE);
   const paginatedActividades = useMemo(() => {
@@ -345,7 +338,6 @@ export default function ActividadesPage() {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
     } else if (currentPage !== 1 && totalPages === 0 && sortedAndFilteredActividades.length > 0) {
-      // This case might happen if filters result in 0 pages but there was data
       setCurrentPage(1);
     }
   }, [currentPage, totalPages, sortedAndFilteredActividades.length]);
@@ -379,26 +371,25 @@ export default function ActividadesPage() {
     }
 
     const headers = [
-      "ID", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", 
-      "Estado", "Num. Procesos Asociados", "Nombres Procesos Asociados",
+      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", 
+      "Estado", "Procedimiento Asociado",
       "Fecha Creación", "Última Modificación"
     ];
 
     const csvRows = [
       headers.join(','),
       ...sortedAndFilteredActividades.map(act => {
-        const associatedProcessNames = act.procesosAsociadosIds
-            ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
-            .filter(Boolean)
-            .join('; ') || ""; // Use semicolon for multi-value cells
+        const associatedProcedureName = act.procedimientoId
+            ? procedimientos.find(p => p.id === act.procedimientoId)?.nombre
+            : "";
         return [
           escapeCsvCell(act.id),
+          escapeCsvCell(act.codigo),
           escapeCsvCell(act.nombre),
           escapeCsvCell(act.descripcionBreve),
           escapeCsvCell(act.sistemaUtilizado),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
-          escapeCsvCell(act.procesosAsociadosCount),
-          escapeCsvCell(associatedProcessNames),
+          escapeCsvCell(associatedProcedureName),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
           escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
         ].join(',');
@@ -424,7 +415,7 @@ export default function ActividadesPage() {
   };
 
 
-  if (isLoadingActividades || isLoadingSistemasCostos || isLoadingCapturedProcesses) {
+  if (isLoadingActividades || isLoadingSistemasCostos || isLoadingProcedimientos) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -444,7 +435,7 @@ export default function ActividadesPage() {
             <CardTitle className="text-2xl font-headline">Gestión de Actividades</CardTitle>
           </div>
           <CardDescription className="text-muted-foreground">
-            Visualización, creación, edición y gestión de estados de todas las actividades granulares. Asocie actividades a procesos capturados.
+            Visualización, creación, edición y gestión de estados de todas las actividades granulares. Asocie actividades a procedimientos.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -475,15 +466,15 @@ export default function ActividadesPage() {
               </Select>
               <Select
                 value={usageFilter}
-                onValueChange={(value: 'all' | 'inUse' | 'notInUse') => setUsageFilter(value)}
+                onValueChange={(value: 'all' | 'assigned' | 'unassigned') => setUsageFilter(value)}
               >
                 <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="Filtrar por uso" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos (Uso)</SelectItem>
-                  <SelectItem value="inUse">En Uso</SelectItem>
-                  <SelectItem value="notInUse">Sin Uso</SelectItem>
+                  <SelectItem value="assigned">Asignadas</SelectItem>
+                  <SelectItem value="unassigned">Sin Asignar</SelectItem>
                 </SelectContent>
               </Select>
               <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
@@ -558,116 +549,11 @@ export default function ActividadesPage() {
                   </DialogHeader>
                   <Form {...actividadForm}>
                     <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                      <FormField
-                        control={actividadForm.control}
-                        name="nombre"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre de la Actividad</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={actividadForm.control}
-                        name="descripcionBreve"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descripción Breve (Opcional)</FormLabel>
-                            <FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={actividadForm.control}
-                        name="sistemaUtilizado"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sistema Utilizado (Opcional)</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value || NO_SYSTEM_SELECTED_VALUE}
-                              disabled={isLoadingSistemasCostos}
-                            >
-                              <FormControl>
-                                <SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando sistemas..." : "Seleccione un sistema"} /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno / Manual</SelectItem>
-                                {isLoadingSistemasCostos ? (
-                                    <SelectItem value="loading-sistemas" disabled>Cargando...</SelectItem>
-                                ) : availableSystems.length === 0 ? (
-                                    <SelectItem value="no-sistemas-available" disabled>No hay sistemas configurados</SelectItem>
-                                ) : (
-                                    availableSystems.map((sys) => (
-                                    <SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>
-                                    ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={actividadForm.control}
-                        name="procesosAsociadosIds"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Procesos Asociados</FormLabel>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="w-full justify-between font-normal">
-                                  <span className="truncate">
-                                    {field.value && field.value.length > 0
-                                      ? field.value.length === 1
-                                        ? capturedProcesses.find(p => p.id === field.value?.[0])?.proceso || `${field.value.length} proceso seleccionado`
-                                        : `${field.value.length} procesos seleccionados`
-                                      : "Seleccionar procesos..."}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-                                <DropdownMenuLabel>Procesos Capturados Disponibles</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {isLoadingCapturedProcesses ? (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando procesos...</div>
-                                ) : capturedProcesses.length === 0 ? (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                    No hay procesos capturados.
-                                  </div>
-                                ) : (
-                                  capturedProcesses.map((proceso) => (
-                                    <DropdownMenuCheckboxItem
-                                      key={proceso.id}
-                                      checked={field.value?.includes(proceso.id)}
-                                      onCheckedChange={(checked) => {
-                                        const currentSelected = field.value || [];
-                                        if (checked) {
-                                          field.onChange([...currentSelected, proceso.id]);
-                                        } else {
-                                          field.onChange(currentSelected.filter((id) => id !== proceso.id));
-                                        }
-                                      }}
-                                    >
-                                      {proceso.proceso}
-                                    </DropdownMenuCheckboxItem>
-                                  ))
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                             <FormDescription>
-                              Vincule esta actividad a uno o más procesos capturados.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <FormField control={actividadForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre de la Actividad</FormLabel><FormControl><Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                       <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
+                       <FormField control={actividadForm.control} name="sistemaUtilizado" render={({ field }) => (<FormItem><FormLabel>Sistema Utilizado (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SYSTEM_SELECTED_VALUE} disabled={isLoadingSistemasCostos}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando..." : "Seleccione"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno</SelectItem>{availableSystems.map((sys) => (<SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                       <FormField control={actividadForm.control} name="procedimientoId" render={({ field }) => (<FormItem><FormLabel>Procedimiento Asociado (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_PROCEDIMIENTO_SELECTED_VALUE} disabled={isLoadingProcedimientos}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingProcedimientos ? "Cargando..." : "Seleccione"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_PROCEDIMIENTO_SELECTED_VALUE}>Ninguno</SelectItem>{procedimientos.map((proc) => (<SelectItem key={proc.id} value={proc.id}>{proc.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+
                       <FormField
                         control={actividadForm.control}
                         name="politicasAsociadasIds"
@@ -688,65 +574,17 @@ export default function ActividadesPage() {
                               <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
                                 <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                {isLoadingPoliticas ? (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando políticas...</div>
-                                ) : politicas.length === 0 ? (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                    No hay políticas creadas.
-                                  </div>
-                                ) : (
-                                  politicas.map((politica) => (
-                                    <DropdownMenuCheckboxItem
-                                      key={politica.id}
-                                      checked={field.value?.includes(politica.id)}
-                                      onCheckedChange={(checked) => {
-                                        const currentSelected = field.value || [];
-                                        if (checked) {
-                                          field.onChange([...currentSelected, politica.id]);
-                                        } else {
-                                          field.onChange(currentSelected.filter((id) => id !== politica.id));
-                                        }
-                                      }}
-                                    >
-                                      {politica.codigo} - {politica.titulo}
-                                    </DropdownMenuCheckboxItem>
-                                  ))
-                                )}
+                                {isLoadingPoliticas ? <div className="px-2 py-1.5 text-sm">Cargando...</div> : politicas.map((politica) => (
+                                    <DropdownMenuCheckboxItem key={politica.id} checked={field.value?.includes(politica.id)} onCheckedChange={(checked) => field.onChange(checked ? [...(field.value || []), politica.id] : (field.value || []).filter(id => id !== politica.id))}>{politica.codigo} - {politica.titulo}</DropdownMenuCheckboxItem>
+                                ))}
                               </DropdownMenuContent>
                             </DropdownMenu>
-                             <FormDescription>
-                              Vincule esta actividad a una o más políticas.
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={actividadForm.control}
-                        name="activa"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Estado Activo</FormLabel>
-                              <FormDescription>
-                                Indica si la actividad está disponible para ser usada en procesos.
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <DialogFooter>
-                        <DialogClose asChild>
-                          <Button type="button" variant="outline" onClick={() => { setIsActividadDialogOpen(false); setEditingActividad(null); }}>Cancelar</Button>
-                        </DialogClose>
-                        <Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar Actividad'}</Button>
-                      </DialogFooter>
+                      <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
+                      <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
                     </form>
                   </Form>
                 </DialogContent>
@@ -760,78 +598,37 @@ export default function ActividadesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[100px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('codigo')}>
-                      <div className="flex items-center">Código {getSortIcon('codigo')}</div>
-                    </TableHead>
-                    <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
-                      <div className="flex items-center">Nombre Actividad {getSortIcon('nombre')}</div>
-                    </TableHead>
-                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('sistemaUtilizado')}>
-                      <div className="flex items-center justify-center">Sistema {getSortIcon('sistemaUtilizado')}</div>
-                    </TableHead>
-                     <TableHead className="w-[140px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}>
-                      <div className="flex items-center justify-center">Últ. Modif. {getSortIcon('updatedAt')}</div>
-                    </TableHead>
-                    <TableHead className="w-[100px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activa')}>
-                      <div className="flex items-center justify-center">Estado {getSortIcon('activa')}</div>
-                    </TableHead>
-                    <TableHead className="w-[150px] text-center cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('procesosAsociadosCount')}>
-                      <div className="flex items-center justify-center">En Uso {getSortIcon('procesosAsociadosCount')}</div>
-                    </TableHead>
+                    <TableHead className="w-[100px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
+                    <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('nombre')}>Nombre {getSortIcon('nombre')}</TableHead>
+                    <TableHead className="w-[150px] cursor-pointer" onClick={() => requestSort('procedimientoAsociado')}>Procedimiento {getSortIcon('procedimientoAsociado')}</TableHead>
+                     <TableHead className="w-[140px] cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
+                    <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('activa')}>Estado {getSortIcon('activa')}</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedActividades.map((actividad, index) => {
-                    const associatedProcessNames = actividad.procesosAsociadosIds
-                        ?.map(id => capturedProcesses.find(p=>p.id === id)?.proceso)
-                        .filter(Boolean)
-                        .join(', ') || "No asociada a procesos.";
+                  {paginatedActividades.map((actividad) => {
+                    const procAsociado = actividad.procedimientoId ? procedimientos.find(p => p.id === actividad.procedimientoId) : null;
                     return (
-                    <TableRow key={`${actividad.id}-${actividad.createdAt}-${index}`}>
+                    <TableRow key={actividad.id}>
                       <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
-                      <TableCell className="text-center text-xs">{actividad.sistemaUtilizado || '-'}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">
-                        {actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : <CalendarClock className="h-4 w-4 inline-block" />}
+                      <TableCell className="text-xs">
+                        {procAsociado ? (
+                          <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                            <Badge variant="outline" className="cursor-default">{procAsociado.nombre}</Badge>
+                          </TooltipTrigger><TooltipContent>{procAsociado.nombre}</TooltipContent></Tooltip></TooltipProvider>
+                        ) : (
+                          <Badge variant="secondary">Sin Asignar</Badge>
+                        )}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={actividad.activa ? 'default' : 'secondary'}>
-                          {actividad.activa ? 'Activa' : 'Inactiva'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                       <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                               <Badge variant={actividad.procesosAsociadosCount > 0 ? "outline" : "secondary"} className="cursor-default hover:bg-muted">
-                                {actividad.procesosAsociadosCount > 0 ? (<><Link2 className="h-3 w-3 mr-1 inline-block"/> {`${actividad.procesosAsociadosCount} procesos`}</>) : "Sin Uso"}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center" className="max-w-xs break-words">
-                              <p className="text-xs">{associatedProcessNames}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                       <TableCell className="text-right space-x-1">
-                        <Switch
-                          checked={actividad.activa}
-                          onCheckedChange={() => handleToggleActividadStatus(actividad)}
-                          aria-label={actividad.activa ? 'Desactivar actividad' : 'Activar actividad'}
-                          className="mr-2"
-                        />
-                         <Button variant="ghost" size="icon" onClick={() => handleViewHistory(actividad)} disabled={!actividad.historialDeCambios || actividad.historialDeCambios.length === 0} title="Ver historial">
-                            <History className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive hover:text-destructive"
-                          title={actividad.procesosAsociadosCount > 0 ? `No se puede eliminar: actividad asociada a ${actividad.procesosAsociadosCount} proceso(s)` : "Eliminar actividad"}
-                        >
-                          {actividad.procesosAsociadosCount > 0 ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
+                      <TableCell className="text-xs text-muted-foreground">{actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
+                      <TableCell className="text-center"><Badge variant={actividad.activa ? 'default' : 'secondary'}>{actividad.activa ? 'Activa' : 'Inactiva'}</Badge></TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Switch checked={actividad.activa} onCheckedChange={() => handleToggleActividadStatus(actividad)} aria-label="Cambiar estado" className="mr-2"/>
+                        <Button variant="ghost" size="icon" onClick={() => handleViewHistory(actividad)} disabled={!actividad.historialDeCambios || actividad.historialDeCambios.length === 0} title="Ver historial"><History className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1"><Edit2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive" title={actividad.procedimientoId ? "No se puede eliminar: actividad asociada" : "Eliminar"}><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
                     </TableRow>
                   );})}
@@ -839,105 +636,40 @@ export default function ActividadesPage() {
               </Table>
             </div>
             <div className="flex items-center justify-between space-x-2 py-4">
-              <span className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} (Total: {sortedAndFilteredActividades.length} actividades)
-              </span>
-              <div className="space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                >
-                  Siguiente
-                </Button>
-              </div>
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredActividades.length} total)</span>
+              <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>Siguiente</Button></div>
             </div>
             </>
           ) : (
-            <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
-              <ListChecks className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold text-foreground">No se encontraron actividades</p>
-              <p className="text-sm text-muted-foreground text-center">
-                {searchTerm || statusFilter !== 'all' || usageFilter !== 'all' ? 'Ajuste los filtros o ' : ''}
-                Comience agregando una nueva actividad.
-              </p>
+            <div className="mt-6 p-8 border-dashed rounded-lg text-center bg-muted/20">
+              <ListChecks className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <p className="font-semibold text-lg">No se encontraron actividades</p>
+              <p className="text-sm text-muted-foreground">Ajuste los filtros o agregue una nueva actividad.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-                <div className="flex items-center">
-                    <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                    Confirmar Eliminación
-                </div>
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la lista de recuperación por 30 días. Podrá restaurarla desde el botón "Recuperar".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setActivityToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDeleteActividad} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center gap-2"><AlertTriangle className="text-destructive"/>Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteActividad} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
       
        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle>
-            <DialogDescription>
-              Registro de las modificaciones realizadas a esta actividad.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
+          <DialogHeader><DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle><DialogDescription>Registro de las modificaciones realizadas.</DialogDescription></DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
             {activityForHistory?.historialDeCambios && activityForHistory.historialDeCambios.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Campo Modificado</TableHead>
-                    <TableHead>Valor Anterior</TableHead>
-                    <TableHead>Valor Nuevo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activityForHistory.historialDeCambios
-                    .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
-                    .map((cambio, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
-                      <TableCell>{cambio.field}</TableCell>
-                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
-                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground text-center">No hay historial de cambios registrado para esta actividad.</p>
-            )}
+              <Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Campo Modificado</TableHead><TableHead>Valor Anterior</TableHead><TableHead>Valor Nuevo</TableHead></TableRow></TableHeader><TableBody>
+                {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).map((cambio, index) => (
+                  <TableRow key={index}><TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm')}</TableCell><TableCell>{cambio.field}</TableCell><TableCell className="text-xs">{String(cambio.before)}</TableCell><TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell></TableRow>
+                ))}
+              </TableBody></Table>
+            ) : (<p className="text-center text-muted-foreground">No hay historial de cambios.</p>)}
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cerrar</Button>
-            </DialogClose>
-          </DialogFooter>
+          <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
