@@ -12,17 +12,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Lightbulb, Sparkles, AlertTriangle, Loader2, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import { usePuestos } from '@/contexts/PuestosContext';
-import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
-
-
-// Helper function to format currency (simplified for this context)
 function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda | string = "USD"): string {
   if (amount === undefined || isNaN(amount)) return "N/A";
   try {
@@ -32,7 +27,6 @@ function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda 
   }
 }
 
-// Helper function to calculate annual cost (simplified for this context)
 function calculateSystemAnnualCost(
   systemId: string,
   allCosts: SistemaCosto[],
@@ -45,7 +39,7 @@ function calculateSystemAnnualCost(
   if (costsForSystem.length === 0) return { cost: 0, currency: 'USD', details: ["Sin costos registrados"] };
   
   let totalAnnualCost = 0;
-  const displayCurrency = costsForSystem[0].moneda || 'USD'; // Use first cost's currency as primary display
+  const displayCurrency = costsForSystem[0].moneda || 'USD'; 
   const costDetails: string[] = [];
 
   costsForSystem.forEach(cost => {
@@ -58,7 +52,7 @@ function calculateSystemAnnualCost(
       periodicCost = baseAmount * 12;
     } else if (cost.frecuencia === "Anual") {
       periodicCost = baseAmount;
-    } else { // "Otro" - assume it's an annual equivalent or a one-time for simplicity in summary
+    } else { 
       periodicCost = baseAmount; 
     }
     
@@ -85,32 +79,14 @@ export default function MejorasPage() {
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
-  const { puestos, isLoadingPuestos } = usePuestos();
-  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { politicas, isLoadingPoliticas } = usePoliticas();
 
   const [isSelectionDialogOpen, setIsSelectionDialogOpen] = useState(false);
-  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
-  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
+  const { procesos, isLoadingProcesos } = useProcesos();
 
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
   const [selectedSystemIds, setSelectedSystemIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (isSelectionDialogOpen) {
-      setIsLoadingProcesses(true);
-      try {
-        const storedProcessesData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-        const allProcs: CapturedProcess[] = storedProcessesData ? JSON.parse(storedProcessesData) : [];
-        setAllProcesses(allProcs.filter(p => !p.deletedAt && p.activo !== false));
-      } catch (e) {
-        console.error("Error loading processes for selection", e);
-        toast({ title: "Error al cargar procesos", variant: "destructive" });
-      } finally {
-        setIsLoadingProcesses(false);
-      }
-    }
-  }, [isSelectionDialogOpen]);
 
 
   const runAnalysis = async () => {
@@ -130,7 +106,7 @@ export default function MejorasPage() {
     }
     
     try {
-      const activeProcessesForAnalysis = allProcesses.filter(p => selectedProcessIds.includes(p.id));
+      const activeProcessesForAnalysis = procesos.filter(p => selectedProcessIds.includes(p.id));
       const activitiesForAnalysis = actividades.filter(a => selectedActivityIds.includes(a.id));
       const systemsForAnalysis = sistemas.filter(s => selectedSystemIds.includes(s.id));
 
@@ -143,11 +119,7 @@ export default function MejorasPage() {
 
       const processDescriptionsText = activeProcessesForAnalysis
         .map(p => {
-          const puestoData = puestos.find(pst => pst.nombre === p.puesto);
-          const puestoInfo = puestoData ? `${p.puesto} (Número de Personas: ${puestoData.numeroPersonas || 'No especificado'})` : p.puesto;
-          
           const deptoInfo = p.departamento ? `Departamento: ${p.departamento}\n` : '';
-
           const associatedActivitiesText = p.activityOrder?.map(actId => {
             const act = actividades.find(a => a.id === actId);
             if (!act) return null;
@@ -157,18 +129,9 @@ export default function MejorasPage() {
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` +
                  deptoInfo +
-                 `Puesto Principal: ${puestoInfo}\n` +
+                 `Puesto Principal: ${p.puesto}\n` +
                  `Descripción: ${p.descripcion}\n` +
-                 `Frecuencia: ${p.frecuencia}\n` +
-                 `Tiempo Estimado: ${p.tiempoEstimado !== undefined ? p.tiempoEstimado + ' minutos' : 'No especificado'}\n` +
-                 `Tiempo Ideal: ${p.tiempoIdeal !== undefined ? p.tiempoIdeal + ' minutos' : 'No especificado'}\n` +
-                 `Costo Estimado: ${p.costoEstimado !== undefined ? `${p.costoEstimado} ${p.monedaCosto || ''}` : 'No especificado'}\n`+
-                 `Costo Ideal: ${p.costoIdeal !== undefined ? `${p.costoIdeal} ${p.monedaCosto || ''}` : 'No especificado'}\n` +
-                 `Sistemas Involucrados: ${p.sistemas && p.sistemas.length > 0 ? p.sistemas.join(', ') : 'Ninguno especificado'}\n` +
-                 `Información de Entrada: ${p.informacionRecibe}\n` +
-                 `Procesos de Entrada: ${p.procesosEntrada && p.procesosEntrada.length > 0 ? p.procesosEntrada.join(', ') : 'Ninguno'}\n` +
-                 `Información de Salida: ${p.informacionEntrega}\n` +
-                 `Procesos de Salida: ${p.procesosSalida && p.procesosSalida.length > 0 ? p.procesosSalida.join(', ') : 'Ninguno'}\n` +
+                 `Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]\n` +
                  (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
         })
         .join('\n\n---\n\n');
@@ -179,18 +142,8 @@ export default function MejorasPage() {
 
       const allActivitiesText = activitiesForAnalysis
         .map(act => {
-          const associatedContexts = new Set<string>();
-          act.procesosAsociadosIds?.forEach(procId => {
-            const proc = allProcesses.find(p => p.id === procId);
-            if (proc) {
-              const deptoContext = proc.departamento ? `, Departamento: ${proc.departamento}` : '';
-              associatedContexts.add(`Proceso: "${proc.proceso}" (Área: ${proc.area}${deptoContext}, Puesto: ${proc.puesto})`);
-            }
-          });
-
           return `Actividad (ID: ${act.id}): "${act.nombre}"\n` +
-                 `  Descripción: ${act.descripcionBreve || 'No disponible'}\n` +
-                 `  Contexto de Uso:\n    - ${associatedContexts.size > 0 ? Array.from(associatedContexts).join('\n    - ') : 'No asociada a procesos activos o ninguno especificado.'}`;
+                 `  Descripción: ${act.descripcionBreve || 'No disponible'}\n`
         })
         .join('\n\n---\n\n');
       
@@ -207,15 +160,23 @@ export default function MejorasPage() {
           }
           systemCostInformationText += `  Costos Registrados:\n    - ${details.join('\n    - ')}\n\n`;
         });
-      } else {
-        systemCostInformationText = "No se seleccionó información de costos de sistemas para analizar.";
       }
+
+      const policyDataText = politicas.map(p => 
+        `Política (ID: ${p.id}): "${p.titulo}"\n` +
+        `  Descripción: ${p.descripcion}\n` +
+        `  Fecha de Revisión: ${p.fechaRevision}\n` +
+        `  Vinculada a Procesos (IDs): [${p.procesosAsociadosIds?.join(', ')}]\n` +
+        `  Vinculada a Procedimientos (IDs): [${p.procedimientosAsociadosIds?.join(', ')}]\n` +
+        `  Vinculada a Actividades (IDs): [${p.actividadesAsociadasIds?.join(', ')}]`
+      ).join('\n\n---\n\n');
 
       const result = await analyzeProcesses({
         processDescriptions: processDescriptionsText || "No se seleccionaron procesos para analizar.",
         systemUsage: systemUsageText,
         allActivities: allActivitiesText || "No se seleccionaron actividades para analizar.",
-        systemCostInformation: systemCostInformationText,
+        systemCostInformation: systemCostInformationText || undefined,
+        policyData: policyDataText || undefined,
         existingActions: existingActionsText,
       });
 
@@ -298,6 +259,42 @@ export default function MejorasPage() {
           puesto: dup.puestoA,
       });
       actionsGeneratedCount++;
+    });
+
+    analysisResult.criticalProcessesWithoutPolicies?.forEach(proc => {
+        addAccion({
+            nombre: `Crear Política para Proceso Crítico: ${proc.processName}`,
+            descripcion: `Sugerencia de IA: ${proc.reason}. Se recomienda crear una política que regule este proceso.`,
+            responsable: 'Por definir',
+            estado: 'En Revisión',
+            origenMejora: 'Análisis IA - Políticas',
+            area: proc.area,
+            puesto: proc.puesto,
+            procesoId: proc.processId,
+        });
+        actionsGeneratedCount++;
+    });
+
+    analysisResult.obsoletePolicies?.forEach(pol => {
+        addAccion({
+            nombre: `Revisar Política Obsoleta: ${pol.policyName}`,
+            descripcion: `Sugerencia de IA: ${pol.reason}. La fecha de revisión (${pol.reviewDate}) ha pasado.`,
+            responsable: 'Por definir',
+            estado: 'En Revisión',
+            origenMejora: 'Análisis IA - Políticas',
+        });
+        actionsGeneratedCount++;
+    });
+    
+    analysisResult.duplicatePolicySuggestions?.forEach(sug => {
+        addAccion({
+            nombre: `Consolidar Políticas: ${sug.policyA_Name} / ${sug.policyB_Name}`,
+            descripcion: `Sugerencia de IA: ${sug.reason}.`,
+            responsable: 'Por definir',
+            estado: 'En Revisión',
+            origenMejora: 'Análisis IA - Políticas',
+        });
+        actionsGeneratedCount++;
     });
 
     if (actionsGeneratedCount > 0) {
@@ -424,7 +421,45 @@ export default function MejorasPage() {
                   </CardContent>
                 </Card>
               )}
+              
+               {analysisResult.criticalProcessesWithoutPolicies && analysisResult.criticalProcessesWithoutPolicies.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Procesos Críticos sin Políticas</CardTitle></CardHeader>
+                  <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-sm">
+                        {analysisResult.criticalProcessesWithoutPolicies.map((item, index) => (
+                          <li key={index}><strong>{item.processName}</strong> (en {item.area} / {item.puesto}): {item.reason}</li>
+                        ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              )}
 
+              {analysisResult.obsoletePolicies && analysisResult.obsoletePolicies.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Políticas Obsoletas o por Vencer</CardTitle></CardHeader>
+                  <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-sm">
+                        {analysisResult.obsoletePolicies.map((item, index) => (
+                          <li key={index}><strong>{item.policyName}</strong>: {item.reason} (Fecha de Revisión: {item.reviewDate})</li>
+                        ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {analysisResult.duplicatePolicySuggestions && analysisResult.duplicatePolicySuggestions.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Sugerencias de Consolidación de Políticas</CardTitle></CardHeader>
+                  <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-sm">
+                        {analysisResult.duplicatePolicySuggestions.map((item, index) => (
+                          <li key={index}><strong>{item.policyA_Name} / {item.policyB_Name}</strong>: {item.reason}</li>
+                        ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -455,13 +490,13 @@ export default function MejorasPage() {
                       </TabsList>
                       <TabsContent value="procesos">
                           <div className="flex justify-end my-2">
-                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds(allProcesses.map(p => p.id))}>Seleccionar Todos</Button>
+                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds(procesos.map(p => p.id))}>Seleccionar Todos</Button>
                             <Button variant="link" size="sm" onClick={() => setSelectedProcessIds([])}>Deseleccionar Todos</Button>
                           </div>
                           <ScrollArea className="h-[400px] border rounded-md p-2">
-                            {isLoadingProcesses ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
+                            {isLoadingProcesos ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
                               <div className="space-y-2">
-                                {allProcesses.map(proc => (
+                                {procesos.map(proc => (
                                   <div key={proc.id} className="flex items-start space-x-2">
                                     <Checkbox
                                       id={`proc-${proc.id}`}

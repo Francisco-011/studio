@@ -11,7 +11,9 @@ import { MessageCircleQuestion, Send, Sparkles, Loader2, User } from "lucide-rea
 import { cn } from '@/lib/utils';
 
 import { useProcesos } from '@/contexts/ProcesosContext';
+import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades } from '@/contexts/ActividadesContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 import { queryConversationalAgent } from '@/ai/flows/conversational-query-flow';
 import { toast } from '@/hooks/use-toast';
 
@@ -27,14 +29,15 @@ export default function ConsultaIaPage() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const { procesos } = useProcesos();
+  const { procedimientos } = useProcedimientos();
   const { actividades } = useActividades();
+  const { politicas } = usePoliticas();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
   };
 
   useEffect(() => {
-    // Scroll to the bottom when messages change
     if (scrollAreaRef.current) {
         scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
     }
@@ -53,16 +56,24 @@ export default function ConsultaIaPage() {
       // Prepare context data
       const processContext = procesos
         .filter(p => !p.deletedAt && p.activo)
-        .map(p => `Proceso: ${p.proceso}\nDescripción: ${p.descripcion}\nÁrea: ${p.area}\nPuesto: ${p.puesto}\n`)
-        .join('---\n');
-      
+        .map(p => `ID Proceso: ${p.id}, Código: ${p.codigo}, Proceso: ${p.proceso}, Descripción: ${p.descripcion}, Área: ${p.area}, Puesto: ${p.puesto}, Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]`)
+        .join('\n');
+        
+      const procedimientoContext = procedimientos
+        .map(p => `ID Procedimiento: ${p.id}, Código: ${p.codigo}, Procedimiento: ${p.nombre}, Pertenece a Proceso (ID): ${p.procesoId}, Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]`)
+        .join('\n');
+
       const activityContext = actividades
         .filter(a => a.activa)
-        .map(a => `Actividad: ${a.nombre}\nDescripción: ${a.descripcionBreve || 'N/A'}\n`)
-        .join('---\n');
+        .map(a => `ID Actividad: ${a.id}, Código: ${a.codigo}, Actividad: ${a.nombre}, Descripción: ${a.descripcionBreve || 'N/A'}, Pertenece a Procedimiento (ID): ${a.procedimientoId}, Políticas Vinculadas (IDs): [${a.politicasAsociadasIds?.join(', ')}]`)
+        .join('\n');
         
-      const fullContext = `--- INICIO CONTEXTO PROCESOS ---\n${processContext}\n--- FIN CONTEXTO PROCESOS ---\n\n--- INICIO CONTEXTO ACTIVIDADES ---\n${activityContext}\n--- FIN CONTEXTO ACTIVIDADES ---`;
-      
+      const politicaContext = politicas
+          .map(p => `ID Política: ${p.id}, Código: ${p.codigo}, Política: ${p.titulo}, Descripción: ${p.descripcion}`)
+          .join('\n');
+          
+      const fullContext = `--- INICIO CONTEXTO PROCESOS ---\n${processContext}\n--- FIN CONTEXTO PROCESOS ---\n\n--- INICIO CONTEXTO PROCEDIMIENTOS ---\n${procedimientoContext}\n--- FIN CONTEXTO PROCEDIMIENTOS ---\n\n--- INICIO CONTEXTO ACTIVIDADES ---\n${activityContext}\n--- FIN CONTEXTO ACTIVIDADES ---\n\n--- INICIO CONTEXTO POLÍTICAS ---\n${politicaContext}\n--- FIN CONTEXTO POLÍTICAS ---`;
+
       const response = await queryConversationalAgent({
         question: input,
         contextData: fullContext,
