@@ -41,7 +41,7 @@ import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions, clasificacionOptions } from '@/contexts/ProcesosContext';
 
 
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
@@ -55,6 +55,7 @@ const defaultFormValues: Partial<CapturaFormData> = {
   puesto: undefined,
   proceso: "",
   descripcion: "",
+  clasificacion: "Privado",
   frecuencia: undefined,
   tiempoEstimado: undefined,
   tiempoIdeal: undefined,
@@ -407,6 +408,22 @@ export default function CapturaPage() {
                     <FormLabel>Descripción Detallada del Proceso</FormLabel>
                     <FormControl><Textarea placeholder="Describa el objetivo, alcance, inicio, fin y los pasos principales del proceso." className="min-h-[120px]" {...field} /></FormControl>
                     <FormDescription>Proporcione una explicación clara y concisa del proceso.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="clasificacion"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Clasificación de Visibilidad</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione la clasificación" /></SelectTrigger></FormControl>
+                      <SelectContent>{(clasificacionOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
+                    </Select>
+                    <FormDescription>Define quién podrá ver la información de este proceso.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

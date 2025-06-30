@@ -13,6 +13,7 @@ interface UserProfile {
   email: string | null;
   nombreCompleto: string;
   rol: UserRole;
+  puestoId?: string;
 }
 
 interface AuthContextType {
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: firebaseUser.email,
             nombreCompleto: userProfileData.nombreCompleto,
             rol: userProfileData.rol,
+            puestoId: userProfileData.puestoId,
           });
         } else {
           // This might happen if user is in auth but not in firestore. Log them out.

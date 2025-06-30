@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
+export const clasificacionOptions = ["Público", "Privado", "Confidencial"] as const;
 
 export const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
@@ -18,6 +19,7 @@ export const capturaFormSchema = z.object({
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  clasificacion: z.enum(clasificacionOptions).default('Privado'),
   frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
   tiempoEstimado: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),

@@ -48,6 +48,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useActivityLog } from '@/contexts/ActivityLogContext';
+import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -59,6 +60,7 @@ export interface User {
   email: string;
   rol: UserRole;
   activo: boolean;
+  puestoId?: string;
 }
 
 const userFormSchema = z.object({
@@ -66,6 +68,7 @@ const userFormSchema = z.object({
   nombreCompleto: z.string().min(3, 'El nombre completo debe tener al menos 3 caracteres.'),
   email: z.string().email('Ingrese un correo electrónico válido.'),
   rol: z.enum(userRoles, { errorMap: () => ({ message: "Seleccione un rol válido."})}),
+  puestoId: z.string().optional(),
   activo: z.boolean().default(true),
 });
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -130,6 +133,12 @@ const PERMISSION_CONFIG = {
       view: 'Ver Página de Análisis',
       analyze: 'Ejecutar Análisis con IA',
       generate_actions: 'Generar Acciones Propuestas desde IA',
+    },
+  },
+  consulta_ia: {
+    label: 'Consulta IA',
+    permissions: {
+      view: 'Ver y Usar Chat de IA',
     },
   },
   acciones: {
@@ -205,6 +214,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
+    'consulta_ia:view': true,
     'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
     'auditoria:view_history': true, 'auditoria:perform': true,
     'configuracion_catalogos:view': true,
@@ -216,6 +226,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'actividades:view': true,
     'panelJerarquico:view': true,
     'panelJerarquico:view_details': true,
+    'consulta_ia:view': true,
     'acciones:view': true,
     'auditoria:view_history': true,
   },
@@ -224,6 +235,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const { puestos, isLoadingPuestos } = usePuestos();
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
@@ -279,7 +291,7 @@ export default function UsuariosPage() {
 
   const userForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: { nombreCompleto: '', email: '', rol: undefined, activo: true },
+    defaultValues: { nombreCompleto: '', email: '', rol: undefined, activo: true, puestoId: undefined },
   });
 
   useEffect(() => {
@@ -297,6 +309,7 @@ export default function UsuariosPage() {
             nombreCompleto: data.nombreCompleto,
             rol: data.rol,
             activo: data.activo,
+            puestoId: data.puestoId || null,
         });
         toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
         addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el rol/estado del usuario "${data.nombreCompleto}".` });
@@ -450,6 +463,7 @@ export default function UsuariosPage() {
                       <TableRow>
                         <TableHead>Nombre Completo</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Puesto Asignado</TableHead>
                         <TableHead className="text-center">Rol</TableHead>
                         <TableHead className="w-[120px] text-center">Estado</TableHead>
                         <TableHead className="text-right w-[140px]">Acciones</TableHead>
@@ -460,6 +474,7 @@ export default function UsuariosPage() {
                         <TableRow key={user.id}>
                           <TableCell className="font-medium">{user.nombreCompleto}</TableCell>
                           <TableCell>{user.email}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{puestos.find(p => p.id === user.puestoId)?.nombre || 'No asignado'}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant={user.rol === "Administrador" ? "default" : "secondary"}>{user.rol}</Badge>
                           </TableCell>
@@ -633,6 +648,32 @@ export default function UsuariosPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={userForm.control}
+                name="puestoId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Puesto Asignado</FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione un puesto" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No Asignado</SelectItem>
+                        {puestos.map((puesto) => (
+                          <SelectItem key={puesto.id} value={puesto.id}>
+                            {puesto.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Define la posición del usuario en la jerarquía.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
