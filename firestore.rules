@@ -3,86 +3,95 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to get the role of the currently signed-in user.
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
+    
+    // Helper Functions
+    function isUserAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+    
+    function getUserAccessLevel() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivelAcceso;
     }
 
-    // Helper function to check if a user is at least a certain role level.
-    function isAtLeast(userId, role) {
-      let roles = {
-        'Usuario Final': 1,
-        'Consultor': 2,
-        'Gerente de Proyecto': 3,
-        'Administrador': 4
+    function levelToNumber(level) {
+      let levels = {
+        'Público': 1, 'Departamental': 2, 'Jerárquico': 3, 'Ejecutivo': 4, 'Confidencial': 5
       };
-      let userRole = getUserData(userId).rol;
-      return roles[userRole] >= roles[role];
+      return levels[level];
+    }
+
+    function hasAccess(requiredLevel) {
+      if (!isUserAuthenticated()) { return false; }
+      return levelToNumber(getUserAccessLevel()) >= levelToNumber(requiredLevel);
     }
     
-    // USERS
-    // Users can be read by any authenticated user.
-    // A user can update their own name.
-    // Only an Admin can change a user's role or active status.
+    // Security Rules for Collections
+
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth.uid == userId;
-      // An update is allowed if:
-      // 1. It's the user themselves, and they are only changing their 'nombreCompleto'.
-      // 2. The request is from an Admin, and they are only changing 'nombreCompleto', 'rol', or 'activo'.
-      allow update: if (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombreCompleto']))
-                    || (isAtLeast(request.auth.uid, 'Administrador') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombreCompleto', 'rol', 'activo']));
-      allow delete: if isAtLeast(request.auth.uid, 'Administrador');
+      allow read: if request.auth.uid == userId || hasAccess('Jerárquico');
+      allow list: if hasAccess('Jerárquico');
+      allow create: if isUserAuthenticated();
+      allow update, delete: if hasAccess('Administrador');
+    }
+
+    match /procesos/{processId} {
+      allow read: if resource.data.clasificacion == 'Público' ||
+                   (resource.data.clasificacion == 'Privado' && hasAccess('Departamental')) ||
+                   (resource.data.clasificacion == 'Confidencial' && hasAccess('Confidencial'));
+      allow list: if hasAccess('Público'); // Relies on client-side filtered queries
+      allow create, update, delete: if hasAccess('Consultor');
+    }
+
+    match /politicas/{politicaId} {
+      allow read: if resource.data.clasificacion == 'Público' ||
+                   (resource.data.clasificacion == 'Privado' && hasAccess('Departamental')) ||
+                   (resource.data.clasificacion == 'Confidencial' && hasAccess('Confidencial'));
+      allow list: if hasAccess('Público'); // Relies on client-side filtered queries
+      allow create, update, delete: if hasAccess('Gerente de Proyecto');
     }
     
-    // CONFIGURATION: Areas, Departamentos, Puestos, Sistemas, Sistemas_Costos
-    // These can be read by anyone, but only managed by Consultants or higher.
+    match /excepciones/{exceptionId} {
+      allow read, list, create, update, delete: if hasAccess('Jerárquico');
+    }
+    
     match /areas/{areaId} {
-      allow read: if request.auth != null;
-      allow write: if isAtLeast(request.auth.uid, 'Consultor');
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Administrador');
     }
-
+    
     match /departamentos/{deptoId} {
-      allow read: if request.auth != null;
-      allow write: if isAtLeast(request.auth.uid, 'Consultor');
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Administrador');
     }
-
+    
     match /puestos/{puestoId} {
-      allow read: if request.auth != null;
-      allow write: if isAtLeast(request.auth.uid, 'Consultor');
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Administrador');
     }
-
+    
     match /sistemas/{sistemaId} {
-      allow read: if request.auth != null;
-      allow write: if isAtLeast(request.auth.uid, 'Consultor');
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Administrador');
     }
-
+    
     match /sistemas_costos/{costoId} {
-      allow read: if request.auth != null;
-      allow write: if isAtLeast(request.auth.uid, 'Consultor');
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Administrador');
     }
 
-    // CORE ENTITIES: Procesos, Actividades, Acciones
-    // These can be read by anyone.
-    // Create/Update requires at least a Consultant role.
-    // Deletion is restricted to Project Managers or Admins to prevent data loss.
-    match /procesos/{procesoId} {
-      allow read: if request.auth != null;
-      allow create, update: if isAtLeast(request.auth.uid, 'Consultor');
-      allow delete: if isAtLeast(request.auth.uid, 'Gerente de Proyecto');
+    match /procedimientos/{procId} {
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Consultor');
     }
-
-    match /actividades/{actividadId} {
-      allow read: if request.auth != null;
-      allow create, update: if isAtLeast(request.auth.uid, 'Consultor');
-      allow delete: if isAtLeast(request.auth.uid, 'Gerente de Proyecto');
+    
+    match /actividades/{actId} {
+      allow read, list: if hasAccess('Público');
+      allow create, update, delete: if hasAccess('Consultor');
     }
-
+    
     match /acciones/{accionId} {
-      allow read: if request.auth != null;
-      allow create, update: if isAtLeast(request.auth.uid, 'Consultor');
-      allow delete: if isAtLeast(request.auth.uid, 'Gerente de Proyecto');
+      allow read, list: if hasAccess('Usuario Final');
+      allow create, update, delete: if hasAccess('Consultor');
     }
   }
 }

@@ -6,9 +6,10 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, where } from 'firebase/firestore';
 import type { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
+import { useAuth } from './AuthContext';
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -52,9 +53,33 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const [politicas, setPoliticas] = useState<Politica[]>([]);
   const [isLoadingPoliticas, setIsLoadingPoliticas] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+        setPoliticas([]);
+        setIsLoadingPoliticas(false);
+        return;
+    }
+    
+    const userLevel = user.nivelAcceso;
+    const allowedClassifications: string[] = ['Público'];
+    if (userLevel === 'Confidencial') {
+      allowedClassifications.push('Privado', 'Confidencial');
+    } else if (userLevel === 'Ejecutivo' || userLevel === 'Jerárquico' || userLevel === 'Departamental') {
+      allowedClassifications.push('Privado');
+    }
+
+    const q = query(
+      collection(db, POLITICAS_COLLECTION),
+      where("clasificacion", "in", allowedClassifications),
+      orderBy("codigo", "asc")
+    );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const politicasData = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -75,7 +100,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, authLoading]);
 
   const addPolitica = useCallback(async (data: PoliticaCreationData) => {
     try {
