@@ -11,13 +11,13 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const ConversationalQueryInputSchema = z.object({
+const ConversationalQueryInputSchema = z.object({
   question: z.string().describe('The user\'s question about a process or activity.'),
   contextData: z.string().describe('A string containing all the relevant data about processes and activities for the AI to use as context.'),
 });
 export type ConversationalQueryInput = z.infer<typeof ConversationalQueryInputSchema>;
 
-export const ConversationalQueryOutputSchema = z.object({
+const ConversationalQueryOutputSchema = z.object({
   answer: z.string().describe('The AI-generated answer to the user\'s question.'),
 });
 export type ConversationalQueryOutput = z.infer<typeof ConversationalQueryOutputSchema>;
