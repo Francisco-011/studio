@@ -16,6 +16,7 @@ import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
 import { ProcesosProvider } from '@/contexts/ProcesosContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { PermissionsProvider } from '@/contexts/PermissionsContext';
 
 
 export default function AuthenticatedAppLayout({
@@ -50,7 +51,9 @@ export default function AuthenticatedAppLayout({
               <ActividadesProvider>
                 <ProcesosProvider>
                   <AccionesProvider>
-                    <AppLayout>{children}</AppLayout>
+                    <PermissionsProvider>
+                      <AppLayout>{children}</AppLayout>
+                    </PermissionsProvider>
                   </AccionesProvider>
                 </ProcesosProvider>
               </ActividadesProvider>

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -49,6 +48,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -182,10 +182,14 @@ const PERMISSION_CONFIG = {
     label: 'Gestión de Usuarios',
     permissions: {
       view: 'Ver Lista de Usuarios',
-      create: 'Crear Usuarios',
       edit: 'Editar Usuarios',
-      delete: 'Eliminar Usuarios',
       manage_permissions: 'Gestionar Permisos de Roles',
+    },
+  },
+  ayuda: {
+    label: 'Ayuda',
+    permissions: {
+      view: 'Ver Módulo de Ayuda',
     },
   },
 };
@@ -218,6 +222,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
     'auditoria:view_history': true, 'auditoria:perform': true,
     'configuracion_catalogos:view': true,
+    'ayuda:view': true,
   },
   'Usuario Final': {
     'dashboard:view_resumen': true,
@@ -229,6 +234,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'consulta_ia:view': true,
     'acciones:view': true,
     'auditoria:view_history': true,
+    'ayuda:view': true,
   },
 };
 
@@ -244,6 +250,7 @@ export default function UsuariosPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { addLogEntry } = useActivityLog();
+  const { hasPermission } = usePermissions();
   
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, Record<string, boolean>>>(initialRolePermissions);
   const [selectedRole, setSelectedRole] = useState<UserRole>('Administrador');
@@ -301,7 +308,7 @@ export default function UsuariosPage() {
   }, [editingUser, isUserDialogOpen, userForm]);
 
   async function handleUserSubmit(data: UserFormData) {
-    if (!editingUser) return;
+    if (!editingUser || !hasPermission('usuarios:edit')) return;
     
     const userDocRef = doc(db, "users", editingUser.id);
     try {
@@ -408,7 +415,9 @@ export default function UsuariosPage() {
           <Tabs defaultValue="users" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="users">Gestión de Usuarios</TabsTrigger>
-              <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
+              {hasPermission('usuarios:manage_permissions') && (
+                <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="users" className="mt-4">
@@ -484,15 +493,19 @@ export default function UsuariosPage() {
                             </Badge>
                           </TableCell>
                            <TableCell className="text-right space-x-1">
-                            <Switch
-                              checked={user.activo}
-                              onCheckedChange={() => handleToggleUserStatus(user)}
-                              aria-label={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
-                              className="mr-2"
-                            />
-                            <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)} className="mr-1">
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
+                            {hasPermission('usuarios:edit') && (
+                              <>
+                                <Switch
+                                  checked={user.activo}
+                                  onCheckedChange={() => handleToggleUserStatus(user)}
+                                  aria-label={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+                                  className="mr-2"
+                                />
+                                <Button variant="ghost" size="icon" onClick={() => handleEditUser(user)} className="mr-1">
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -536,56 +549,62 @@ export default function UsuariosPage() {
             </TabsContent>
 
             <TabsContent value="permissions" className="mt-4">
-              <CardDescription className="mb-4">
-                Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardan automáticamente al cambiar de rol o al presionar "Guardar".
-              </CardDescription>
-              <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
-                <div className="flex-grow">
-                  <Label htmlFor="role-select">Seleccionar Rol a Editar</Label>
-                  <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
-                    <SelectTrigger id="role-select">
-                      <SelectValue placeholder="Seleccione un rol..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {userRoles.map(role => (
-                        <SelectItem key={role} value={role}>{role}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={handleSavePermissions}>
-                  <Save className="mr-2 h-4 w-4" /> Guardar Cambios
-                </Button>
-              </div>
+              {hasPermission('usuarios:manage_permissions') ? (
+                <>
+                  <CardDescription className="mb-4">
+                    Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardan automáticamente al cambiar de rol o al presionar "Guardar".
+                  </CardDescription>
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
+                    <div className="flex-grow">
+                      <Label htmlFor="role-select">Seleccionar Rol a Editar</Label>
+                      <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+                        <SelectTrigger id="role-select">
+                          <SelectValue placeholder="Seleccione un rol..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userRoles.map(role => (
+                            <SelectItem key={role} value={role}>{role}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleSavePermissions}>
+                      <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+                    </Button>
+                  </div>
 
-              {isLoadingPermissions ? (<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : (
-              <Accordion type="multiple" className="w-full" defaultValue={Object.keys(PERMISSION_CONFIG)}>
-                {(Object.keys(PERMISSION_CONFIG) as ModuleKey[]).map(moduleKey => (
-                  <AccordionItem value={moduleKey} key={moduleKey}>
-                    <AccordionTrigger>{PERMISSION_CONFIG[moduleKey].label}</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2">
-                        {Object.entries(PERMISSION_CONFIG[moduleKey].permissions).map(([permissionKey, permissionLabel]) => (
-                          <div key={`${moduleKey}-${permissionKey}`} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`${moduleKey}-${permissionKey}`}
-                              checked={rolePermissions[selectedRole]?.[`${moduleKey}:${permissionKey}`] || false}
-                              onCheckedChange={(checked) => handlePermissionChange(moduleKey, permissionKey, !!checked)}
-                              disabled={selectedRole === 'Administrador'}
-                            />
-                            <label
-                              htmlFor={`${moduleKey}-${permissionKey}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                              {permissionLabel}
-                            </label>
+                  {isLoadingPermissions ? (<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : (
+                  <Accordion type="multiple" className="w-full" defaultValue={Object.keys(PERMISSION_CONFIG)}>
+                    {(Object.keys(PERMISSION_CONFIG) as ModuleKey[]).map(moduleKey => (
+                      <AccordionItem value={moduleKey} key={moduleKey}>
+                        <AccordionTrigger>{PERMISSION_CONFIG[moduleKey].label}</AccordionTrigger>
+                        <AccordionContent>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2">
+                            {Object.entries(PERMISSION_CONFIG[moduleKey].permissions).map(([permissionKey, permissionLabel]) => (
+                              <div key={`${moduleKey}-${permissionKey}`} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`${moduleKey}-${permissionKey}`}
+                                  checked={rolePermissions[selectedRole]?.[`${moduleKey}:${permissionKey}`] || false}
+                                  onCheckedChange={(checked) => handlePermissionChange(moduleKey, permissionKey, !!checked)}
+                                  disabled={selectedRole === 'Administrador'}
+                                />
+                                <label
+                                  htmlFor={`${moduleKey}-${permissionKey}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  {permissionLabel}
+                                </label>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                  )}
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground p-8">No tiene permiso para gestionar roles y permisos.</div>
               )}
             </TabsContent>
           </Tabs>
@@ -702,7 +721,7 @@ export default function UsuariosPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="outline" onClick={() => { setIsUserDialogOpen(false); setEditingUser(null); }}>Cancelar</Button>
                 </DialogClose>
-                <Button type="submit">Guardar Cambios</Button>
+                <Button type="submit" disabled={!hasPermission('usuarios:edit')}>Guardar Cambios</Button>
               </DialogFooter>
             </form>
           </Form>
