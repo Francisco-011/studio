@@ -30,7 +30,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, UserPlus } from 'lucide-react';
 import Link from 'next/link';
-import type { UserRole } from '../(app)/usuarios/page';
+import type { UserRole, NivelAcceso } from '../(app)/usuarios/page';
 
 const signupFormSchema = z.object({
   nombreCompleto: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
@@ -70,6 +70,7 @@ export default function SignupPage() {
         nombreCompleto: data.nombreCompleto,
         email: data.email,
         rol: 'Usuario Final' as UserRole, // Default role
+        nivelAcceso: 'Público' as NivelAcceso, // Default access level
         activo: true,
         createdAt: serverTimestamp(),
       });

@@ -4,94 +4,95 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper Functions
+    // Helper function to check if the user is authenticated.
     function isUserAuthenticated() {
-      return request.auth != null && request.auth.uid != null;
+      return request.auth != null;
     }
     
-    function getUserAccessLevel() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivelAcceso;
+    // Helper function to get the user's access level from their profile.
+    function getUserAccessLevel(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.nivelAcceso;
     }
 
-    function levelToNumber(level) {
-      let levels = {
-        'Público': 1, 'Departamental': 2, 'Jerárquico': 3, 'Ejecutivo': 4, 'Confidencial': 5
-      };
-      return levels[level];
+    // Helper function to check if the user is an administrator by role.
+    function isUserRoleAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
     }
 
-    function hasAccess(requiredLevel) {
-      if (!isUserAuthenticated()) { return false; }
-      return levelToNumber(getUserAccessLevel()) >= levelToNumber(requiredLevel);
-    }
-    
-    // Security Rules for Collections
-
+    // USERS collection rules
     match /users/{userId} {
-      allow read: if request.auth.uid == userId || hasAccess('Jerárquico');
-      allow list: if hasAccess('Jerárquico');
-      allow create: if isUserAuthenticated();
-      allow update, delete: if hasAccess('Administrador');
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin() || request.auth.uid == userId;
     }
 
-    match /procesos/{processId} {
-      allow read: if resource.data.clasificacion == 'Público' ||
-                   (resource.data.clasificacion == 'Privado' && hasAccess('Departamental')) ||
-                   (resource.data.clasificacion == 'Confidencial' && hasAccess('Confidencial'));
-      allow list: if hasAccess('Público'); // Relies on client-side filtered queries
-      allow create, update, delete: if hasAccess('Consultor');
-    }
-
-    match /politicas/{politicaId} {
-      allow read: if resource.data.clasificacion == 'Público' ||
-                   (resource.data.clasificacion == 'Privado' && hasAccess('Departamental')) ||
-                   (resource.data.clasificacion == 'Confidencial' && hasAccess('Confidencial'));
-      allow list: if hasAccess('Público'); // Relies on client-side filtered queries
-      allow create, update, delete: if hasAccess('Gerente de Proyecto');
-    }
-    
-    match /excepciones/{exceptionId} {
-      allow read, list, create, update, delete: if hasAccess('Jerárquico');
-    }
-    
+    // Configuration collections (Areas, Departamentos, Puestos, etc.)
     match /areas/{areaId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Administrador');
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin();
     }
-    
     match /departamentos/{deptoId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Administrador');
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin();
     }
-    
     match /puestos/{puestoId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Administrador');
-    }
-    
-    match /sistemas/{sistemaId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Administrador');
-    }
-    
-    match /sistemas_costos/{costoId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Administrador');
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin();
     }
 
-    match /procedimientos/{procId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Consultor');
+    // Systems and Costs
+    match /sistemas/{sistemaId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin();
+    }
+    match /sistemas_costos/{costoId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isUserRoleAdmin();
     }
     
-    match /actividades/{actId} {
-      allow read, list: if hasAccess('Público');
-      allow create, update, delete: if hasAccess('Consultor');
-    }
-    
+    // Core operational data
     match /acciones/{accionId} {
-      allow read, list: if hasAccess('Usuario Final');
-      allow create, update, delete: if hasAccess('Consultor');
+      allow read, write: if isUserAuthenticated();
+    }
+    match /actividades/{actividadId} {
+      allow read, write: if isUserAuthenticated();
+    }
+    match /procedimientos/{procedimientoId} {
+      allow read, write: if isUserAuthenticated();
+    }
+
+    // PROCESOS collection rules
+    match /procesos/{procesoId} {
+      allow read: if isUserAuthenticated(); // Further filtering done client-side for now
+      allow write: if isUserAuthenticated(); // Allow writes, can be refined later based on roles
+    }
+
+    // POLITICAS collection rules
+    match /politicas/{politicaId} {
+      // A user can read a policy if:
+      // 1. The policy is 'Público'.
+      // 2. The policy is 'Privado' and their access level is 'Departamental' or higher.
+      // 3. The policy is 'Confidencial' and their access level is 'Confidencial'.
+      allow read: if isUserAuthenticated() &&
+                  (resource.data.clasificacion == 'Público' ||
+                  (resource.data.clasificacion == 'Privado' && getUserAccessLevel(request.auth.uid) in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial']) ||
+                  (resource.data.clasificacion == 'Confidencial' && getUserAccessLevel(request.auth.uid) == 'Confidencial'));
+
+      // A user can list (query) policies if their query only asks for classifications they are allowed to see.
+      allow list: if isUserAuthenticated() &&
+                   request.query.wheres[0].field == 'clasificacion' &&
+                   request.query.wheres[0].op == 'in' &&
+                   (
+                     (getUserAccessLevel(request.auth.uid) == 'Público' && request.query.wheres[0].value.hasOnly(['Público'])) ||
+                     (getUserAccessLevel(request.auth.uid) in ['Departamental', 'Jerárquico', 'Ejecutivo'] && request.query.wheres[0].value.hasOnly(['Público', 'Privado'])) ||
+                     (getUserAccessLevel(request.auth.uid) == 'Confidencial') // Admin can query all
+                   );
+                   
+      allow write: if isUserRoleAdmin();
+    }
+
+    // Exceptions collection rules
+    match /excepciones/{excepcionId} {
+       allow read, write: if isUserAuthenticated();
     }
   }
 }

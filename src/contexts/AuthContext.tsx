@@ -6,13 +6,14 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import type { UserRole } from '@/app/(app)/usuarios/page';
+import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
 
 interface UserProfile {
   uid: string;
   email: string | null;
   nombreCompleto: string;
   rol: UserRole;
+  nivelAcceso: NivelAcceso;
   puestoId?: string;
 }
 
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: firebaseUser.email,
             nombreCompleto: userProfileData.nombreCompleto,
             rol: userProfileData.rol,
+            nivelAcceso: userProfileData.nivelAcceso || 'Público', // Default to 'Público' if not set
             puestoId: userProfileData.puestoId,
           });
         } else {

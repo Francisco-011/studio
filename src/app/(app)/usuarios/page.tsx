@@ -54,11 +54,15 @@ import { usePermissions } from '@/contexts/PermissionsContext';
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
 export type UserRole = typeof userRoles[number];
 
+const nivelesAcceso = ["Público", "Departamental", "Jerárquico", "Ejecutivo", "Confidencial"] as const;
+export type NivelAcceso = typeof nivelesAcceso[number];
+
 export interface User {
   id: string; // This is the UID from Firebase Auth
   nombreCompleto: string;
   email: string;
   rol: UserRole;
+  nivelAcceso: NivelAcceso;
   activo: boolean;
   puestoId?: string;
 }
@@ -68,6 +72,7 @@ const userFormSchema = z.object({
   nombreCompleto: z.string().min(3, 'El nombre completo debe tener al menos 3 caracteres.'),
   email: z.string().email('Ingrese un correo electrónico válido.'),
   rol: z.enum(userRoles, { errorMap: () => ({ message: "Seleccione un rol válido."})}),
+  nivelAcceso: z.enum(nivelesAcceso, { errorMap: () => ({ message: "Seleccione un nivel de acceso." })}),
   puestoId: z.string().optional(),
   activo: z.boolean().default(true),
 });
@@ -84,6 +89,7 @@ const PERMISSION_CONFIG = {
       view_procesos: 'Ver Dash. Procesos',
       view_mejoras: 'Ver Dash. Mejoras',
       view_auditoria: 'Ver Dash. Auditoría',
+      view_politicas: 'Ver Dash. Políticas',
     },
   },
   captura: {
@@ -116,6 +122,14 @@ const PERMISSION_CONFIG = {
       restore: 'Recuperar Actividades Eliminadas',
       export: 'Exportar CSV de Actividades',
       view_history: 'Ver Historial de Cambios de Actividad',
+    },
+  },
+   politicas: {
+    label: 'Políticas',
+    permissions: {
+      view: 'Ver Políticas',
+      create: 'Crear/Editar Políticas',
+      delete: 'Eliminar Políticas',
     },
   },
   panelJerarquico: {
@@ -212,10 +226,11 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     return { ...acc, ...modulePermissions };
   }, {}),
   Consultor: {
-    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true,
+    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
     'captura:create_process': true, 'captura:define_activities': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
+    'politicas:view': true, 'politicas:create': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
     'consulta_ia:view': true,
@@ -229,6 +244,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'dashboard:view_procesos': true,
     'procesosRegistrados:view': true,
     'actividades:view': true,
+    'politicas:view': true,
     'panelJerarquico:view': true,
     'panelJerarquico:view_details': true,
     'consulta_ia:view': true,
@@ -253,7 +269,7 @@ export default function UsuariosPage() {
   const { hasPermission } = usePermissions();
   
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, Record<string, boolean>>>(initialRolePermissions);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('Administrador');
+  const [selectedRoleForPerms, setSelectedRoleForPerms] = useState<UserRole>('Administrador');
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
 
   useEffect(() => {
@@ -298,7 +314,7 @@ export default function UsuariosPage() {
 
   const userForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: { nombreCompleto: '', email: '', rol: undefined, activo: true, puestoId: undefined },
+    defaultValues: { nombreCompleto: '', email: '', rol: undefined, nivelAcceso: 'Público', activo: true, puestoId: undefined },
   });
 
   useEffect(() => {
@@ -315,11 +331,12 @@ export default function UsuariosPage() {
         await updateDoc(userDocRef, {
             nombreCompleto: data.nombreCompleto,
             rol: data.rol,
+            nivelAcceso: data.nivelAcceso,
             activo: data.activo,
             puestoId: data.puestoId || null,
         });
         toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
-        addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el rol/estado del usuario "${data.nombreCompleto}".` });
+        addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el perfil del usuario "${data.nombreCompleto}".` });
     } catch (error) {
         console.error("Error updating user:", error);
         toast({ title: "Error", description: "No se pudo actualizar el usuario.", variant: "destructive"});
@@ -383,8 +400,8 @@ export default function UsuariosPage() {
   const handlePermissionChange = (moduleKey: string, permissionKey: string, checked: boolean) => {
     setRolePermissions(prev => ({
       ...prev,
-      [selectedRole]: {
-        ...prev[selectedRole],
+      [selectedRoleForPerms]: {
+        ...prev[selectedRoleForPerms],
         [`${moduleKey}:${permissionKey}`]: checked,
       },
     }));
@@ -393,9 +410,9 @@ export default function UsuariosPage() {
   const handleSavePermissions = () => {
     toast({
       title: 'Permisos Guardados',
-      description: `Los permisos para el rol '${selectedRole}' han sido actualizados.`,
+      description: `Los permisos para el rol '${selectedRoleForPerms}' han sido actualizados.`,
     });
-    addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRole, details: `Se actualizaron los permisos para el rol "${selectedRole}".` });
+    addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRoleForPerms, details: `Se actualizaron los permisos para el rol "${selectedRoleForPerms}".` });
   };
 
 
@@ -472,8 +489,9 @@ export default function UsuariosPage() {
                       <TableRow>
                         <TableHead>Nombre Completo</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Puesto Asignado</TableHead>
-                        <TableHead className="text-center">Rol</TableHead>
+                        <TableHead>Puesto</TableHead>
+                        <TableHead>Rol</TableHead>
+                        <TableHead>Nivel Acceso</TableHead>
                         <TableHead className="w-[120px] text-center">Estado</TableHead>
                         <TableHead className="text-right w-[140px]">Acciones</TableHead>
                       </TableRow>
@@ -484,9 +502,8 @@ export default function UsuariosPage() {
                           <TableCell className="font-medium">{user.nombreCompleto}</TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{puestos.find(p => p.id === user.puestoId)?.nombre || 'No asignado'}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={user.rol === "Administrador" ? "default" : "secondary"}>{user.rol}</Badge>
-                          </TableCell>
+                          <TableCell><Badge variant="outline">{user.rol}</Badge></TableCell>
+                          <TableCell><Badge variant="secondary">{user.nivelAcceso}</Badge></TableCell>
                           <TableCell className="text-center">
                             <Badge variant={user.activo ? 'default' : 'outline'}>
                               {user.activo ? 'Activo' : 'Inactivo'}
@@ -552,12 +569,12 @@ export default function UsuariosPage() {
               {hasPermission('usuarios:manage_permissions') ? (
                 <>
                   <CardDescription className="mb-4">
-                    Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardan automáticamente al cambiar de rol o al presionar "Guardar".
+                    Seleccione un rol para ver y modificar los permisos asociados.
                   </CardDescription>
                   <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
                     <div className="flex-grow">
                       <Label htmlFor="role-select">Seleccionar Rol a Editar</Label>
-                      <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+                      <Select value={selectedRoleForPerms} onValueChange={(value) => setSelectedRoleForPerms(value as UserRole)}>
                         <SelectTrigger id="role-select">
                           <SelectValue placeholder="Seleccione un rol..." />
                         </SelectTrigger>
@@ -569,7 +586,7 @@ export default function UsuariosPage() {
                       </Select>
                     </div>
                     <Button onClick={handleSavePermissions}>
-                      <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+                      <Save className="mr-2 h-4 w-4" /> Guardar Permisos para este Rol
                     </Button>
                   </div>
 
@@ -584,9 +601,9 @@ export default function UsuariosPage() {
                               <div key={`${moduleKey}-${permissionKey}`} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`${moduleKey}-${permissionKey}`}
-                                  checked={rolePermissions[selectedRole]?.[`${moduleKey}:${permissionKey}`] || false}
+                                  checked={rolePermissions[selectedRoleForPerms]?.[`${moduleKey}:${permissionKey}`] || false}
                                   onCheckedChange={(checked) => handlePermissionChange(moduleKey, permissionKey, !!checked)}
-                                  disabled={selectedRole === 'Administrador'}
+                                  disabled={selectedRoleForPerms === 'Administrador'}
                                 />
                                 <label
                                   htmlFor={`${moduleKey}-${permissionKey}`}
@@ -652,7 +669,7 @@ export default function UsuariosPage() {
                 name="rol"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Rol</FormLabel>
+                    <FormLabel>Rol Funcional</FormLabel>
                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -663,6 +680,30 @@ export default function UsuariosPage() {
                         {userRoles.map((role) => (
                           <SelectItem key={role} value={role}>
                             {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={userForm.control}
+                name="nivelAcceso"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nivel de Acceso a Información</FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione un nivel" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {nivelesAcceso.map((nivel) => (
+                          <SelectItem key={nivel} value={nivel}>
+                            {nivel}
                           </SelectItem>
                         ))}
                       </SelectContent>

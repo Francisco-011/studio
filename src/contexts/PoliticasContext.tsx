@@ -10,6 +10,7 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import type { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
+import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -72,6 +73,13 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       allowedClassifications.push('Privado', 'Confidencial');
     } else if (userLevel === 'Ejecutivo' || userLevel === 'Jerárquico' || userLevel === 'Departamental') {
       allowedClassifications.push('Privado');
+    }
+
+    if (allowedClassifications.length === 0) {
+      // This should not happen now, but as a safeguard.
+      setPoliticas([]);
+      setIsLoadingPoliticas(false);
+      return;
     }
 
     const q = query(
