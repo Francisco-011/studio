@@ -776,7 +776,7 @@ export default function AuditoriaPage() {
                                     <h4 className="font-semibold text-lg mb-2">Procedimientos y Actividades</h4>
                                     {(auditTargetDetails.procedimientos && auditTargetDetails.procedimientos.length > 0) ? (
                                         <Accordion type="multiple" className="w-full space-y-2">
-                                        {auditTargetDetails.procedimientos.map(({ procedimiento, activities }, procIndex) => (
+                                        {auditTargetDetails.procedimientos.map(({ procedimiento, activities: activitiesToShow }, procIndex) => (
                                             <AccordionItem value={procedimiento.id} key={procedimiento.id} className="bg-background rounded-md border">
                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                     <div className="flex items-center gap-4 text-left">
@@ -786,21 +786,23 @@ export default function AuditoriaPage() {
                                                 </AccordionTrigger>
                                                 <AccordionContent className="p-4 pt-0 pl-16 space-y-3">
                                                     <DetailDisplay title="Descripción del Procedimiento" value={procedimiento.descripcion} isTextarea />
-                                                    {activities.length > 0 ? (
+                                                    <DetailDisplay title="Sistemas Utilizados en Procedimiento" value={procedimiento.sistemasUtilizados} isList />
+                                                    {activitiesToShow.length > 0 ? (
                                                         <div className="space-y-2">
                                                             <h5 className="font-semibold text-sm mt-2">Actividades:</h5>
-                                                            {activities.map((act, actIndex) => (
+                                                            {activitiesToShow.map((act, actIndex) => (
                                                                 <Card key={act.id} className="bg-background/50">
                                                                     <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <span className="text-sm font-semibold">{procIndex + 1}.{actIndex + 1}</span>
-                                                                            <p className="font-medium text-sm">{act.nombre}</p>
-                                                                            {!act.activa && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                                                        <div className="flex items-start gap-2 flex-grow min-w-0">
+                                                                            <span className="font-semibold text-sm w-10 pt-px text-right shrink-0">{procIndex + 1}.{actIndex + 1}</span>
+                                                                            <div className="flex flex-col">
+                                                                                <p className="font-medium text-sm break-words">{act.nombre}</p>
+                                                                                {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1">Inactiva</Badge>}
+                                                                            </div>
                                                                         </div>
                                                                     </CardHeader>
-                                                                    <CardContent className="p-3 pt-0 text-xs space-y-2">
+                                                                    <CardContent className="p-3 pt-0 pl-14 text-xs space-y-2">
                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
                                                                         <DetailDisplay title="Código" value={act.codigo} />
                                                                         {act.updatedAt && isValid(new Date(act.updatedAt)) && (
                                                                             <DetailDisplay title="Última Modificación" value={format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es })} />
@@ -859,7 +861,7 @@ export default function AuditoriaPage() {
                                                                     <h4 className="font-semibold text-base mb-2">Procedimientos y Actividades</h4>
                                                                     {procedimientos && procedimientos.length > 0 ? (
                                                                         <Accordion type="multiple" className="w-full space-y-2">
-                                                                        {procedimientos.map(({procedimiento, activities}, procIndex) => (
+                                                                        {procedimientos.map(({procedimiento, activities: activitiesToShow}, procIndex) => (
                                                                             <AccordionItem value={procedimiento.id} key={procedimiento.id} className="bg-card rounded-md border">
                                                                                 <AccordionTrigger className="p-3 text-sm hover:no-underline">
                                                                                     <div className="flex items-center gap-3 text-left">
@@ -868,20 +870,22 @@ export default function AuditoriaPage() {
                                                                                     </div>
                                                                                 </AccordionTrigger>
                                                                                 <AccordionContent className="p-4 pt-0 pl-12 space-y-2">
-                                                                                    {activities.length > 0 ? (
+                                                                                    <DetailDisplay title="Sistemas Utilizados en Procedimiento" value={procedimiento.sistemasUtilizados} isList />
+                                                                                    {activitiesToShow.length > 0 ? (
                                                                                         <div className="space-y-2 mt-2">
-                                                                                            {activities.map((act, actIndex) => (
+                                                                                            {activitiesToShow.map((act, actIndex) => (
                                                                                                 <Card key={act.id} className="bg-background/50">
                                                                                                     <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
-                                                                                                        <div className="flex items-center gap-3">
-                                                                                                            <span className="text-sm font-semibold">{procIndex + 1}.{actIndex + 1}</span>
-                                                                                                            <p className="font-medium text-sm">{act.nombre}</p>
-                                                                                                            {!act.activa && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                                                                                         <div className="flex items-start gap-2 flex-grow min-w-0">
+                                                                                                            <span className="font-semibold text-sm w-10 pt-px text-right shrink-0">{procIndex + 1}.{actIndex + 1}</span>
+                                                                                                            <div className="flex flex-col">
+                                                                                                                <p className="font-medium text-sm break-words">{act.nombre}</p>
+                                                                                                                {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1">Inactiva</Badge>}
+                                                                                                            </div>
                                                                                                         </div>
                                                                                                     </CardHeader>
-                                                                                                    <CardContent className="p-3 pt-0 text-xs space-y-2">
+                                                                                                    <CardContent className="p-3 pt-0 pl-14 text-xs space-y-2">
                                                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
                                                                                                         <DetailDisplay title="Código" value={act.codigo} />
                                                                                                         {act.updatedAt && isValid(new Date(act.updatedAt)) && (
                                                                                                             <DetailDisplay title="Última Modificación" value={format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es })} />
