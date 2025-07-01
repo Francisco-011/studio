@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
-import { usePoliticas } from '@/contexts/PoliticasContext';
+import { usePoliticas, politicaLinkTypes, type PoliticaVinculo } from '@/contexts/PoliticasContext';
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -24,7 +24,10 @@ import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, AlertTri
 const activityCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre de la actividad es requerido (mínimo 3 caracteres).'),
   descripcionBreve: z.string().optional(),
-  politicasAsociadasIds: z.array(z.string()).optional().default([]),
+  politicasAsociadas: z.array(z.object({
+    policyId: z.string(),
+    linkType: z.string(),
+  })).optional().default([]),
 });
 type ActivityCaptureFormData = z.infer<typeof activityCaptureFormSchema>;
 
@@ -52,7 +55,7 @@ export default function DefinirActividadesProcedimientoPage() {
 
   const activityForm = useForm<ActivityCaptureFormData>({
     resolver: zodResolver(activityCaptureFormSchema),
-    defaultValues: { nombre: '', descripcionBreve: '', politicasAsociadasIds: [] },
+    defaultValues: { nombre: '', descripcionBreve: '', politicasAsociadas: [] },
   });
 
   const watchedActivityName = activityForm.watch('nombre');
@@ -71,7 +74,7 @@ export default function DefinirActividadesProcedimientoPage() {
                             tempId: globalAct.id,
                             nombre: globalAct.nombre,
                             descripcionBreve: globalAct.descripcionBreve,
-                            politicasAsociadasIds: globalAct.politicasAsociadasIds || [],
+                            politicasAsociadas: globalAct.politicasAsociadas || [],
                         };
                     }
                     return null;
@@ -88,7 +91,7 @@ export default function DefinirActividadesProcedimientoPage() {
   }, [procedimientoId, router, procedimientos, globalActivities, isLoadingActividades, isLoadingProcedimientos]);
 
   const openAddActivityDialog = () => {
-    activityForm.reset({ nombre: '', descripcionBreve: '', politicasAsociadasIds: [] });
+    activityForm.reset({ nombre: '', descripcionBreve: '', politicasAsociadas: [] });
     setEditingActivity(null);
     setIsActivityFormOpen(true);
   };
@@ -164,7 +167,7 @@ export default function DefinirActividadesProcedimientoPage() {
         const activityDataPayload = {
           nombre: localAct.nombre,
           descripcionBreve: localAct.descripcionBreve,
-          politicasAsociadasIds: localAct.politicasAsociadasIds,
+          politicasAsociadas: localAct.politicasAsociadas,
           procedimientoId: parentProcedimiento.id,
         };
 
@@ -254,7 +257,7 @@ export default function DefinirActividadesProcedimientoPage() {
             <form onSubmit={activityForm.handleSubmit(handleActivityFormSubmit)} className="space-y-4 py-4">
               <FormField control={activityForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre Actividad</FormLabel><FormControl><Input {...field} /></FormControl>{similarActivityWarning && (<FormDescription className="text-amber-600"><AlertTriangle className="h-4 w-4 inline-block mr-1" />{similarActivityWarning}</FormDescription>)}<FormMessage /></FormItem>)} />
               <FormField control={activityForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={activityForm.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Asociadas (Opcional)</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between">{field.value?.length || 0} seleccionadas <ChevronDown className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas</DropdownMenuLabel><DropdownMenuSeparator />{politicas.map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...field.value || [], p.id] : field.value?.filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+              <FormField control={activityForm.control} name="politicasAsociadas" render={({ field }) => (<FormItem><FormLabel>Políticas Asociadas (Opcional)</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between">{field.value?.length || 0} seleccionadas <ChevronDown className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas</DropdownMenuLabel><DropdownMenuSeparator />{politicas.map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.some(v => v.policyId === p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), { policyId: p.id, linkType: 'Aplica a' }] : field.value?.filter(v => v.policyId !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
               <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActivity ? 'Actualizar' : 'Agregar'}</Button></DialogFooter>
             </form>
           </Form>

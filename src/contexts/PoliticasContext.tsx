@@ -18,6 +18,14 @@ export type NivelCompliance = typeof nivelesCompliance[number];
 export const politicaEstados = ["Borrador", "En Revisión", "Aprobada", "Archivada"] as const;
 export type PoliticaEstado = typeof politicaEstados[number];
 
+export const politicaLinkTypes = ["Aplica a", "Regula", "Complementa", "Requiere", "Implementa"] as const;
+export type PoliticaLinkType = typeof politicaLinkTypes[number];
+
+export interface PoliticaVinculo {
+  policyId: string;
+  linkType: PoliticaLinkType;
+}
+
 export interface Politica {
   id: string;
   codigo: string;
@@ -30,9 +38,6 @@ export interface Politica {
   nivelCompliance: NivelCompliance;
   fechaVigencia: string; // ISO string
   fechaRevision: string; // ISO string
-  procesosAsociadosIds: string[];
-  procedimientosAsociadosIds: string[];
-  actividadesAsociadasIds: string[];
   createdAt: number;
   updatedAt: number;
   consecuenciasIncumplimiento?: string;
@@ -44,7 +49,7 @@ export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' 
 
 interface PoliticasContextType {
   politicas: Politica[];
-  addPolitica: (data: PoliticaCreationData) => Promise<void>;
+  addPolitica: (data: Omit<PoliticaCreationData, 'estado'>) => Promise<string | null>;
   updatePolitica: (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => Promise<void>;
   updatePoliticaStatus: (id: string, estado: PoliticaEstado) => Promise<void>;
   deletePolitica: (id: string) => Promise<void>;
@@ -114,10 +119,10 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [user, authLoading]);
 
-  const addPolitica = useCallback(async (data: PoliticaCreationData) => {
+  const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {
         const codigo = `PO-${Date.now().toString().slice(-6)}`;
-        await addDoc(collection(db, POLITICAS_COLLECTION), {
+        const docRef = await addDoc(collection(db, POLITICAS_COLLECTION), {
           ...data,
           codigo,
           estado: 'Borrador', // Default state
@@ -126,9 +131,11 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
           historialDeCambios: [],
         });
         addLogEntry({ action: 'create', entityType: 'Política', entityName: data.titulo, details: `Se creó la política "${data.titulo}" (${codigo}).` });
+        return docRef.id;
     } catch(e) {
         console.error("Error adding política:", e);
         toast({ title: "Error", description: "No se pudo agregar la política.", variant: "destructive"});
+        return null;
     }
   }, [addLogEntry]);
 
@@ -159,20 +166,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
                 field: key,
                 before: String(originalValue),
                 after: String(newValue),
-            });
-        }
-    });
-
-    const arrayFields: (keyof typeof data)[] = ['procesosAsociadosIds', 'procedimientosAsociadosIds', 'actividadesAsociadasIds'];
-    arrayFields.forEach(key => {
-        const originalArray = (originalPolitica[key as keyof Politica] as string[] | undefined)?.sort() || [];
-        const newArray = (data[key as keyof PoliticaCreationData] as string[] | undefined)?.sort() || [];
-        if(JSON.stringify(originalArray) !== JSON.stringify(newArray)) {
-            changes.push({
-                timestamp: new Date().toISOString(),
-                field: key,
-                before: originalArray.join(', ') || 'Ninguno',
-                after: newArray.join(', ') || 'Ninguno',
             });
         }
     });

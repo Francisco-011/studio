@@ -232,7 +232,9 @@ export default function ProcesosYFlujosRegistradosPage() {
             activityOrder: p.activityOrder || [],
             updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now()),
             historialDeCambios: p.historialDeCambios || [],
+            politicasAsociadas: p.politicasAsociadas || (Array.isArray(p.politicasAsociadasIds) ? p.politicasAsociadasIds.map((id: string) => ({ policyId: id, linkType: 'Aplica a' })) : []),
           };
+          delete newP.politicasAsociadasIds;
           if (!newP.procesosEntrada && p.formatosRecibe) { newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe]; }
           delete newP.formatosRecibe;
           if (!newP.procesosSalida && p.formatosEntrega) { newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega]; }
@@ -401,9 +403,9 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (!processToToggle) return;
     const targetStatus = !(processToToggle.activo !== false);
     if (targetStatus === false) {
-      const linkedActiveActivities = allActivities.filter(act => act.activa && act.procesosAsociadosIds?.includes(processId));
+      const linkedActiveActivities = allActivities.filter(act => act.activa && (act.procedimientoId && processToToggle.procedimientoOrder?.includes(act.procedimientoId)));
       if (linkedActiveActivities.length > 0) {
-        toast({ title: "Inactivación Bloqueada", description: `El proceso no puede inactivarse porque está asociado a ${linkedActiveActivities.length} actividad(es) activa(s).`, variant: "destructive", duration: 7000, });
+        toast({ title: "Inactivación Bloqueada", description: `El proceso no puede inactivarse porque una de sus actividades está activa.`, variant: "destructive", duration: 7000, });
         return;
       }
     }
@@ -752,8 +754,11 @@ export default function ProcesosYFlujosRegistradosPage() {
                         return true;
                     });
                 
-                const linkedPolicies = proc.politicasAsociadasIds
-                  ?.map(id => allPoliticas.find(p => p.id === id)?.titulo)
+                const linkedPolicies = proc.politicasAsociadas
+                  ?.map(link => {
+                    const policy = allPoliticas.find(p => p.id === link.policyId)
+                    return policy ? { ...policy, linkType: link.linkType } : null
+                  })
                   .filter(Boolean);
 
                 return (
@@ -795,7 +800,11 @@ export default function ProcesosYFlujosRegistradosPage() {
                               <DetailDisplay title="Descripción" value={proc.descripcion} isTextarea />
                               <DetailDisplay title="Frecuencia" value={proc.frecuencia} />
                               <DetailDisplay title="Sistemas" value={proc.sistemas} isList />
-                              <DetailDisplay title="Políticas Vinculadas" value={linkedPolicies} isList />
+                              <DetailDisplay 
+                                title="Políticas Vinculadas"
+                                value={linkedPolicies?.map(p => `${p!.titulo} (${p!.linkType})`)}
+                                isList
+                              />
                               <DetailDisplay title="Entradas" value={proc.informacionRecibe} isTextarea />
                               <DetailDisplay title="Salidas" value={proc.informacionEntrega} isTextarea />
                               <DetailDisplay title="Procesos de Entrada" value={proc.procesosEntrada} isList />

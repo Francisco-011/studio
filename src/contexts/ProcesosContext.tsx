@@ -8,6 +8,7 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
+import type { PoliticaLinkType, PoliticaVinculo } from './PoliticasContext';
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
@@ -44,7 +45,10 @@ export const capturaFormSchema = z.object({
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
   procesosSalida: z.array(z.string()).optional().default([]),
   procedimientoOrder: z.array(z.string()).optional().default([]),
-  politicasAsociadasIds: z.array(z.string()).optional().default([]),
+  politicasAsociadas: z.array(z.object({
+    policyId: z.string(),
+    linkType: z.string(), // z.enum(politicaLinkTypes) would cause circular dependency
+  })).optional().default([]),
 }).refine(data => {
   if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
     return false;
@@ -108,6 +112,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
                 capturedAt: capturedAtData?.toDate().toISOString() || new Date().toISOString(),
                 updatedAt: updatedAtData?.toMillis() || capturedAtData?.toMillis() || Date.now(),
                 deletedAt: deletedAtData?.toDate().toISOString(),
+                // Ensure politicasAsociadas is an array
+                politicasAsociadas: Array.isArray(data.politicasAsociadas) ? data.politicasAsociadas : [],
             } as CapturedProcess;
         });
         setProcesos(procesosData);

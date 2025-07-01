@@ -68,7 +68,7 @@ const defaultFormValues: Partial<CapturaFormData> = {
   informacionEntrega: "",
   procesosSalida: [],
   procedimientoOrder: [],
-  politicasAsociadasIds: [],
+  politicasAsociadas: [],
 };
 
 
