@@ -191,14 +191,16 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
   const addProceso = useCallback(async (data: CapturaFormData): Promise<CapturedProcess | null> => {
     try {
         const codigo = `PR-${Date.now().toString().slice(-6)}`;
-        const docRef = await addDoc(collection(db, PROCESOS_COLLECTION), {
+        const payload: { [key: string]: any } = {
           ...data,
           codigo,
           capturedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           activo: true,
           historialDeCambios: [],
-        });
+        };
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        const docRef = await addDoc(collection(db, PROCESOS_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Proceso', entityName: data.proceso, details: `Se capturó el nuevo proceso "${data.proceso}" (${codigo}).` });
         return {
             ...data,
@@ -242,11 +244,12 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             }
         });
         
-        const dataWithHistory = {
+        const dataWithHistory: {[key: string]: any} = {
             ...data,
             updatedAt: serverTimestamp(),
             historialDeCambios: [...(originalProceso.historialDeCambios || []), ...changes]
         };
+        Object.keys(dataWithHistory).forEach(key => dataWithHistory[key] === undefined && delete dataWithHistory[key]);
         batch.update(procesoDocRef, dataWithHistory);
         
         const newName = data.proceso;

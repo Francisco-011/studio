@@ -94,12 +94,15 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
 
   const addSistema = useCallback(async (data: SistemaCreationData) => {
     try {
-       await addDoc(collection(db, SISTEMAS_COLLECTION), {
+      const payload: { [key: string]: any } = {
           nombre: data.nombre,
           scope: data.scope || "Empresa",
           scopeId: data.scope === "Empresa" ? null : data.scopeId,
           createdAt: serverTimestamp(),
-      });
+      };
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      await addDoc(collection(db, SISTEMAS_COLLECTION), payload);
       addLogEntry({ action: 'create', entityType: 'Sistema', entityName: data.nombre, details: `Se creó el sistema "${data.nombre}".` });
     } catch (e) {
       console.error("Error adding sistema: ", e);
@@ -111,10 +114,12 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
     const sistemaDocRef = doc(db, SISTEMAS_COLLECTION, id);
     const originalSistema = sistemas.find(s => s.id === id);
     try {
-        const updateData = { ...data };
+        const updateData: { [key: string]: any } = { ...data };
         if (data.scope === 'Empresa') {
-            updateData.scopeId = undefined;
+            updateData.scopeId = null;
         }
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
         await updateDoc(sistemaDocRef, updateData);
         if(originalSistema) {
           addLogEntry({ action: 'update', entityType: 'Sistema', entityName: data.nombre || originalSistema.nombre, details: `Se actualizó el sistema "${originalSistema.nombre}".` });
@@ -164,10 +169,13 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
   const addCostoSistema = useCallback(async (costoData: Omit<SistemaCosto, 'id'>) => {
     const sistema = sistemas.find(s => s.id === costoData.sistemaId);
     try {
-      await addDoc(collection(db, COSTOS_SISTEMAS_COLLECTION), {
+      const payload: { [key: string]: any } = {
         ...costoData,
         createdAt: serverTimestamp(),
-      });
+      };
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      await addDoc(collection(db, COSTOS_SISTEMAS_COLLECTION), payload);
       if(sistema) {
         addLogEntry({ action: 'create', entityType: 'Costo de Sistema', entityName: sistema.nombre, details: `Se agregó un costo al sistema "${sistema.nombre}".` });
       }
@@ -181,7 +189,10 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
      const costoDocRef = doc(db, COSTOS_SISTEMAS_COLLECTION, id);
      const originalCosto = costosSistemas.find(c => c.id === id);
      try {
-       await updateDoc(costoDocRef, costoData);
+       const payload: { [key: string]: any } = { ...costoData };
+       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+       await updateDoc(costoDocRef, payload);
        if(originalCosto) {
           const sistema = sistemas.find(s => s.id === originalCosto.sistemaId);
           if(sistema) {

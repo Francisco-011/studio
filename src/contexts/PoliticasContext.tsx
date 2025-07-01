@@ -140,14 +140,16 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {
         const codigo = `PO-${Date.now().toString().slice(-6)}`;
-        const docRef = await addDoc(collection(db, POLITICAS_COLLECTION), {
+        const payload: { [key: string]: any } = {
           ...data,
           codigo,
           estado: 'Borrador',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           historialDeCambios: [],
-        });
+        };
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        const docRef = await addDoc(collection(db, POLITICAS_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Política', entityName: data.titulo, details: `Se creó la política "${data.titulo}" (${codigo}).` });
         return docRef.id;
     } catch(e) {
@@ -189,11 +191,14 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
 
     if (changes.length > 0) {
       try {
-        await updateDoc(politicaDocRef, {
+        const payload: { [key: string]: any } = {
           ...data,
           updatedAt: serverTimestamp(),
           historialDeCambios: [...(originalPolitica.historialDeCambios || []), ...changes]
-        });
+        };
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+        await updateDoc(politicaDocRef, payload);
         addLogEntry({ action: 'update', entityType: 'Política', entityName: data.titulo || originalPolitica.titulo, details: `Se actualizó la política "${originalPolitica.titulo}".` });
         toast({ title: "Política Actualizada", description: `${changes.length} campo(s) fueron modificados.` });
       } catch(e) {

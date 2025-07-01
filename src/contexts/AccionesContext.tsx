@@ -94,12 +94,14 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
 
   const addAccion = useCallback(async (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => {
     try {
-        await addDoc(collection(db, ACCIONES_COLLECTION), {
+        const payload: { [key: string]: any } = {
           ...data,
           fechaCreacion: serverTimestamp(),
           updatedAt: serverTimestamp(),
           historialDeCambios: [],
-        });
+        };
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        await addDoc(collection(db, ACCIONES_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Acción de Mejora', entityName: data.nombre, details: `Se creó la acción de mejora "${data.nombre}".` });
     } catch(e) {
         console.error("Error adding accion:", e);
@@ -122,6 +124,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
     }
     
     try {
+      Object.keys(dataToUpdate).forEach(key => dataToUpdate[key] === undefined && delete dataToUpdate[key]);
       await updateDoc(accionDocRef, dataToUpdate);
       addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: data.nombre || originalAccion.nombre, details: `Se actualizó la acción "${originalAccion.nombre}".` });
     } catch(e) {

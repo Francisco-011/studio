@@ -71,11 +71,14 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      await addDoc(collection(db, EXCEPTIONS_COLLECTION), {
+      const payload: { [key: string]: any } = {
         ...data,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-      });
+      };
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+      
+      await addDoc(collection(db, EXCEPTIONS_COLLECTION), payload);
       toast({ title: "Excepción Creada", description: "La regla de excepción ha sido registrada." });
       addLogEntry({ action: 'create', entityType: 'Excepción de Acceso', entityName: `${data.exceptionType}: ${data.documentType} ${data.documentId}`, details: `Se creó una excepción para el usuario ID ${data.userId}.` });
     } catch (e) {

@@ -62,10 +62,13 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
 
   const addPuesto = useCallback(async (data: PuestoCreationData) => {
     try {
-      await addDoc(collection(db, PUESTOS_COLLECTION), {
+      const payload: { [key: string]: any } = {
         ...data,
         createdAt: serverTimestamp(),
-      });
+      };
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      await addDoc(collection(db, PUESTOS_COLLECTION), payload);
       addLogEntry({ action: 'create', entityType: 'Puesto', entityName: data.nombre, details: `Se creó el puesto "${data.nombre}".` });
     } catch(e) {
       console.error("Error adding puesto: ", e);
@@ -77,7 +80,9 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     const puestoDocRef = doc(db, PUESTOS_COLLECTION, id);
     const originalPuesto = puestos.find(p => p.id === id);
     try {
-      const updateData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+      const updateData: { [key: string]: any } = { ...data };
+      Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+      
       await updateDoc(puestoDocRef, updateData);
       if (originalPuesto && originalPuesto.nombre !== data.nombre) {
         addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre || originalPuesto.nombre, details: `El puesto "${originalPuesto.nombre}" fue renombrado a "${data.nombre}".` });

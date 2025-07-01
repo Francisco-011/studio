@@ -90,7 +90,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' | 'politicasAsociadas'> & { politicasAsociadas?: PoliticaVinculo[] }): Promise<Actividad> => {
     try {
       const codigo = `AC-${Date.now().toString().slice(-6)}`;
-      const payload = {
+      const payload: { [key: string]: any } = {
         ...data,
         codigo,
         createdAt: serverTimestamp(),
@@ -100,6 +100,9 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         politicasAsociadas: data.politicasAsociadas || [],
         deletedAt: null,
       };
+
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
       const docRef = await addDoc(collection(db, ACTIVIDADES_COLLECTION), payload);
       addLogEntry({ action: 'create', entityType: 'Actividad', entityName: data.nombre, details: `Se creó la actividad "${data.nombre}" (${codigo}).` });
       
@@ -144,11 +147,15 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
 
     const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
     try {
-      await updateDoc(docRef, {
+      const payload: { [key: string]: any } = {
         ...data,
         updatedAt: serverTimestamp(),
         historialDeCambios: [...(originalActividad.historialDeCambios || []), ...changes]
-      });
+      };
+      
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      await updateDoc(docRef, payload);
     } catch(e) {
       console.error("Error updating actividad: ", e);
       toast({ title: "Error", description: "No se pudo actualizar la actividad.", variant: "destructive"});
