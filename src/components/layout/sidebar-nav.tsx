@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -84,7 +85,7 @@ const navItems: NavItem[] = [
     },
     { href: '/usuarios', label: 'Usuarios', icon: Users, permission: 'usuarios:view' },
     { href: '/ayuda', label: 'Ayuda', icon: LifeBuoy, permission: 'ayuda:view' },
-    { href: '/acerca-de', label: 'Acerca de SIAP', icon: Info },
+    { href: '/acerca-de', label: 'Acerca de PROSCENDIA', icon: Info },
 ];
 
 

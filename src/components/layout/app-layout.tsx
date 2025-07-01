@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -58,7 +59,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarContent>
         <SidebarFooter className="p-2 group-data-[collapsible=icon]:hidden">
           <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} STUFFACTORY
+            &copy; {new Date().getFullYear()} Francisco Rivera Almazán
           </p>
         </SidebarFooter>
       </Sidebar>
@@ -102,7 +103,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
         <footer className="px-4 py-2 text-center text-xs text-muted-foreground">
-          PROSCENDIA v1.0 - Desarrollado por Francisco Rivera Almazán para STUFFACTORY | © 2025
+          © 2025 Francisco Rivera Almazán. Todos los derechos reservados.
         </footer>
       </SidebarInset>
     </>

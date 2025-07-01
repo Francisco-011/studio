@@ -46,8 +46,7 @@ export default function AcercaDePage() {
             </h3>
             <p>
               <strong>PROSCENDIA v1.0</strong><br />
-              © 2025 Francisco Rivera Almazán. Todos los derechos reservados.<br />
-              Desarrollado para uso interno de STUFFACTORY.
+              Todos los derechos reservados © 2025, Francisco Rivera Almazán. Queda prohibida la reproducción, distribución o modificación de este software, total o parcial, sin el consentimiento explícito por escrito de Francisco Rivera Almazán.
             </p>
           </div>
         </CardContent>
