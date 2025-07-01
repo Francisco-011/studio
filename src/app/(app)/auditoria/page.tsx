@@ -70,6 +70,7 @@ import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/S
 import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/contexts/ActivityLogContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -85,7 +86,7 @@ type FindingType = typeof findingTypes[number];
 
 const auditStatuses = ["En Progreso", "Completada", "Cancelada"] as const;
 type AuditStatus = typeof auditStatuses[number];
-const auditTypes = ["proceso", "puesto", "sistema"] as const;
+const auditTypes = ["proceso", "puesto", "sistema", "politica"] as const;
 
 const auditFindingSchema = z.object({
   type: z.enum(findingTypes, { errorMap: () => ({ message: "Seleccione un tipo válido."})}),
@@ -109,7 +110,7 @@ interface AuditFinding extends AuditFindingFormData {
 
 export interface Audit {
   id: string;
-  auditType: 'proceso' | 'puesto' | 'sistema';
+  auditType: 'proceso' | 'puesto' | 'sistema' | 'politica';
   targetId: string;
   targetName: string;
   processIdsToAudit?: string[];
@@ -164,6 +165,7 @@ export default function AuditoriaPage() {
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
   const { procesos: allProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos: allProcedimientos, isLoading: isLoadingProcedimientos } = useProcedimientos();
+  const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
 
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
   const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
@@ -171,10 +173,10 @@ export default function AuditoriaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartAuditDialogOpen, setIsStartAuditDialogOpen] = useState(false);
   
-  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | 'sistema' | ''>('');
+  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | 'sistema' | 'politica' | ''>('');
   const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
   const [newAuditProcessIds, setNewAuditProcessIds] = useState<string[]>([]);
-  const [newAuditorName, setNewAuditorName] = useState<string>('Auditor Principal');
+  const [newAuditorName, setNewAuditorName] = useState('Auditor Principal');
 
   const [isFindingDialogOpen, setIsFindingDialogOpen] = useState(false);
   const [editingFinding, setEditingFinding] = useState<AuditFinding | null>(null);
@@ -189,7 +191,7 @@ export default function AuditoriaPage() {
   const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
-  const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | 'proceso' | 'puesto' | 'sistema'>('all');
+  const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | 'proceso' | 'puesto' | 'sistema' | 'politica'>('all');
   const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | AuditStatus>('all');
   const [pendingActionsFilter, setPendingActionsFilter] = useState<'all' | 'with_pending' | 'no_pending'>('all');
   const [auditSortConfig, setAuditSortConfig] = useState<SortConfig<SortableAuditKeys> | null>(null);
@@ -210,6 +212,7 @@ export default function AuditoriaPage() {
   const departamentosMap = useMemo(() => new Map(departamentos.map(d => [d.id, d])), [departamentos]);
   const areasMap = useMemo(() => new Map(areas.map(a => [a.id, a])), [areas]);
   const sistemasMap = useMemo(() => new Map(sistemas.map(s => [s.id, s])), [sistemas]);
+  const politicasMap = useMemo(() => new Map(allPoliticas.map(p => [p.id, p])), [allPoliticas]);
 
 
   const findingForm = useForm<AuditFindingFormData>({
@@ -256,7 +259,7 @@ export default function AuditoriaPage() {
   }, [newAuditType, newAuditTargetId]);
 
   const auditTargetDetails = useMemo(() => {
-    const nullDetails = { name: "No encontrado", process: null, puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null, procedimientos: [] };
+    const nullDetails = { name: "No encontrado", process: null, puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null, procedimientos: [], policy: null, linkedProcesses: [], relatedPolicies: [] };
 
     if (!currentAuditSession) return null;
 
@@ -285,10 +288,12 @@ export default function AuditoriaPage() {
       const puestoQueEjecuta = puestoNameToPuestoMap.get(process.puesto);
       const jefeInmediato = puestoQueEjecuta?.jefeInmediato ? puestosMap.get(puestoQueEjecuta.jefeInmediato) : null;
       const departamento = puestoQueEjecuta ? departamentosMap.get(puestoQueEjecuta.departamentoId || '') : null;
+      const relatedPolicies = (process.politicasAsociadas || []).map(link => politicasMap.get(link.policyId)).filter((p): p is Politica => !!p);
+
 
       return {
-        name: process.proceso, process, puesto: null, relatedProcesses: [], sistema: null, departamento, jefeInmediato,
-        procedimientos: procedimientosDelProceso
+        ...nullDetails, name: process.proceso, process, departamento, jefeInmediato,
+        procedimientos: procedimientosDelProceso, relatedPolicies,
       };
 
     } else if (currentAuditSession.auditType === 'puesto') {
@@ -320,24 +325,49 @@ export default function AuditoriaPage() {
             }))
         }));
       
+        const policyIds = new Set<string>();
+        relatedProcessesForPuesto.forEach(proc => {
+            (proc.politicasAsociadas || []).forEach(link => policyIds.add(link.policyId));
+        });
+        const relatedPolicies = Array.from(policyIds).map(id => politicasMap.get(id)).filter((p): p is Politica => !!p);
+
       return {
-        name: puesto.nombre, process: null, puesto, relatedProcesses: relatedProcessesData, sistema: null,
-        departamento, jefeInmediato, procedimientos: []
+        ...nullDetails, name: puesto.nombre, puesto, relatedProcesses: relatedProcessesData,
+        departamento, jefeInmediato, relatedPolicies
       };
-    } else { // Sistema
+    } else if (currentAuditSession.auditType === 'sistema') {
         const sistema = sistemasMap.get(currentAuditSession.targetId);
         if(!sistema) return nullDetails;
 
         const costosDelSistema = costosSistemas.filter(c => c.sistemaId === sistema.id);
-        const procesosQueUsanSistema = allProcesses.filter(p => p.sistemas?.includes(sistema.nombre));
+        const procesosQueUsanSistema = allProcesses.filter(p => (p.sistemasUtilizados || []).includes(sistema.nombre));
+
+        const policyIds = new Set<string>();
+        procesosQueUsanSistema.forEach(proc => {
+            (proc.politicasAsociadas || []).forEach(link => policyIds.add(link.policyId));
+        });
+        const relatedPolicies = Array.from(policyIds).map(id => politicasMap.get(id)).filter((p): p is Politica => !!p);
 
         return {
-            name: sistema.nombre, process: null, puesto: null, sistema: {...sistema, costos: costosDelSistema },
+            ...nullDetails,
+            name: sistema.nombre, sistema: {...sistema, costos: costosDelSistema },
             relatedProcesses: procesosQueUsanSistema.map(p => ({ process: p, procedimientos: []})),
-            departamento: null, jefeInmediato: null, procedimientos: []
+            relatedPolicies,
+        }
+    } else if (currentAuditSession.auditType === 'politica') {
+        const policy = politicasMap.get(currentAuditSession.targetId);
+        if(!policy) return nullDetails;
+
+        const linkedProcesses = (policy.procesosAsociadosIds || [])
+            .map(id => procesosMap.get(id))
+            .filter((p): p is CapturedProcess => !!p);
+
+        return {
+            ...nullDetails, name: policy.titulo, policy, linkedProcesses,
         }
     }
-  }, [currentAuditSession, activityDisplayFilter, procesosMap, procedimientosMap, actividadesMap, puestosMap, puestoNameToPuestoMap, departamentosMap, sistemasMap, allProcesses, costosSistemas]);
+    return null;
+  }, [currentAuditSession, activityDisplayFilter, procesosMap, procedimientosMap, actividadesMap, puestosMap, puestoNameToPuestoMap, departamentosMap, sistemasMap, politicasMap, allProcesses, costosSistemas]);
 
   useEffect(() => {
     if (isFindingDialogOpen) {
@@ -358,7 +388,9 @@ export default function AuditoriaPage() {
     const targetName = newAuditType === 'proceso'
       ? procesosMap.get(newAuditTargetId)?.proceso
       : newAuditType === 'puesto' ? puestosMap.get(newAuditTargetId)?.nombre
-      : sistemasMap.get(newAuditTargetId)?.nombre;
+      : newAuditType === 'sistema' ? sistemasMap.get(newAuditTargetId)?.nombre
+      : politicasMap.get(newAuditTargetId)?.titulo;
+
 
     if (!targetName) {
         toast({ title: "Error", description: "No se encontró el nombre del objetivo seleccionado." });
@@ -657,7 +689,7 @@ export default function AuditoriaPage() {
     return logSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos || isLoadingProcedimientos;
+  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos || isLoadingProcedimientos || isLoadingPoliticas;
 
   const auditAlerts = useMemo(() => {
     if (isLoadingAllData) return [];
@@ -996,6 +1028,60 @@ export default function AuditoriaPage() {
                                     </CardContent>
                                 </Card>
                             )}
+                            {auditTargetDetails?.policy && (
+                                <>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Detalles de la Política</CardTitle></CardHeader>
+                                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <DetailDisplay title="Título" value={auditTargetDetails.policy.titulo} />
+                                        <DetailDisplay title="Código" value={auditTargetDetails.policy.codigo} />
+                                        <DetailDisplay title="Estado" value={auditTargetDetails.policy.estado} />
+                                        <DetailDisplay title="Nivel de Cumplimiento" value={auditTargetDetails.policy.nivelCompliance} />
+                                        <DetailDisplay title="Área Responsable" value={auditTargetDetails.policy.areaResponsable} />
+                                        <DetailDisplay title="Departamento Responsable" value={auditTargetDetails.policy.departamentoResponsable} />
+                                        <div className="md:col-span-2">
+                                            <DetailDisplay title="Descripción" value={auditTargetDetails.policy.descripcion} isTextarea />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Procesos Vinculados</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {auditTargetDetails.linkedProcesses && auditTargetDetails.linkedProcesses.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {auditTargetDetails.linkedProcesses.map(proc => (
+                                                    <div key={proc.id} className="text-sm p-2 border rounded-md bg-background">
+                                                        <p className="font-semibold">{proc.proceso}</p>
+                                                        <p className="text-xs text-muted-foreground">{proc.area} / {proc.puesto}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">Esta política no está vinculada a ningún proceso.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                </>
+                            )}
+                             {auditTargetDetails && auditTargetDetails.relatedPolicies && (
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" />Políticas Aplicables</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {auditTargetDetails.relatedPolicies.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {auditTargetDetails.relatedPolicies.map((pol: Politica) => (
+                                            <div key={pol.id} className="text-sm p-2 border rounded-md bg-background">
+                                                <p className="font-semibold">{pol.codigo} - {pol.titulo}</p>
+                                                <p className="text-xs text-muted-foreground">{pol.descripcion}</p>
+                                            </div>
+                                            ))}
+                                        </div>
+                                        ) : (
+                                        <p className="text-sm text-muted-foreground italic">No hay políticas asociadas directamente al objetivo auditado.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                             )}
                         </CardContent>
                     </Card>
 
@@ -1157,12 +1243,13 @@ export default function AuditoriaPage() {
                         </div>
                         <div>
                             <Label htmlFor="auditTypeSelect">Tipo de Auditoría</Label>
-                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | 'sistema' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
+                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | 'sistema' | 'politica' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
                                 <SelectTrigger id="auditTypeSelect"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="proceso">Proceso</SelectItem>
                                     <SelectItem value="puesto">Puesto</SelectItem>
                                     <SelectItem value="sistema">Sistema</SelectItem>
+                                    <SelectItem value="politica">Política</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1176,9 +1263,11 @@ export default function AuditoriaPage() {
                                         allProcesses.map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)
                                     ) : newAuditType === 'puesto' ? (
                                         puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
-                                    ) : (
+                                    ) : newAuditType === 'sistema' ? (
                                         sistemas.map(s => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)
-                                    )}
+                                    ) : newAuditType === 'politica' ? (
+                                        allPoliticas.map(p => <SelectItem key={p.id} value={p.id}>{p.codigo} - {p.titulo}</SelectItem>)
+                                    ) : null}
                                 </SelectContent>
                             </Select>
                         </div>
