@@ -50,7 +50,6 @@ export const capturaFormSchema = z.object({
     z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
   ),
   monedaCosto: z.enum(monedaOptions as [string, ...string[]]).optional(),
-  sistemas: z.array(z.string()).optional().default([]),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
   procesosEntrada: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
@@ -84,7 +83,7 @@ export interface CambioHistorial {
   after: any;
 }
 
-export interface CapturedProcess extends CapturaFormData {
+export interface CapturedProcess extends Omit<CapturaFormData, 'sistemas'> {
   id: string;
   codigo: string;
   capturedAt: string;
@@ -92,7 +91,6 @@ export interface CapturedProcess extends CapturaFormData {
   deletedAt?: string;
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
-  politicasAsociadasIds?: string[];
   puestoId?: string;
   activityOrder?: string[];
 }

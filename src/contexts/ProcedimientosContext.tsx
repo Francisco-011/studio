@@ -7,7 +7,6 @@ import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
-import type { PoliticaVinculo } from './PoliticasContext';
 
 export interface Procedimiento {
   id: string;
@@ -16,7 +15,7 @@ export interface Procedimiento {
   descripcion?: string;
   procesoId: string;
   activityOrder: string[];
-  politicasAsociadas: PoliticaVinculo[];
+  sistemasUtilizados?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -50,7 +49,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
                 ...docData,
                 createdAt: (docData.createdAt as Timestamp)?.toMillis() || 0,
                 updatedAt: (docData.updatedAt as Timestamp)?.toMillis() || 0,
-                politicasAsociadas: Array.isArray(docData.politicasAsociadas) ? docData.politicasAsociadas : [],
+                sistemasUtilizados: Array.isArray(docData.sistemasUtilizados) ? docData.sistemasUtilizados : [],
             } as Procedimiento;
         });
         setProcedimientos(data);
@@ -70,7 +69,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
         const payload = {
             ...data,
             codigo,
-            politicasAsociadas: data.politicasAsociadas || [],
+            sistemasUtilizados: data.sistemasUtilizados || [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -82,7 +81,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
             ...data,
             id: docRef.id,
             codigo,
-            politicasAsociadas: data.politicasAsociadas || [],
+            sistemasUtilizados: data.sistemasUtilizados || [],
             createdAt: currentTime,
             updatedAt: currentTime,
         };

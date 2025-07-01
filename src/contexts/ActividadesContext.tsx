@@ -7,8 +7,6 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import type { PoliticaVinculo } from './PoliticasContext';
-
 
 export interface CambioHistorial {
   timestamp: string;
@@ -22,19 +20,18 @@ export interface Actividad {
   codigo: string;
   nombre: string;
   activa: boolean;
-  politicasAsociadas: PoliticaVinculo[];
   createdAt: number; 
   updatedAt?: number;
   deletedAt?: number; 
   descripcionBreve?: string;
-  sistemaUtilizado?: string;
   historialDeCambios?: CambioHistorial[];
+  procedimientoId?: string; // This is a helper property, not stored in DB
 }
 
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' | 'politicasAsociadas'> & { politicasAsociadas?: PoliticaVinculo[] }) => Promise<Actividad>;
+  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' >) => Promise<Actividad>;
   updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>) => Promise<void>;
   softDeleteActividad: (id: string) => Promise<void>;
   restoreActividad: (id: string) => Promise<void>;
@@ -67,7 +64,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
                 createdAt: docCreatedAt?.toMillis ? docCreatedAt.toMillis() : (typeof docCreatedAt === 'number' ? docCreatedAt : 0),
                 updatedAt: docUpdatedAt?.toMillis ? docUpdatedAt.toMillis() : (typeof docUpdatedAt === 'number' ? docUpdatedAt : undefined),
                 deletedAt: docDeletedAt?.toMillis ? docDeletedAt.toMillis() : (typeof docDeletedAt === 'number' ? docDeletedAt : undefined),
-                politicasAsociadas: Array.isArray(data.politicasAsociadas) ? data.politicasAsociadas : [],
             } as Actividad;
         });
         
@@ -83,7 +79,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' | 'politicasAsociadas'> & { politicasAsociadas?: PoliticaVinculo[] }): Promise<Actividad> => {
+  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' >): Promise<Actividad> => {
     try {
       const codigo = `AC-${Date.now().toString().slice(-6)}`;
       const payload: { [key: string]: any } = {
@@ -93,7 +89,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         updatedAt: serverTimestamp(),
         activa: data.activa === undefined ? true : data.activa,
         historialDeCambios: [],
-        politicasAsociadas: data.politicasAsociadas || [],
         deletedAt: null,
       };
 
@@ -107,7 +102,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
           ...data,
           id: docRef.id,
           codigo,
-          politicasAsociadas: data.politicasAsociadas || [],
           createdAt: currentTime,
           updatedAt: currentTime,
           historialDeCambios: [],
@@ -128,7 +122,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadas'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

@@ -40,7 +40,6 @@ import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 
@@ -62,7 +61,6 @@ const defaultFormValues: Partial<CapturaFormData> = {
   costoEstimado: undefined,
   costoIdeal: undefined,
   monedaCosto: undefined,
-  sistemas: [],
   informacionRecibe: "",
   procesosEntrada: [],
   informacionEntrega: "",
@@ -78,7 +76,6 @@ export default function CapturaPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { procesos: allProcesses, addProceso, isLoadingProcesos } = useProcesos();
 
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
@@ -123,21 +120,6 @@ export default function CapturaPage() {
     return puestosInArea;
   }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
 
-  const availableSistemasForForm = useMemo(() => {
-    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
-
-    const selectedAreaObj = areas.find(a => a.nombre === watchedAreaName);
-    const selectedDeptoObj = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === selectedAreaObj?.id);
-    const selectedPuestoObj = puestos.find(p => p.nombre === form.getValues('puesto') && (p.areaId === selectedAreaObj?.id));
-
-    return allConfiguredSistemas.filter(sistema => {
-      if (sistema.scope === "Empresa") return true;
-      if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
-      if (sistema.scope === "Departamento" && selectedDeptoObj && sistema.scopeId === selectedDeptoObj.id) return true;
-      if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
-      return false;
-    });
-  }, [allConfiguredSistemas, watchedAreaName, watchedDepartamentoName, form, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
   
   useEffect(() => {
     if (watchedProcessName && allProcesses.length > 0) {
@@ -480,19 +462,6 @@ export default function CapturaPage() {
                 <FormField control={form.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 80" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl></div><FormMessage /></FormItem>)} />
               </div>
 
-              <FormField
-                control={form.control}
-                name="sistemas"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Sistemas / Aplicaciones Utilizadas (Opcional)</FormLabel>
-                     {renderMultiSelectDropdown(field, "Sistemas Disponibles", "Seleccionar sistemas...", availableSistemasForForm, isLoadingSistemasCostos)}
-                    <FormDescription>Seleccione los sistemas o software involucrados. La lista se filtra según el contexto.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
               <div className="space-y-2">
                  <h3 className="text-lg font-medium">Flujo de Información Asociado</h3>
                  <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información.</p>
