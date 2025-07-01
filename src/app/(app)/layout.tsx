@@ -6,21 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { AppLayout } from '@/components/layout/app-layout';
-import { AreasProvider } from '@/contexts/AreasContext';
-import { DepartamentosProvider } from '@/contexts/DepartamentosContext';
-import { PuestosProvider } from '@/contexts/PuestosContext';
-import { ActividadesProvider } from '@/contexts/ActividadesContext';
-import { AccionesProvider } from '@/contexts/AccionesContext';
-import { SistemasCostosProvider } from '@/contexts/SistemasCostosContext';
-import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
-import { ProcesosProvider } from '@/contexts/ProcesosContext';
-import { ProcedimientosProvider } from '@/contexts/ProcedimientosContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { PermissionsProvider } from '@/contexts/PermissionsContext';
-import { PoliticasProvider } from '@/contexts/PoliticasContext';
-import { ExceptionsProvider } from '@/contexts/ExceptionsContext';
-
+import { AppProviders } from '@/contexts/AppProviders';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -46,30 +34,8 @@ export default function AuthenticatedAppLayout({
   }
 
   return (
-    <ActivityLogProvider>
-      <ExceptionsProvider>
-        <PermissionsProvider>
-          <AreasProvider>
-            <DepartamentosProvider>
-              <PuestosProvider>
-                <SistemasCostosProvider>
-                  <PoliticasProvider>
-                    <ActividadesProvider>
-                      <ProcesosProvider>
-                        <ProcedimientosProvider>
-                          <AccionesProvider>
-                            <AppLayout>{children}</AppLayout>
-                          </AccionesProvider>
-                        </ProcedimientosProvider>
-                      </ProcesosProvider>
-                    </ActividadesProvider>
-                  </PoliticasProvider>
-                </SistemasCostosProvider>
-              </PuestosProvider>
-            </DepartamentosProvider>
-          </AreasProvider>
-        </PermissionsProvider>
-      </ExceptionsProvider>
-    </ActivityLogProvider>
+    <AppProviders>
+      <AppLayout>{children}</AppLayout>
+    </AppProviders>
   );
 }
