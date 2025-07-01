@@ -69,7 +69,7 @@ export default function AyudaPage() {
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Panel Jerárquico</h5>
-                    <p className="mt-1"><strong>Función:</strong> Una vista interactiva que muestra la estructura completa **Proceso → Procedimiento → Actividad → Política**. Permite arrastrar actividades desde un "pool" para asignarlas a procedimientos y visualizar al instante qué políticas regulan cada parte del flujo.</p>
+                    <p className="mt-1"><strong>Función:</strong> Una vista interactiva que muestra la estructura completa <strong>Proceso → Procedimiento → Actividad → Política</strong>. Permite arrastrar actividades desde un "pool" para asignarlas a procedimientos y visualizar al instante qué políticas regulan cada parte del flujo.</p>
                     <p className="mt-1"><strong>Beneficios:</strong> Ofrece una visión clara de cómo se distribuye y regula el trabajo en la organización. Es la herramienta principal para construir y auditar flujos.</p>
                   </div>
                   <div className="pt-4 border-t border-dashed">
@@ -149,3 +149,5 @@ export default function AyudaPage() {
     </div>
   );
 }
+
+    
