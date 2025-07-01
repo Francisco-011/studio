@@ -1,8 +1,8 @@
-# SIAP: Escenario de Pruebas Funcionales (End-to-End)
+# PROSCENDIA: Escenario de Pruebas Funcionales (End-to-End)
 
 ## 1. Introducción
 
-Este documento proporciona un conjunto de casos de prueba para validar de manera integral todas las funcionalidades del sistema SIAP. El objetivo es asegurar que cada módulo funcione correctamente de forma individual y en conjunto antes de la puesta en producción.
+Este documento proporciona un conjunto de casos de prueba para validar de manera integral todas las funcionalidades del sistema PROSCENDIA. El objetivo es asegurar que cada módulo funcione correctamente de forma individual y en conjunto antes de la puesta en producción.
 
 ---
 

@@ -100,7 +100,7 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl">Crear una Cuenta en SIAP</CardTitle>
+          <CardTitle className="text-2xl">Crear una Cuenta en PROSCENDIA</CardTitle>
           <CardDescription>
             Ingrese sus datos para registrarse en el sistema.
           </CardDescription>

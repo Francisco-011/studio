@@ -1,9 +1,9 @@
-# Manual de Usuario SIAP
+# Manual de Usuario PROSCENDIA
 
-## 1. Introducción a SIAP
+## 1. Introducción a PROSCENDIA
 
-### ¿Qué es SIAP?
-SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral diseñada para ayudarte a mapear, analizar, optimizar y gobernar los procesos de negocio de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, SIAP te proporciona una visión completa y accionable de cómo opera tu empresa.
+### ¿Qué es PROSCENDIA?
+El nombre **PROSCENDIA** nace de la unión de "Process" (Proceso) y "Ascend" (Ascender), reflejando su misión principal: **elevar tus procesos de negocio**. Es una herramienta integral diseñada para ayudarte a mapear, analizar, optimizar y gobernar las operaciones de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, PROSCENDIA te proporciona una visión completa y accionable de cómo opera tu empresa.
 
 ### Objetivos del Sistema
 - **Centralizar la Información:** Crear un repositorio único y estandarizado de todos los procesos, procedimientos, actividades y políticas. Su beneficio es eliminar la dispersión de documentos y asegurar que todos consulten la misma versión de la verdad.
@@ -47,7 +47,7 @@ SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral dis
 **Beneficios:** Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas, sugiriendo mejoras accionables y validando la coherencia de la estructura organizacional.
 
 ### Consulta IA
-**Función:** Un asistente de chat conversacional que entiende la estructura de datos de SIAP. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.
+**Función:** Un asistente de chat conversacional que entiende la estructura de datos de PROSCENDIA. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.
 **Beneficios:** Democratiza el acceso a la información, permitiendo a cualquier usuario obtener respuestas rápidas sin necesidad de navegar por todas las pantallas.
 
 ### Acciones

@@ -14,10 +14,10 @@ export default function AyudaPage() {
         <CardHeader>
           <div className="flex items-center gap-2 mb-1">
             <LifeBuoy className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-headline">Manual de Usuario SIAP</CardTitle>
+            <CardTitle className="text-2xl font-headline">Manual de Usuario PROSCENDIA</CardTitle>
           </div>
           <CardDescription>
-            Una guía completa para entender y operar todas las funcionalidades del Sistema Integral de Análisis de Procesos.
+            Una guía completa para entender y operar todas las funcionalidades de PROSCENDIA.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -25,10 +25,10 @@ export default function AyudaPage() {
             <Accordion type="single" collapsible className="w-full pr-4" defaultValue="item-intro">
               
               <AccordionItem value="item-intro">
-                <AccordionTrigger className="text-lg font-semibold">1. Introducción a SIAP</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold">1. Introducción a PROSCENDIA</AccordionTrigger>
                 <AccordionContent className="space-y-3 text-sm">
-                  <h4 className="font-semibold text-base">¿Qué es SIAP?</h4>
-                  <p>SIAP (Sistema Integral de Análisis de Procesos) es una herramienta diseñada para ayudarte a mapear, analizar, optimizar y gobernar los procesos de negocio de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, SIAP te proporciona una visión completa y accionable de cómo opera tu empresa.</p>
+                  <h4 className="font-semibold text-base">¿Qué es PROSCENDIA?</h4>
+                  <p>El nombre **PROSCENDIA** nace de la unión de "Process" (Proceso) y "Ascend" (Ascender), reflejando su misión principal: **elevar tus procesos de negocio**. Es una herramienta integral diseñada para ayudarte a mapear, analizar, optimizar y gobernar las operaciones de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, PROSCENDIA te proporciona una visión completa y accionable de cómo opera tu empresa.</p>
                   <h4 className="font-semibold text-base">Objetivos del Sistema</h4>
                   <ul className="list-disc pl-5 space-y-2">
                     <li><strong>Centralizar la Información:</strong> Crear un repositorio único y estandarizado de todos los procesos, procedimientos, actividades y políticas. Su beneficio es eliminar la dispersión de documentos y asegurar que todos consulten la misma versión de la verdad.</li>
@@ -82,7 +82,7 @@ export default function AyudaPage() {
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Consulta IA</h5>
-                    <p className="mt-1"><strong>Función:</strong> Un asistente de chat conversacional que entiende la estructura de datos de SIAP. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.</p>
+                    <p className="mt-1"><strong>Función:</strong> Un asistente de chat conversacional que entiende la estructura de datos de PROSCENDIA. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.</p>
                     <p className="mt-1"><strong>Beneficios:</strong> Democratiza el acceso a la información, permitiendo a cualquier usuario obtener respuestas rápidas sin necesidad de navegar por todas las pantallas.</p>
                   </div>
                   <div className="pt-4 border-t border-dashed">
@@ -150,7 +150,7 @@ export default function AyudaPage() {
            <Separator className="my-4" />
            <div className="text-center">
              <Link href="/acerca-de" className="text-sm font-medium text-primary hover:underline">
-                Acerca de SIAP
+                Acerca de PROSCENDIA
              </Link>
            </div>
         </CardContent>

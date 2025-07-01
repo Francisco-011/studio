@@ -122,7 +122,7 @@ export default function ConsultaIaPage() {
             <CardTitle className="text-2xl font-headline">Consulta con Asistente IA</CardTitle>
           </div>
           <CardDescription>
-            Haga preguntas en lenguaje natural sobre los procesos, procedimientos, actividades y políticas registrados en SIAP.
+            Haga preguntas en lenguaje natural sobre los procesos, procedimientos, actividades y políticas registrados en PROSCENDIA.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col p-4">

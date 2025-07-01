@@ -67,9 +67,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex w-full items-center">
             <SidebarTrigger className="md:hidden mr-2" />
             <div className="flex flex-col flex-grow items-center">
-              <h1 className="text-3xl font-bold text-primary">SIAP</h1>
+              <h1 className="text-3xl font-bold text-primary">PROSCENDIA</h1>
               <p className="text-sm text-primary">
-                Sistema Integral de Análisis de Procesos
+                Eleva tus Procesos
               </p>
             </div>
              <DropdownMenu>
@@ -102,7 +102,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
         <footer className="px-4 py-2 text-center text-xs text-muted-foreground">
-          SIAP v1.0 - Desarrollado por Francisco Rivera Almazán para STUFFACTORY | © 2025
+          PROSCENDIA v1.0 - Desarrollado por Francisco Rivera Almazán para STUFFACTORY | © 2025
         </footer>
       </SidebarInset>
     </>

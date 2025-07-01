@@ -6,8 +6,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 export const metadata: Metadata = {
-  title: 'SIAP - STUFFACTORY',
-  description: 'Sistema Integral de Análisis de Procesos (SIAP)',
+  title: 'PROSCENDIA - STUFFACTORY',
+  description: 'PROSCENDIA: Eleva tus procesos de negocio.',
 };
 
 export default function RootLayout({

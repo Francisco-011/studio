@@ -55,7 +55,7 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, data.email, data.password);
       toast({
         title: 'Inicio de sesión exitoso',
-        description: 'Bienvenido de vuelta a SIAP.',
+        description: 'Bienvenido de vuelta a PROSCENDIA.',
       });
       router.push('/dashboard');
     } catch (error: any) {
@@ -74,7 +74,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl">Iniciar Sesión en SIAP</CardTitle>
+          <CardTitle className="text-2xl">Iniciar Sesión en PROSCENDIA</CardTitle>
           <CardDescription>
             Ingrese su correo y contraseña para acceder al sistema.
           </CardDescription>

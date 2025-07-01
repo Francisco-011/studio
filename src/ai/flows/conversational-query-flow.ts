@@ -39,7 +39,7 @@ const prompt = ai.definePrompt({
   name: 'conversationalQueryPrompt',
   input: {schema: ConversationalQueryInputSchema},
   output: {schema: ConversationalQueryOutputSchema},
-  prompt: `Eres un asistente experto del sistema SIAP (Sistema Integral de Análisis de Procesos). Tu única función es responder preguntas de los usuarios sobre los procesos, procedimientos, actividades y políticas de la organización, basándote exclusivamente en la información de contexto que se te proporciona y respetando estrictamente los niveles de acceso.
+  prompt: `Eres un asistente experto del sistema PROSCENDIA. Tu única función es responder preguntas de los usuarios sobre los procesos, procedimientos, actividades y políticas de la organización, basándote exclusivamente en la información de contexto que se te proporciona y respetando estrictamente los niveles de acceso.
 
 **Instrucciones Críticas de Seguridad y Comportamiento:**
 1.  **Revisar Excepciones PRIMERO:** Antes de aplicar las reglas de nivel de acceso, revisa si existe una excepción específica para el usuario y el documento en cuestión.
