@@ -148,7 +148,7 @@ export default function DefinirProcedimientosPage() {
       }
 
       await updateProceso(parentProcess.id, { procedimientoOrder: finalProcedimientoIds, updatedAt: Date.now() });
-      toast({ title: "Éxito", description: `Procedimientos guardados para '${parentProcess.proceso}'.` });
+      toast({ title: "Éxito", description: `Procedimientos guardados para '${parentProcess.proceso}'. El siguiente paso es asignar actividades desde el Panel Jerárquico.` });
       router.push('/procesos-y-flujos-registrados');
     } catch (e) {
       console.error("Error saving:", e);
@@ -167,7 +167,7 @@ export default function DefinirProcedimientosPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2 mb-1"><ListOrdered className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Definir Procedimientos para: {parentProcess.proceso}</CardTitle></div>
-          <CardDescription>Agregue, ordene y detalle los procedimientos que componen este proceso. Las actividades de cada procedimiento se definen en el módulo de "Actividades".</CardDescription>
+          <CardDescription>Agregue, ordene y detalle los procedimientos que componen este proceso. Las actividades se asignan a cada procedimiento desde el "Panel Jerárquico" para construir el flujo de trabajo completo.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex justify-end"><Button onClick={openAddDialog}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Procedimiento</Button></div>

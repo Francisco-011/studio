@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -10,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageCircleQuestion, Send, Sparkles, Loader2, User } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
@@ -28,6 +28,7 @@ export default function ConsultaIaPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   const { procesos } = useProcesos();
   const { procedimientos } = useProcedimientos();
@@ -48,6 +49,11 @@ export default function ConsultaIaPage() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (!user) {
+      toast({ title: "Error de autenticación", description: "No se pudo identificar al usuario.", variant: "destructive"});
+      return;
+    }
+
     const userMessage: Message = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
@@ -56,21 +62,20 @@ export default function ConsultaIaPage() {
     try {
       // Prepare context data
       const processContext = procesos
-        .filter(p => !p.deletedAt && p.activo)
-        .map(p => `ID Proceso: ${p.id}, Código: ${p.codigo}, Proceso: ${p.proceso}, Descripción: ${p.descripcion}, Área: ${p.area}, Puesto: ${p.puesto}, Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]`)
+        .filter(p => !p.deletedAt)
+        .map(p => `ID Proceso: ${p.id}, Código: ${p.codigo}, Proceso: ${p.proceso}, Descripción: ${p.descripcion}, Clasificación: ${p.clasificacion}, Área: ${p.area}, Puesto: ${p.puesto}, Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
         .join('\n');
         
       const procedimientoContext = procedimientos
-        .map(p => `ID Procedimiento: ${p.id}, Código: ${p.codigo}, Procedimiento: ${p.nombre}, Pertenece a Proceso (ID): ${p.procesoId}, Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]`)
+        .map(p => `ID Procedimiento: ${p.id}, Código: ${p.codigo}, Procedimiento: ${p.nombre}, Pertenece a Proceso (ID): ${p.procesoId}, Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
         .join('\n');
 
       const activityContext = actividades
-        .filter(a => a.activa)
-        .map(a => `ID Actividad: ${a.id}, Código: ${a.codigo}, Actividad: ${a.nombre}, Descripción: ${a.descripcionBreve || 'N/A'}, Pertenece a Procedimiento (ID): ${a.procedimientoId}, Políticas Vinculadas (IDs): [${a.politicasAsociadasIds?.join(', ')}]`)
+        .map(a => `ID Actividad: ${a.id}, Código: ${a.codigo}, Actividad: ${a.nombre}, Descripción: ${a.descripcionBreve || 'N/A'}, Pertenece a Procedimiento (ID): ${a.procedimientoId}, Políticas Vinculadas (IDs): [${a.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
         .join('\n');
         
       const politicaContext = politicas
-          .map(p => `ID Política: ${p.id}, Código: ${p.codigo}, Política: ${p.titulo}, Descripción: ${p.descripcion}`)
+          .map(p => `ID Política: ${p.id}, Código: ${p.codigo}, Política: ${p.titulo}, Descripción: ${p.descripcion}, Clasificación: ${p.clasificacion}`)
           .join('\n');
           
       const fullContext = `--- INICIO CONTEXTO PROCESOS ---\n${processContext}\n--- FIN CONTEXTO PROCESOS ---\n\n--- INICIO CONTEXTO PROCEDIMIENTOS ---\n${procedimientoContext}\n--- FIN CONTEXTO PROCEDIMIENTOS ---\n\n--- INICIO CONTEXTO ACTIVIDADES ---\n${activityContext}\n--- FIN CONTEXTO ACTIVIDADES ---\n\n--- INICIO CONTEXTO POLÍTICAS ---\n${politicaContext}\n--- FIN CONTEXTO POLÍTICAS ---`;
@@ -78,6 +83,8 @@ export default function ConsultaIaPage() {
       const response = await queryConversationalAgent({
         question: input,
         contextData: fullContext,
+        userRole: user.rol,
+        userAccessLevel: user.nivelAcceso,
       });
 
       const assistantMessage: Message = { role: 'assistant', content: response.answer };

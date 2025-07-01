@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
     { href: '/actividades', label: 'Actividades', icon: ListChecks, permission: 'actividades:view' },
     { href: '/politicas', label: 'Políticas', icon: FileText, permission: 'politicas:view' },
     { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree, matchPrefix: true, permission: 'panelJerarquico:view' },
-    { href: '/mejoras', label: 'Análisis IA', icon: TrendingUp, permission: 'analisis_ia:view' },
+    { href: '/mejoras', label: 'Análisis de Mejoras', icon: TrendingUp, permission: 'analisis_ia:view' },
     { href: '/consulta-ia', label: 'Consulta IA', icon: MessageCircleQuestion, permission: 'consulta_ia:view' },
     { href: '/acciones', label: 'Acciones', icon: Target, permission: 'acciones:view' },
     { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck, permission: 'auditoria:view_history' },
