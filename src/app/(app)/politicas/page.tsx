@@ -8,13 +8,14 @@ import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { usePoliticas, type Politica, type NivelCompliance, nivelesCompliance, type PoliticaCreationData } from '@/contexts/PoliticasContext';
+import { usePoliticas, type Politica, type NivelCompliance, nivelesCompliance, type PoliticaCreationData, politicaEstados, type PoliticaEstado } from '@/contexts/PoliticasContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { clasificacionOptions } from '@/contexts/ProcesosContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,10 +29,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, ChevronDown, History } from "lucide-react";
+import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, ChevronDown, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion } from "lucide-react";
+import { cn } from '@/lib/utils';
+
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -59,12 +62,13 @@ const politicaFormSchema = z.object({
 type PoliticaFormData = z.infer<typeof politicaFormSchema>;
 
 export default function PoliticasPage() {
-  const { politicas, addPolitica, updatePolitica, deletePolitica, isLoadingPoliticas } = usePoliticas();
+  const { politicas, addPolitica, updatePolitica, deletePolitica, updatePoliticaStatus, isLoadingPoliticas } = usePoliticas();
   const { procesos, isLoadingProcesos } = useProcesos();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   const { actividades, isLoadingActividades } = useActividades();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { hasPermission } = usePermissions();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPolitica, setEditingPolitica] = useState<Politica | null>(null);
@@ -114,7 +118,7 @@ export default function PoliticasPage() {
   }, [editingPolitica, isDialogOpen, form]);
 
   async function handleSubmit(data: PoliticaFormData) {
-    const dataToSave: PoliticaCreationData = {
+    const dataToSave: Omit<PoliticaCreationData, 'estado'> = {
       ...data,
       departamentoResponsable: data.departamentoResponsable === NO_DEPARTAMENTO_SELECTED ? undefined : data.departamentoResponsable,
       fechaVigencia: data.fechaVigencia.toISOString(),
@@ -130,6 +134,10 @@ export default function PoliticasPage() {
   }
 
   function handleEdit(politica: Politica) {
+    if (politica.estado === 'Aprobada' || politica.estado === 'Archivada') {
+      toast({ title: 'Acción no permitida', description: 'Para editar, primero regrese la política al estado de "Borrador".', variant: 'default'});
+      return;
+    }
     setEditingPolitica(politica);
     setIsDialogOpen(true);
   }
@@ -147,7 +155,6 @@ export default function PoliticasPage() {
   async function executeDelete() {
     if (!politicaToDelete) return;
     await deletePolitica(politicaToDelete.id);
-    toast({ title: 'Política Eliminada', description: `La política "${politicaToDelete.titulo}" ha sido eliminada.`, variant: 'destructive' });
     setIsConfirmDeleteDialogOpen(false);
     setPoliticaToDelete(null);
   }
@@ -176,7 +183,7 @@ export default function PoliticasPage() {
             <FileText className="h-6 w-6 text-primary" />
             <CardTitle className="text-2xl font-headline">Gestión de Políticas</CardTitle>
           </div>
-          <CardDescription>Cree, edite y gestione las políticas que rigen los procesos y actividades de la organización.</CardDescription>
+          <CardDescription>Cree, edite y gestione el ciclo de vida de las políticas que rigen la organización.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex justify-between items-center">
@@ -235,8 +242,8 @@ export default function PoliticasPage() {
                   <TableRow>
                     <TableHead>Código</TableHead>
                     <TableHead>Título</TableHead>
-                    <TableHead>Clasificación</TableHead>
-                    <TableHead>Cumplimiento</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Nivel Cumplimiento</TableHead>
                     <TableHead>Próx. Revisión</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -246,13 +253,33 @@ export default function PoliticasPage() {
                     <TableRow key={politica.id}>
                       <TableCell className="font-mono text-xs">{politica.codigo}</TableCell>
                       <TableCell className="font-medium">{politica.titulo}</TableCell>
-                      <TableCell><Badge variant={politica.clasificacion === 'Público' ? 'secondary' : (politica.clasificacion === 'Confidencial' ? 'destructive' : 'outline')}>{politica.clasificacion}</Badge></TableCell>
+                       <TableCell>
+                        <Badge variant={
+                           politica.estado === 'Aprobada' ? 'default' :
+                           politica.estado === 'En Revisión' ? 'secondary' :
+                           politica.estado === 'Archivada' ? 'destructive' : 'outline'
+                        }>{politica.estado}</Badge>
+                      </TableCell>
                       <TableCell><Badge variant="outline" className={politica.nivelCompliance === 'Obligatorio' ? 'border-amber-500 text-amber-600' : ''}>{politica.nivelCompliance}</Badge></TableCell>
-                      <TableCell>{format(parseISO(politica.fechaRevision), 'dd MMM, yyyy', { locale: es })}</TableCell>
+                      <TableCell>{politica.fechaRevision ? format(parseISO(politica.fechaRevision), 'dd MMM, yyyy', { locale: es }) : 'N/A'}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleViewHistory(politica)} disabled={!politica.historialDeCambios || politica.historialDeCambios.length === 0}><History className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(politica)}><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDelete(politica)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end">
+                             <DropdownMenuItem onClick={() => handleEdit(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Archivada'}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => promptDelete(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Archivada'} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
+                             <DropdownMenuSeparator />
+                              {politica.estado === 'Borrador' && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'En Revisión')}><Send className="mr-2 h-4 w-4" /> Enviar a Revisión</DropdownMenuItem>}
+                              {politica.estado === 'En Revisión' && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Aprobada')}><CheckCheck className="mr-2 h-4 w-4" /> Aprobar</DropdownMenuItem>}
+                              {politica.estado === 'En Revisión' && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Borrador')}><ShieldQuestion className="mr-2 h-4 w-4" /> Regresar a Borrador</DropdownMenuItem>}
+                              {politica.estado === 'Aprobada' && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Archivada')}><Archive className="mr-2 h-4 w-4" /> Archivar</DropdownMenuItem>}
+                              {(politica.estado === 'Aprobada' || politica.estado === 'Archivada') && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Borrador')}><ShieldQuestion className="mr-2 h-4 w-4" /> Crear Nueva Versión</DropdownMenuItem>}
+                              <DropdownMenuSeparator />
+                             <DropdownMenuItem onClick={() => handleViewHistory(politica)} disabled={!politica.historialDeCambios || politica.historialDeCambios.length === 0}><History className="mr-2 h-4 w-4" /> Ver Historial</DropdownMenuItem>
+                           </DropdownMenuContent>
+                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}

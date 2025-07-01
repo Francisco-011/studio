@@ -18,7 +18,7 @@ const AnalyzeProcessesInputSchema = z.object({
   allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y el procedimiento al que están asociadas.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
   existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
-  policyData: z.string().optional().describe('Una lista de todas las políticas, incluyendo su título, descripción, fecha de revisión y los procesos/procedimientos/actividades a los que están vinculadas.'),
+  policyData: z.string().optional().describe('Una lista de todas las políticas, incluyendo su título, descripción, estado (ej. "Aprobada") y fecha de revisión.'),
 });
 export type AnalyzeProcessesInput = z.infer<typeof AnalyzeProcessesInputSchema>;
 
@@ -119,8 +119,8 @@ Tu análisis debe centrarse en CUATRO áreas clave y debes devolver la salida en
     - **Procesos Duplicados (duplicateProcesses)**: Encuentra procesos que son funcionalmente idénticos aunque tengan nombres diferentes.
     - **Actividades Duplicadas (duplicateActivities)**: Encuentra actividades funcionalmente idénticas, considerando el contexto. Si el contexto (área, puesto, proceso) es diferente, NO lo reportes como duplicado a menos que el resultado sea idéntico.
 
-3.  **Análisis de Gaps de Políticas (Policy Gap Analysis)**: Utilizando la información de políticas proporcionada, identifica las siguientes áreas de riesgo y oportunidad.
-    - **Procesos Críticos sin Políticas (criticalProcessesWithoutPolicies)**: Identifica procesos que, por su naturaleza (ej: manejan finanzas, datos sensibles, seguridad), deberían tener políticas asociadas pero no las tienen. Un proceso se considera crítico si su nombre o descripción sugiere alta responsabilidad o riesgo.
+3.  **Análisis de Gaps de Políticas (Policy Gap Analysis)**: Utilizando la información de políticas proporcionada, identifica las siguientes áreas de riesgo y oportunidad. **IMPORTANTE: Al buscar gaps de cobertura (ej. procesos críticos sin políticas), considera que un proceso solo está 'cubierto' si está vinculado a una política en estado 'Aprobada'.**
+    - **Procesos Críticos sin Políticas (criticalProcessesWithoutPolicies)**: Identifica procesos que, por su naturaleza (ej: manejan finanzas, datos sensibles, seguridad), deberían tener políticas asociadas pero no las tienen.
     - **Políticas Obsoletas (obsoletePolicies)**: Revisa las fechas de revisión de las políticas. Identifica y lista aquellas cuya fecha de revisión ya ha pasado.
     - **Sugerencias de Duplicidad de Políticas (duplicatePolicySuggestions)**: Compara los títulos y descripciones de las políticas. Si encuentras dos o más que cubren el mismo tema de forma muy similar, sugiérelas para consolidación.
 

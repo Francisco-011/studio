@@ -44,13 +44,14 @@ export default function PoliticasDashboardPage() {
     const politicasAprobadas = politicas.filter(p => p.estado === 'Aprobada');
 
     const politicasPorVencer = politicasAprobadas.filter(p => {
+      if (!p.fechaRevision) return false;
       const fechaRevision = parseISO(p.fechaRevision);
       return isValid(fechaRevision) && fechaRevision <= ninetyDaysFromNow;
     }).length;
 
     const politicasAprobadasIds = new Set(politicasAprobadas.map(p => p.id));
     const procesosConPoliticasAprobadas = procesos.filter(p => 
-        p.politicasAsociadasIds && p.politicasAsociadasIds.some(id => politicasAprobadasIds.has(id))
+        p.politicasAsociadas && p.politicasAsociadas.some(link => politicasAprobadasIds.has(link.policyId))
     ).length;
     
     const coberturaProcesos = procesos.length > 0 ? (procesosConPoliticasAprobadas / procesos.length) * 100 : 0;
@@ -107,6 +108,7 @@ export default function PoliticasDashboardPage() {
     return politicas
       .filter(p => p.estado === 'Aprobada')
       .filter(p => {
+        if (!p.fechaRevision) return false;
         const fechaRevision = parseISO(p.fechaRevision);
         return isValid(fechaRevision) && fechaRevision <= ninetyDaysFromNow;
       }).sort((a,b) => parseISO(a.fechaRevision).getTime() - parseISO(b.fechaRevision).getTime());
