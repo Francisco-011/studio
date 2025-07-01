@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,6 +22,9 @@ import { usePoliticas } from '@/contexts/PoliticasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { Label } from '@/components/ui/label';
 
 function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda | string = "USD"): string {
   if (amount === undefined || isNaN(amount)) return "N/A";
@@ -87,7 +90,8 @@ export default function MejorasPage() {
   const [jobProfileError, setJobProfileError] = useState<string | null>(null);
   const [selectedPuestoId, setSelectedPuestoId] = useState<string>('');
 
-
+  const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
@@ -101,6 +105,12 @@ export default function MejorasPage() {
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
   const [selectedSystemIds, setSelectedSystemIds] = useState<string[]>([]);
+  const [selectedProcedimientoIds, setSelectedProcedimientoIds] = useState<string[]>([]);
+  const [selectedPuestoAnalysisIds, setSelectedPuestoAnalysisIds] = useState<string[]>([]);
+  
+  const [dialogAreaFilter, setDialogAreaFilter] = useState('all');
+  const [dialogDeptoFilter, setDialogDeptoFilter] = useState('all');
+  const [dialogPuestoFilter, setDialogPuestoFilter] = useState('all');
 
 
   const runInefficiencyAnalysis = async () => {
@@ -109,7 +119,7 @@ export default function MejorasPage() {
     setInefficiencyAnalysisResult(null);
     setIsSelectionDialogOpen(false);
 
-    if (selectedProcessIds.length === 0 && selectedActivityIds.length === 0 && selectedSystemIds.length === 0) {
+    if (selectedProcessIds.length === 0 && selectedActivityIds.length === 0 && selectedSystemIds.length === 0 && selectedProcedimientoIds.length === 0 && selectedPuestoAnalysisIds.length === 0) {
         toast({
             title: "Nada seleccionado",
             description: "Por favor, seleccione al menos un elemento para analizar.",
@@ -123,6 +133,8 @@ export default function MejorasPage() {
       const activeProcessesForAnalysis = procesos.filter(p => selectedProcessIds.includes(p.id));
       const activitiesForAnalysis = actividades.filter(a => selectedActivityIds.includes(a.id));
       const systemsForAnalysis = sistemas.filter(s => selectedSystemIds.includes(s.id));
+      const procedimientosForAnalysis = procedimientos.filter(p => selectedProcedimientoIds.includes(p.id));
+      const puestosForAnalysis = puestos.filter(p => selectedPuestoAnalysisIds.includes(p.id));
 
       const relevantActions = allAcciones.filter(a => 
         ['Pendiente', 'En Progreso', 'En Revisión'].includes(a.estado)
@@ -134,25 +146,31 @@ export default function MejorasPage() {
       const processDescriptionsText = activeProcessesForAnalysis
         .map(p => {
           const deptoInfo = p.departamento ? `Departamento: ${p.departamento}\n` : '';
-          const associatedActivitiesText = p.activityOrder?.map(actId => {
-            const act = actividades.find(a => a.id === actId);
-            if (!act) return null;
-            return `    - Actividad (ID: ${act.id}): ${act.nombre}\n`;
-          }).filter(Boolean).join('');
-          
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
-                 `Área: ${p.area}\n` +
-                 deptoInfo +
-                 `Puesto Principal: ${p.puesto}\n` +
+                 `Área: ${p.area}\n` + deptoInfo + `Puesto Principal: ${p.puesto}\n` +
                  `Descripción: ${p.descripcion}\n` +
-                 `Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(pol => pol.policyId).join(', ')}]\n` +
-                 (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
+                 `Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(pol => pol.policyId).join(', ')}]\n`;
         })
         .join('\n\n---\n\n');
 
       const systemUsageText = `Sistemas informáticos utilizados en los procesos seleccionados: ${
         systemsForAnalysis.length > 0 ? systemsForAnalysis.map(s => s.nombre).join(', ') : 'No se seleccionaron sistemas.'
       }`;
+      
+      const allProcedimientosText = procedimientosForAnalysis.map(proc => {
+        const procParent = procesos.find(p => p.id === proc.procesoId);
+        return `Procedimiento (ID: ${proc.id}): "${proc.nombre}"\n` +
+               `  Descripción: ${proc.descripcion || 'No disponible'}\n` +
+               `  Asociado al Proceso: "${procParent?.proceso || 'N/A'}" (ID: ${proc.procesoId})`;
+      }).join('\n\n---\n\n');
+
+      const allPuestosText = puestosForAnalysis.map(p => {
+        const areaName = areas.find(a => a.id === p.areaId)?.nombre || 'N/A';
+        const deptoName = departamentos.find(d => d.id === p.departamentoId)?.nombre;
+        return `Puesto (ID: ${p.id}): "${p.nombre}"\n` +
+               `  Área: ${areaName}\n` +
+               (deptoName ? `  Departamento: ${deptoName}\n` : '');
+      }).join('\n\n---\n\n');
 
       const allActivitiesText = activitiesForAnalysis
         .map(act => {
@@ -192,6 +210,8 @@ export default function MejorasPage() {
         systemCostInformation: systemCostInformationText || undefined,
         policyData: policyDataText || undefined,
         existingActions: existingActionsText,
+        allProcedimientos: allProcedimientosText || undefined,
+        allPuestos: allPuestosText || undefined,
       });
 
       setInefficiencyAnalysisResult(result);
@@ -373,6 +393,34 @@ export default function MejorasPage() {
     }
   };
 
+  const dialogAvailableDeptos = useMemo(() => {
+    if (dialogAreaFilter === 'all') return [];
+    const area = areas.find(a => a.nombre === dialogAreaFilter);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [dialogAreaFilter, areas, departamentos]);
+
+  const dialogAvailablePuestos = useMemo(() => {
+    if (dialogAreaFilter === 'all') return puestos;
+    const area = areas.find(a => a.nombre === dialogAreaFilter);
+    if (!area) return [];
+    const puestosInArea = puestos.filter(p => p.areaId === area.id);
+    if (dialogDeptoFilter !== 'all') {
+      const depto = departamentos.find(d => d.id === dialogDeptoFilter);
+      return depto ? puestosInArea.filter(p => p.departamentoId === depto.id) : [];
+    }
+    return puestosInArea;
+  }, [dialogAreaFilter, dialogDeptoFilter, areas, departamentos, puestos]);
+
+  const filteredDialogItems = (items: any[], nameField: string) => {
+    return items.filter(item => {
+      const areaMatch = dialogAreaFilter === 'all' || item.area === dialogAreaFilter || puestos.find(p => p.id === item.puestoId)?.areaId === areas.find(a => a.nombre === dialogAreaFilter)?.id;
+      const deptoMatch = dialogDeptoFilter === 'all' || item.departamentoId === dialogDeptoFilter;
+      const puestoMatch = dialogPuestoFilter === 'all' || item.puestoId === dialogPuestoFilter;
+      return areaMatch && deptoMatch && puestoMatch;
+    });
+  };
+  
+  const totalSelected = selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length + selectedProcedimientoIds.length + selectedPuestoAnalysisIds.length;
 
   return (
     <div className="container mx-auto py-8">
@@ -513,26 +561,26 @@ export default function MejorasPage() {
       </Card>
       
       <Dialog open={isSelectionDialogOpen} onOpenChange={setIsSelectionDialogOpen}>
-          <DialogContent className="sm:max-w-3xl">
-              <DialogHeader><DialogTitle>Seleccionar Elementos para Análisis de Ineficiencias</DialogTitle><DialogDescription>Elija qué procesos, actividades y sistemas desea incluir en el análisis.</DialogDescription></DialogHeader>
+          <DialogContent className="sm:max-w-4xl">
+              <DialogHeader><DialogTitle>Seleccionar Elementos para Análisis de Ineficiencias</DialogTitle><DialogDescription>Elija qué elementos desea incluir en el análisis. Use los filtros para acotar su búsqueda.</DialogDescription></DialogHeader>
               <div className="py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 p-3 border rounded-lg bg-muted/20">
+                      <div><Label>Área</Label><Select value={dialogAreaFilter} onValueChange={v => { setDialogAreaFilter(v); setDialogDeptoFilter('all'); setDialogPuestoFilter('all'); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select></div>
+                      <div><Label>Departamento</Label><Select value={dialogDeptoFilter} onValueChange={v => {setDialogDeptoFilter(v); setDialogPuestoFilter('all');}} disabled={dialogAreaFilter === 'all'}><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos</SelectItem>{dialogAvailableDeptos.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select></div>
+                      <div><Label>Puesto</Label><Select value={dialogPuestoFilter} onValueChange={setDialogPuestoFilter} disabled={dialogAreaFilter === 'all'}><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{dialogAvailablePuestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select></div>
+                  </div>
                   <Tabs defaultValue="procesos">
-                      <TabsList className="grid w-full grid-cols-3"><TabsTrigger value="procesos">Procesos</TabsTrigger><TabsTrigger value="actividades">Actividades</TabsTrigger><TabsTrigger value="sistemas">Sistemas</TabsTrigger></TabsList>
-                      <TabsContent value="procesos">
-                          <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedProcessIds(procesos.map(p => p.id))}>Sel. Todos</Button><Button variant="link" size="sm" onClick={() => setSelectedProcessIds([])}>Desel. Todos</Button></div>
-                          <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procesos.map(proc => (<div key={proc.id} className="flex items-start space-x-2"><Checkbox id={`proc-${proc.id}`} checked={selectedProcessIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))} className="mt-1"/><label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.proceso}<span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span></label></div>))}</div></ScrollArea>
-                      </TabsContent>
-                       <TabsContent value="actividades">
-                           <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedActivityIds(actividades.filter(a=>a.activa).map(a => a.id))}>Sel. Todas</Button><Button variant="link" size="sm" onClick={() => setSelectedActivityIds([])}>Desel. Todas</Button></div>
-                           <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{actividades.filter(a => a.activa).map(act => (<div key={act.id} className="flex items-center space-x-2"><Checkbox id={`act-${act.id}`} checked={selectedActivityIds.includes(act.id)} onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}/><label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">{act.nombre}</label></div>))}</div></ScrollArea>
-                      </TabsContent>
-                      <TabsContent value="sistemas">
-                          <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedSystemIds(sistemas.map(s => s.id))}>Sel. Todos</Button><Button variant="link" size="sm" onClick={() => setSelectedSystemIds([])}>Desel. Todos</Button></div>
-                           <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{sistemas.map(sys => (<div key={sys.id} className="flex items-center space-x-2"><Checkbox id={`sys-${sys.id}`} checked={selectedSystemIds.includes(sys.id)} onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}/><label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">{sys.nombre}</label></div>))}</div></ScrollArea>
-                      </TabsContent>
+                      <TabsList className="grid w-full grid-cols-5"><TabsTrigger value="procesos">Procesos</TabsTrigger><TabsTrigger value="procedimientos">Procedimientos</TabsTrigger><TabsTrigger value="actividades">Actividades</TabsTrigger><TabsTrigger value="puestos">Puestos</TabsTrigger><TabsTrigger value="sistemas">Sistemas</TabsTrigger></TabsList>
+                      
+                      <TabsContent value="procesos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procesos.filter(p => !p.deletedAt && (dialogAreaFilter === 'all' || p.area === dialogAreaFilter) && (dialogPuestoFilter === 'all' || p.puestoId === dialogPuestoFilter)).map(proc => (<div key={proc.id} className="flex items-start space-x-2"><Checkbox id={`proc-${proc.id}`} checked={selectedProcessIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))} className="mt-1"/><label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.proceso}<span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span></label></div>))}</div></ScrollArea></TabsContent>
+                      <TabsContent value="procedimientos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procedimientos.map(proc => (<div key={proc.id} className="flex items-center space-x-2"><Checkbox id={`proc-item-${proc.id}`} checked={selectedProcedimientoIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcedimientoIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))}/><label htmlFor={`proc-item-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.nombre}</label></div>))}</div></ScrollArea></TabsContent>
+                      <TabsContent value="actividades"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{actividades.filter(a => a.activa).map(act => (<div key={act.id} className="flex items-center space-x-2"><Checkbox id={`act-${act.id}`} checked={selectedActivityIds.includes(act.id)} onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}/><label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">{act.nombre}</label></div>))}</div></ScrollArea></TabsContent>
+                      <TabsContent value="puestos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{puestos.filter(p => (dialogAreaFilter === 'all' || p.areaId === areas.find(a=>a.nombre === dialogAreaFilter)?.id)).map(p => (<div key={p.id} className="flex items-center space-x-2"><Checkbox id={`puesto-an-${p.id}`} checked={selectedPuestoAnalysisIds.includes(p.id)} onCheckedChange={(checked) => setSelectedPuestoAnalysisIds(prev => checked ? [...prev, p.id] : prev.filter(id => id !== p.id))}/><label htmlFor={`puesto-an-${p.id}`} className="text-sm font-medium leading-none cursor-pointer">{p.nombre}</label></div>))}</div></ScrollArea></TabsContent>
+                      <TabsContent value="sistemas"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{sistemas.map(sys => (<div key={sys.id} className="flex items-center space-x-2"><Checkbox id={`sys-${sys.id}`} checked={selectedSystemIds.includes(sys.id)} onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}/><label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">{sys.nombre}</label></div>))}</div></ScrollArea></TabsContent>
+
                   </Tabs>
               </div>
-              <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button onClick={runInefficiencyAnalysis}>Analizar Selección ({selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length})</Button></DialogFooter>
+              <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button onClick={runInefficiencyAnalysis}>Analizar Selección ({totalSelected})</Button></DialogFooter>
           </DialogContent>
       </Dialog>
     </div>
