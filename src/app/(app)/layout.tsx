@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AreasProvider } from '@/contexts/AreasContext';
-import { DepartamentosProvider } from '@/contexts/DepartamentosProvider';
+import { DepartamentosProvider } from '@/contexts/DepartamentosContext';
 import { PuestosProvider } from '@/contexts/PuestosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
