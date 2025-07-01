@@ -12,8 +12,9 @@ import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosCon
 import { usePuestos, type Puesto, type PuestoCreationData, nivelesOrganizacionales } from '@/contexts/PuestosContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, formasDePagoOptions, frecuenciasDePagoOptions, tiposDeMonedaOptions, sistemaScopeOptions, type SistemaScope, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones } from '@/contexts/AccionesContext';
-import type { CapturedProcess } from '../procesos-y-flujos-registrados/page';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import { useActividades } from '@/contexts/ActividadesContext';
+import { auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -51,7 +52,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock, CalendarCheck2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,7 +74,8 @@ const puestoFormSchema = z.object({
   departamentoId: z.string().optional(),
   jefeInmediato: z.string().optional(),
   nivelOrganizacional: z.enum(nivelesOrganizacionales, { errorMap: () => ({ message: "Seleccione un nivel." }) }),
-  numeroPersonas: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional())
+  numeroPersonas: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
+  auditFrequencyInDays: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().optional()),
 });
 type PuestoFormData = z.infer<typeof puestoFormSchema>;
 
@@ -124,13 +126,8 @@ export default function ConfiguracionPage() {
   const { puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos } = usePuestos();
   const { sistemas, costosSistemas, addSistema, updateSistema, deleteSistema, addCostoSistema, updateCostoSistema, deleteCostoSistema, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones } = useAcciones();
-  const [allProcesses, setAllProcesses] = useState<CapturedProcess[]>([]);
+  const { procesos } = useProcesos();
   const { actividades } = useActividades();
-
-  useEffect(() => {
-      const storedData = localStorage.getItem('proceza-captured-data');
-      if (storedData) setAllProcesses(JSON.parse(storedData));
-  }, []);
 
   // Dialog states
   const [isAreaDialogOpen, setIsAreaDialogOpen] = useState(false);
@@ -193,8 +190,8 @@ export default function ConfiguracionPage() {
     setIsDeptoDialogOpen(false);
   }
   async function handlePuestoSubmit(data: PuestoFormData) {
-    const puestoData: PuestoCreationData = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId };
-    if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData);
+    const puestoData: Partial<PuestoCreationData> = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId };
+    if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData as PuestoCreationData);
     setIsPuestoDialogOpen(false);
   }
   async function handleSistemaSubmit(data: SistemaFormData) {
@@ -239,18 +236,18 @@ export default function ConfiguracionPage() {
             }
             break;
         case 'puesto':
-            isUsed = allProcesses.some(p => p.puesto === itemToDelete.name) || acciones.some(a => a.puesto === itemToDelete.name);
+            isUsed = procesos.some(p => p.puesto === itemToDelete.name) || acciones.some(a => a.puesto === itemToDelete.name);
              if(isUsed) {
-                usageMessage = allProcesses.some(p => p.puesto === itemToDelete.name) ? 'Procesos Capturados' : 'Acciones de Mejora';
+                usageMessage = procesos.some(p => p.puesto === itemToDelete.name) ? 'Procesos Capturados' : 'Acciones de Mejora';
                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
             } else {
                 await deletePuesto(id);
             }
             break;
         case 'sistema':
-            isUsed = allProcesses.some(p => p.sistemas?.includes(itemToDelete.name)) || actividades.some(a => a.sistemaUtilizado === itemToDelete.name);
+            isUsed = procesos.some(p => p.sistemas?.includes(itemToDelete.name)) || actividades.some(a => a.sistemaUtilizado === itemToDelete.name);
              if (isUsed) {
-                usageMessage = allProcesses.some(p => p.sistemas?.includes(itemToDelete.name)) ? 'Procesos Capturados' : 'Actividades';
+                usageMessage = procesos.some(p => p.sistemas?.includes(itemToDelete.name)) ? 'Procesos Capturados' : 'Actividades';
                  toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
             } else {
               await deleteSistema(id);
@@ -527,6 +524,7 @@ export default function ConfiguracionPage() {
             <FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel Organizacional</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione nivel..." /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel># Personas en el Puesto</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={field.onChange} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
         </DialogContent>

@@ -19,6 +19,8 @@ export interface Puesto {
   jefeInmediato?: string; 
   nivelOrganizacional: NivelOrganizacional;
   numeroPersonas?: number;
+  auditFrequencyInDays?: number;
+  lastAuditedAt?: string; // ISO String
   createdAt?: any;
 }
 
@@ -27,7 +29,7 @@ export type PuestoCreationData = Omit<Puesto, 'id' | 'createdAt'>;
 interface PuestosContextType {
   puestos: Puesto[];
   addPuesto: (data: PuestoCreationData) => Promise<void>;
-  updatePuesto: (id: string, data: PuestoCreationData) => Promise<void>;
+  updatePuesto: (id: string, data: Partial<PuestoCreationData>) => Promise<void>;
   deletePuesto: (id: string) => Promise<void>;
   isLoadingPuestos: boolean;
 }
@@ -71,7 +73,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updatePuesto = useCallback(async (id: string, data: PuestoCreationData) => {
+  const updatePuesto = useCallback(async (id: string, data: Partial<PuestoCreationData>) => {
     const puestoDocRef = doc(db, PUESTOS_COLLECTION, id);
     const originalPuesto = puestos.find(p => p.id === id);
     try {
@@ -79,7 +81,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
       const updateData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
       await updateDoc(puestoDocRef, updateData);
       if (originalPuesto && originalPuesto.nombre !== data.nombre) {
-        addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre, details: `El puesto "${originalPuesto.nombre}" fue renombrado a "${data.nombre}".` });
+        addLogEntry({ action: 'update', entityType: 'Puesto', entityName: data.nombre || originalPuesto.nombre, details: `El puesto "${originalPuesto.nombre}" fue renombrado a "${data.nombre}".` });
       }
     } catch(e) {
       console.error("Error updating puesto: ", e);

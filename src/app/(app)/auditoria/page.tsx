@@ -152,12 +152,12 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
 export default function AuditoriaPage() {
   const { actividades, isLoadingActividades } = useActividades();
   const { addAccion, isLoadingAcciones } = useAcciones();
-  const { puestos, isLoadingPuestos } = usePuestos();
+  const { puestos, updatePuesto, isLoadingPuestos } = usePuestos();
   const { areas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
-  const { procesos: allProcesses, isLoadingProcesos } = useProcesos();
+  const { procesos: allProcesses, updateProceso, isLoadingProcesos } = useProcesos();
 
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
   const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
@@ -422,8 +422,17 @@ export default function AuditoriaPage() {
     toast({ title: "Plan de Acción Registrado", description: "La acción ha sido creada en el módulo de 'Acciones'." });
   };
   
-  const handleFinalizeAudit = () => {
+  const handleFinalizeAudit = async () => {
     if (!currentAuditSession) return;
+
+    // Update lastAuditedAt on the corresponding entity
+    const now = new Date().toISOString();
+    if (currentAuditSession.auditType === 'proceso') {
+        await updateProceso(currentAuditSession.targetId, { lastAuditedAt: now });
+    } else if (currentAuditSession.auditType === 'puesto') {
+        await updatePuesto(currentAuditSession.targetId, { lastAuditedAt: now });
+    }
+
     const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
     setPastAudits(prev => {
         const existingIndex = prev.findIndex(a => a.id === finalAudit.id);

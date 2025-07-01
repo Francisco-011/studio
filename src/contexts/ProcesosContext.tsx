@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
@@ -16,6 +16,14 @@ import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
 export const clasificacionOptions = ["Público", "Privado", "Confidencial"] as const;
+export const auditFrequencyOptions = [
+    { label: "Cada mes", value: 30 },
+    { label: "Cada 3 meses (Trimestral)", value: 90 },
+    { label: "Cada 6 meses (Semestral)", value: 180 },
+    { label: "Cada año (Anual)", value: 365 },
+    { label: "Cada 2 años", value: 730 },
+];
+
 
 export const capturaFormSchema = z.object({
   area: z.string().min(1, "El área es requerida."),
@@ -52,6 +60,11 @@ export const capturaFormSchema = z.object({
     policyId: z.string(),
     linkType: z.string(), // z.enum(politicaLinkTypes) would cause circular dependency
   })).optional().default([]),
+  auditFrequencyInDays: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int().optional()
+  ),
+  lastAuditedAt: z.string().optional(),
 }).refine(data => {
   if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
     return false;
@@ -207,7 +220,41 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
 
     try {
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
-        await updateDoc(procesoDocRef, { ...data, updatedAt: serverTimestamp() });
+        const batch = writeBatch(db);
+
+        batch.update(procesoDocRef, { ...data, updatedAt: serverTimestamp() });
+        
+        // Cascade name change if necessary
+        const newName = data.proceso;
+        if (newName && newName !== originalProceso.proceso) {
+            const allCurrentProcesses = [...procesos]; // Use current state for cascading logic
+            allCurrentProcesses.forEach(p => {
+                if (p.id === id) return; // Skip the process being updated
+                let needsUpdate = false;
+                const newProcesosEntrada = p.procesosEntrada?.map(entrada => {
+                    if (entrada === originalProceso.proceso) {
+                        needsUpdate = true;
+                        return newName;
+                    }
+                    return entrada;
+                });
+                const newProcesosSalida = p.procesosSalida?.map(salida => {
+                    if (salida === originalProceso.proceso) {
+                        needsUpdate = true;
+                        return newName;
+                    }
+                    return salida;
+                });
+
+                if (needsUpdate) {
+                    const linkedProcRef = doc(db, PROCESOS_COLLECTION, p.id);
+                    batch.update(linkedProcRef, { procesosEntrada: newProcesosEntrada, procesosSalida: newProcesosSalida });
+                }
+            });
+        }
+        
+        await batch.commit();
+
         addLogEntry({ action: 'update', entityType: 'Proceso', entityName: data.proceso || originalProceso.proceso, details: `Se actualizó el proceso "${originalProceso.proceso}".` });
     } catch (e) {
         console.error("Error updating proceso: ", e);

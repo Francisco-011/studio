@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock, AlertTriangle } from "lucide-react";
+import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock, AlertTriangle, CalendarCheck2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -41,7 +41,7 @@ import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions, clasificacionOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
@@ -69,6 +69,7 @@ const defaultFormValues: Partial<CapturaFormData> = {
   procesosSalida: [],
   procedimientoOrder: [],
   politicasAsociadas: [],
+  auditFrequencyInDays: undefined,
 };
 
 
@@ -414,21 +415,41 @@ export default function CapturaPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="clasificacion"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Clasificación de Visibilidad</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione la clasificación" /></SelectTrigger></FormControl>
-                      <SelectContent>{(clasificacionOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
-                    </Select>
-                    <FormDescription>Define quién podrá ver la información de este proceso.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="clasificacion"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Clasificación de Visibilidad</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione la clasificación" /></SelectTrigger></FormControl>
+                        <SelectContent>{(clasificacionOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
+                      </Select>
+                      <FormDescription>Define quién podrá ver la información de este proceso.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="auditFrequencyInDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frecuencia de Auditoría</FormLabel>
+                       <Select onValueChange={field.onChange} value={field.value?.toString()}>
+                        <FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione la frecuencia de auditoría" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">No requiere auditoría periódica</SelectItem>
+                          {auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Define cada cuánto debe auditarse este proceso.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               
               <div className="space-y-2">
                  <h3 className="text-lg font-medium">Métricas del Proceso</h3>
