@@ -112,19 +112,16 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
           return request.auth != null;
         }
 
-        // Helper function to get user's role and data
+        // Helper function to get user's data
         function getUserData(userId) {
           return get(/databases/$(database)/documents/users/$(userId)).data;
         }
 
-        // Helper function to check if the user has a specific role
-        function hasRole(roles) {
-          // Ensure we don't try to access properties on a null object
-          if (request.auth == null || request.auth.uid == null) {
-            return false;
-          }
-          let userRole = getUserData(request.auth.uid).rol;
-          return userRole in roles;
+        // Helper function to check if the user has one of the allowed roles.
+        // allowedRoles must be a list of strings, e.g. ['Administrador', 'Gerente de Proyecto']
+        function hasRole(allowedRoles) {
+          return isAuthenticated() &&
+                 [getUserData(request.auth.uid).rol].hasAny(allowedRoles);
         }
 
         // --- USERS ---
