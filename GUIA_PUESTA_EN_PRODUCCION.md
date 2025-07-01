@@ -1,3 +1,4 @@
+
 # SIAP: Guía Final para Puesta en Producción
 
 ¡Felicidades! Hemos construido juntos una aplicación poderosa y funcional. Este documento es tu mapa del tesoro, una guía paso a paso y sin tecnicismos para llevar SIAP del estado de prototipo a una aplicación real, segura y en línea, lista para ser usada por tu equipo.
@@ -124,7 +125,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         // Reglas para la colección de usuarios
         match /users/{userId} {
           allow read, update: if request.auth.uid == userId || esAdmin();
-          allow create: if esAdmin(); // Signup creates the user document
+          allow create: if request.auth.uid != null; // Allow signup
           allow delete: if esAdmin();
         }
 
