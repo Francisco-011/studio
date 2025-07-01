@@ -1,33 +1,29 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
   
-    // Helper Functions
+    // --- Helper Functions ---
+    
     function esAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
     }
     
-    function rolUsuario() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
-    }
-
     function nivelAccesoUsuario() {
       let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      // Default to 'Público' if nivelAcceso is not set
-      return 'nivelAcceso' in userData ? userData.nivelAcceso : 'Público';
+      return userData.nivelAcceso;
     }
 
-    // --- COLLECTION RULES ---
+    // --- Collection Rules ---
 
-    // Users Collection
+    // USERS: Users can read/update their own profile. Admins can manage all.
     match /users/{userId} {
       allow read, update: if request.auth.uid == userId || esAdmin();
-      allow create: if request.auth.uid != null; // Allow signup
-      allow delete: if esAdmin();
+      allow create, delete: if esAdmin();
     }
 
-    // Configuration Collections (Catalogs)
+    // CONFIGURATION: Only Admins can write, authenticated users can read.
     match /areas/{areaId} {
       allow read: if request.auth.uid != null;
       allow create, update, delete: if esAdmin();
@@ -52,7 +48,8 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
-    // Operational Collections
+    // OPERATIONAL: Authenticated users can read/write.
+    // Specific access is controlled by application logic and permissions context.
     match /acciones/{accionId} {
       allow read, write: if request.auth.uid != null;
     }
@@ -61,26 +58,35 @@ service cloud.firestore {
       allow read, write: if request.auth.uid != null;
     }
     
-    match /procesos/{procesoId} {
+    match /procedimientos/{procedimientoId} {
       allow read, write: if request.auth.uid != null;
     }
 
-    match /procedimientos/{procedimientoId} {
-        allow read, write: if request.auth.uid != null;
+    // --- Granular Access Control for Processes and Policies ---
+
+    function puedeVerDocumento(clasificacion) {
+      let nivel = nivelAccesoUsuario();
+      if (esAdmin()) { return true; }
+      if (clasificacion == 'Público') { return true; }
+      if (clasificacion == 'Privado') {
+        return nivel in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial'];
+      }
+      if (clasificacion == 'Confidencial') {
+        return nivel == 'Confidencial';
+      }
+      return false;
+    }
+
+    match /procesos/{procesoId} {
+      allow get: if puedeVerDocumento(resource.data.clasificacion);
+      allow list: if puedeVerDocumento(resource.data.clasificacion); // Firestore queries check this on each document
+      allow create, update, delete: if request.auth.uid != null; // Write permissions controlled by app logic
     }
     
-    // Granular Access for Policies
     match /politicas/{politicaId} {
-      allow get: if request.auth.uid != null;
-      
-      // LIST access is based on user's access level vs policy's classification
-      allow list: if esAdmin() ||
-                   (nivelAccesoUsuario() in ['Ejecutivo', 'Confidencial'] && resource.data.clasificacion in ['Público', 'Privado', 'Confidencial']) ||
-                   (nivelAccesoUsuario() in ['Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
-                   (nivelAccesoUsuario() == 'Público' && resource.data.clasificacion == 'Público');
-      
-      // WRITE access is based on user's role
-      allow create, update: if rolUsuario() in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
+      allow get: if puedeVerDocumento(resource.data.clasificacion);
+      allow list: if puedeVerDocumento(resource.data.clasificacion);
+      allow create, update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
       allow delete: if esAdmin();
     }
   }

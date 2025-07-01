@@ -17,7 +17,7 @@ import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { clasificacionOptions } from '@/contexts/ProcesosContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
