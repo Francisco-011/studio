@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { PoliticasProvider } from '@/contexts/PoliticasContext';
+import { ExceptionsProvider } from '@/contexts/ExceptionsContext';
 
 
 export default function AuthenticatedAppLayout({
@@ -55,9 +56,11 @@ export default function AuthenticatedAppLayout({
                   <ProcesosProvider>
                     <ProcedimientosProvider>
                       <AccionesProvider>
-                        <PermissionsProvider>
-                          <AppLayout>{children}</AppLayout>
-                        </PermissionsProvider>
+                        <ExceptionsProvider>
+                          <PermissionsProvider>
+                            <AppLayout>{children}</AppLayout>
+                          </PermissionsProvider>
+                        </ExceptionsProvider>
                       </AccionesProvider>
                     </ProcedimientosProvider>
                   </ProcesosProvider>

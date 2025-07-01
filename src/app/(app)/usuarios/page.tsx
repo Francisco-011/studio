@@ -7,6 +7,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { format, parseISO, isValid } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -19,6 +21,16 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -39,16 +51,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { Users, Search, Edit2, ShieldCheck, Save, Loader2, ShieldQuestion } from "lucide-react";
+import { Users, Search, Edit2, ShieldCheck, Save, Loader2, ShieldQuestion, PlusCircle, Trash2, CalendarIcon, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { useProcesos } from '@/contexts/ProcesosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useExceptions, type AccessException, type AccessExceptionCreationData } from '@/contexts/ExceptionsContext';
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -77,6 +96,17 @@ const userFormSchema = z.object({
   activo: z.boolean().default(true),
 });
 type UserFormData = z.infer<typeof userFormSchema>;
+
+const exceptionFormSchema = z.object({
+    userId: z.string({ required_error: 'Debe seleccionar un usuario.' }),
+    documentType: z.enum(['politica', 'proceso'], { required_error: 'Debe seleccionar un tipo de documento.' }),
+    documentId: z.string({ required_error: 'Debe seleccionar un documento.' }),
+    exceptionType: z.enum(['INCLUDE', 'EXCLUDE'], { required_error: 'Debe seleccionar un tipo de excepción.' }),
+    expiresAt: z.date().optional(),
+    justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).'),
+});
+type ExceptionFormData = z.infer<typeof exceptionFormSchema>;
+
 
 const ITEMS_PER_PAGE = 10;
 const LOCAL_STORAGE_PERMISSIONS_KEY = 'proceza-role-permissions';
@@ -201,6 +231,14 @@ const PERMISSION_CONFIG = {
       manage_permissions: 'Gestionar Permisos de Roles',
     },
   },
+  excepciones: {
+    label: 'Excepciones de Acceso',
+    permissions: {
+      view: 'Ver Excepciones',
+      create: 'Crear Excepciones',
+      delete: 'Eliminar Excepciones',
+    },
+  },
   ayuda: {
     label: 'Ayuda',
     permissions: {
@@ -273,6 +311,14 @@ export default function UsuariosPage() {
   const [selectedRoleForPerms, setSelectedRoleForPerms] = useState<UserRole>('Administrador');
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
 
+  // Exception management states
+  const { exceptions, addException, deleteException, isLoadingExceptions } = useExceptions();
+  const { procesos, isLoadingProcesos } = useProcesos();
+  const { politicas, isLoadingPoliticas } = usePoliticas();
+  const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
+  const [exceptionToDelete, setExceptionToDelete] = useState<AccessException | null>(null);
+  const [isConfirmDeleteExceptionOpen, setIsConfirmDeleteExceptionOpen] = useState(false);
+
   useEffect(() => {
     setIsLoadingUsers(true);
     const q = query(collection(db, "users"));
@@ -317,6 +363,27 @@ export default function UsuariosPage() {
     resolver: zodResolver(userFormSchema),
     defaultValues: { nombreCompleto: '', email: '', rol: undefined, nivelAcceso: 'Público', activo: true, puestoId: undefined },
   });
+
+  const exceptionForm = useForm<ExceptionFormData>({
+    resolver: zodResolver(exceptionFormSchema),
+  });
+
+  const watchedDocType = exceptionForm.watch('documentType');
+
+  const availableDocuments = useMemo(() => {
+    if (watchedDocType === 'politica') {
+      return politicas.map(p => ({ id: p.id, name: `${p.codigo} - ${p.titulo}` }));
+    }
+    if (watchedDocType === 'proceso') {
+      return procesos.filter(p => !p.deletedAt).map(p => ({ id: p.id, name: p.proceso }));
+    }
+    return [];
+  }, [watchedDocType, politicas, procesos]);
+
+  useEffect(() => {
+    exceptionForm.reset({ ...exceptionForm.getValues(), documentId: undefined });
+  }, [watchedDocType, exceptionForm]);
+
 
   useEffect(() => {
     if (isUserDialogOpen && editingUser) {
@@ -416,6 +483,27 @@ export default function UsuariosPage() {
     addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRoleForPerms, details: `Se actualizaron los permisos para el rol "${selectedRoleForPerms}".` });
   };
 
+  async function handleExceptionSubmit(data: ExceptionFormData) {
+    const payload: AccessExceptionCreationData = {
+        ...data,
+        expiresAt: data.expiresAt ? data.expiresAt.toISOString() : undefined,
+    };
+    await addException(payload);
+    setIsExceptionDialogOpen(false);
+    exceptionForm.reset();
+  }
+
+  function promptDeleteException(exception: AccessException) {
+    setExceptionToDelete(exception);
+    setIsConfirmDeleteExceptionOpen(true);
+  }
+
+  function executeDeleteException() {
+    if (!exceptionToDelete) return;
+    deleteException(exceptionToDelete.id);
+    setExceptionToDelete(null);
+    setIsConfirmDeleteExceptionOpen(false);
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -436,7 +524,7 @@ export default function UsuariosPage() {
               {hasPermission('usuarios:manage_permissions') && (
                 <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
               )}
-               {hasPermission('usuarios:manage_permissions') && (
+               {hasPermission('excepciones:view') && (
                 <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones de Acceso</TabsTrigger>
               )}
             </TabsList>
@@ -630,14 +718,58 @@ export default function UsuariosPage() {
             </TabsContent>
             
             <TabsContent value="exceptions" className="mt-4">
-               {hasPermission('usuarios:manage_permissions') ? (
-                  <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
-                    <ShieldQuestion className="h-16 w-16 text-muted-foreground mb-4" />
-                    <p className="text-lg font-semibold text-foreground">Módulo de Excepciones</p>
-                    <p className="text-sm text-muted-foreground text-center">
-                      Aquí se gestionarán las excepciones de acceso para usuarios específicos. Esta funcionalidad está en desarrollo.
-                    </p>
+               {hasPermission('excepciones:view') ? (
+                  <>
+                  <CardDescription className="mb-4">
+                    Gestione reglas de acceso específicas para usuarios individuales que anulan sus permisos de Nivel de Acceso base.
+                  </CardDescription>
+                  <div className="flex justify-end mb-4">
+                    <Button onClick={() => setIsExceptionDialogOpen(true)} disabled={!hasPermission('excepciones:create')}>
+                        <PlusCircle className="mr-2 h-4 w-4"/> Crear Excepción
+                    </Button>
                   </div>
+                  {isLoadingExceptions ? (<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : (
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Usuario</TableHead>
+                                    <TableHead>Tipo Excepción</TableHead>
+                                    <TableHead>Documento</TableHead>
+                                    <TableHead>Vence el</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {exceptions.length > 0 ? exceptions.map(ex => {
+                                    const user = users.find(u => u.id === ex.userId);
+                                    const docName = ex.documentType === 'politica' 
+                                        ? politicas.find(p => p.id === ex.documentId)?.titulo 
+                                        : procesos.find(p => p.id === ex.documentId)?.proceso;
+                                    return (
+                                    <TableRow key={ex.id}>
+                                        <TableCell>{user?.nombreCompleto || ex.userId}</TableCell>
+                                        <TableCell><Badge variant={ex.exceptionType === 'INCLUDE' ? 'default' : 'destructive'}>{ex.exceptionType === 'INCLUDE' ? 'Incluir (Permitir)' : 'Excluir (Denegar)'}</Badge></TableCell>
+                                        <TableCell>
+                                            <p className="font-medium">{docName || ex.documentId}</p>
+                                            <p className="text-xs text-muted-foreground capitalize">{ex.documentType}</p>
+                                        </TableCell>
+                                        <TableCell>{ex.expiresAt ? format(parseISO(ex.expiresAt), 'dd MMM yyyy', {locale: es}) : 'Permanente'}</TableCell>
+                                        <TableCell className="text-right">
+                                            {hasPermission('excepciones:delete') && (
+                                                <Button variant="ghost" size="icon" onClick={() => promptDeleteException(ex)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                    )
+                                }) : (
+                                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No hay excepciones de acceso definidas.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                  )}
+                  </>
                ) : (
                   <div className="text-center text-muted-foreground p-8">No tiene permiso para gestionar excepciones de acceso.</div>
                )}
@@ -787,6 +919,39 @@ export default function UsuariosPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      <Dialog open={isExceptionDialogOpen} onOpenChange={setIsExceptionDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle>Crear Excepción de Acceso</DialogTitle>
+                <DialogDescription>Otorgue o revoque acceso a un documento específico para un usuario.</DialogDescription>
+            </DialogHeader>
+            <Form {...exceptionForm}>
+                <form onSubmit={exceptionForm.handleSubmit(handleExceptionSubmit)} className="space-y-4 py-4">
+                    <FormField control={exceptionForm.control} name="userId" render={({ field }) => (<FormItem><FormLabel>Usuario</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un usuario..."/></SelectTrigger></FormControl><SelectContent>{users.filter(u=>u.activo).map(u=><SelectItem key={u.id} value={u.id}>{u.nombreCompleto}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField control={exceptionForm.control} name="documentType" render={({ field }) => (<FormItem><FormLabel>Tipo de Documento</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="politica">Política</SelectItem><SelectItem value="proceso">Proceso</SelectItem></SelectContent></Select><FormMessage/></FormItem>)}/>
+                        <FormField control={exceptionForm.control} name="documentId" render={({ field }) => (<FormItem><FormLabel>Documento Específico</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!watchedDocType}><FormControl><SelectTrigger><SelectValue placeholder={!watchedDocType ? "Seleccione tipo primero" : "Seleccione..."}/></SelectTrigger></FormControl><SelectContent>{availableDocuments.map(doc=><SelectItem key={doc.id} value={doc.id}>{doc.name}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+                    </div>
+                    <FormField control={exceptionForm.control} name="exceptionType" render={({ field }) => (<FormItem><FormLabel>Tipo de Excepción</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="INCLUDE">Incluir (Permitir Acceso)</SelectItem><SelectItem value="EXCLUDE">Excluir (Denegar Acceso)</SelectItem></SelectContent></Select><FormMessage/></FormItem>)}/>
+                    <FormField control={exceptionForm.control} name="expiresAt" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Fecha de Vencimiento (Opcional)</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className="font-normal">{field.value ? format(field.value, 'PPP', {locale: es}) : <span>Permanente</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50"/></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}/></PopoverContent></Popover><FormDescription>La excepción será inválida después de esta fecha.</FormDescription><FormMessage/></FormItem>)}/>
+                    <FormField control={exceptionForm.control} name="justification" render={({ field }) => (<FormItem><FormLabel>Justificación</FormLabel><FormControl><Textarea placeholder="Ej: Acceso temporal para proyecto de auditoría interna." {...field}/></FormControl><FormMessage/></FormItem>)}/>
+                    <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Crear Excepción</Button></DialogFooter>
+                </form>
+            </Form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={isConfirmDeleteExceptionOpen} onOpenChange={setIsConfirmDeleteExceptionOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive"/>Confirmar Eliminación</div></AlertDialogTitle>
+                <AlertDialogDescription>¿Está seguro de que desea eliminar esta regla de excepción? Esta acción no se puede deshacer.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setExceptionToDelete(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={executeDeleteException} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
