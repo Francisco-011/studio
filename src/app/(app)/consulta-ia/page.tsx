@@ -63,37 +63,71 @@ export default function ConsultaIaPage() {
     setIsLoading(true);
 
     try {
-      // Prepare context data
       const processContext = procesos
         .filter(p => !p.deletedAt)
-        .map(p => `ID Proceso: ${p.id}, Código: ${p.codigo}, Proceso: ${p.proceso}, Descripción: ${p.descripcion}, Clasificación: ${p.clasificacion}, Área: ${p.area}, Puesto: ${p.puesto}, Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
-        .join('\n');
+        .map(p => `
+---
+Entidad: Proceso
+ID: ${p.id}
+Nombre: ${p.proceso}
+Código: ${p.codigo}
+Descripción: ${p.descripcion}
+Clasificación: ${p.clasificacion}
+Área: ${p.area}
+Puesto: ${p.puesto}
+Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ') || ''}]
+---
+        `).join('\n\n');
         
       const procedimientoContext = procedimientos
-        .map(p => `ID Procedimiento: ${p.id}, Código: ${p.codigo}, Procedimiento: ${p.nombre}, Pertenece a Proceso (ID): ${p.procesoId}, Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
-        .join('\n');
+        .map(p => {
+          const parentProcess = procesos.find(proc => proc.id === p.procesoId);
+          return `
+---
+Entidad: Procedimiento
+ID: ${p.id}
+Nombre: ${p.nombre}
+Código: ${p.codigo}
+Descripción: ${p.descripcion || 'N/A'}
+Proceso Padre: ${parentProcess?.proceso || 'N/A'} (ID: ${p.procesoId})
+---
+          `;
+        }).join('\n\n');
 
       const activityContext = actividades
-        .map(a => `ID Actividad: ${a.id}, Código: ${a.codigo}, Actividad: ${a.nombre}, Descripción: ${a.descripcionBreve || 'N/A'}, Pertenece a Procedimiento (ID): ${a.procedimientoId}, Políticas Vinculadas (IDs): [${a.politicasAsociadas?.map(link => link.policyId).join(', ')}]`)
-        .join('\n');
+        .map(a => {
+           const parentProcedimiento = procedimientos.find(p => p.id === a.procedimientoId);
+           return `
+---
+Entidad: Actividad
+ID: ${a.id}
+Nombre: ${a.nombre}
+Código: ${a.codigo}
+Descripción: ${a.descripcionBreve || 'N/A'}
+Procedimiento Padre: ${parentProcedimiento?.nombre || 'N/A'} (ID: ${a.procedimientoId})
+---
+           `
+        }).join('\n\n');
         
       const politicaContext = politicas
-          .map(p => `ID Política: ${p.id}, Código: ${p.codigo}, Política: ${p.titulo}, Descripción: ${p.descripcion}, Clasificación: ${p.clasificacion}`)
-          .join('\n');
+          .map(p => `
+---
+Entidad: Política
+ID: ${p.id}
+Nombre: ${p.titulo}
+Código: ${p.codigo}
+Descripción: ${p.descripcion}
+Clasificación: ${p.clasificacion}
+---
+          `).join('\n\n');
           
-      const fullContext = `--- INICIO CONTEXTO PROCESOS ---\n${processContext}\n--- FIN CONTEXTO PROCESOS ---\n\n--- INICIO CONTEXTO PROCEDIMIENTOS ---\n${procedimientoContext}\n--- FIN CONTEXTO PROCEDIMIENTOS ---\n\n--- INICIO CONTEXTO ACTIVIDADES ---\n${activityContext}\n--- FIN CONTEXTO ACTIVIDADES ---\n\n--- INICIO CONTEXTO POLÍTICAS ---\n${politicaContext}\n--- FIN CONTEXTO POLÍTICAS ---`;
-
-      const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()));
-      const userExceptionsText = userExceptions.length > 0
-          ? userExceptions.map(ex => `Tipo: ${ex.exceptionType}, Documento: ${ex.documentType} con ID ${ex.documentId}`).join('\n')
-          : undefined;
+      const fullContext = `Contexto de Procesos:\n${processContext}\n\nContexto de Procedimientos:\n${procedimientoContext}\n\nContexto de Actividades:\n${activityContext}\n\nContexto de Políticas:\n${politicaContext}`;
 
       const response = await queryConversationalAgent({
         question: input,
         contextData: fullContext,
         userRole: user.rol,
         userAccessLevel: user.nivelAcceso,
-        userExceptions: userExceptionsText,
       });
 
       const assistantMessage: Message = { role: 'assistant', content: response.answer };
