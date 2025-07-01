@@ -68,6 +68,7 @@ import { useAcciones } from '@/contexts/AccionesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
 import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/contexts/ActivityLogContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -159,6 +160,7 @@ export default function AuditoriaPage() {
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
   const { procesos: allProcesses, updateProceso, isLoadingProcesos } = useProcesos();
+  const { procedimientos: allProcedimientos, isLoading: isLoadingProcedimientos } = useProcedimientos();
 
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
   const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
@@ -241,8 +243,9 @@ export default function AuditoriaPage() {
   }, [newAuditType, newAuditTargetId]);
 
   const auditTargetDetails = useMemo(() => {
-    const nullDetails = { name: "No encontrado", process: null, activities: [], puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null };
-    if (!currentAuditSession) return null;
+    const nullDetails = { name: "No encontrado", process: null, puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null, procedimientos: [] };
+
+    if (!currentAuditSession || !allProcedimientos) return null;
 
     const activityFilterFunc = (act: Actividad) => {
         if (activityDisplayFilter === 'all') return true;
@@ -254,19 +257,27 @@ export default function AuditoriaPage() {
     if (currentAuditSession.auditType === 'proceso') {
       const process = allProcesses.find(p => p.id === currentAuditSession.targetId);
       if (!process) return nullDetails;
-      const processActivities = (process.activityOrder || [])
-        .map(actId => actividades.find(a => a.id === actId))
-        .filter((act): act is Actividad => !!act)
-        .filter(activityFilterFunc);
+      
+      const procedimientosDelProceso = (process.procedimientoOrder || [])
+        .map(procId => allProcedimientos.find(p => p.id === procId))
+        .filter((p): p is Procedimiento => !!p)
+        .map(p => ({
+            procedimiento: p,
+            activities: (p.activityOrder || [])
+              .map(actId => actividades.find(a => a.id === actId))
+              .filter((act): act is Actividad => !!act)
+              .filter(activityFilterFunc)
+        }));
 
       const puestoQueEjecuta = puestos.find(p => p.nombre === process.puesto);
       const jefeInmediato = puestoQueEjecuta?.jefeInmediato ? puestos.find(p => p.id === puestoQueEjecuta.jefeInmediato) : null;
       const departamento = puestoQueEjecuta ? departamentos.find(d => d.id === puestoQueEjecuta.departamentoId) : null;
 
       return {
-        name: process.proceso, process, activities: processActivities, puesto: null,
-        relatedProcesses: [], sistema: null, departamento, jefeInmediato
+        name: process.proceso, process, puesto: null, relatedProcesses: [], sistema: null, departamento, jefeInmediato,
+        procedimientos: procedimientosDelProceso
       };
+
     } else if (currentAuditSession.auditType === 'puesto') {
       const puesto = puestos.find(p => p.id === currentAuditSession.targetId);
       if (!puesto) return nullDetails;
@@ -284,12 +295,21 @@ export default function AuditoriaPage() {
       const relatedProcessesData = relatedProcessesForPuesto
         .map(proc => ({
           process: proc,
-          activities: (proc.activityOrder || []).map(actId => actividades.find(a => a.id === actId)).filter((act): act is Actividad => !!act).filter(activityFilterFunc)
+          procedimientos: (proc.procedimientoOrder || [])
+            .map(procId => allProcedimientos.find(p => p.id === procId))
+            .filter((p): p is Procedimiento => !!p)
+            .map(p => ({
+                procedimiento: p,
+                activities: (p.activityOrder || [])
+                    .map(actId => actividades.find(a => a.id === actId))
+                    .filter((act): act is Actividad => !!act)
+                    .filter(activityFilterFunc)
+            }))
         }));
       
       return {
-        name: puesto.nombre, process: null, activities: [], puesto, relatedProcesses: relatedProcessesData, sistema: null,
-        departamento, jefeInmediato,
+        name: puesto.nombre, process: null, puesto, relatedProcesses: relatedProcessesData, sistema: null,
+        departamento, jefeInmediato, procedimientos: []
       };
     } else { // Sistema
         const sistema = sistemas.find(s => s.id === currentAuditSession.targetId);
@@ -299,12 +319,12 @@ export default function AuditoriaPage() {
         const procesosQueUsanSistema = allProcesses.filter(p => p.sistemas?.includes(sistema.nombre));
 
         return {
-            name: sistema.nombre, process: null, activities: [], puesto: null, sistema: {...sistema, costos: costosDelSistema },
-            relatedProcesses: procesosQueUsanSistema.map(p => ({ process: p, activities: []})),
-            departamento: null, jefeInmediato: null
+            name: sistema.nombre, process: null, puesto: null, sistema: {...sistema, costos: costosDelSistema },
+            relatedProcesses: procesosQueUsanSistema.map(p => ({ process: p, procedimientos: []})),
+            departamento: null, jefeInmediato: null, procedimientos: []
         }
     }
-  }, [currentAuditSession, allProcesses, actividades, puestos, areas, activityDisplayFilter, departamentos, sistemas, costosSistemas]);
+  }, [currentAuditSession, allProcesses, actividades, puestos, areas, activityDisplayFilter, departamentos, sistemas, costosSistemas, allProcedimientos]);
 
   useEffect(() => {
     if (isFindingDialogOpen) {
@@ -620,7 +640,7 @@ export default function AuditoriaPage() {
     return logSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos;
+  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos || isLoadingProcedimientos;
 
   const auditAlerts = useMemo(() => {
     if (isLoadingAllData) return [];
@@ -743,31 +763,43 @@ export default function AuditoriaPage() {
                                 </Card>
                                 
                                 <div>
-                                    <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
-                                    {(auditTargetDetails.activities && auditTargetDetails.activities.length > 0) ? (
+                                    <h4 className="font-semibold text-lg mb-2">Procedimientos y Actividades</h4>
+                                    {(auditTargetDetails.procedimientos && auditTargetDetails.procedimientos.length > 0) ? (
                                         <Accordion type="multiple" className="w-full space-y-2">
-                                        {auditTargetDetails.activities.map((act, index) => (
-                                            <AccordionItem value={act.id} key={`${act.id}-${index}`} className="bg-background rounded-md border">
+                                        {auditTargetDetails.procedimientos.map(({ procedimiento, activities }, procIndex) => (
+                                            <AccordionItem value={procedimiento.id} key={procedimiento.id} className="bg-background rounded-md border">
                                                 <AccordionTrigger className="p-4 hover:no-underline">
                                                     <div className="flex items-center gap-4 text-left">
-                                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                                        <span className="text-base font-medium flex items-center gap-2">
-                                                          {act.nombre}
-                                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
-                                                        </span>
+                                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{procIndex + 1}</span>
+                                                        <span className="text-base font-medium">{procedimiento.nombre}</span>
                                                     </div>
                                                 </AccordionTrigger>
-                                                <AccordionContent className="p-4 pt-0 pl-16">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                    </div>
+                                                <AccordionContent className="p-4 pt-0 pl-16 space-y-3">
+                                                    <DetailDisplay title="Descripción del Procedimiento" value={procedimiento.descripcion} isTextarea />
+                                                    {activities.length > 0 ? (
+                                                        <div className="space-y-2">
+                                                            <h5 className="font-semibold text-sm mt-2">Actividades:</h5>
+                                                            {activities.map((act, actIndex) => (
+                                                                <Card key={act.id} className="bg-background/50">
+                                                                  <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
+                                                                    <div className="flex items-center gap-3">
+                                                                      <span className="text-sm font-semibold">{procIndex + 1}.{actIndex + 1}</span>
+                                                                      <p className="font-medium text-sm">{act.nombre}</p>
+                                                                      {!act.activa && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                                                    </div>
+                                                                  </CardHeader>
+                                                                </Card>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground italic">Este procedimiento no tiene actividades definidas o no coinciden con el filtro.</p>
+                                                    )}
                                                 </AccordionContent>
                                             </AccordionItem>
                                         ))}
                                         </Accordion>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas o que coincidan con el filtro.</p>
+                                        <p className="text-sm text-muted-foreground italic">Este proceso no tiene procedimientos definidos.</p>
                                     )}
                                 </div>
                                 </>
@@ -788,7 +820,7 @@ export default function AuditoriaPage() {
                                                 <Separator className="my-4" />
                                                 <h4 className="font-semibold text-md mb-2">Procesos Auditados del Puesto</h4>
                                                 <Accordion type="multiple" className="w-full">
-                                                    {auditTargetDetails.relatedProcesses.map(({ process, activities }) => (
+                                                    {auditTargetDetails.relatedProcesses.map(({ process, procedimientos }) => (
                                                         <AccordionItem value={process.id} key={process.id}>
                                                             <AccordionTrigger>{process.proceso}</AccordionTrigger>
                                                             <AccordionContent className="space-y-4 p-2 bg-background">
@@ -806,31 +838,36 @@ export default function AuditoriaPage() {
                                                                 </Card>
                                                                 
                                                                 <div>
-                                                                    <h4 className="font-semibold text-base mb-2">Actividades</h4>
-                                                                    {activities && activities.length > 0 ? (
+                                                                    <h4 className="font-semibold text-base mb-2">Procedimientos y Actividades</h4>
+                                                                    {procedimientos && procedimientos.length > 0 ? (
                                                                         <Accordion type="multiple" className="w-full space-y-2">
-                                                                        {activities.map((act, index) => (
-                                                                            <AccordionItem value={act.id} key={`${act.id}-${index}`} className="bg-card rounded-md border">
-                                                                                <AccordionTrigger className="p-4 hover:no-underline">
-                                                                                    <div className="flex items-center gap-4 text-left">
-                                                                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{index + 1}</span>
-                                                                                        <span className="text-base font-medium flex items-center gap-2">
-                                                                                          {act.nombre}
-                                                                                          {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
-                                                                                        </span>
+                                                                        {procedimientos.map(({procedimiento, activities}, procIndex) => (
+                                                                            <AccordionItem value={procedimiento.id} key={procedimiento.id} className="bg-card rounded-md border">
+                                                                                <AccordionTrigger className="p-3 text-sm hover:no-underline">
+                                                                                    <div className="flex items-center gap-3 text-left">
+                                                                                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold text-xs">{procIndex + 1}</span>
+                                                                                        <span className="font-medium">{procedimiento.nombre}</span>
                                                                                     </div>
                                                                                 </AccordionTrigger>
-                                                                                <AccordionContent className="p-4 pt-0 pl-16">
-                                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                                                        <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                                                                    </div>
+                                                                                <AccordionContent className="p-4 pt-0 pl-12 space-y-2">
+                                                                                    {activities.length > 0 ? (
+                                                                                        <div className="space-y-2 mt-2">
+                                                                                            {activities.map((act, actIndex) => (
+                                                                                                <div key={act.id} className="text-xs p-2 border rounded-md bg-background/50">
+                                                                                                    <p className="font-medium">{procIndex + 1}.{actIndex + 1} {act.nombre}</p>
+                                                                                                    {!act.activa && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <p className="text-sm text-muted-foreground italic p-2">Este procedimiento no tiene actividades.</p>
+                                                                                    )}
                                                                                 </AccordionContent>
                                                                             </AccordionItem>
                                                                         ))}
                                                                         </Accordion>
                                                                     ) : (
-                                                                        <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene actividades definidas o que coincidan con el filtro.</p>
+                                                                        <p className="text-sm text-muted-foreground italic p-2">Este proceso no tiene procedimientos definidos.</p>
                                                                     )}
                                                                 </div>
                                                             </AccordionContent>
