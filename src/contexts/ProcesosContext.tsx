@@ -223,27 +223,44 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
         const batch = writeBatch(db);
 
-        batch.update(procesoDocRef, { ...data, updatedAt: serverTimestamp() });
+        const changes: CambioHistorial[] = [];
+        const fieldsToCompare: (keyof typeof data)[] = [
+            'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'frecuencia', 
+            'tiempoEstimado', 'tiempoIdeal', 'costoEstimado', 'costoIdeal', 'monedaCosto',
+            'informacionRecibe', 'informacionEntrega', 'procedimientoOrder'
+        ];
+
+        fieldsToCompare.forEach(key => {
+            if(data[key] !== undefined && originalProceso[key as keyof CapturedProcess] !== data[key]) {
+                changes.push({
+                    timestamp: new Date().toISOString(),
+                    field: key,
+                    before: originalProceso[key as keyof CapturedProcess] ?? 'No especificado',
+                    after: data[key] ?? 'No especificado'
+                });
+            }
+        });
+        
+        const dataWithHistory = {
+            ...data,
+            updatedAt: serverTimestamp(),
+            historialDeCambios: [...(originalProceso.historialDeCambios || []), ...changes]
+        };
+        batch.update(procesoDocRef, dataWithHistory);
         
         // Cascade name change if necessary
         const newName = data.proceso;
         if (newName && newName !== originalProceso.proceso) {
-            const allCurrentProcesses = [...procesos]; // Use current state for cascading logic
+            const allCurrentProcesses = [...procesos];
             allCurrentProcesses.forEach(p => {
-                if (p.id === id) return; // Skip the process being updated
+                if (p.id === id) return;
                 let needsUpdate = false;
                 const newProcesosEntrada = p.procesosEntrada?.map(entrada => {
-                    if (entrada === originalProceso.proceso) {
-                        needsUpdate = true;
-                        return newName;
-                    }
+                    if (entrada === originalProceso.proceso) { needsUpdate = true; return newName; }
                     return entrada;
                 });
                 const newProcesosSalida = p.procesosSalida?.map(salida => {
-                    if (salida === originalProceso.proceso) {
-                        needsUpdate = true;
-                        return newName;
-                    }
+                    if (salida === originalProceso.proceso) { needsUpdate = true; return newName; }
                     return salida;
                 });
 
@@ -256,7 +273,9 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         
         await batch.commit();
 
-        addLogEntry({ action: 'update', entityType: 'Proceso', entityName: data.proceso || originalProceso.proceso, details: `Se actualizó el proceso "${originalProceso.proceso}".` });
+        if (changes.length > 0) {
+           addLogEntry({ action: 'update', entityType: 'Proceso', entityName: data.proceso || originalProceso.proceso, details: `Se actualizó el proceso "${originalProceso.proceso}".` });
+        }
     } catch (e) {
         console.error("Error updating proceso: ", e);
         toast({ title: "Error", description: "No se pudo actualizar el proceso.", variant: "destructive"});
@@ -271,7 +290,6 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
           await updateDoc(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp() });
           addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: procesoToDelete.proceso, details: `Proceso "${procesoToDelete.proceso}" movido a la papelera.` });
-          toast({ title: "Proceso Eliminado", variant: 'destructive' });
       } catch (e) {
           console.error("Error deleting proceso: ", e);
           toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive" });
@@ -286,7 +304,6 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
           await updateDoc(procesoDocRef, { deletedAt: null, activo: true, updatedAt: serverTimestamp() });
           addLogEntry({ action: 'restore', entityType: 'Proceso', entityName: procesoToRestore.proceso, details: `Se restauró el proceso "${procesoToRestore.proceso}".` });
-          toast({ title: "Proceso Restaurado" });
       } catch (e) {
           console.error("Error restoring proceso: ", e);
           toast({ title: "Error", description: "No se pudo restaurar el proceso.", variant: "destructive" });
@@ -301,7 +318,6 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
         await updateDoc(procesoDocRef, { activo: newStatus, updatedAt: serverTimestamp() });
         addLogEntry({ action: 'status_change', entityType: 'Proceso', entityName: procesoToToggle.proceso, details: `El estado del proceso "${procesoToToggle.proceso}" cambió a ${newStatus ? 'Activo' : 'Inactivo'}.` });
-        toast({ title: `Proceso ${newStatus ? 'Activado' : 'Inactivado'}` });
     } catch (e) {
         console.error("Error toggling proceso status: ", e);
         toast({ title: "Error", description: "No se pudo cambiar el estado del proceso.", variant: "destructive" });

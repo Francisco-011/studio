@@ -71,27 +71,9 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { useActivityLog } from '@/contexts/ActivityLogContext';
-import { capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 
-export interface CambioHistorial {
-  timestamp: string;
-  field: string;
-  before: any;
-  after: any;
-}
-
-export interface CapturedProcess extends CapturaFormData {
-  id: string;
-  capturedAt: string;
-  updatedAt?: number;
-  deletedAt?: string;
-  activo?: boolean;
-  historialDeCambios?: CambioHistorial[];
-}
-
-const CAPTURED_DATA_LOCAL_STORAGE_KEY = 'proceza-captured-data';
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -136,9 +118,16 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { actividades: allActivities, isLoadingActividades } = useActividades();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
-  const { addLogEntry } = useActivityLog();
   
-  const [allCapturedData, setAllCapturedData] = useState<CapturedProcess[]>([]);
+  const { 
+    procesos: allCapturedData, 
+    updateProceso, 
+    softDeleteProceso, 
+    restoreProceso, 
+    toggleProcesoStatus, 
+    isLoadingProcesos 
+  } = useProcesos();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAreaFilter, setSelectedAreaFilter] = useState('all');
   const [selectedDeptoFilter, setSelectedDeptoFilter] = useState('all');
@@ -146,7 +135,6 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [activityStatusFilter, setActivityStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [isLoading, setIsLoading] = useState(true);
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProcess, setEditingProcess] = useState<CapturedProcess | null>(null);
@@ -217,53 +205,6 @@ export default function ProcesosYFlujosRegistradosPage() {
       });
     }
   }, [editingProcess, editForm]);
-
-
-  useEffect(() => {
-    setIsLoading(true);
-    try {
-      const storedData = localStorage.getItem(CAPTURED_DATA_LOCAL_STORAGE_KEY);
-      if (storedData) {
-        const parsedData: any[] = JSON.parse(storedData);
-        const migratedData: CapturedProcess[] = parsedData.map(p => {
-          const newP: any = {
-            ...p,
-            activo: p.activo === undefined ? true : p.activo,
-            activityOrder: p.activityOrder || [],
-            updatedAt: p.updatedAt || (p.capturedAt ? parseISO(p.capturedAt).getTime() : Date.now()),
-            historialDeCambios: p.historialDeCambios || [],
-            politicasAsociadas: p.politicasAsociadas || (Array.isArray(p.politicasAsociadasIds) ? p.politicasAsociadasIds.map((id: string) => ({ policyId: id, linkType: 'Aplica a' })) : []),
-          };
-          delete newP.politicasAsociadasIds;
-          if (!newP.procesosEntrada && p.formatosRecibe) { newP.procesosEntrada = Array.isArray(p.formatosRecibe) ? p.formatosRecibe : [p.formatosRecibe]; }
-          delete newP.formatosRecibe;
-          if (!newP.procesosSalida && p.formatosEntrega) { newP.procesosSalida = Array.isArray(p.formatosEntrega) ? p.formatosEntrega : [p.formatosEntrega]; }
-          delete newP.formatosEntrega;
-          return newP as CapturedProcess;
-        });
-        setAllCapturedData(migratedData);
-      } else {
-        setAllCapturedData([]);
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error);
-      toast({ title: "Error al cargar datos", variant: "destructive" });
-      setAllCapturedData([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-  
-  useEffect(() => {
-    if (!isLoading) {
-      try {
-        localStorage.setItem(CAPTURED_DATA_LOCAL_STORAGE_KEY, JSON.stringify(allCapturedData));
-      } catch (error) {
-        console.error("Error saving captured data:", error);
-        toast({ title: "Error al guardar", variant: "destructive" });
-      }
-    }
-  }, [allCapturedData, isLoading]);
   
   const toggleRow = (id: string) => {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
@@ -314,7 +255,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
     if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
-    if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.activityOrder?.length || 0) === 0 : (proc.activityOrder?.length || 0) > 0));
+    if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.procedimientoOrder?.length || 0) === 0 : (proc.procedimientoOrder?.length || 0) > 0));
     
     if (sortConfig !== null) {
       dataToFilter.sort((a, b) => {
@@ -367,52 +308,16 @@ export default function ProcesosYFlujosRegistradosPage() {
   
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
-    try {
-      const updatedData = allCapturedData.map(p => p.id === processToDelete.id ? { ...p, deletedAt: new Date().toISOString(), updatedAt: Date.now() } : p);
-      setAllCapturedData(updatedData);
-      toast({ title: "Proceso Eliminado", variant: 'destructive' });
-      addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: processToDelete.proceso, details: `Proceso "${processToDelete.proceso}" movido a la papelera.`});
-    } catch (error) {
-      toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive"});
-    }
+    softDeleteProceso(processToDelete.id);
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
   };
   const handleRestoreProcess = (id: string) => {
-    try {
-      let restoredProcessName = '';
-      const updatedData = allCapturedData.map(p => {
-        if (p.id === id) {
-          restoredProcessName = p.proceso;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { deletedAt, ...restoredProc } = p;
-          return { ...restoredProc, activo: true, updatedAt: Date.now() };
-        }
-        return p;
-      });
-      setAllCapturedData(updatedData);
-      toast({ title: "Proceso Restaurado" });
-      addLogEntry({ action: 'restore', entityType: 'Proceso', entityName: restoredProcessName, details: `Se restauró el proceso "${restoredProcessName}".`});
-    } catch (error) {
-      toast({ title: "Error al Restaurar", variant: "destructive"});
-    }
+    restoreProceso(id);
   };
 
   const handleToggleProcessStatus = (processId: string) => {
-    const processToToggle = allCapturedData.find(p => p.id === processId);
-    if (!processToToggle) return;
-    const targetStatus = !(processToToggle.activo !== false);
-    if (targetStatus === false) {
-      const linkedActiveActivities = allActivities.filter(act => act.activa && (act.procedimientoId && processToToggle.procedimientoOrder?.includes(act.procedimientoId)));
-      if (linkedActiveActivities.length > 0) {
-        toast({ title: "Inactivación Bloqueada", description: `El proceso no puede inactivarse porque una de sus actividades está activa.`, variant: "destructive", duration: 7000, });
-        return;
-      }
-    }
-    const updatedData = allCapturedData.map(p => p.id === processId ? { ...p, activo: targetStatus, updatedAt: Date.now() } : p);
-    setAllCapturedData(updatedData);
-    toast({ title: `Proceso ${targetStatus ? 'Activado' : 'Inactivado'}` });
-    addLogEntry({ action: 'status_change', entityType: 'Proceso', entityName: processToToggle.proceso, details: `El estado del proceso "${processToToggle.proceso}" cambió a ${targetStatus ? 'Activo' : 'Inactivo'}.`});
+    toggleProcesoStatus(processId);
   };
 
   const handleOpenEditDialog = (proc: CapturedProcess) => {
@@ -427,91 +332,11 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   function handleEditSubmit(values: CapturaFormData) {
     if (!editingProcess) return;
-
-    const originalProcess = allCapturedData.find(p => p.id === editingProcess.id);
-    if (!originalProcess) {
-      toast({ title: "Error", description: "No se encontró el proceso original para comparar cambios.", variant: "destructive" });
-      return;
-    }
-    
-    let updatedData = [...allCapturedData];
-    const hasNameChanged = originalProcess.proceso !== values.proceso;
-
-    const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof CapturaFormData)[] = [
-      'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'frecuencia', 
-      'tiempoEstimado', 'tiempoIdeal', 'costoEstimado', 'costoIdeal', 'monedaCosto',
-      'informacionRecibe', 'informacionEntrega'
-    ];
-
-    fieldsToCompare.forEach(key => {
-      const originalValue = originalProcess[key as keyof CapturedProcess] ?? '';
-      const newValue = values[key as keyof CapturedProcess] ?? '';
-      if (originalValue !== newValue) {
-        changes.push({
-          timestamp: new Date().toISOString(),
-          field: key,
-          before: originalProcess[key as keyof CapturedProcess] ?? 'No especificado',
-          after: values[key as keyof CapturedProcess] ?? 'No especificado'
-        });
-      }
-    });
-
-    const arrayFields: (keyof CapturaFormData)[] = ['sistemas', 'procesosEntrada', 'procesosSalida'];
-    arrayFields.forEach(key => {
-        const originalValue = JSON.stringify((originalProcess[key as keyof CapturedProcess] as string[] | undefined)?.sort() || []);
-        const newValue = JSON.stringify((values[key as keyof CapturedProcess] as string[] | undefined)?.sort() || []);
-        if (originalValue !== newValue) {
-             changes.push({
-                timestamp: new Date().toISOString(),
-                field: key,
-                before: (originalProcess[key as keyof CapturedProcess] as string[] | undefined)?.join(', ') || 'Ninguno',
-                after: (values[key as keyof CapturedProcess] as string[] | undefined)?.join(', ') || 'Ninguno'
-             });
-        }
-    });
-    
-    // First, update the process being edited.
-    let dataWithChanges = allCapturedData.map(p =>
-        p.id === editingProcess.id ? {
-          ...editingProcess,
-          ...values,
-          departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
-          updatedAt: Date.now(),
-          historialDeCambios: [...(p.historialDeCambios || []), ...changes]
-        } : p
-    );
-    
-    // Then, if the name changed, cascade the update.
-    if (hasNameChanged) {
-        const oldName = originalProcess.proceso;
-        const newName = values.proceso;
-        dataWithChanges = dataWithChanges.map(p => {
-            if (p.id === editingProcess.id) return p; // Skip the just-updated process
-            
-            const newProcesosEntrada = p.procesosEntrada?.map(entrada => entrada === oldName ? newName : entrada);
-            const newProcesosSalida = p.procesosSalida?.map(salida => salida === oldName ? newName : salida);
-            
-            // Check if there are actual changes to avoid unnecessary updates
-            if (JSON.stringify(p.procesosEntrada) !== JSON.stringify(newProcesosEntrada) || JSON.stringify(p.procesosSalida) !== JSON.stringify(newProcesosSalida)) {
-              return {
-                ...p,
-                procesosEntrada: newProcesosEntrada,
-                procesosSalida: newProcesosSalida,
-              };
-            }
-            return p;
-        });
-    }
-
-    if (changes.length > 0) {
-      setAllCapturedData(dataWithChanges);
-      toast({ title: "Proceso Actualizado", description: `${changes.length} campo(s) fueron modificados.` });
-      addLogEntry({ action: 'update', entityType: 'Proceso', entityName: values.proceso, details: `Se actualizó el proceso "${values.proceso}".`});
-    } else {
-       toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar." });
-    }
-
+    const dataToUpdate: Partial<Omit<CapturedProcess, 'id'>> = {
+      ...values,
+      departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
+    };
+    updateProceso(editingProcess.id, dataToUpdate);
     setIsEditDialogOpen(false);
     setEditingProcess(null);
   }
@@ -594,7 +419,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   const getEffectiveCost = (proc: CapturedProcess) => {
     if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };
-    return { value: 0, isDerived: false }; // Activities no longer have cost
+    return { value: 0, isDerived: false };
   };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
@@ -690,7 +515,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     </DropdownMenu>
   )};
 
-  if (isLoading || isLoadingActividades || isLoadingAreas || isLoadingPuestos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
+  if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
   return (
     <div className="container mx-auto py-8">
@@ -744,7 +569,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 const isExpanded = expandedRows[proc.id];
                 const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
 
-                const activitiesToShow = (proc.activityOrder || [])
+                const activitiesToShow = (proc.procedimientoOrder || [])
                     .map(actId => allActivities.find(a => a.id === actId))
                     .filter((act): act is Actividad => !!act)
                     .filter(act => {
@@ -781,7 +606,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                             </span>
                         </TooltipTrigger>{isDerived && <TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent>}</Tooltip></TooltipProvider>
                     </TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.activityOrder?.length || 0}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.procedimientoOrder?.length || 0}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" />
@@ -813,7 +638,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                         </Card>
                         <div>
                           <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
-                           {(proc.activityOrder && proc.activityOrder.length > 0) ? (
+                           {(proc.procedimientoOrder && proc.procedimientoOrder.length > 0) ? (
                                 activitiesToShow.length > 0 ? (
                                     <div className="space-y-3">
                                         {activitiesToShow.map((act, index) => (
@@ -874,8 +699,8 @@ export default function ProcesosYFlujosRegistradosPage() {
               <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField control={editForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciaOptions as string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={editForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciaOptions as readonly string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as readonly string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                  <FormField control={editForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Est. (min)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>)} />
@@ -885,9 +710,9 @@ export default function ProcesosYFlujosRegistradosPage() {
               </div>
               <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Info. Recibida</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoading, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Info. Entregada</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoading, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
                 <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>

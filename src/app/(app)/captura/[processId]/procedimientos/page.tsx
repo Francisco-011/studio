@@ -68,7 +68,7 @@ export default function DefinirProcedimientosPage() {
                           tempId: globalProc.id, 
                           nombre: globalProc.nombre, 
                           descripcion: globalProc.descripcion,
-                          politicasAsociadasIds: globalProc.politicasAsociadasIds || [],
+                          politicasAsociadasIds: globalProc.politicasAsociadas?.map(p => p.policyId) || [],
                         };
                     }
                     return null;
@@ -125,34 +125,42 @@ export default function DefinirProcedimientosPage() {
     const finalProcedimientoIds: string[] = [];
 
     try {
+      const globalProcedimientosMap = new Map(globalProcedimientos.map(p => [p.id, p]));
+
       for (const localProc of definedProcedimientos) {
         let idToLink: string;
-        const existingGlobal = globalProcedimientos.find(gp => gp.id === localProc.tempId);
-        const payload: ProcedimientoCreationData = {
+
+        const payload: Omit<ProcedimientoCreationData, 'procesoId'> = {
           nombre: localProc.nombre,
           descripcion: localProc.descripcion,
-          procesoId: parentProcess.id,
-          activityOrder: existingGlobal?.activityOrder || [],
-          politicasAsociadasIds: localProc.politicasAsociadasIds || [],
+          activityOrder: [],
+          politicasAsociadas: (localProc.politicasAsociadasIds || []).map(id => ({
+            policyId: id,
+            linkType: 'Aplica a',
+          })),
         };
-
-        if (existingGlobal) {
-          idToLink = existingGlobal.id;
-          await updateGlobalProcedimiento(idToLink, payload);
+        
+        const isExistingGlobal = globalProcedimientosMap.has(localProc.tempId);
+        
+        if (isExistingGlobal) {
+          idToLink = localProc.tempId;
+          const existingProc = globalProcedimientosMap.get(idToLink)!;
+          payload.activityOrder = existingProc.activityOrder || [];
+          await updateGlobalProcedimiento(idToLink, { ...payload, procesoId: parentProcess.id });
         } else {
-          const newProc = await addProcedimiento(payload);
-          if (!newProc) throw new Error("Failed to create new procedimiento.");
+          const newProc = await addProcedimiento({ ...payload, procesoId: parentProcess.id });
+          if (!newProc) throw new Error(`Fallo al crear el procedimiento: ${localProc.nombre}`);
           idToLink = newProc.id;
         }
         finalProcedimientoIds.push(idToLink);
       }
 
-      await updateProceso(parentProcess.id, { procedimientoOrder: finalProcedimientoIds, updatedAt: Date.now() });
+      await updateProceso(parentProcess.id, { procedimientoOrder: finalProcedimientoIds });
       toast({ title: "Éxito", description: `Procedimientos guardados para '${parentProcess.proceso}'. El siguiente paso es asignar actividades desde el Panel Jerárquico.` });
-      router.push('/procesos-y-flujos-registrados');
+      router.push('/analisis/panel-jerarquico');
     } catch (e) {
       console.error("Error saving:", e);
-      toast({ title: "Error al Guardar", variant: "destructive" });
+      toast({ title: "Error al Guardar", description: String(e), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
