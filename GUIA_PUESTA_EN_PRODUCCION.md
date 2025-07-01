@@ -1,4 +1,3 @@
-
 # SIAP: Guía Final para Puesta en Producción
 
 ¡Felicidades! Hemos construido juntos una aplicación poderosa y funcional. Este documento es tu mapa del tesoro, una guía paso a paso y sin tecnicismos para llevar SIAP del estado de prototipo a una aplicación real, segura y en línea, lista para ser usada por tu equipo.
@@ -100,92 +99,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 1.  **Vuelve a Firestore**: En el menú de la izquierda de Firebase, ve a **"Compilación"** -> **"Firestore Database"**.
 2.  **Ve a la Pestaña "Reglas"**: En la parte superior, haz clic en la pestaña **"Reglas"**.
 3.  **Borra el Contenido Actual**: Verás un texto de ejemplo en el editor. Selecciónalo todo y bórralo.
-4.  **Pega las Nuevas Reglas**: Copia TODO el contenido del siguiente bloque de código y pégalo en el editor de reglas de Firebase. Este código se encuentra también en el archivo `firestore.rules` de tu proyecto.
-
-    ```js
-    rules_version = '2';
-
-    service cloud.firestore {
-      match /databases/{database}/documents {
-      
-        function esAdmin() {
-          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
-        }
-        
-        function rolUsuario() {
-          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
-        }
-
-        function nivelAccesoUsuario() {
-          let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-          // Default to 'Público' if nivelAcceso is not set
-          return 'nivelAcceso' in userData ? userData.nivelAcceso : 'Público';
-        }
-
-        // Reglas para la colección de usuarios
-        match /users/{userId} {
-          allow read, update: if request.auth.uid == userId || esAdmin();
-          allow create: if request.auth.uid != null; // Allow signup
-          allow delete: if esAdmin();
-        }
-
-        // Reglas para colecciones de configuración (Catálogos)
-        match /areas/{areaId} {
-          allow read: if request.auth.uid != null;
-          allow create, update, delete: if esAdmin();
-        }
-        
-        match /departamentos/{deptoId} {
-          allow read: if request.auth.uid != null;
-          allow create, update, delete: if esAdmin();
-        }
-
-        match /puestos/{puestoId} {
-          allow read: if request.auth.uid != null;
-          allow create, update, delete: if esAdmin();
-        }
-        
-        match /sistemas/{sistemaId} {
-          allow read: if request.auth.uid != null;
-          allow create, update, delete: if esAdmin();
-        }
-        
-        match /sistemas_costos/{costoId} {
-          allow read, write: if esAdmin();
-        }
-
-        // Reglas para colecciones operativas
-        match /acciones/{accionId} {
-          allow read, write: if request.auth.uid != null;
-        }
-        
-        match /actividades/{actividadId} {
-          allow read, write: if request.auth.uid != null;
-        }
-        
-        match /procesos/{procesoId} {
-          allow read, write: if request.auth.uid != null;
-        }
-
-        match /procedimientos/{procedimientoId} {
-            allow read, write: if request.auth.uid != null;
-        }
-        
-        // Reglas de acceso granular para Políticas
-        match /politicas/{politicaId} {
-          allow get: if request.auth.uid != null;
-          // Allow list if the user's access level permits viewing the policy's classification
-          allow list: if esAdmin() ||
-                       (nivelAccesoUsuario() in ['Ejecutivo', 'Confidencial'] && resource.data.clasificacion in ['Público', 'Privado', 'Confidencial']) ||
-                       (nivelAccesoUsuario() in ['Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
-                       (nivelAccesoUsuario() == 'Público' && resource.data.clasificacion == 'Público');
-          
-          allow create, update: if rolUsuario() in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
-          allow delete: if esAdmin();
-        }
-      }
-    }
-    ```
+4.  **Pega las Nuevas Reglas**: En tu proyecto, busca el archivo llamado **`firestore.rules`**. Abre este archivo, copia TODO su contenido y pégalo en el editor de reglas de Firebase.
 5.  **Publica los Cambios**: Haz clic en el botón **"Publicar"**.
 
 ¡Tus datos ahora están protegidos por reglas de seguridad a nivel de servidor!

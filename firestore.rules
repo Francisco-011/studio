@@ -1,9 +1,9 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
   
+    // Helper Functions
     function esAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
     }
@@ -18,14 +18,16 @@ service cloud.firestore {
       return 'nivelAcceso' in userData ? userData.nivelAcceso : 'Público';
     }
 
-    // Reglas para la colección de usuarios
+    // --- COLLECTION RULES ---
+
+    // Users Collection
     match /users/{userId} {
       allow read, update: if request.auth.uid == userId || esAdmin();
       allow create: if request.auth.uid != null; // Allow signup
       allow delete: if esAdmin();
     }
 
-    // Reglas para colecciones de configuración (Catálogos)
+    // Configuration Collections (Catalogs)
     match /areas/{areaId} {
       allow read: if request.auth.uid != null;
       allow create, update, delete: if esAdmin();
@@ -50,7 +52,7 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
-    // Reglas para colecciones operativas
+    // Operational Collections
     match /acciones/{accionId} {
       allow read, write: if request.auth.uid != null;
     }
@@ -67,15 +69,17 @@ service cloud.firestore {
         allow read, write: if request.auth.uid != null;
     }
     
-    // Reglas de acceso granular para Políticas
+    // Granular Access for Policies
     match /politicas/{politicaId} {
       allow get: if request.auth.uid != null;
-      // Allow list if the user's access level permits viewing the policy's classification
+      
+      // LIST access is based on user's access level vs policy's classification
       allow list: if esAdmin() ||
                    (nivelAccesoUsuario() in ['Ejecutivo', 'Confidencial'] && resource.data.clasificacion in ['Público', 'Privado', 'Confidencial']) ||
                    (nivelAccesoUsuario() in ['Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
                    (nivelAccesoUsuario() == 'Público' && resource.data.clasificacion == 'Público');
       
+      // WRITE access is based on user's role
       allow create, update: if rolUsuario() in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
       allow delete: if esAdmin();
     }
