@@ -327,7 +327,7 @@ export default function MejorasPage() {
 
     inefficiencyAnalysisResult.duplicateActivities?.forEach(dup => {
       const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
-      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA}/${dup.puestoA}, B: ${dup.areaB}/${dup.puestoB}).`;
+      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA || 'N/A'}/${dup.puestoA || 'N/A'}, B: ${dup.areaB || 'N/A'}/${dup.puestoB || 'N/A'}).`;
       
       addAccion({
           nombre: title,

@@ -41,8 +41,10 @@ SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral dis
 **Beneficios:** Ofrece una visión clara de cómo se distribuye y regula el trabajo en la organización. Es la herramienta principal para construir y auditar flujos.
 
 ### Análisis IA (Mejoras)
-**Función:** Módulo de inteligencia artificial que examina los datos capturados para encontrar posibles duplicidades (de procesos, actividades), sistemas redundantes y gaps de cumplimiento en las políticas (ej. procesos críticos sin política).
-**Beneficios:** Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas y sugiriendo mejoras accionables que pueden convertirse en "Acciones" con un solo clic.
+**Función:** Este módulo tiene dos sub-funciones:
+1.  **Análisis de Ineficiencias:** Examina los datos capturados para encontrar posibles duplicidades (de procesos, actividades), sistemas redundantes y gaps de cumplimiento en las políticas.
+2.  **Análisis de Perfil de Puesto:** Genera un perfil de puesto profesional y valida si las actividades asignadas a un rol están alineadas con sus responsabilidades.
+**Beneficios:** Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas, sugiriendo mejoras accionables y validando la coherencia de la estructura organizacional.
 
 ### Consulta IA
 **Función:** Un asistente de chat conversacional que entiende la estructura de datos de SIAP. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.
@@ -53,16 +55,16 @@ SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral dis
 **Beneficios:** Convierte las ideas y hallazgos en proyectos concretos y medibles, asegurando que las oportunidades de mejora no se queden en el papel.
 
 ### Auditoría y Cumplimiento
-**Función:** Permite realizar auditorías formales sobre procesos, puestos o sistemas. Se pueden registrar hallazgos y generar planes de acción. También incluye un registro de actividad de todo el sistema.
-**Beneficios:** Facilita las labores de control interno y auditoría, manteniendo un registro trazable de las revisiones y sus resultados.
+**Función:** Permite realizar auditorías formales sobre procesos, puestos o sistemas. Se pueden registrar hallazgos y generar planes de acción. Su dashboard muestra **alertas automáticas** para las auditorías que están pendientes o vencidas según la frecuencia programada.
+**Beneficios:** Facilita las labores de control interno, mantiene un registro trazable y ayuda a gestionar proactivamente el calendario de cumplimiento.
 
 ### Configuración
 **Función:** El panel de control administrativo. Aquí se gestionan las listas maestras (Áreas, Departamentos, Puestos, Sistemas y sus costos) y se realizan cargas masivas de datos.
 **Beneficios:** Mantiene la integridad de los datos del sistema y permite una configuración y actualización rápida y eficiente.
 
 ### Usuarios y Permisos
-**Función:** Desde aquí, un Administrador puede gestionar los roles de los usuarios y definir qué puede hacer y ver cada rol dentro del sistema, asignando permisos granulares por módulo.
-**Beneficios:** Asegura que cada usuario tenga acceso únicamente a la información y funciones que le corresponden, protegiendo la integridad y confidencialidad de los datos.
+**Función:** Desde aquí, un Administrador puede gestionar los roles de los usuarios, definir qué puede hacer y ver cada rol dentro del sistema, y gestionar **excepciones de acceso** a documentos específicos para usuarios individuales.
+**Beneficios:** Asegura un control de acceso granular y flexible, protegiendo la integridad y confidencialidad de los datos.
 
 ---
 
@@ -70,7 +72,7 @@ SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral dis
 
 ### Cómo Capturar un Proceso y su Flujo Completo
 1.  Ve al módulo **"Captura"**.
-2.  Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, etc.).
+2.  Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, frecuencia de auditoría, etc.).
 3.  Al guardar, serás redirigido a la página de **"Definir Procedimientos"**. Aquí, añade uno o más procedimientos que componen el proceso.
 4.  Luego, ve al **"Panel Jerárquico"**. Expande el proceso que acabas de crear hasta ver sus procedimientos.
 5.  Desde el **"Pool de Actividades"** a la derecha, arrastra y suelta las actividades que necesites sobre el procedimiento correspondiente.
@@ -84,8 +86,8 @@ SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral dis
 5.  Para vincular una política, ve al módulo **"Políticas"**, edita la política deseada y usa el botón **"Vincular a Elementos"** para asociarla a procesos, procedimientos o actividades, especificando el tipo de relación.
 
 ### Cómo Realizar un Análisis con IA
-1.  Ve a **"Análisis IA"**.
+1.  Ve a **"Análisis IA"** y selecciona la pestaña **"Análisis de Ineficiencias"**.
 2.  Haz clic en el botón **"Analizar Ineficiencias con IA"**.
-3.  Se abrirá una ventana para que selecciones los procesos, actividades y sistemas que la IA debe examinar.
-4.  La IA devolverá un resumen y listas de posibles **duplicidades, redundancias y gaps de políticas**.
-5.  Si los hallazgos son acertados, puedes generar **"Acciones de Mejora"** directamente desde los resultados, las cuales aparecerán en el módulo de "Acciones" listas para ser gestionadas.
+3.  Se abrirá una ventana para que selecciones los procesos, procedimientos, actividades, puestos y sistemas que la IA debe examinar.
+4.  La IA devolverá un resumen y listas de posibles **duplicidades, redundancias y gaps de políticas**, evitando sugerir mejoras que ya estén registradas como "Acciones".
+5.  Si los hallazgos son acertados, puedes generar **"Acciones de Mejora"** directamente desde los resultados.

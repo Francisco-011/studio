@@ -73,10 +73,12 @@ export default function AyudaPage() {
                     <p className="mt-1"><strong>Función:</strong> Una vista interactiva que muestra la estructura completa <strong>Proceso → Procedimiento → Actividad → Política</strong>. Permite arrastrar actividades desde un "pool" para asignarlas a procedimientos y visualizar al instante qué políticas regulan cada parte del flujo.</p>
                     <p className="mt-1"><strong>Beneficios:</strong> Ofrece una visión clara de cómo se distribuye y regula el trabajo en la organización. Es la herramienta principal para construir y auditar flujos.</p>
                   </div>
-                  <div className="pt-4 border-t border-dashed">
+                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Análisis IA (Mejoras)</h5>
-                    <p className="mt-1"><strong>Función:</strong> Módulo de inteligencia artificial que examina los datos capturados para encontrar posibles duplicidades (de procesos, actividades), sistemas redundantes y gaps de cumplimiento en las políticas (ej. procesos críticos sin política).</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas y sugiriendo mejoras accionables que pueden convertirse en "Acciones" con un solo clic.</p>
+                    <p className="mt-1"><strong>Función:</strong> Este módulo tiene dos sub-funciones:
+                        1.  **Análisis de Ineficiencias:** Examina los datos capturados para encontrar posibles duplicidades (de procesos, actividades), sistemas redundantes y gaps de cumplimiento en las políticas.
+                        2.  **Análisis de Perfil de Puesto:** Genera un perfil de puesto profesional y valida si las actividades asignadas a un rol están alineadas con sus responsabilidades.</p>
+                    <p className="mt-1"><strong>Beneficios:</strong> Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas, sugiriendo mejoras accionables y validando la coherencia de la estructura organizacional.</p>
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Consulta IA</h5>
@@ -90,18 +92,18 @@ export default function AyudaPage() {
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Auditoría y Cumplimiento</h5>
-                    <p className="mt-1"><strong>Función:</strong> Permite realizar auditorías formales sobre procesos, puestos o sistemas. Se pueden registrar hallazgos y generar planes de acción. También incluye un registro de actividad de todo el sistema.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Facilita las labores de control interno y auditoría, manteniendo un registro trazable de las revisiones y sus resultados.</p>
+                    <p className="mt-1"><strong>Función:</strong> Permite realizar auditorías formales sobre procesos, puestos o sistemas. Se pueden registrar hallazgos y generar planes de acción. Su dashboard muestra **alertas automáticas** para las auditorías que están pendientes o vencidas según la frecuencia programada.</p>
+                    <p className="mt-1"><strong>Beneficios:</strong> Facilita las labores de control interno, mantiene un registro trazable y ayuda a gestionar proactivamente el calendario de cumplimiento.</p>
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Configuración</h5>
                     <p className="mt-1"><strong>Función:</strong> El panel de control administrativo. Aquí se gestionan las listas maestras (Áreas, Departamentos, Puestos, Sistemas y sus costos) y se realizan cargas masivas de datos.</p>
                     <p className="mt-1"><strong>Beneficios:</strong> Mantiene la integridad de los datos del sistema y permite una configuración y actualización rápida y eficiente.</p>
                   </div>
-                  <div className="pt-4 border-t border-dashed">
+                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Usuarios y Permisos</h5>
-                    <p className="mt-1"><strong>Función:</strong> Desde aquí, un Administrador puede gestionar los roles de los usuarios y definir qué puede hacer y ver cada rol dentro del sistema, asignando permisos granulares por módulo.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Asegura que cada usuario tenga acceso únicamente a la información y funciones que le corresponden, protegiendo la integridad y confidencialidad de los datos.</p>
+                    <p className="mt-1"><strong>Función:</strong> Desde aquí, un Administrador puede gestionar los roles de los usuarios, definir qué puede hacer y ver cada rol dentro del sistema, y gestionar **excepciones de acceso** a documentos específicos para usuarios individuales.</p>
+                    <p className="mt-1"><strong>Beneficios:</strong> Asegura un control de acceso granular y flexible, protegiendo la integridad y confidencialidad de los datos.</p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -113,31 +115,31 @@ export default function AyudaPage() {
                     <h5 className="font-bold text-primary">Cómo Capturar un Proceso y su Flujo Completo</h5>
                     <ol className="list-decimal pl-5 space-y-1 mt-2">
                       <li>Ve al módulo <strong>"Captura"</strong>.</li>
-                      <li>Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, etc.).</li>
+                      <li>Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, frecuencia de auditoría, etc.).</li>
                       <li>Al guardar, serás redirigido a la página de <strong>"Definir Procedimientos"</strong>. Aquí, añade uno o más procedimientos que componen el proceso.</li>
-                      <li>Para cada procedimiento, puedes asociar políticas y definir sus detalles. Las actividades se añaden desde el <strong>Panel Jerárquico</strong>.</li>
-                      <li>Una vez guardados los procedimientos, ve al módulo <strong>"Panel Jerárquico"</strong> para asignar las actividades a cada procedimiento.</li>
-                      <li>Todo el flujo será visible en <strong>"Procesos Registrados"</strong> y en el <strong>"Panel Jerárquico"</strong>.</li>
+                      <li>Luego, ve al **"Panel Jerárquico"**. Expande el proceso que acabas de crear hasta ver sus procedimientos.</li>
+                      <li>Desde el **"Pool de Actividades"** a la derecha, arrastra y suelta las actividades que necesites sobre el procedimiento correspondiente.</li>
+                      <li>Una vez guardado, todo el flujo será visible en **"Procesos Registrados"** y en el **"Panel Jerárquico"**.</li>
                     </ol>
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Cómo Vincular Políticas y Actividades en el Panel Jerárquico</h5>
                     <ol className="list-decimal pl-5 space-y-1 mt-2">
-                      <li>Ve al <strong>"Panel Jerárquico"</strong>.</li>
+                      <li>Ve al **"Panel Jerárquico"**.</li>
                       <li>Expande el árbol de la izquierda para encontrar el <strong>procedimiento</strong> al que quieres añadirle trabajo.</li>
-                      <li>En el <strong>"Pool de Actividades"</strong> de la derecha, busca la actividad que quieres asignar (puedes usar los filtros).</li>
-                      <li><strong>Arrastra la actividad</strong> desde el pool y <strong>suéltala sobre el nombre del procedimiento</strong> o entre dos actividades existentes dentro de un procedimiento.</li>
-                      <li>Para vincular una política, ve al módulo <strong>"Políticas"</strong>, edita la política deseada y usa el botón <strong>"Vincular a Elementos"</strong> para asociarla a procesos, procedimientos o actividades, especificando el tipo de relación. La vinculación también aparecerá en el panel.</li>
+                      <li>En el **"Pool de Actividades"** de la derecha, busca la actividad que quieres asignar (puedes usar los filtros).</li>
+                      <li><strong>Arrastra la actividad</strong> desde el pool y **suéltala sobre el nombre del procedimiento** o entre dos actividades existentes dentro de un procedimiento.</li>
+                      <li>Para vincular una política, ve al módulo <strong>"Políticas"</strong>, edita la política deseada y usa el botón **"Vincular a Elementos"** para asociarla a procesos, procedimientos o actividades, especificando el tipo de relación.</li>
                     </ol>
                   </div>
                   <div className="pt-4 border-t border-dashed">
                     <h5 className="font-bold text-primary">Cómo Realizar un Análisis con IA</h5>
                     <ol className="list-decimal pl-5 space-y-1 mt-2">
-                      <li>Ve a <strong>"Análisis IA"</strong>.</li>
+                      <li>Ve a <strong>"Análisis IA"</strong> y selecciona la pestaña **"Análisis de Ineficiencias"**.</li>
                       <li>Haz clic en el botón <strong>"Analizar Ineficiencias con IA"</strong>.</li>
-                      <li>Se abrirá una ventana para que selecciones los procesos, actividades y sistemas que la IA debe examinar.</li>
-                      <li>La IA devolverá un resumen y listas de posibles <strong>duplicidades, redundancias y gaps de políticas</strong>.</li>
-                      <li>Si los hallazgos son acertados, puedes generar <strong>"Acciones de Mejora"</strong> directamente desde los resultados, las cuales aparecerán en el módulo de "Acciones" listas para ser gestionadas.</li>
+                      <li>Se abrirá una ventana para que selecciones los procesos, procedimientos, actividades, puestos y sistemas que la IA debe examinar.</li>
+                      <li>La IA devolverá un resumen y listas de posibles **duplicidades, redundancias y gaps de políticas**, evitando sugerir mejoras que ya estén registradas como "Acciones".</li>
+                      <li>Si los hallazgos son acertados, puedes generar **"Acciones de Mejora"** directamente desde los resultados.</li>
                     </ol>
                   </div>
                 </AccordionContent>

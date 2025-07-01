@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, getDocs } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
@@ -93,6 +93,7 @@ export interface CapturedProcess extends CapturaFormData {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   politicasAsociadasIds?: string[];
+  puestoId?: string; // Added for filtering
 }
 
 interface ProcesosContextType {

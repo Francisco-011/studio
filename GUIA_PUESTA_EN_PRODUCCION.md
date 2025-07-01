@@ -62,7 +62,7 @@ Este es el paso más crucial. Le daremos a nuestra aplicación las "llaves" para
 2.  **Registra tu Aplicación Web**:
     *   Asegúrate de estar en la pestaña **"General"**.
     *   Busca la sección "Tus apps". Haz clic en el ícono que parece `</>` (representa una aplicación web).
-    *   Asígnale un "Apodo" a tu app, como `SIAP Web`. No necesitas marcar la casilla de "Firebase Hosting" en este paso.
+    *   Asignale un "Apodo" a tu app, como `SIAP Web`. No necesitas marcar la casilla de "Firebase Hosting" en este paso.
     *   Haz clic en **"Registrar app"**.
 3.  **Copia las Credenciales**:
     *   Firebase te mostrará un bloque de código con un objeto llamado `firebaseConfig`. ¡Estas son tus llaves!
@@ -99,7 +99,70 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 1.  **Vuelve a Firestore**: En el menú de la izquierda de Firebase, ve a **"Compilación"** -> **"Firestore Database"**.
 2.  **Ve a la Pestaña "Reglas"**: En la parte superior, haz clic en la pestaña **"Reglas"**.
 3.  **Borra el Contenido Actual**: Verás un texto de ejemplo en el editor. Selecciónalo todo y bórralo.
-4.  **Pega las Nuevas Reglas**: En tu proyecto, busca el archivo llamado **`firestore.rules`**. Abre este archivo, copia TODO su contenido y pégalo en el editor de reglas de Firebase.
+4.  **Pega las Nuevas Reglas**: Copia TODO el contenido del siguiente bloque de código y pégalo en el editor de reglas de Firebase.
+
+    ```
+    rules_version = '2';
+
+    service cloud.firestore {
+      match /databases/{database}/documents {
+
+        // Helper function to check if a user is authenticated
+        function isAuthenticated() {
+          return request.auth != null;
+        }
+
+        // Helper function to get user's role and data
+        function getUserData(userId) {
+          return get(/databases/$(database)/documents/users/$(userId)).data;
+        }
+
+        // Helper function to check if the user has a specific role
+        function hasRole(roles) {
+          let userRole = getUserData(request.auth.uid).rol;
+          return userRole in roles;
+        }
+
+        // --- USERS ---
+        // Users can read their own data.
+        // Admins can read anyone's data.
+        // Users can only be created during signup.
+        // Users can update their own data. Admins can update anyone's data.
+        match /users/{userId} {
+          allow read: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
+          allow create: if isAuthenticated(); // Anyone can create their profile during signup
+          allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
+        }
+
+        // --- GENERIC CATALOGS (Areas, Departamentos, Puestos, Sistemas, etc.) ---
+        // Any authenticated user can read catalogs, only Admins and Gerentes can write.
+        match /{collection}/{docId} where collection in ['areas', 'departamentos', 'puestos', 'sistemas', 'sistemas_costos', 'acciones', 'actividades', 'procedimientos'] {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        
+        // --- PROCESOS y POLITICAS (Special Read Logic) ---
+        // Read is more permissive to allow client-side filtering based on Nivel de Acceso and Exceptions.
+        // Write permissions remain strict.
+        match /procesos/{processId} {
+            allow read: if isAuthenticated();
+            allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto', 'Consultor']);
+        }
+
+        match /politicas/{policyId} {
+            allow read: if isAuthenticated();
+            allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto', 'Consultor']);
+        }
+        
+        // --- ACCESS EXCEPTIONS ---
+        // Only Admins or Project Managers can manage access exceptions.
+        match /access_exceptions/{exceptionId} {
+            allow read, write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+      }
+    }
+    ```
+
 5.  **Publica los Cambios**: Haz clic en el botón **"Publicar"**.
 
 ¡Tus datos ahora están protegidos por reglas de seguridad a nivel de servidor!
