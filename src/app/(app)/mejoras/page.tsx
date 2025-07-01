@@ -112,6 +112,81 @@ export default function MejorasPage() {
   const [dialogDeptoFilter, setDialogDeptoFilter] = useState('all');
   const [dialogPuestoFilter, setDialogPuestoFilter] = useState('all');
 
+  const dialogAvailableDeptos = useMemo(() => {
+    if (dialogAreaFilter === 'all') return [];
+    const area = areas.find(a => a.nombre === dialogAreaFilter);
+    return area ? departamentos.filter(d => d.areaId === area.id) : [];
+  }, [dialogAreaFilter, areas, departamentos]);
+
+  const dialogAvailablePuestos = useMemo(() => {
+    if (dialogAreaFilter === 'all') return puestos;
+    const area = areas.find(a => a.nombre === dialogAreaFilter);
+    if (!area) return [];
+    const puestosInArea = puestos.filter(p => p.areaId === area.id);
+    if (dialogDeptoFilter !== 'all') {
+      const depto = departamentos.find(d => d.id === dialogDeptoFilter);
+      return depto ? puestosInArea.filter(p => p.departamentoId === depto.id) : [];
+    }
+    return puestosInArea;
+  }, [dialogAreaFilter, dialogDeptoFilter, areas, departamentos, puestos]);
+
+  const filteredDialogProcesos = useMemo(() => {
+    return procesos.filter(p => {
+        if (p.deletedAt) return false;
+        const areaMatch = dialogAreaFilter === 'all' || p.area === dialogAreaFilter;
+        if (!areaMatch) return false;
+        
+        const depto = departamentos.find(d => d.id === dialogDeptoFilter);
+        const deptoMatch = dialogDeptoFilter === 'all' || p.departamento === depto?.nombre;
+        if (!deptoMatch) return false;
+
+        const puestoMatch = dialogPuestoFilter === 'all' || p.puestoId === dialogPuestoFilter;
+        return puestoMatch;
+    });
+  }, [procesos, dialogAreaFilter, dialogDeptoFilter, dialogPuestoFilter, departamentos]);
+
+  const filteredDialogProcesoIds = useMemo(() => new Set(filteredDialogProcesos.map(p => p.id)), [filteredDialogProcesos]);
+
+  const filteredDialogProcedimientos = useMemo(() => {
+      return procedimientos.filter(p => p.procesoId && filteredDialogProcesoIds.has(p.procesoId));
+  }, [procedimientos, filteredDialogProcesoIds]);
+
+  const filteredDialogProcedimientoIds = useMemo(() => new Set(filteredDialogProcedimientos.map(p => p.id)), [filteredDialogProcedimientos]);
+
+  const filteredDialogActividades = useMemo(() => {
+      return actividades.filter(a => a.activa && a.procedimientoId && filteredDialogProcedimientoIds.has(a.procedimientoId));
+  }, [actividades, filteredDialogProcedimientoIds]);
+
+  const filteredDialogPuestos = dialogAvailablePuestos;
+  const filteredDialogSistemas = sistemas;
+
+  const handleSelectAll = (entityType: 'procesos' | 'procedimientos' | 'actividades' | 'puestos' | 'sistemas') => {
+      let allIds: string[] = [];
+      let setter: React.Dispatch<React.SetStateAction<string[]>>;
+
+      if (entityType === 'procesos') { allIds = filteredDialogProcesos.map(i => i.id); setter = setSelectedProcessIds; }
+      else if (entityType === 'procedimientos') { allIds = filteredDialogProcedimientos.map(i => i.id); setter = setSelectedProcedimientoIds; }
+      else if (entityType === 'actividades') { allIds = filteredDialogActividades.map(i => i.id); setter = setSelectedActivityIds; }
+      else if (entityType === 'puestos') { allIds = filteredDialogPuestos.map(i => i.id); setter = setSelectedPuestoAnalysisIds; }
+      else if (entityType === 'sistemas') { allIds = filteredDialogSistemas.map(i => i.id); setter = setSelectedSystemIds; }
+      else return;
+
+      setter(prev => Array.from(new Set([...prev, ...allIds])));
+  };
+
+  const handleDeselectAll = (entityType: 'procesos' | 'procedimientos' | 'actividades' | 'puestos' | 'sistemas') => {
+      let idsToDeselect: Set<string>;
+      let setter: React.Dispatch<React.SetStateAction<string[]>>;
+
+      if (entityType === 'procesos') { idsToDeselect = new Set(filteredDialogProcesos.map(i => i.id)); setter = setSelectedProcessIds; }
+      else if (entityType === 'procedimientos') { idsToDeselect = new Set(filteredDialogProcedimientos.map(i => i.id)); setter = setSelectedProcedimientoIds; }
+      else if (entityType === 'actividades') { idsToDeselect = new Set(filteredDialogActividades.map(i => i.id)); setter = setSelectedActivityIds; }
+      else if (entityType === 'puestos') { idsToDeselect = new Set(filteredDialogPuestos.map(i => i.id)); setter = setSelectedPuestoAnalysisIds; }
+      else if (entityType === 'sistemas') { idsToDeselect = new Set(filteredDialogSistemas.map(i => i.id)); setter = setSelectedSystemIds; }
+      else return;
+
+      setter(prev => prev.filter(id => !idsToDeselect.has(id)));
+  };
 
   const runInefficiencyAnalysis = async () => {
     setIsInefficiencyLoading(true);
@@ -392,33 +467,6 @@ export default function MejorasPage() {
       });
     }
   };
-
-  const dialogAvailableDeptos = useMemo(() => {
-    if (dialogAreaFilter === 'all') return [];
-    const area = areas.find(a => a.nombre === dialogAreaFilter);
-    return area ? departamentos.filter(d => d.areaId === area.id) : [];
-  }, [dialogAreaFilter, areas, departamentos]);
-
-  const dialogAvailablePuestos = useMemo(() => {
-    if (dialogAreaFilter === 'all') return puestos;
-    const area = areas.find(a => a.nombre === dialogAreaFilter);
-    if (!area) return [];
-    const puestosInArea = puestos.filter(p => p.areaId === area.id);
-    if (dialogDeptoFilter !== 'all') {
-      const depto = departamentos.find(d => d.id === dialogDeptoFilter);
-      return depto ? puestosInArea.filter(p => p.departamentoId === depto.id) : [];
-    }
-    return puestosInArea;
-  }, [dialogAreaFilter, dialogDeptoFilter, areas, departamentos, puestos]);
-
-  const filteredDialogItems = (items: any[], nameField: string) => {
-    return items.filter(item => {
-      const areaMatch = dialogAreaFilter === 'all' || item.area === dialogAreaFilter || puestos.find(p => p.id === item.puestoId)?.areaId === areas.find(a => a.nombre === dialogAreaFilter)?.id;
-      const deptoMatch = dialogDeptoFilter === 'all' || item.departamentoId === dialogDeptoFilter;
-      const puestoMatch = dialogPuestoFilter === 'all' || item.puestoId === dialogPuestoFilter;
-      return areaMatch && deptoMatch && puestoMatch;
-    });
-  };
   
   const totalSelected = selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length + selectedProcedimientoIds.length + selectedPuestoAnalysisIds.length;
 
@@ -572,11 +620,26 @@ export default function MejorasPage() {
                   <Tabs defaultValue="procesos">
                       <TabsList className="grid w-full grid-cols-5"><TabsTrigger value="procesos">Procesos</TabsTrigger><TabsTrigger value="procedimientos">Procedimientos</TabsTrigger><TabsTrigger value="actividades">Actividades</TabsTrigger><TabsTrigger value="puestos">Puestos</TabsTrigger><TabsTrigger value="sistemas">Sistemas</TabsTrigger></TabsList>
                       
-                      <TabsContent value="procesos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procesos.filter(p => !p.deletedAt && (dialogAreaFilter === 'all' || p.area === dialogAreaFilter) && (dialogPuestoFilter === 'all' || p.puestoId === dialogPuestoFilter)).map(proc => (<div key={proc.id} className="flex items-start space-x-2"><Checkbox id={`proc-${proc.id}`} checked={selectedProcessIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))} className="mt-1"/><label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.proceso}<span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span></label></div>))}</div></ScrollArea></TabsContent>
-                      <TabsContent value="procedimientos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procedimientos.map(proc => (<div key={proc.id} className="flex items-center space-x-2"><Checkbox id={`proc-item-${proc.id}`} checked={selectedProcedimientoIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcedimientoIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))}/><label htmlFor={`proc-item-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.nombre}</label></div>))}</div></ScrollArea></TabsContent>
-                      <TabsContent value="actividades"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{actividades.filter(a => a.activa).map(act => (<div key={act.id} className="flex items-center space-x-2"><Checkbox id={`act-${act.id}`} checked={selectedActivityIds.includes(act.id)} onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}/><label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">{act.nombre}</label></div>))}</div></ScrollArea></TabsContent>
-                      <TabsContent value="puestos"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{puestos.filter(p => (dialogAreaFilter === 'all' || p.areaId === areas.find(a=>a.nombre === dialogAreaFilter)?.id)).map(p => (<div key={p.id} className="flex items-center space-x-2"><Checkbox id={`puesto-an-${p.id}`} checked={selectedPuestoAnalysisIds.includes(p.id)} onCheckedChange={(checked) => setSelectedPuestoAnalysisIds(prev => checked ? [...prev, p.id] : prev.filter(id => id !== p.id))}/><label htmlFor={`puesto-an-${p.id}`} className="text-sm font-medium leading-none cursor-pointer">{p.nombre}</label></div>))}</div></ScrollArea></TabsContent>
-                      <TabsContent value="sistemas"><ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{sistemas.map(sys => (<div key={sys.id} className="flex items-center space-x-2"><Checkbox id={`sys-${sys.id}`} checked={selectedSystemIds.includes(sys.id)} onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}/><label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">{sys.nombre}</label></div>))}</div></ScrollArea></TabsContent>
+                      <TabsContent value="procesos">
+                        <div className="flex justify-end gap-2 mb-2"><Button size="sm" variant="outline" onClick={() => handleSelectAll('procesos')}>Seleccionar Visibles</Button><Button size="sm" variant="outline" onClick={() => handleDeselectAll('procesos')}>Deseleccionar Visibles</Button></div>
+                        <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{filteredDialogProcesos.map(proc => (<div key={proc.id} className="flex items-start space-x-2"><Checkbox id={`proc-${proc.id}`} checked={selectedProcessIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))} className="mt-1"/><label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.proceso}<span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span></label></div>))}</div></ScrollArea>
+                      </TabsContent>
+                      <TabsContent value="procedimientos">
+                        <div className="flex justify-end gap-2 mb-2"><Button size="sm" variant="outline" onClick={() => handleSelectAll('procedimientos')}>Seleccionar Visibles</Button><Button size="sm" variant="outline" onClick={() => handleDeselectAll('procedimientos')}>Deseleccionar Visibles</Button></div>
+                        <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{filteredDialogProcedimientos.map(proc => (<div key={proc.id} className="flex items-center space-x-2"><Checkbox id={`proc-item-${proc.id}`} checked={selectedProcedimientoIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcedimientoIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))}/><label htmlFor={`proc-item-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.nombre}</label></div>))}</div></ScrollArea>
+                      </TabsContent>
+                      <TabsContent value="actividades">
+                        <div className="flex justify-end gap-2 mb-2"><Button size="sm" variant="outline" onClick={() => handleSelectAll('actividades')}>Seleccionar Visibles</Button><Button size="sm" variant="outline" onClick={() => handleDeselectAll('actividades')}>Deseleccionar Visibles</Button></div>
+                        <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{filteredDialogActividades.map(act => (<div key={act.id} className="flex items-center space-x-2"><Checkbox id={`act-${act.id}`} checked={selectedActivityIds.includes(act.id)} onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}/><label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">{act.nombre}</label></div>))}</div></ScrollArea>
+                      </TabsContent>
+                      <TabsContent value="puestos">
+                        <div className="flex justify-end gap-2 mb-2"><Button size="sm" variant="outline" onClick={() => handleSelectAll('puestos')}>Seleccionar Visibles</Button><Button size="sm" variant="outline" onClick={() => handleDeselectAll('puestos')}>Deseleccionar Visibles</Button></div>
+                        <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{filteredDialogPuestos.map(p => (<div key={p.id} className="flex items-center space-x-2"><Checkbox id={`puesto-an-${p.id}`} checked={selectedPuestoAnalysisIds.includes(p.id)} onCheckedChange={(checked) => setSelectedPuestoAnalysisIds(prev => checked ? [...prev, p.id] : prev.filter(id => id !== p.id))}/><label htmlFor={`puesto-an-${p.id}`} className="text-sm font-medium leading-none cursor-pointer">{p.nombre}</label></div>))}</div></ScrollArea>
+                      </TabsContent>
+                      <TabsContent value="sistemas">
+                        <div className="flex justify-end gap-2 mb-2"><Button size="sm" variant="outline" onClick={() => handleSelectAll('sistemas')}>Seleccionar Visibles</Button><Button size="sm" variant="outline" onClick={() => handleDeselectAll('sistemas')}>Deseleccionar Visibles</Button></div>
+                        <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{filteredDialogSistemas.map(sys => (<div key={sys.id} className="flex items-center space-x-2"><Checkbox id={`sys-${sys.id}`} checked={selectedSystemIds.includes(sys.id)} onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}/><label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">{sys.nombre}</label></div>))}</div></ScrollArea>
+                      </TabsContent>
 
                   </Tabs>
               </div>
