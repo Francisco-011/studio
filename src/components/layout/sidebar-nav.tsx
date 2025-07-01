@@ -20,7 +20,6 @@ import {
   Target,
   ClipboardCheck,
   FolderTree, 
-  UploadCloud,
   ChevronRight,
   LifeBuoy,
   MessageCircleQuestion,

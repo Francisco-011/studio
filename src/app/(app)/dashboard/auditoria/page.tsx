@@ -18,10 +18,8 @@ import { cn } from '@/lib/utils';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
+import { useProcesos } from '@/contexts/ProcesosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-
 
 interface AuditFinding {
   type: "Conforme" | "No Conforme" | "Oportunidad de Mejora";
@@ -118,7 +116,7 @@ export default function AuditoriaDashboardPage() {
     
     if (range?.from) {
       const from = startOfDay(range.from);
-      const to = range.to ? endOfDay(range.to) : endOfDay(range.to);
+      const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
       filtered = filtered.filter(audit => {
           const auditDate = parseISO(audit.auditDate);
           return isValid(auditDate) && auditDate >= from && auditDate <= to;

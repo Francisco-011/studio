@@ -76,6 +76,8 @@ export interface CapturedProcess extends CapturaFormData {
   deletedAt?: string;
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
+  // The 'politicasAsociadas' from CapturaFormData already handles this.
+  politicasAsociadasIds?: string[]; // Kept for backwards compatibility if needed, but should be deprecated.
 }
 
 interface ProcesosContextType {
@@ -112,7 +114,6 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
                 capturedAt: capturedAtData?.toDate().toISOString() || new Date().toISOString(),
                 updatedAt: updatedAtData?.toMillis() || capturedAtData?.toMillis() || Date.now(),
                 deletedAt: deletedAtData?.toDate().toISOString(),
-                // Ensure politicasAsociadas is an array
                 politicasAsociadas: Array.isArray(data.politicasAsociadas) ? data.politicasAsociadas : [],
             } as CapturedProcess;
         });

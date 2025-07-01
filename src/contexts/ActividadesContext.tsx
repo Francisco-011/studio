@@ -30,6 +30,9 @@ export interface Actividad {
   descripcionBreve?: string;
   sistemaUtilizado?: string;
   historialDeCambios?: CambioHistorial[];
+  // Deprecated, should be derived from procedure
+  procesosAsociadosIds?: string[];
+  procesosAsociadosCount?: number;
 }
 
 interface ActividadesContextType {

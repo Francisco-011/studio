@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, CheckCircle2, TrendingUp, Activity as ActivityIcon, FileSearch2, Clock, Loader2, FileText, CalendarRange, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { DollarSign, CheckCircle2, TrendingUp, Activity as ActivityIcon, FileSearch2, Clock, Loader2, FileText, CalendarRange } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
   Table,
@@ -30,8 +30,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
-import { Label } from '@/components/ui/label';
+import { useProcesos } from '@/contexts/ProcesosContext';
 
 function formatDashboardCurrency(amount: number, currency: string) {
   if (currency === 'N/A' || !currency) return amount.toLocaleString('es-MX');
