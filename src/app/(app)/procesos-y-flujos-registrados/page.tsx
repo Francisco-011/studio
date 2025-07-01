@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -44,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History, Workflow } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -73,6 +74,8 @@ import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+
 
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
 const SPECIAL_SALIDA_OPTION = "Finalizador";
@@ -118,6 +121,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { actividades: allActivities, isLoadingActividades } = useActividades();
   const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
+  const { procedimientos: allProcedimientos, isLoadingProcedimientos } = useProcedimientos();
   
   const { 
     procesos: allCapturedData, 
@@ -255,14 +259,29 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
     if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
-    if (activityCountFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (activityCountFilter === 'none' ? (proc.procedimientoOrder?.length || 0) === 0 : (proc.procedimientoOrder?.length || 0) > 0));
+    if (activityCountFilter !== 'all') {
+        dataToFilter = dataToFilter.filter(proc => {
+            const procedureIds = proc.procedimientoOrder || [];
+            const hasActivities = allProcedimientos
+                .filter(p => procedureIds.includes(p.id))
+                .some(p => p.activityOrder && p.activityOrder.length > 0);
+            return activityCountFilter === 'some' ? hasActivities : !hasActivities;
+        });
+    }
     
     if (sortConfig !== null) {
       dataToFilter.sort((a, b) => {
         let valA: any;
         let valB: any;
+        
+        const getTotalActivities = (proc: CapturedProcess) => {
+            const procedureIds = proc.procedimientoOrder || [];
+            return allProcedimientos
+                .filter(p => procedureIds.includes(p.id))
+                .reduce((sum, p) => sum + (p.activityOrder?.length || 0), 0);
+        }
 
-        if (sortConfig.key === 'numActividades') { valA = a.activityOrder?.length || 0; valB = b.activityOrder?.length || 0; }
+        if (sortConfig.key === 'numActividades') { valA = getTotalActivities(a); valB = getTotalActivities(b); }
         else if (sortConfig.key === 'updatedAt') { valA = a.updatedAt || 0; valB = b.updatedAt || 0; }
         else if (sortConfig.key === 'activo') { valA = a.activo !== false; valB = b.activo !== false; }
         else { valA = a[sortConfig.key as keyof CapturedProcess]; valB = b[sortConfig.key as keyof CapturedProcess]; }
@@ -278,7 +297,7 @@ export default function ProcesosYFlujosRegistradosPage() {
        dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig, allProcedimientos]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -515,7 +534,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     </DropdownMenu>
   )};
 
-  if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
+  if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
   return (
     <div className="container mx-auto py-8">
@@ -568,17 +587,12 @@ export default function ProcesosYFlujosRegistradosPage() {
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
                 const isExpanded = expandedRows[proc.id];
                 const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
-
-                const activitiesToShow = (proc.procedimientoOrder || [])
-                    .map(actId => allActivities.find(a => a.id === actId))
-                    .filter((act): act is Actividad => !!act)
-                    .filter(act => {
-                        if (activityStatusFilter === 'all') return true;
-                        if (activityStatusFilter === 'active') return act.activa;
-                        if (activityStatusFilter === 'inactive') return !act.activa;
-                        return true;
-                    });
+                const proceduresForProcess = (proc.procedimientoOrder || [])
+                    .map(procId => allProcedimientos.find(p => p.id === procId))
+                    .filter((p): p is Procedimiento => !!p);
                 
+                const totalActivitiesCount = proceduresForProcess.reduce((sum, currentProc) => sum + (currentProc.activityOrder?.length || 0), 0);
+
                 const linkedPolicies = proc.politicasAsociadas
                   ?.map(link => {
                     const policy = allPoliticas.find(p => p.id === link.policyId)
@@ -606,7 +620,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                             </span>
                         </TooltipTrigger>{isDerived && <TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent>}</Tooltip></TooltipProvider>
                     </TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.procedimientoOrder?.length || 0}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" />
@@ -637,36 +651,55 @@ export default function ProcesosYFlujosRegistradosPage() {
                           </CardContent>
                         </Card>
                         <div>
-                          <h4 className="font-semibold text-lg mb-2">Actividades en Orden</h4>
-                           {(proc.procedimientoOrder && proc.procedimientoOrder.length > 0) ? (
-                                activitiesToShow.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {activitiesToShow.map((act, index) => (
-                                        <Card key={`${proc.id}-act-${act.id}-${index}`} className="bg-background">
-                                            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-4">
-                                                <div className="flex items-center gap-4">
-                                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">{index + 1}</span>
-                                                    <CardTitle className="text-base flex items-center gap-2">
-                                                        {act.nombre}
-                                                        {!act.activa && <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">Inactiva</Badge>}
-                                                    </CardTitle>
-                                                </div>
-                                                <Button variant="ghost" size="icon" onClick={() => handleEditActivity(act.nombre)} title={`Editar actividad: ${act.nombre}`}>
-                                                    <Edit2 className="h-4 w-4 text-muted-foreground" />
-                                                </Button>
-                                            </CardHeader>
-                                            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0 pl-16">
-                                                <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
-                                                <DetailDisplay title="Sistema Utilizado" value={act.sistemaUtilizado} />
-                                            </CardContent>
-                                        </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground italic">Ninguna actividad coincide con el filtro de estado actual.</p>
-                                )
+                          <h4 className="font-semibold text-lg mb-2">Procedimientos y Actividades</h4>
+                           {proceduresForProcess.length > 0 ? (
+                                <Accordion type="multiple" className="w-full space-y-2">
+                                  {proceduresForProcess.map((procedure, procIndex) => {
+                                      const activitiesToShow = (procedure.activityOrder || [])
+                                        .map(actId => allActivities.find(a => a.id === actId))
+                                        .filter((act): act is Actividad => !!act)
+                                        .filter(act => {
+                                            if (activityStatusFilter === 'all') return true;
+                                            if (activityStatusFilter === 'active') return act.activa;
+                                            if (activityStatusFilter === 'inactive') return !act.activa;
+                                            return true;
+                                        });
+
+                                      return (
+                                          <AccordionItem value={procedure.id} key={procedure.id} className="bg-background rounded-md border">
+                                              <AccordionTrigger className="p-4 hover:no-underline">
+                                                  <div className="flex items-center gap-4 text-left">
+                                                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
+                                                      <span className="text-base font-medium flex items-center gap-2">{procedure.nombre}</span>
+                                                  </div>
+                                              </AccordionTrigger>
+                                              <AccordionContent className="p-4 pt-0 pl-16 space-y-3">
+                                                  <DetailDisplay title="Descripción del Procedimiento" value={procedure.descripcion} isTextarea />
+                                                   {activitiesToShow.length > 0 ? (
+                                                      <div className="space-y-2">
+                                                          {activitiesToShow.map((act, actIndex) => (
+                                                            <Card key={act.id} className="bg-background/50">
+                                                              <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
+                                                                <div className="flex items-center gap-3">
+                                                                  <span className="text-sm font-semibold">{procIndex + 1}.{actIndex + 1}</span>
+                                                                  <p className="font-medium text-sm">{act.nombre}</p>
+                                                                  {!act.activa && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                                                </div>
+                                                                <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
+                                                              </CardHeader>
+                                                            </Card>
+                                                          ))}
+                                                      </div>
+                                                   ) : (
+                                                      <p className="text-sm text-muted-foreground italic">Este procedimiento no tiene actividades o no coinciden con el filtro.</p>
+                                                   )}
+                                              </AccordionContent>
+                                          </AccordionItem>
+                                      )
+                                  })}
+                                </Accordion>
                            ) : (
-                             <p className="text-sm text-muted-foreground italic">Este proceso no tiene actividades definidas en orden.</p>
+                             <p className="text-sm text-muted-foreground italic flex items-center gap-2"><Workflow className="h-4 w-4"/> Este proceso no tiene procedimientos definidos.</p>
                            )}
                         </div>
                       </div>

@@ -99,7 +99,7 @@ export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoading: isLoadingPuestos } = usePuestos();
-  const { actividades, updateActividad: updateGlobalActivity, isLoadingActividades } = useActividades();
+  const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
   const { politicas, isLoading: isLoadingPoliticas } = usePoliticas();
@@ -124,6 +124,7 @@ export default function PanelJerarquicoPage() {
     type: DropTargetType;
     targetProcedureId?: string;
     targetActivityId?: string;
+    targetActivityIndex?: number;
   } | null>(null);
 
 
@@ -259,13 +260,17 @@ export default function PanelJerarquicoPage() {
                         const procedureNodes = (proc.procedimientoOrder || [])
                             .map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p)
                             .map(procedure => {
-                                const procedurePolicies = (procedure.politicasAsociadasIds || [])
-                                  .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
+                                const procedurePolicies = (procedure.politicasAsociadas || [])
+                                  .map(pol => politicas.find(p => p.id === pol.policyId)).filter((p): p is Politica => !!p)
                                   .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
                                 
                                 const activityNodes = (procedure.activityOrder || [])
-                                  .map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a)
-                                  .map(activity => {
+                                  .map((actId, index) => {
+                                      const activity = actividades.find(a => a.id === actId);
+                                      return activity ? { activity, index } : null;
+                                  })
+                                  .filter((a): a is { activity: Actividad, index: number } => !!a)
+                                  .map(({ activity, index }) => {
                                       const activityPolicies = (activity.politicasAsociadas || [])
                                         .map(link => {
                                             const pol = politicas.find(p => p.id === link.policyId);
@@ -274,7 +279,7 @@ export default function PanelJerarquicoPage() {
                                         .filter((p): p is Politica & { linkType: string } => !!p)
                                         .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.codigo} (${p.linkType})`, type: 'politica' as const, originalId: p.id, payload: p }));
                                       return {
-                                        id: `activity-${activity.id}-from-procedure-${procedure.id}`,
+                                        id: `activity-${activity.id}-proc-${procedure.id}-idx-${index}`,
                                         name: activity.nombre, type: 'actividad' as const, originalId: activity.id, activo: activity.activa,
                                         children: activityPolicies, payload: activity
                                       };
@@ -359,8 +364,9 @@ export default function PanelJerarquicoPage() {
         };
         expand(newTreeData);
         setExpandedNodes(allNodeIds);
-    } else if (!policySearchTerm) {
-        setExpandedNodes({});
+    } else if (!policySearchTerm && !treeGeneralSearchTerm) {
+        // Only collapse if not searching
+        // setExpandedNodes({}); Commenting out to prevent collapse on filter change
     }
 
 }, [
@@ -379,9 +385,9 @@ export default function PanelJerarquicoPage() {
     e: DragEvent<HTMLDivElement>, 
     itemId: string, 
     itemType: 'activityFromPool' | 'activityInProcedure',
-    sourceDetails?: { procedureId?: string; indexInProcedure?: number }
+    sourceDetails?: { procedureId: string; indexInProcedure: number }
   ) => {
-    const activity = itemType.startsWith('activity') ? actividades.find(a => a.id === itemId) : null;
+    const activity = actividades.find(a => a.id === itemId);
     if (activity && !activity.activa) { 
         e.preventDefault();
         toast({ title: "Acción no permitida", description: "Las actividades inactivas no se pueden asignar o mover.", variant: "default" });
@@ -420,7 +426,7 @@ export default function PanelJerarquicoPage() {
     e: DragEvent<HTMLDivElement>, 
     targetId: string, 
     targetType: DropTargetType,
-    additionalTargetInfo?: { procedureId?: string; activityId?: string }
+    additionalTargetInfo?: { procedureId?: string; activityId?: string, activityIndex?: number }
   ) => {
     e.preventDefault();
     let canDropOnTarget = true;
@@ -436,7 +442,8 @@ export default function PanelJerarquicoPage() {
         id: targetId, 
         type: targetType,
         targetProcedureId: additionalTargetInfo?.procedureId,
-        targetActivityId: additionalTargetInfo?.activityId
+        targetActivityId: additionalTargetInfo?.activityId,
+        targetActivityIndex: additionalTargetInfo?.activityIndex
       });
     } else {
       setDropTargetInfo(null);
@@ -454,8 +461,8 @@ export default function PanelJerarquicoPage() {
     e.preventDefault();
     if (!draggedItem || !dropTargetInfo) return;
 
-    const { type: draggedItemType, id: draggedItemId, sourceProcedureId } = draggedItem;
-    const { type: targetType, id: dropTargetNodeId, targetProcedureId: actualTargetProcedureId, targetActivityId: actualTargetActivityId } = dropTargetInfo;
+    const { type: draggedItemType, id: draggedItemId, sourceProcedureId, sourceIndexInProcedure } = draggedItem;
+    const { type: targetType, targetProcedureId, targetActivityIndex } = dropTargetInfo;
     
     if (draggedItemType.startsWith('activity')) {
         const activity = actividades.find(a => a.id === draggedItemId);
@@ -463,40 +470,44 @@ export default function PanelJerarquicoPage() {
             toast({ title: "Acción no permitida", description: "No se pueden asignar actividades inactivas.", variant: "default" });
             setDraggedItem(null); setDropTargetInfo(null); return;
         }
-    
-        const handleProcedureUpdate = async (procedureId: string, updateFn: (order: string[]) => string[]) => {
-            const originalProcedure = procedimientos.find(p => p.id === procedureId);
-            if (originalProcedure) {
-                const newOrder = updateFn(originalProcedure.activityOrder || []);
-                await updateProcedimiento(procedureId, { activityOrder: newOrder });
+
+        // Case 1: Dropping into the pool (un-assigning)
+        if (targetType === 'pool' && sourceProcedureId) {
+            const sourceProc = procedimientos.find(p => p.id === sourceProcedureId);
+            if(sourceProc) {
+                const newOrder = (sourceProc.activityOrder || []).filter(id => id !== draggedItemId);
+                await updateProcedimiento(sourceProcedureId, { activityOrder: newOrder });
+                toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" fue removida.` });
             }
-        };
-
-        if (targetType === 'pool') { 
-            if (!sourceProcedureId) { setDraggedItem(null); setDropTargetInfo(null); return; }
+        } 
+        // Case 2: Assigning or moving
+        else if ((targetType === 'procedimiento' || targetType === 'activity-in-tree') && targetProcedureId) {
             
-            await updateGlobalActivity(draggedItemId, { procedimientoId: undefined });
-            await handleProcedureUpdate(sourceProcedureId, (order) => order.filter(id => id !== draggedItemId));
-            toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" desasignada.` });
-
-        } else if ((targetType === 'procedimiento' || targetType === 'activity-in-tree') && actualTargetProcedureId) {
-            
-            await updateGlobalActivity(draggedItemId, { procedimientoId: actualTargetProcedureId });
-
-            if (sourceProcedureId && sourceProcedureId !== actualTargetProcedureId) {
-                await handleProcedureUpdate(sourceProcedureId, (order) => order.filter(id => id !== draggedItemId));
-            }
-            await handleProcedureUpdate(actualTargetProcedureId, (order) => {
-                const tempOrder = order.filter(id => id !== draggedItemId);
-                if (actualTargetActivityId) {
-                    const dropIndex = tempOrder.indexOf(actualTargetActivityId);
-                    tempOrder.splice(dropIndex !== -1 ? dropIndex : tempOrder.length, 0, draggedItemId);
-                } else {
-                    tempOrder.push(draggedItemId);
+            // Remove from source procedure if it exists
+            if (sourceProcedureId && sourceProcedureId !== targetProcedureId) {
+                const sourceProc = procedimientos.find(p => p.id === sourceProcedureId);
+                if (sourceProc) {
+                    const newOrder = (sourceProc.activityOrder || []).filter(id => id !== draggedItemId);
+                    await updateProcedimiento(sourceProcedureId, { activityOrder: newOrder });
                 }
-                return tempOrder;
-            });
-            toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada.` });
+            }
+
+            // Add to target procedure
+            const targetProc = procedimientos.find(p => p.id === targetProcedureId);
+            if (targetProc) {
+                let currentOrder = [...(targetProc.activityOrder || [])];
+
+                // Remove instance if it was a reorder within the same procedure
+                if (sourceProcedureId === targetProcedureId && sourceIndexInProcedure !== undefined) {
+                    currentOrder.splice(sourceIndexInProcedure, 1);
+                }
+
+                const dropIndex = targetActivityIndex !== undefined ? targetActivityIndex : currentOrder.length;
+                currentOrder.splice(dropIndex, 0, draggedItemId);
+                
+                await updateProcedimiento(targetProcedureId, { activityOrder: currentOrder });
+                toast({ title: "Operación completada", description: `Actividad "${activity.nombre}" gestionada.` });
+            }
         }
     }
     
@@ -517,13 +528,21 @@ export default function PanelJerarquicoPage() {
     if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
   };
 
-  const unassignedCount = useMemo(() => actividades.filter(a => a.activa && !a.procedimientoId).length, [actividades]);
-  const assignedCount = useMemo(() => actividades.filter(a => a.activa && !!a.procedimientoId).length, [actividades]);
-  
+  const assignmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    procedimientos.forEach(proc => {
+        (proc.activityOrder || []).forEach(actId => {
+            counts.set(actId, (counts.get(actId) || 0) + 1);
+        });
+    });
+    return counts;
+  }, [procedimientos]);
+
   const activeActivitiesCount = useMemo(() => actividades.filter(a => a.activa).length, [actividades]);
   const inactiveActivitiesCount = useMemo(() => actividades.filter(a => !a.activa).length, [actividades]);
-
-
+  const unassignedCount = useMemo(() => actividades.filter(a => a.activa && (assignmentCounts.get(a.id) || 0) === 0).length, [actividades, assignmentCounts]);
+  const assignedCount = useMemo(() => actividades.filter(a => a.activa && (assignmentCounts.get(a.id) || 0) > 0).length, [actividades, assignmentCounts]);
+  
   const availableActivities = useMemo(() => {
     return actividades
       .filter(a => {
@@ -534,13 +553,14 @@ export default function PanelJerarquicoPage() {
           return false;
         }
 
-        if (assignmentCountFilter === 'unassigned' && a.procedimientoId) return false;
-        if (assignmentCountFilter === 'assigned' && !a.procedimientoId) return false;
+        const count = assignmentCounts.get(a.id) || 0;
+        if (assignmentCountFilter === 'unassigned' && count > 0) return false;
+        if (assignmentCountFilter === 'assigned' && count === 0) return false;
         
         return true;
       })
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
-  }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter]);
+  }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter, assignmentCounts]);
   
   if (isLoadingAllData) {
     return (
@@ -562,7 +582,7 @@ export default function PanelJerarquicoPage() {
   }
 
   const renderTree = (nodes: TreeNode[]): JSX.Element[] => {
-    return nodes.map(node => {
+    return nodes.map((node, nodeIndex) => {
         let nodeContent;
         const baseClasses = "flex items-center py-1 px-2 rounded group hover:bg-muted/50";
         switch (node.type) {
@@ -585,16 +605,17 @@ export default function PanelJerarquicoPage() {
             );
             break;
           case 'actividad':
+            const { index: activityIndex } = node.payload;
             nodeContent = (
               <div 
-                id={`activity-in-tree-${node.originalId}`}
+                id={node.id}
                 draggable={node.activo} 
-                onDragStart={(e) => node.activo ? handleDragStart(e, node.originalId!, 'activityInProcedure', { procedureId: node.payload.procedimientoId }) : e.preventDefault()}
-                onDragOver={(e) => handleDragOver(e, 'activity-in-tree', `activity-in-tree-${node.originalId}`)}
+                onDragStart={(e) => node.activo ? handleDragStart(e, node.originalId!, 'activityInProcedure', { procedureId: node.payload.procedimientoId, indexInProcedure: activityIndex }) : e.preventDefault()}
+                onDragOver={(e) => handleDragOver(e, 'activity-in-tree', node.id)}
                 onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, `activity-in-tree-${node.originalId}`, 'activity-in-tree', { procedureId: node.payload.procedimientoId, activityId: node.originalId })}
+                onDragEnter={(e) => handleDragEnter(e, node.id, 'activity-in-tree', { procedureId: node.payload.procedimientoId, activityId: node.originalId, activityIndex })}
                 onDragLeave={handleDragLeave}
-                className={cn(baseClasses, "ml-8 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.targetActivityId === node.originalId && "ring-2 ring-primary")}
+                className={cn(baseClasses, "ml-8 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === node.id && "ring-2 ring-primary")}
                 title={!node.activo ? "Esta actividad está inactiva" : node.name}
               >
                 <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground" : "text-transparent")}/>
@@ -681,7 +702,7 @@ export default function PanelJerarquicoPage() {
                       <div className="sm:col-span-2"> <Select value={assignmentCountFilter} onValueChange={(v) => setAssignmentCountFilter(v as AssignmentCountFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas (Asignación)</SelectItem><SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem><SelectItem value="assigned">Asignadas ({assignedCount})</SelectItem></SelectContent></Select></div>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act, index) => (<div key={`${act.id}-${index}`} draggable={act.activa} onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : (act.procedimientoId ? `Asignada a: ${procedimientos.find(p=>p.id===act.procedimientoId)?.nombre}` : 'No asignada')}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span> {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
+                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act) => (<div key={act.id} draggable={act.activa} onDragStart={(e) => act.activa ? handleDragStart(e, act.id, 'activityFromPool') : e.preventDefault()} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : `${assignmentCounts.get(act.id) || 0} asignaciones`}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span><Badge variant="secondary" className="ml-2">{assignmentCounts.get(act.id) || 0} asign.</Badge> {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
                 </Card>
               </div>
         </CardContent>

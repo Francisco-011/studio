@@ -22,7 +22,6 @@ export interface Actividad {
   codigo: string;
   nombre: string;
   activa: boolean;
-  procedimientoId?: string;
   politicasAsociadas: PoliticaVinculo[];
   createdAt: number; 
   updatedAt?: number;
@@ -30,9 +29,6 @@ export interface Actividad {
   descripcionBreve?: string;
   sistemaUtilizado?: string;
   historialDeCambios?: CambioHistorial[];
-  // Deprecated, should be derived from procedure
-  procesosAsociadosIds?: string[];
-  procesosAsociadosCount?: number;
 }
 
 interface ActividadesContextType {
@@ -132,7 +128,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadas', 'procedimientoId'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'sistemaUtilizado', 'politicasAsociadas'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

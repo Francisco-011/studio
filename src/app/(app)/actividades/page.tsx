@@ -71,7 +71,6 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
-const NO_PROCEDIMIENTO_SELECTED_VALUE = "__NO_PROCEDIMIENTO__";
 
 
 const actividadFormSchema = z.object({
@@ -80,12 +79,11 @@ const actividadFormSchema = z.object({
   descripcionBreve: z.string().optional(),
   sistemaUtilizado: z.string().optional(),
   activa: z.boolean().default(true),
-  procedimientoId: z.string().optional(),
   politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'procedimientoAsociado';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve' | 'politicasAsociadas'> | 'asignaciones';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -153,6 +151,17 @@ export default function ActividadesPage() {
         setSearchTerm(searchQuery);
     }
   }, [searchParams]);
+  
+  const assignmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    procedimientos.forEach(proc => {
+        (proc.activityOrder || []).forEach(actId => {
+            counts.set(actId, (counts.get(actId) || 0) + 1);
+        });
+    });
+    return counts;
+  }, [procedimientos]);
+
 
   const actividadForm = useForm<ActividadFormData>({
     resolver: zodResolver(actividadFormSchema),
@@ -161,7 +170,6 @@ export default function ActividadesPage() {
       descripcionBreve: '',
       sistemaUtilizado: undefined,
       activa: true,
-      procedimientoId: undefined,
       politicasAsociadasIds: [],
     },
   });
@@ -175,8 +183,7 @@ export default function ActividadesPage() {
           descripcionBreve: editingActividad.descripcionBreve || '',
           sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           activa: editingActividad.activa,
-          procedimientoId: editingActividad.procedimientoId || undefined,
-          politicasAsociadasIds: editingActividad.politicasAsociadasIds || [],
+          politicasAsociadasIds: editingActividad.politicasAsociadas?.map(p => p.policyId) || [],
         });
       } else {
         actividadForm.reset({
@@ -184,7 +191,6 @@ export default function ActividadesPage() {
           descripcionBreve: '',
           sistemaUtilizado: undefined,
           activa: true,
-          procedimientoId: undefined,
           politicasAsociadasIds: [],
         });
       }
@@ -197,7 +203,7 @@ export default function ActividadesPage() {
     const activityDataForStorage = {
       ...activityDataFromForm,
       sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
-      procedimientoId: data.procedimientoId === NO_PROCEDIMIENTO_SELECTED_VALUE ? undefined : data.procedimientoId,
+      politicasAsociadas: (data.politicasAsociadasIds || []).map(polId => ({ policyId: polId, linkType: 'Aplica a' as const })),
     };
 
     if (editingActividad && id) {
@@ -223,10 +229,11 @@ export default function ActividadesPage() {
   }
 
   function promptDeleteActividad(actividad: Actividad) {
-    if (actividad.procedimientoId) {
+    const usageCount = assignmentCounts.get(actividad.id) || 0;
+    if (usageCount > 0) {
       toast({
         title: 'Eliminación Bloqueada',
-        description: `La actividad "${actividad.nombre}" está asociada a un procedimiento y no puede ser eliminada. Desvincúlela primero.`,
+        description: `La actividad "${actividad.nombre}" está asignada a ${usageCount} procedimiento(s) y no puede ser eliminada.`,
         variant: 'destructive',
         duration: 5000,
       });
@@ -238,16 +245,6 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-    if (activityToDelete.procedimientoId) {
-        toast({
-            title: 'Error en Eliminación',
-            description: `La actividad "${activityToDelete.nombre}" sigue asociada a un procedimiento.`,
-            variant: 'destructive',
-        });
-        setIsConfirmDeleteDialogOpen(false);
-        setActivityToDelete(null);
-        return;
-    }
     softDeleteActividad(activityToDelete.id);
     toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
     setActivityToDelete(null);
@@ -269,6 +266,7 @@ export default function ActividadesPage() {
   const sortedAndFilteredActividades = useMemo(() => {
     setCurrentPage(1); // Reset to first page on filter change
     let filtered = actividades.filter(actividad => {
+      const count = assignmentCounts.get(actividad.id) || 0;
       const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus =
@@ -277,8 +275,8 @@ export default function ActividadesPage() {
         (statusFilter === 'inactive' && !actividad.activa);
       const matchesUsage =
         usageFilter === 'all' ||
-        (usageFilter === 'assigned' && !!actividad.procedimientoId) ||
-        (usageFilter === 'unassigned' && !actividad.procedimientoId);
+        (usageFilter === 'assigned' && count > 0) ||
+        (usageFilter === 'unassigned' && count === 0);
       return matchesSearchTerm && matchesStatus && matchesUsage;
     });
 
@@ -287,9 +285,9 @@ export default function ActividadesPage() {
         let valA: any;
         let valB: any;
 
-        if (sortConfig.key === 'procedimientoAsociado') {
-            valA = a.procedimientoId ? (procedimientos.find(p => p.id === a.procedimientoId)?.nombre || '') : '';
-            valB = b.procedimientoId ? (procedimientos.find(p => p.id === b.procedimientoId)?.nombre || '') : '';
+        if (sortConfig.key === 'asignaciones') {
+            valA = assignmentCounts.get(a.id) || 0;
+            valB = assignmentCounts.get(b.id) || 0;
         } else {
             valA = a[sortConfig.key as keyof Actividad];
             valB = b[sortConfig.key as keyof Actividad];
@@ -324,7 +322,7 @@ export default function ActividadesPage() {
       filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
     return filtered;
-  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, procedimientos]);
+  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts]);
 
   const totalPages = Math.ceil(sortedAndFilteredActividades.length / ITEMS_PER_PAGE);
   const paginatedActividades = useMemo(() => {
@@ -372,16 +370,13 @@ export default function ActividadesPage() {
 
     const headers = [
       "ID", "Código", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", 
-      "Estado", "Procedimiento Asociado",
+      "Estado", "Asignaciones",
       "Fecha Creación", "Última Modificación"
     ];
 
     const csvRows = [
       headers.join(','),
       ...sortedAndFilteredActividades.map(act => {
-        const associatedProcedureName = act.procedimientoId
-            ? procedimientos.find(p => p.id === act.procedimientoId)?.nombre
-            : "";
         return [
           escapeCsvCell(act.id),
           escapeCsvCell(act.codigo),
@@ -389,7 +384,7 @@ export default function ActividadesPage() {
           escapeCsvCell(act.descripcionBreve),
           escapeCsvCell(act.sistemaUtilizado),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
-          escapeCsvCell(associatedProcedureName),
+          escapeCsvCell(assignmentCounts.get(act.id) || 0),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
           escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
         ].join(',');
@@ -552,8 +547,7 @@ export default function ActividadesPage() {
                       <FormField control={actividadForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre de la Actividad</FormLabel><FormControl><Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} /></FormControl><FormMessage /></FormItem>)} />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
                        <FormField control={actividadForm.control} name="sistemaUtilizado" render={({ field }) => (<FormItem><FormLabel>Sistema Utilizado (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SYSTEM_SELECTED_VALUE} disabled={isLoadingSistemasCostos}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando..." : "Seleccione"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno</SelectItem>{availableSystems.map((sys) => (<SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                       <FormField control={actividadForm.control} name="procedimientoId" render={({ field }) => (<FormItem><FormLabel>Procedimiento Asociado (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_PROCEDIMIENTO_SELECTED_VALUE} disabled={isLoadingProcedimientos}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingProcedimientos ? "Cargando..." : "Seleccione"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_PROCEDIMIENTO_SELECTED_VALUE}>Ninguno</SelectItem>{procedimientos.map((proc) => (<SelectItem key={proc.id} value={proc.id}>{proc.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-
+                      
                       <FormField
                         control={actividadForm.control}
                         name="politicasAsociadasIds"
@@ -600,27 +594,19 @@ export default function ActividadesPage() {
                   <TableRow>
                     <TableHead className="w-[100px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
                     <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('nombre')}>Nombre {getSortIcon('nombre')}</TableHead>
-                    <TableHead className="w-[150px] cursor-pointer" onClick={() => requestSort('procedimientoAsociado')}>Procedimiento {getSortIcon('procedimientoAsociado')}</TableHead>
+                    <TableHead className="w-[150px] cursor-pointer" onClick={() => requestSort('asignaciones')}>Asignaciones {getSortIcon('asignaciones')}</TableHead>
                      <TableHead className="w-[140px] cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
                     <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('activa')}>Estado {getSortIcon('activa')}</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedActividades.map((actividad) => {
-                    const procAsociado = actividad.procedimientoId ? procedimientos.find(p => p.id === actividad.procedimientoId) : null;
-                    return (
+                  {paginatedActividades.map((actividad) => (
                     <TableRow key={actividad.id}>
                       <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
-                      <TableCell className="text-xs">
-                        {procAsociado ? (
-                          <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                            <Badge variant="outline" className="cursor-default">{procAsociado.nombre}</Badge>
-                          </TooltipTrigger><TooltipContent>{procAsociado.nombre}</TooltipContent></Tooltip></TooltipProvider>
-                        ) : (
-                          <Badge variant="secondary">Sin Asignar</Badge>
-                        )}
+                      <TableCell className="text-sm">
+                        <Badge variant="secondary" className="cursor-default">{assignmentCounts.get(actividad.id) || 0} Asign.</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
                       <TableCell className="text-center"><Badge variant={actividad.activa ? 'default' : 'secondary'}>{actividad.activa ? 'Activa' : 'Inactiva'}</Badge></TableCell>
@@ -628,10 +614,10 @@ export default function ActividadesPage() {
                         <Switch checked={actividad.activa} onCheckedChange={() => handleToggleActividadStatus(actividad)} aria-label="Cambiar estado" className="mr-2"/>
                         <Button variant="ghost" size="icon" onClick={() => handleViewHistory(actividad)} disabled={!actividad.historialDeCambios || actividad.historialDeCambios.length === 0} title="Ver historial"><History className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditActividad(actividad)} className="mr-1"><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive" title={actividad.procedimientoId ? "No se puede eliminar: actividad asociada" : "Eliminar"}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive" title={ (assignmentCounts.get(actividad.id) || 0) > 0 ? "No se puede eliminar: actividad asignada" : "Eliminar"}><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
                     </TableRow>
-                  );})}
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -672,4 +658,3 @@ export default function ActividadesPage() {
     </div>
   );
 }
-
