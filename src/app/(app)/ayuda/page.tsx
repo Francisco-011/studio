@@ -1,10 +1,11 @@
-
 'use client';
 
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { LifeBuoy } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from '@/components/ui/separator';
 
 export default function AyudaPage() {
   return (
@@ -20,7 +21,7 @@ export default function AyudaPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-250px)]">
+          <ScrollArea className="h-[calc(100vh-320px)]">
             <Accordion type="single" collapsible className="w-full pr-4" defaultValue="item-intro">
               
               <AccordionItem value="item-intro">
@@ -144,10 +145,14 @@ export default function AyudaPage() {
 
             </Accordion>
           </ScrollArea>
+           <Separator className="my-4" />
+           <div className="text-center">
+             <Link href="/acerca-de" className="text-sm font-medium text-primary hover:underline">
+                Acerca de SIAP
+             </Link>
+           </div>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-    

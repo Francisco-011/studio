@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -24,6 +23,7 @@ import {
   LifeBuoy,
   MessageCircleQuestion,
   FileText,
+  Info,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -84,6 +84,7 @@ const navItems: NavItem[] = [
     },
     { href: '/usuarios', label: 'Usuarios', icon: Users, permission: 'usuarios:view' },
     { href: '/ayuda', label: 'Ayuda', icon: LifeBuoy, permission: 'ayuda:view' },
+    { href: '/acerca-de', label: 'Acerca de SIAP', icon: Info },
 ];
 
 
@@ -156,11 +157,11 @@ export function SidebarNav() {
           );
         }
 
-        if (!item.permission || !hasPermission(item.permission)) {
+        if (item.permission && !hasPermission(item.permission)) {
             return null;
         }
         return (
-          <SidebarMenuItem key={item.href}>
+          <SidebarMenuItem key={item.href || item.label}>
             <SidebarMenuButton
               asChild
               isActive={pathname === item.href}
