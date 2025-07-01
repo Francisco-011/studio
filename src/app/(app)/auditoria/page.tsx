@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -73,7 +73,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle } from "lucide-react";
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
@@ -349,6 +349,12 @@ export default function AuditoriaPage() {
     setNewAuditTargetId('');
     setNewAuditProcessIds([]);
   };
+
+  const handleStartAuditFromAlert = (type: 'proceso' | 'puesto', id: string) => {
+    setNewAuditType(type);
+    setNewAuditTargetId(id);
+    setIsStartAuditDialogOpen(true);
+  };
   
   const handleFindingSubmit = (data: AuditFindingFormData) => {
     if (!currentAuditSession) return;
@@ -609,6 +615,45 @@ export default function AuditoriaPage() {
   };
 
   const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos;
+
+  const auditAlerts = useMemo(() => {
+    if (isLoadingAllData) return [];
+    
+    const now = new Date();
+    const alerts: { id: string; type: 'proceso' | 'puesto'; name: string; lastAudited?: string; daysOverdue: number }[] = [];
+
+    allProcesses.forEach(proc => {
+      if (proc.auditFrequencyInDays) {
+        const lastAudit = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+        if (!lastAudit) {
+          alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, daysOverdue: 9999 }); // Never audited
+        } else {
+          const nextDueDate = new Date(lastAudit.getTime() + proc.auditFrequencyInDays * 24 * 60 * 60 * 1000);
+          if (now > nextDueDate) {
+            alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
+        }
+      }
+    });
+
+    puestos.forEach(puesto => {
+      if (puesto.auditFrequencyInDays) {
+        const lastAudit = puesto.lastAuditedAt ? parseISO(puesto.lastAuditedAt) : null;
+        if (!lastAudit) {
+          alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, daysOverdue: 9999 });
+        } else {
+          const nextDueDate = new Date(lastAudit.getTime() + puesto.auditFrequencyInDays * 24 * 60 * 60 * 1000);
+          if (now > nextDueDate) {
+            alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
+        }
+      }
+    });
+    
+    return alerts.sort((a,b) => b.daysOverdue - a.daysOverdue);
+
+  }, [allProcesses, puestos, isLoadingAllData]);
+
 
   if (isLoadingAllData) {
     return (
@@ -924,8 +969,7 @@ export default function AuditoriaPage() {
                         )} />
                         )}
                         <DialogFooter>
-                            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                            <Button type="submit">{editingFinding ? "Guardar Cambios" : "Agregar Hallazgo"}</Button>
+                            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingFinding ? "Guardar Cambios" : "Agregar Hallazgo"}</Button>
                         </DialogFooter>
                     </form>
                 </Form>
@@ -985,7 +1029,7 @@ export default function AuditoriaPage() {
                     <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
                 </div>
                 <CardDescription>
-                    Inicie nuevas auditorías a procesos, puestos o sistemas, o consulte el historial de auditorías completadas.
+                    Inicie nuevas auditorías, consulte el historial de auditorías completadas y vea el registro de actividad del sistema.
                 </CardDescription>
             </div>
             <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
@@ -1074,11 +1118,46 @@ export default function AuditoriaPage() {
             </Dialog>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="historial">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs defaultValue="alertas">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="alertas">Alertas de Auditoría ({auditAlerts.length})</TabsTrigger>
               <TabsTrigger value="historial">Historial de Auditorías</TabsTrigger>
-              <TabsTrigger value="actividad">Registro de Actividad del Sistema</TabsTrigger>
+              <TabsTrigger value="actividad">Registro de Actividad</TabsTrigger>
             </TabsList>
+
+             <TabsContent value="alertas" className="mt-4">
+               <CardDescription className="mb-4">
+                  Esta tabla muestra los procesos y puestos que requieren una auditoría basada en la frecuencia programada.
+                </CardDescription>
+                {auditAlerts.length > 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Última Auditoría</TableHead><TableHead>Días de Atraso</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {auditAlerts.map(alert => (
+                          <TableRow key={alert.id}>
+                            <TableCell className="font-medium">{alert.name}</TableCell>
+                            <TableCell className="capitalize">{alert.type}</TableCell>
+                            <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy') : 'Nunca auditado'}</TableCell>
+                            <TableCell><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type, alert.id)}>
+                                <PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center p-8 bg-green-50 text-green-800 rounded-lg border border-green-200">
+                    <CheckCircle className="h-8 w-8 mx-auto mb-2" />
+                    <p className="font-semibold">¡Excelente! No hay auditorías pendientes.</p>
+                  </div>
+                )}
+             </TabsContent>
+
             <TabsContent value="historial" className="mt-4">
                 <div className="space-y-2 mb-4 p-2 border rounded-lg bg-muted/20">
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
