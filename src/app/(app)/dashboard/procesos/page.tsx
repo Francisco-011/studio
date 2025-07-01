@@ -455,18 +455,8 @@ export default function ProcesosDashboardPage() {
                 }
             });
 
-            const duplicadasPorArea = new Map<string, number>();
+            const duplicadasPorArea = new Map<string, Set<string>>();
             allCapturedProcesses.forEach(proc => {
-                if (proc.procedimientoOrder) {
-                    proc.procedimientoOrder.forEach(procId => {
-                        const procedimiento = allCapturedProcesses.find(p => p.id === procId);
-                    })
-                }
-            });
-            // This logic is complex. Let's simplify.
-            // For now, let's just count duplicated activity names per area based on where processes are.
-            const duplicadasPorAreaFromProc = new Map<string, Set<string>>();
-            filteredProcesses.forEach(proc => {
                 if (proc.procedimientoOrder) {
                    // This is getting complex, will simplify the metric for now
                 }
