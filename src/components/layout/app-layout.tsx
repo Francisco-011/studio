@@ -103,7 +103,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
         <footer className="px-4 py-2 text-center text-xs text-muted-foreground">
-          © 2025 Francisco Rivera Almazán. Todos los derechos reservados.
+          PROSCENDIA v1.0 - Desarrollado por Francisco Rivera Almazán para STUFFACTORY | © 2025
         </footer>
       </SidebarInset>
     </>
