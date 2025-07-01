@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { Users, Search, Edit2, ShieldCheck, Save, Loader2 } from "lucide-react";
+import { Users, Search, Edit2, ShieldCheck, Save, Loader2, ShieldQuestion } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -431,10 +431,13 @@ export default function UsuariosPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="users" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="users">Gestión de Usuarios</TabsTrigger>
               {hasPermission('usuarios:manage_permissions') && (
                 <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
+              )}
+               {hasPermission('usuarios:manage_permissions') && (
+                <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones de Acceso</TabsTrigger>
               )}
             </TabsList>
             
@@ -625,6 +628,21 @@ export default function UsuariosPage() {
                 <div className="text-center text-muted-foreground p-8">No tiene permiso para gestionar roles y permisos.</div>
               )}
             </TabsContent>
+            
+            <TabsContent value="exceptions" className="mt-4">
+               {hasPermission('usuarios:manage_permissions') ? (
+                  <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
+                    <ShieldQuestion className="h-16 w-16 text-muted-foreground mb-4" />
+                    <p className="text-lg font-semibold text-foreground">Módulo de Excepciones</p>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Aquí se gestionarán las excepciones de acceso para usuarios específicos. Esta funcionalidad está en desarrollo.
+                    </p>
+                  </div>
+               ) : (
+                  <div className="text-center text-muted-foreground p-8">No tiene permiso para gestionar excepciones de acceso.</div>
+               )}
+            </TabsContent>
+
           </Tabs>
         </CardContent>
       </Card>
