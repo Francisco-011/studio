@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,8 +46,8 @@ export default function AcercaDePage() {
             </h3>
             <p>
               <strong>PROSCENDIA v1.0</strong><br />
-              Todos los derechos reservados © 2025, STUFFACTORY.<br />
-              Queda prohibida la reproducción, distribución o modificación de este software, total o parcial, sin el consentimiento explícito por escrito de STUFFACTORY.
+              © 2025 Francisco Rivera Almazán. Todos los derechos reservados.<br />
+              Desarrollado para uso interno de STUFFACTORY.
             </p>
           </div>
         </CardContent>
