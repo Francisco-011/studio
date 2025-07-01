@@ -90,6 +90,7 @@ Nombre: ${p.nombre}
 Código: ${p.codigo}
 Descripción: ${p.descripcion || 'N/A'}
 Proceso Padre: ${parentProcess?.proceso || 'N/A'} (ID: ${p.procesoId})
+Sistemas Utilizados: [${p.sistemasUtilizados?.join(', ') || 'Ninguno'}]
 ---
           `;
         }).join('\n\n');
@@ -118,6 +119,7 @@ Nombre: ${p.titulo}
 Código: ${p.codigo}
 Descripción: ${p.descripcion}
 Clasificación: ${p.clasificacion}
+Procesos Vinculados (IDs): [${p.procesosAsociadosIds?.join(', ') || ''}]
 ---
           `).join('\n\n');
           
