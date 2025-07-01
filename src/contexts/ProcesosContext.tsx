@@ -220,8 +220,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     if (!originalProceso) return;
 
     try {
-        const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
         const batch = writeBatch(db);
+        const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
 
         const changes: CambioHistorial[] = [];
         const fieldsToCompare: (keyof typeof data)[] = [
@@ -248,12 +248,12 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         };
         batch.update(procesoDocRef, dataWithHistory);
         
-        // Cascade name change if necessary
         const newName = data.proceso;
         if (newName && newName !== originalProceso.proceso) {
-            const allCurrentProcesses = [...procesos];
-            allCurrentProcesses.forEach(p => {
-                if (p.id === id) return;
+            const allProcessesSnapshot = await getDocs(query(collection(db, PROCESOS_COLLECTION)));
+            allProcessesSnapshot.forEach(docSnapshot => {
+                if (docSnapshot.id === id) return;
+                const p = docSnapshot.data() as CapturedProcess;
                 let needsUpdate = false;
                 const newProcesosEntrada = p.procesosEntrada?.map(entrada => {
                     if (entrada === originalProceso.proceso) { needsUpdate = true; return newName; }
@@ -265,8 +265,11 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
                 });
 
                 if (needsUpdate) {
-                    const linkedProcRef = doc(db, PROCESOS_COLLECTION, p.id);
-                    batch.update(linkedProcRef, { procesosEntrada: newProcesosEntrada, procesosSalida: newProcesosSalida });
+                    const linkedProcRef = doc(db, PROCESOS_COLLECTION, docSnapshot.id);
+                    const updatePayload: any = {};
+                    if (newProcesosEntrada) updatePayload.procesosEntrada = newProcesosEntrada;
+                    if (newProcesosSalida) updatePayload.procesosSalida = newProcesosSalida;
+                    batch.update(linkedProcRef, updatePayload);
                 }
             });
         }
@@ -287,8 +290,31 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
       if (!procesoToDelete) return;
 
       try {
+          const batch = writeBatch(db);
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
-          await updateDoc(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          batch.update(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), activo: false });
+          
+          const allProcessesSnapshot = await getDocs(query(collection(db, PROCESOS_COLLECTION)));
+          allProcessesSnapshot.forEach(docSnapshot => {
+              if (docSnapshot.id === id) return;
+              const p = docSnapshot.data() as CapturedProcess;
+              let needsUpdate = false;
+              const newProcesosEntrada = p.procesosEntrada?.filter(entrada => entrada !== procesoToDelete.proceso);
+              if (newProcesosEntrada && newProcesosEntrada.length !== (p.procesosEntrada?.length || 0)) {
+                  needsUpdate = true;
+              }
+              const newProcesosSalida = p.procesosSalida?.filter(salida => salida !== procesoToDelete.proceso);
+              if (newProcesosSalida && newProcesosSalida.length !== (p.procesosSalida?.length || 0)) {
+                  needsUpdate = true;
+              }
+
+              if (needsUpdate) {
+                  const linkedProcRef = doc(db, PROCESOS_COLLECTION, docSnapshot.id);
+                  batch.update(linkedProcRef, { procesosEntrada: newProcesosEntrada, procesosSalida: newProcesosSalida });
+              }
+          });
+          
+          await batch.commit();
           addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: procesoToDelete.proceso, details: `Proceso "${procesoToDelete.proceso}" movido a la papelera.` });
       } catch (e) {
           console.error("Error deleting proceso: ", e);
@@ -338,3 +364,5 @@ export function useProcesos(): ProcesosContextType {
   }
   return context;
 }
+
+    
