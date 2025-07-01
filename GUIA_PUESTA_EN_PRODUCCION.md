@@ -119,6 +119,10 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 
         // Helper function to check if the user has a specific role
         function hasRole(roles) {
+          // Ensure we don't try to access properties on a null object
+          if (request.auth == null || request.auth.uid == null) {
+            return false;
+          }
           let userRole = getUserData(request.auth.uid).rol;
           return userRole in roles;
         }
@@ -136,7 +140,35 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 
         // --- GENERIC CATALOGS (Areas, Departamentos, Puestos, Sistemas, etc.) ---
         // Any authenticated user can read catalogs, only Admins and Gerentes can write.
-        match /{collection}/{docId} where collection in ['areas', 'departamentos', 'puestos', 'sistemas', 'sistemas_costos', 'acciones', 'actividades', 'procedimientos'] {
+        match /areas/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /departamentos/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /puestos/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /sistemas/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /sistemas_costos/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /acciones/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /actividades/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        match /procedimientos/{docId} {
           allow read: if isAuthenticated();
           allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
         }
