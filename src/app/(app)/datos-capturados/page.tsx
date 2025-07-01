@@ -1,6 +1,6 @@
 
-// This page is deprecated and has been removed.
-// All its functionality has been migrated to and improved in '/procesos-y-flujos-registrados'.
-export default function DeprecatedDatosCapturadosPage() {
-  return null;
+// This page is obsolete and can be safely removed.
+// Functionality has been migrated to /procesos-y-flujos-registrados.
+export default function ObsoletePage() {
+    return null;
 }
