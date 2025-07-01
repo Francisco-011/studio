@@ -132,13 +132,14 @@ const LOG_ITEMS_PER_PAGE = 15;
 
 
 const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
-  if (value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '' && !isTextarea && !isList)) {
-    return null;
-  }
+  const isValueEmpty = value === undefined || value === null || (isList && Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '');
+  
   return (
     <div className="text-sm">
       <strong className="font-semibold text-foreground/90">{title}:</strong>
-      {isList && Array.isArray(value) ? (
+      {isValueEmpty ? (
+        <p className="text-muted-foreground">No especificado</p>
+      ) : isList && Array.isArray(value) ? (
         <div className="flex flex-wrap gap-1 mt-1">
           {value.map((item, idx) => (
             <Badge key={idx} variant="secondary">{item}</Badge>
@@ -793,8 +794,8 @@ export default function AuditoriaPage() {
                                                             {activitiesToShow.map((act, actIndex) => (
                                                                 <Card key={act.id} className="bg-background/50">
                                                                     <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
-                                                                        <div className="flex items-start gap-2 flex-grow min-w-0">
-                                                                            <span className="font-semibold text-sm w-10 pt-px text-right shrink-0">{procIndex + 1}.{actIndex + 1}</span>
+                                                                        <div className="flex items-start gap-3 flex-grow min-w-0">
+                                                                            <span className="font-semibold text-sm w-10 pt-px shrink-0">{procIndex + 1}.{actIndex + 1}</span>
                                                                             <div className="flex flex-col">
                                                                                 <p className="font-medium text-sm break-words">{act.nombre}</p>
                                                                                 {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1">Inactiva</Badge>}
@@ -877,7 +878,7 @@ export default function AuditoriaPage() {
                                                                                                 <Card key={act.id} className="bg-background/50">
                                                                                                     <CardHeader className="flex-row items-center justify-between gap-4 space-y-0 p-3">
                                                                                                          <div className="flex items-start gap-2 flex-grow min-w-0">
-                                                                                                            <span className="font-semibold text-sm w-10 pt-px text-right shrink-0">{procIndex + 1}.{actIndex + 1}</span>
+                                                                                                            <span className="font-semibold text-sm w-10 pt-px shrink-0">{procIndex + 1}.{actIndex + 1}</span>
                                                                                                             <div className="flex flex-col">
                                                                                                                 <p className="font-medium text-sm break-words">{act.nombre}</p>
                                                                                                                 {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1">Inactiva</Badge>}
