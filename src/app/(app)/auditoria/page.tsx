@@ -76,7 +76,7 @@ import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { CheckCircle } from 'lucide-react';
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow } from "lucide-react";
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
@@ -824,7 +824,7 @@ export default function AuditoriaPage() {
                                                                             <div className="col-span-2">
                                                                                 <span className="font-semibold">Últ. Modif.: </span>
                                                                                 <span className="text-muted-foreground">
-                                                                                    {format(new Date(act.updatedAt || act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es })}
+                                                                                    {act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -915,13 +915,9 @@ export default function AuditoriaPage() {
                                                                                                                 <span className="text-muted-foreground">{act.codigo}</span>
                                                                                                             </div>
                                                                                                             <div>
-                                                                                                                <span className="font-semibold">Sistema: </span>
-                                                                                                                <span className="text-muted-foreground">{act.sistemaUtilizado || 'N/A'}</span>
-                                                                                                            </div>
-                                                                                                            <div className="col-span-2">
                                                                                                                 <span className="font-semibold">Últ. Modif.: </span>
                                                                                                                 <span className="text-muted-foreground">
-                                                                                                                    {format(new Date(act.updatedAt || act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es })}
+                                                                                                                    {act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')}
                                                                                                                 </span>
                                                                                                             </div>
                                                                                                         </div>
