@@ -139,6 +139,8 @@ export default function AccionesPage() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccionEstado | 'all'>('all');
+  const [areaFilter, setAreaFilter] = useState('all');
+  const [puestoFilter, setPuestoFilter] = useState('all');
   
   const [isAccionDialogOpen, setIsAccionDialogOpen] = useState(false);
   const [editingAccion, setEditingAccion] = useState<Accion | null>(null);
@@ -382,11 +384,11 @@ export default function AccionesPage() {
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.responsable.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (accion.origenMejora && accion.origenMejora.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (accion.area && accion.area.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (accion.puesto && accion.puesto.toLowerCase().includes(searchTerm.toLowerCase()));
+        (accion.origenMejora && accion.origenMejora.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'all' || accion.estado === statusFilter;
-      return matchesSearchTerm && matchesStatus;
+      const matchesArea = areaFilter === 'all' || accion.area === areaFilter;
+      const matchesPuesto = puestoFilter === 'all' || accion.puesto === puestoFilter;
+      return matchesSearchTerm && matchesStatus && matchesArea && matchesPuesto;
     });
 
     if (sortConfig !== null) {
@@ -434,7 +436,7 @@ export default function AccionesPage() {
     }
     return filtered;
 
-  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, actividades]);
+  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, actividades, areaFilter, puestoFilter]);
 
   const requestSort = (key: SortableAccionKeys) => {
     let direction: SortDirection = 'ascending';
@@ -467,6 +469,13 @@ export default function AccionesPage() {
        setCurrentPage(1);
     }
   }, [currentPage, totalPages, sortedAndFilteredAcciones.length]);
+  
+  const puestosInAreaFilter = useMemo(() => {
+    if (areaFilter === 'all' || isLoadingPuestos || isLoadingAreas) return puestos;
+    const areaId = areas.find(a => a.nombre === areaFilter)?.id;
+    return areaId ? puestos.filter(p => p.areaId === areaId) : [];
+  }, [areaFilter, puestos, areas, isLoadingPuestos, isLoadingAreas]);
+
 
   const handleExport = () => {
     if (sortedAndFilteredAcciones.length === 0) {
@@ -553,325 +562,356 @@ export default function AccionesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 space-y-4 md:flex md:items-end md:justify-between md:space-y-0 md:space-x-4">
-            <div className="relative flex-1 md:flex-grow">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar por nombre, descripción, responsable, área, puesto..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10"
-              />
-            </div>
-            <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-2">
-              <Select
-                value={statusFilter}
-                onValueChange={(value: AccionEstado | 'all') => setStatusFilter(value)}
-              >
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Filtrar por estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  {accionEstados.map(estado => (
-                    <SelectItem key={estado} value={estado}>{estado}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-               <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
-                  <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredAcciones.length})
-              </Button>
-              <Dialog open={isAccionDialogOpen} onOpenChange={(isOpen) => {
-                setIsAccionDialogOpen(isOpen);
-                if (!isOpen) {
-                  setEditingAccion(null);
-                  accionForm.reset();
-                }
-              }}>
-                <DialogTrigger asChild>
-                  <Button onClick={() => { setEditingAccion(null); accionForm.reset(); setIsAccionDialogOpen(true); }} className="w-full sm:w-auto">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Agregar Acción
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>{editingAccion ? 'Editar Acción de Mejora' : 'Agregar Nueva Acción de Mejora'}</DialogTitle>
-                    <DialogDescription>
-                      {editingAccion ? 'Modifica los detalles de la acción.' : 'Completa la información para registrar una nueva acción.'}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...accionForm}>
-                    <form onSubmit={accionForm.handleSubmit(handleAccionSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                      <FormField
-                        control={accionForm.control}
-                        name="nombre"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre de la Acción</FormLabel>
-                            <FormControl><Input placeholder="Ej: Implementar nuevo CRM" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={accionForm.control}
-                        name="descripcion"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descripción Detallada</FormLabel>
-                            <FormControl><Textarea placeholder="Describe el objetivo, alcance y pasos clave de la acción." {...field} className="min-h-[100px]" /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={accionForm.control}
-                            name="procesoId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Proceso Asociado (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED}>
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
-                                    {capturedProcesses.filter(p => p.activo !== false).map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={accionForm.control}
-                            name="actividadId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Actividad Asociada (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED}>
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una actividad" /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguna</SelectItem>
-                                    {actividades.filter(a => a.activa).map(act => (<SelectItem key={act.id} value={act.id}>{act.nombre}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                       </div>
+          <div className="mb-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-4">
+                <Label htmlFor="search-input">Búsqueda General</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    id="search-input"
+                    type="search"
+                    placeholder="Buscar por nombre, descripción, responsable..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="area-filter">Filtrar por Área</Label>
+                <Select value={areaFilter} onValueChange={v => { setAreaFilter(v); setPuestoFilter('all'); }}>
+                  <SelectTrigger id="area-filter"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las Áreas</SelectItem>
+                    {areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="puesto-filter">Filtrar por Puesto</Label>
+                 <Select value={puestoFilter} onValueChange={setPuestoFilter} disabled={areaFilter === 'all'}>
+                  <SelectTrigger id="puesto-filter">
+                    <SelectValue placeholder={areaFilter === 'all' ? "Seleccione un área primero" : "Todos los Puestos"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los Puestos</SelectItem>
+                    {puestosInAreaFilter.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="status-filter">Filtrar por Estado</Label>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value: AccionEstado | 'all') => setStatusFilter(value)}
+                >
+                  <SelectTrigger id="status-filter">
+                    <SelectValue placeholder="Filtrar por estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    {accionEstados.map(estado => (
+                      <SelectItem key={estado} value={estado}>{estado}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end gap-2">
+                <Button onClick={handleExport} variant="outline" className="w-full">
+                    <FileText className="mr-2 h-4 w-4" /> Exportar
+                </Button>
+                <Dialog open={isAccionDialogOpen} onOpenChange={(isOpen) => {
+                  setIsAccionDialogOpen(isOpen);
+                  if (!isOpen) {
+                    setEditingAccion(null);
+                    accionForm.reset();
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => { setEditingAccion(null); accionForm.reset(); setIsAccionDialogOpen(true); }} className="w-full">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Agregar
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>{editingAccion ? 'Editar Acción de Mejora' : 'Agregar Nueva Acción de Mejora'}</DialogTitle>
+                      <DialogDescription>
+                        {editingAccion ? 'Modifica los detalles de la acción.' : 'Completa la información para registrar una nueva acción.'}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...accionForm}>
+                      <form onSubmit={accionForm.handleSubmit(handleAccionSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+                        <FormField
+                          control={accionForm.control}
+                          name="nombre"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nombre de la Acción</FormLabel>
+                              <FormControl><Input placeholder="Ej: Implementar nuevo CRM" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={accionForm.control}
+                          name="descripcion"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Descripción Detallada</FormLabel>
+                              <FormControl><Textarea placeholder="Describe el objetivo, alcance y pasos clave de la acción." {...field} className="min-h-[100px]" /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                              control={accionForm.control}
+                              name="procesoId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Proceso Asociado (Opcional)</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED}>
+                                    <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                      <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
+                                      {capturedProcesses.filter(p => p.activo !== false).map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={accionForm.control}
+                              name="actividadId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Actividad Asociada (Opcional)</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED}>
+                                    <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una actividad" /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                      <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguna</SelectItem>
+                                      {actividades.filter(a => a.activa).map(act => (<SelectItem key={act.id} value={act.id}>{act.nombre}</SelectItem>))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                        </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="responsable"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Responsable</FormLabel>
+                                <FormControl><Input placeholder="Ej: Equipo de TI, Ana Pérez" {...field} /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="estado"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Estado</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    {accionEstados.map(estado => (<SelectItem key={estado} value={estado}>{estado}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="area"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Área (Opcional)</FormLabel>
+                                <Select
+                                  onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
+                                  value={field.value || NO_AREA_SELECTED}
+                                  disabled={isLoadingAreas}
+                                >
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    <SelectItem value={NO_AREA_SELECTED}>Ninguna</SelectItem>
+                                    {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="puesto"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Puesto (Opcional)</FormLabel>
+                                <Select
+                                  onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
+                                  value={field.value || NO_PUESTO_SELECTED}
+                                  disabled={isLoadingPuestos}
+                                >
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                      <SelectItem value={NO_PUESTO_SELECTED}>Ninguno</SelectItem>
+                                      {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription className="text-xs">Puestos filtrados por el área seleccionada.</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="fechaObjetivo"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col">
+                                <FormLabel>Fecha Límite (Objetivo)</FormLabel>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                        {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} />
+                                  </PopoverContent>
+                                </Popover>
+                                <FormDescription className="text-xs">La fecha en que se planea completar esta acción.</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="fechaFinalizacion"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col">
+                                <FormLabel>Fecha de Finalización Real</FormLabel>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                        {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} />
+                                  </PopoverContent>
+                                </Popover>
+                                <FormDescription className="text-xs">Fecha en que la acción fue completada.</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="ahorroEstimado"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
+                                <div className="relative">
+                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" /></FormControl>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="monedaAhorro"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Moneda del Ahorro</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione moneda" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    {monedaOptions.map(moneda => (<SelectItem key={moneda} value={moneda}>{moneda}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="ahorroTiempoEstimado"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
+                                <div className="relative">
+                                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" /></FormControl>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="unidadTiempoAhorro"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Unidad de Tiempo</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
                         <FormField
                           control={accionForm.control}
-                          name="responsable"
+                          name="origenMejora"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Responsable</FormLabel>
-                              <FormControl><Input placeholder="Ej: Equipo de TI, Ana Pérez" {...field} /></FormControl>
+                              <FormLabel>Origen de la Mejora (Opcional)</FormLabel>
+                              <FormControl><Input placeholder="Ej: Análisis IA Q2, Sugerencia Cliente X" {...field} value={field.value ?? ''} /></FormControl>
+                              <FormDescription>Indique de dónde surgió esta acción de mejora.</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <FormField
-                          control={accionForm.control}
-                          name="estado"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Estado</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  {accionEstados.map(estado => (<SelectItem key={estado} value={estado}>{estado}</SelectItem>))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField
-                          control={accionForm.control}
-                          name="area"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Área (Opcional)</FormLabel>
-                              <Select
-                                onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
-                                value={field.value || NO_AREA_SELECTED}
-                                disabled={isLoadingAreas}
-                              >
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  <SelectItem value={NO_AREA_SELECTED}>Ninguna</SelectItem>
-                                  {areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={accionForm.control}
-                          name="puesto"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Puesto (Opcional)</FormLabel>
-                              <Select
-                                onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
-                                value={field.value || NO_PUESTO_SELECTED}
-                                disabled={isLoadingPuestos}
-                              >
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    <SelectItem value={NO_PUESTO_SELECTED}>Ninguno</SelectItem>
-                                    {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
-                                </SelectContent>
-                              </Select>
-                              <FormDescription className="text-xs">Puestos filtrados por el área seleccionada.</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={accionForm.control}
-                          name="fechaObjetivo"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                              <FormLabel>Fecha Límite (Objetivo)</FormLabel>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                      {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
-                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} />
-                                </PopoverContent>
-                              </Popover>
-                              <FormDescription className="text-xs">La fecha en que se planea completar esta acción.</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={accionForm.control}
-                          name="fechaFinalizacion"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                              <FormLabel>Fecha de Finalización Real</FormLabel>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                      {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
-                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} />
-                                </PopoverContent>
-                              </Popover>
-                              <FormDescription className="text-xs">Fecha en que la acción fue completada.</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={accionForm.control}
-                          name="ahorroEstimado"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" /></FormControl>
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                         <FormField
-                          control={accionForm.control}
-                          name="monedaAhorro"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Moneda del Ahorro</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione moneda" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  {monedaOptions.map(moneda => (<SelectItem key={moneda} value={moneda}>{moneda}</SelectItem>))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={accionForm.control}
-                          name="ahorroTiempoEstimado"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
-                              <div className="relative">
-                                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" /></FormControl>
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                         <FormField
-                          control={accionForm.control}
-                          name="unidadTiempoAhorro"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Unidad de Tiempo</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <FormField
-                        control={accionForm.control}
-                        name="origenMejora"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Origen de la Mejora (Opcional)</FormLabel>
-                            <FormControl><Input placeholder="Ej: Análisis IA Q2, Sugerencia Cliente X" {...field} value={field.value ?? ''} /></FormControl>
-                            <FormDescription>Indique de dónde surgió esta acción de mejora.</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <DialogFooter>
-                        <DialogClose asChild>
-                          <Button type="button" variant="outline">Cancelar</Button>
-                        </DialogClose>
-                        <Button type="submit">{editingAccion ? 'Guardar Cambios' : 'Agregar Acción'}</Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button type="button" variant="outline">Cancelar</Button>
+                          </DialogClose>
+                          <Button type="submit">{editingAccion ? 'Guardar Cambios' : 'Agregar Acción'}</Button>
+                        </DialogFooter>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
 

@@ -15,6 +15,8 @@ import {z} from 'genkit';
 const AnalyzeProcessesInputSchema = z.object({
   processDescriptions: z.string().describe('Una lista de descripciones de procesos para analizar, incluyendo IDs, área, puesto y sistemas.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
+  allProcedimientos: z.string().optional().describe('Una lista de todos los procedimientos definidos en el sistema, incluyendo su nombre, ID, descripción y el proceso al que están asociados.'),
+  allPuestos: z.string().optional().describe('Una lista de todos los puestos de trabajo, incluyendo nombre, área y departamento.'),
   allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y el procedimiento al que están asociadas.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
   existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
@@ -107,7 +109,7 @@ const analyzeProcessesPrompt = ai.definePrompt({
   output: {schema: AnalyzeProcessesOutputSchema},
   prompt: `Eres un analista de negocios experto en optimización de procesos y gobernanza corporativa, impulsado por IA. Tu misión es identificar duplicidades, oportunidades de ahorro cuantificables y gaps de cumplimiento.
 
-Se te proporcionan descripciones detalladas de procesos, actividades, uso de sistemas y políticas.
+Se te proporcionan descripciones detalladas de procesos, procedimientos, actividades, puestos, uso de sistemas y políticas.
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
@@ -128,6 +130,16 @@ Tu análisis debe centrarse en CUATRO áreas clave y debes devolver la salida en
 
 **Descripciones de Procesos:**
 {{{processDescriptions}}}
+
+{{#if allProcedimientos}}
+**Lista Completa de Procedimientos y su Contexto:**
+{{{allProcedimientos}}}
+{{/if}}
+
+{{#if allPuestos}}
+**Lista Completa de Puestos:**
+{{{allPuestos}}}
+{{/if}}
 
 **Lista Completa de Actividades y su Contexto:**
 {{{allActivities}}}
