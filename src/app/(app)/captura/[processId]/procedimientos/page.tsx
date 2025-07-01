@@ -55,11 +55,11 @@ export default function DefinirProcedimientosPage() {
   });
 
   useEffect(() => {
-    if (processId && !isLoadingProcesos) {
+    if (processId && !isLoadingProcesos && !isLoadingProcedimientos) {
       const currentProcess = procesos.find(p => p.id === processId);
       if (currentProcess) {
         setParentProcess(currentProcess);
-        if (currentProcess.procedimientoOrder && currentProcess.procedimientoOrder.length > 0 && !isLoadingProcedimientos) {
+        if (currentProcess.procedimientoOrder && currentProcess.procedimientoOrder.length > 0) {
             const preloadedData: LocalProcedimientoDefinition[] = currentProcess.procedimientoOrder
                 .map(procId => {
                     const globalProc = globalProcedimientos.find(gp => gp.id === procId);
@@ -75,6 +75,8 @@ export default function DefinirProcedimientosPage() {
                 })
                 .filter((p): p is LocalProcedimientoDefinition => p !== null);
             setDefinedProcedimientos(preloadedData);
+        } else {
+            setDefinedProcedimientos([]);
         }
       } else {
         toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive" });
@@ -130,13 +132,12 @@ export default function DefinirProcedimientosPage() {
       for (const localProc of definedProcedimientos) {
         let idToLink: string;
 
-        const payload: Omit<ProcedimientoCreationData, 'procesoId'> = {
+        const payload: Partial<ProcedimientoCreationData> = {
           nombre: localProc.nombre,
           descripcion: localProc.descripcion,
-          activityOrder: [],
           politicasAsociadas: (localProc.politicasAsociadasIds || []).map(id => ({
             policyId: id,
-            linkType: 'Aplica a',
+            linkType: 'Aplica a' as const,
           })),
         };
         
@@ -145,17 +146,20 @@ export default function DefinirProcedimientosPage() {
         if (isExistingGlobal) {
           idToLink = localProc.tempId;
           const existingProc = globalProcedimientosMap.get(idToLink)!;
-          payload.activityOrder = existingProc.activityOrder || [];
-          await updateGlobalProcedimiento(idToLink, { ...payload, procesoId: parentProcess.id });
+          // IMPORTANT FIX: Preserve existing activityOrder
+          payload.activityOrder = existingProc.activityOrder || []; 
+          await updateGlobalProcedimiento(idToLink, { ...(payload as Partial<ProcedimientoCreationData>), procesoId: parentProcess.id });
         } else {
-          const newProc = await addProcedimiento({ ...payload, procesoId: parentProcess.id });
+          // New procedures start with an empty activityOrder
+          payload.activityOrder = [];
+          const newProc = await addProcedimiento({ ...(payload as ProcedimientoCreationData), procesoId: parentProcess.id });
           if (!newProc) throw new Error(`Fallo al crear el procedimiento: ${localProc.nombre}`);
           idToLink = newProc.id;
         }
         finalProcedimientoIds.push(idToLink);
       }
 
-      // Delete orphaned procedures
+      // Delete orphaned procedures that are no longer in the list
       const originalProcedureIds = parentProcess.procedimientoOrder || [];
       const newProcedureIdsSet = new Set(finalProcedimientoIds);
       const proceduresToDelete = originalProcedureIds.filter(id => !newProcedureIdsSet.has(id));
