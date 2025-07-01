@@ -15,15 +15,8 @@ service cloud.firestore {
 
     // Reglas para la colección de usuarios
     match /users/{userId} {
-      // Los usuarios pueden leer su propio perfil.
-      // Los administradores pueden leer cualquier perfil.
       allow read: if request.auth.uid == userId || esAdmin();
-      
-      // Los usuarios pueden actualizar su propio perfil.
-      // Los administradores pueden actualizar cualquier perfil.
       allow update: if request.auth.uid == userId || esAdmin();
-
-      // Solo los administradores pueden crear o eliminar usuarios (la creación inicial se hace desde el backend).
       allow create, delete: if esAdmin();
     }
 
@@ -73,17 +66,10 @@ service cloud.firestore {
     // Reglas de acceso granular para Políticas
     match /politicas/{politicaId} {
       allow get: if request.auth.uid != null;
-      
-      // Permite la lectura (listado) basado en el nivel de acceso
       allow list: if 
-          // Administradores y Ejecutivos ven todo
           (nivelAccesoUsuario() in ['Administrador', 'Ejecutivo', 'Confidencial']) ||
-          // Gerentes y otros ven Público y Privado
           (nivelAccesoUsuario() in ['Gerente de Proyecto', 'Consultor', 'Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
-          // Usuarios finales solo ven Público
           (nivelAccesoUsuario() == 'Usuario Final' && resource.data.clasificacion == 'Público');
-
-      // Solo usuarios con los roles adecuados pueden escribir
       allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
     }
   }

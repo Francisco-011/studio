@@ -1,9 +1,9 @@
-# Manual de Usuario Proceza
+# Manual de Usuario SIAP
 
-## 1. Introducción a Proceza
+## 1. Introducción a SIAP
 
-### ¿Qué es Proceza?
-Proceza (Procesos con Eficacia y Trazabilidad) es una herramienta integral diseñada para ayudarte a mapear, analizar, optimizar y gobernar los procesos de negocio de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, Proceza te proporciona una visión completa y accionable de cómo opera tu empresa.
+### ¿Qué es SIAP?
+SIAP (Sistema Integral de Análisis de Procesos) es una herramienta integral diseñada para ayudarte a mapear, analizar, optimizar y gobernar los procesos de negocio de tu organización. Desde la captura detallada de un flujo de trabajo hasta el análisis con Inteligencia Artificial para detectar ineficiencias, SIAP te proporciona una visión completa y accionable de cómo opera tu empresa.
 
 ### Objetivos del Sistema
 - **Centralizar la Información:** Crear un repositorio único y estandarizado de todos los procesos, procedimientos, actividades y políticas. Su beneficio es eliminar la dispersión de documentos y asegurar que todos consulten la misma versión de la verdad.
@@ -45,7 +45,7 @@ Proceza (Procesos con Eficacia y Trazabilidad) es una herramienta integral dise�
 **Beneficios:** Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas y sugiriendo mejoras accionables que pueden convertirse en "Acciones" con un solo clic.
 
 ### Consulta IA
-**Función:** Un asistente de chat conversacional que entiende la estructura de datos de Proceza. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.
+**Función:** Un asistente de chat conversacional que entiende la estructura de datos de SIAP. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.
 **Beneficios:** Democratiza el acceso a la información, permitiendo a cualquier usuario obtener respuestas rápidas sin necesidad de navegar por todas las pantallas.
 
 ### Acciones
@@ -72,8 +72,9 @@ Proceza (Procesos con Eficacia y Trazabilidad) es una herramienta integral dise�
 1.  Ve al módulo **"Captura"**.
 2.  Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, etc.).
 3.  Al guardar, serás redirigido a la página de **"Definir Procedimientos"**. Aquí, añade uno o más procedimientos que componen el proceso.
-4.  Para cada procedimiento, haz clic en **"Definir Actividades"**. Serás llevado a una nueva pantalla para listar y ordenar las actividades específicas de ese procedimiento.
-5.  Una vez guardado, todo el flujo será visible en **"Procesos Registrados"** y en el **"Panel Jerárquico"**.
+4.  Luego, ve al **"Panel Jerárquico"**. Expande el proceso que acabas de crear hasta ver sus procedimientos.
+5.  Desde el **"Pool de Actividades"** a la derecha, arrastra y suelta las actividades que necesites sobre el procedimiento correspondiente.
+6.  Una vez guardado, todo el flujo será visible en **"Procesos Registrados"** y en el **"Panel Jerárquico"**.
 
 ### Cómo Vincular Políticas y Actividades en el Panel Jerárquico
 1.  Ve al **"Panel Jerárquico"**.

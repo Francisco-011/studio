@@ -167,20 +167,19 @@ export default function DefinirProcedimientosPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2 mb-1"><ListOrdered className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Definir Procedimientos para: {parentProcess.proceso}</CardTitle></div>
-          <CardDescription>Agregue, ordene y detalle los procedimientos que componen este proceso.</CardDescription>
+          <CardDescription>Agregue, ordene y detalle los procedimientos que componen este proceso. Las actividades de cada procedimiento se definen en el módulo de "Actividades".</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex justify-end"><Button onClick={openAddDialog}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Procedimiento</Button></div>
           {definedProcedimientos.length > 0 ? (
             <div className="rounded-md border mb-6">
               <Table>
-                <TableHeader><TableRow><TableHead className="w-[50px]">Orden</TableHead><TableHead>Nombre Procedimiento</TableHead><TableHead>Actividades</TableHead><TableHead className="text-right w-[200px]">Acciones</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead className="w-[50px]">Orden</TableHead><TableHead>Nombre Procedimiento</TableHead><TableHead className="text-right w-[200px]">Acciones</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {definedProcedimientos.map((proc, index) => (
                     <TableRow key={proc.tempId}>
                       <TableCell className="text-center font-medium">{index + 1}</TableCell>
                       <TableCell>{proc.nombre}</TableCell>
-                      <TableCell><Button variant="link" size="sm" onClick={() => router.push(`/captura/procedimiento/${proc.tempId}/actividades`)}>Definir Actividades</Button></TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => handleMove(index, 'up')} disabled={index === 0}><ArrowUp className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => handleMove(index, 'down')} disabled={index === definedProcedimientos.length - 1}><ArrowDown className="h-4 w-4" /></Button>

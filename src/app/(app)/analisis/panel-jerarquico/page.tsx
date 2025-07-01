@@ -244,11 +244,15 @@ export default function PanelJerarquicoPage() {
                 Object.values(deptoNode.puestosMap).forEach(puestoNode => {
 
                     let processTreeNodes = puestoNode.processList.map(proc => {
-                        const processPolicies = (proc.politicasAsociadasIds || [])
-                            .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
+                        const processPolicies = (proc.politicasAsociadas || [])
+                            .map(link => {
+                                const pol = politicas.find(p => p.id === link.policyId);
+                                return pol ? { ...pol, linkType: link.linkType } : null;
+                            })
+                            .filter((p): p is Politica & { linkType: string } => !!p)
                             .map(p => ({
                                 id: `politica-${p.id}-proc-${proc.id}`,
-                                name: `${p.codigo} - ${p.titulo}`,
+                                name: `${p.codigo} (${p.linkType})`,
                                 type: 'politica' as const, originalId: p.id, payload: p,
                             }));
 
@@ -257,14 +261,18 @@ export default function PanelJerarquicoPage() {
                             .map(procedure => {
                                 const procedurePolicies = (procedure.politicasAsociadasIds || [])
                                   .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
-                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo} - ${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
+                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
                                 
                                 const activityNodes = (procedure.activityOrder || [])
                                   .map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a)
                                   .map(activity => {
-                                      const activityPolicies = (activity.politicasAsociadasIds || [])
-                                        .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
-                                        .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.codigo} - ${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p }));
+                                      const activityPolicies = (activity.politicasAsociadas || [])
+                                        .map(link => {
+                                            const pol = politicas.find(p => p.id === link.policyId);
+                                            return pol ? { ...pol, linkType: link.linkType } : null;
+                                        })
+                                        .filter((p): p is Politica & { linkType: string } => !!p)
+                                        .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.codigo} (${p.linkType})`, type: 'politica' as const, originalId: p.id, payload: p }));
                                       return {
                                         id: `activity-${activity.id}-from-procedure-${procedure.id}`,
                                         name: activity.nombre, type: 'actividad' as const, originalId: activity.id, activo: activity.activa,
@@ -680,16 +688,53 @@ export default function PanelJerarquicoPage() {
       </Card>
 
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>Detalles de {detailItemType}: {selectedItemForDetail?.nombre || (selectedItemForDetail as Politica)?.titulo}</DialogTitle><DialogDescription>Información completa del elemento seleccionado.</DialogDescription></DialogHeader>
-          <div className="py-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
-            {detailItemType === 'process' && selectedItemForDetail && <DetailSectionDisplay title="Área" value={(selectedItemForDetail as CapturedProcess).area} />}
-            {detailItemType === 'policy' && selectedItemForDetail && <DetailSectionDisplay title="Código" value={(selectedItemForDetail as Politica).codigo} />}
-            {/* Add more details as needed */}
-          </div>
-          <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose></DialogFooter>
+        <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Detalles de {detailItemType}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+                {detailItemType === 'process' && selectedItemForDetail && (
+                    <div className="space-y-3">
+                        <DetailSectionDisplay title="Proceso" value={(selectedItemForDetail as CapturedProcess).proceso} />
+                        <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as CapturedProcess).descripcion} isTextarea />
+                        <DetailSectionDisplay title="Área" value={(selectedItemForDetail as CapturedProcess).area} />
+                        <DetailSectionDisplay title="Puesto" value={(selectedItemForDetail as CapturedProcess).puesto} />
+                        <DetailSectionDisplay title="Frecuencia" value={(selectedItemForDetail as CapturedProcess).frecuencia} />
+                        <DetailSectionDisplay title="Tiempo Estimado" value={formatMinutesToHours((selectedItemForDetail as CapturedProcess).tiempoEstimado || 0)} />
+                        <DetailSectionDisplay title="Costo Estimado" value={`${(selectedItemForDetail as CapturedProcess).costoEstimado || 0} ${(selectedItemForDetail as CapturedProcess).monedaCosto || ''}`} />
+                    </div>
+                )}
+                {detailItemType === 'activity' && selectedItemForDetail && (
+                    <div className="space-y-3">
+                        <DetailSectionDisplay title="Actividad" value={(selectedItemForDetail as Actividad).nombre} />
+                        <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Actividad).descripcionBreve} isTextarea />
+                        <DetailSectionDisplay title="Sistema Utilizado" value={(selectedItemForDetail as Actividad).sistemaUtilizado} />
+                    </div>
+                )}
+                {detailItemType === 'procedure' && selectedItemForDetail && (
+                    <div className="space-y-3">
+                        <DetailSectionDisplay title="Procedimiento" value={(selectedItemForDetail as Procedimiento).nombre} />
+                        <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Procedimiento).descripcion} isTextarea />
+                    </div>
+                )}
+                {detailItemType === 'policy' && selectedItemForDetail && (
+                    <div className="space-y-3">
+                        <DetailSectionDisplay title="Política" value={(selectedItemForDetail as Politica).titulo} />
+                        <DetailSectionDisplay title="Código" value={(selectedItemForDetail as Politica).codigo} />
+                        <DetailSectionDisplay title="Estado" value={(selectedItemForDetail as Politica).estado} />
+                        <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Politica).descripcion} isTextarea />
+                        <DetailSectionDisplay title="Nivel de Cumplimiento" value={(selectedItemForDetail as Politica).nivelCompliance} />
+                        <DetailSectionDisplay title="Clasificación" value={(selectedItemForDetail as Politica).clasificacion} />
+                        <DetailSectionDisplay title="Fecha de Vigencia" value={format(parseISO((selectedItemForDetail as Politica).fechaVigencia), "PPP", { locale: es })} />
+                        <DetailSectionDisplay title="Fecha de Revisión" value={format(parseISO((selectedItemForDetail as Politica).fechaRevision), "PPP", { locale: es })} />
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
