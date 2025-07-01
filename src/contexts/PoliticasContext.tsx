@@ -10,7 +10,7 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import type { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
-import type { NivelAcceso } from '@/app/(app)/usuarios/page';
+import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -71,36 +71,56 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (authLoading) {
+      setIsLoadingPoliticas(true);
       return;
     }
 
     if (!user) {
-        setPoliticas([]);
-        setIsLoadingPoliticas(false);
-        return;
-    }
-    
-    const userLevel = user.nivelAcceso;
-    const allowedClassifications: string[] = ['Público'];
-    if (userLevel === 'Confidencial') {
-      allowedClassifications.push('Privado', 'Confidencial');
-    } else if (userLevel === 'Ejecutivo' || userLevel === 'Jerárquico' || userLevel === 'Departamental') {
-      allowedClassifications.push('Privado');
-    }
-
-    if (allowedClassifications.length === 0) {
       setPoliticas([]);
       setIsLoadingPoliticas(false);
       return;
     }
+    
+    const userRole = user.rol;
+    const userLevel = user.nivelAcceso;
+    let politicasQuery;
 
-    const q = query(
-      collection(db, POLITICAS_COLLECTION),
-      where("clasificacion", "in", allowedClassifications),
-      orderBy("codigo", "asc")
-    );
+    if (userRole === 'Administrador') {
+      // Admin sees all policies, no 'where' filter needed.
+      politicasQuery = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
+    } else {
+      let allowedClassifications: string[];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+      switch (userLevel) {
+        case 'Ejecutivo':
+        case 'Confidencial':
+          allowedClassifications = ['Público', 'Privado', 'Confidencial'];
+          break;
+        case 'Jerárquico':
+        case 'Departamental':
+          allowedClassifications = ['Público', 'Privado'];
+          break;
+        case 'Público':
+        default:
+          allowedClassifications = ['Público'];
+          break;
+      }
+      
+      if (allowedClassifications.length > 0) {
+        politicasQuery = query(
+          collection(db, POLITICAS_COLLECTION),
+          where("clasificacion", "in", allowedClassifications),
+          orderBy("codigo", "asc")
+        );
+      } else {
+        // If for some reason a user has no allowed classifications, return empty.
+        setPoliticas([]);
+        setIsLoadingPoliticas(false);
+        return;
+      }
+    }
+
+    const unsubscribe = onSnapshot(politicasQuery, (snapshot) => {
         const politicasData = snapshot.docs.map(doc => {
             const data = doc.data();
             return {

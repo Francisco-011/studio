@@ -107,12 +107,14 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
     service cloud.firestore {
       match /databases/{database}/documents {
       
-        // Función para verificar si el usuario es Administrador
         function esAdmin() {
           return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
         }
         
-        // Función para obtener el nivel de acceso del usuario
+        function rolUsuario() {
+          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
+        }
+
         function nivelAccesoUsuario() {
           let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
           // Default to 'Público' if nivelAcceso is not set
@@ -122,7 +124,8 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         // Reglas para la colección de usuarios
         match /users/{userId} {
           allow read, update: if request.auth.uid == userId || esAdmin();
-          allow create, delete: if esAdmin();
+          allow create: if esAdmin(); // Signup creates the user document
+          allow delete: if esAdmin();
         }
 
         // Reglas para colecciones de configuración (Catálogos)
@@ -147,7 +150,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         }
         
         match /sistemas_costos/{costoId} {
-          allow read, write: if request.auth.uid != null; // Simplified for now
+          allow read, write: if esAdmin();
         }
 
         // Reglas para colecciones operativas
@@ -171,11 +174,12 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         match /politicas/{politicaId} {
           allow get: if request.auth.uid != null;
           // Allow list if the user's access level permits viewing the policy's classification
-          allow list: if 
-              (nivelAccesoUsuario() == 'Administrador' || nivelAccesoUsuario() == 'Ejecutivo' || nivelAccesoUsuario() == 'Confidencial') ||
-              (nivelAccesoUsuario() in ['Gerente de Proyecto', 'Consultor', 'Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
-              (nivelAccesoUsuario() == 'Usuario Final' && resource.data.clasificacion == 'Público');
-          allow create, update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
+          allow list: if esAdmin() ||
+                       (nivelAccesoUsuario() in ['Ejecutivo', 'Confidencial'] && resource.data.clasificacion in ['Público', 'Privado', 'Confidencial']) ||
+                       (nivelAccesoUsuario() in ['Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
+                       (nivelAccesoUsuario() == 'Público' && resource.data.clasificacion == 'Público');
+          
+          allow create, update: if rolUsuario() in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
           allow delete: if esAdmin();
         }
       }
