@@ -1,22 +1,27 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Lightbulb, Sparkles, AlertTriangle, Loader2, Send } from "lucide-react";
+import { Lightbulb, Sparkles, AlertTriangle, Loader2, Send, Briefcase, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { analyzeProcesses, type AnalyzeProcessesOutput } from '@/ai/flows/ai-powered-inefficiency-detection';
+import { analyzeJobProfile, type JobProfileAnalysisOutput } from '@/ai/flows/job-profile-analysis-flow';
+
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto, type TipoMoneda } from '@/contexts/SistemasCostosContext';
 import { useAcciones, type Accion, type AccionEstado, type Moneda, type TiempoUnidad } from '@/contexts/AccionesContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+import { useProcedimientos } from '@/contexts/ProcedimientosContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda | string = "USD"): string {
   if (amount === undefined || isNaN(amount)) return "N/A";
@@ -73,13 +78,22 @@ function calculateSystemAnnualCost(
 
 
 export default function MejorasPage() {
-  const [analysisResult, setAnalysisResult] = useState<AnalyzeProcessesOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [inefficiencyAnalysisResult, setInefficiencyAnalysisResult] = useState<AnalyzeProcessesOutput | null>(null);
+  const [isInefficiencyLoading, setIsInefficiencyLoading] = useState(false);
+  const [inefficiencyError, setInefficiencyError] = useState<string | null>(null);
+
+  const [jobProfileAnalysisResult, setJobProfileAnalysisResult] = useState<JobProfileAnalysisOutput | null>(null);
+  const [isJobProfileLoading, setIsJobProfileLoading] = useState(false);
+  const [jobProfileError, setJobProfileError] = useState<string | null>(null);
+  const [selectedPuestoId, setSelectedPuestoId] = useState<string>('');
+
+
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { acciones: allAcciones, addAccion } = useAcciones();
   const { actividades, isLoadingActividades } = useActividades();
   const { politicas, isLoadingPoliticas } = usePoliticas();
+  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
+  const { puestos, isLoadingPuestos } = usePuestos();
 
   const [isSelectionDialogOpen, setIsSelectionDialogOpen] = useState(false);
   const { procesos, isLoadingProcesos } = useProcesos();
@@ -89,10 +103,10 @@ export default function MejorasPage() {
   const [selectedSystemIds, setSelectedSystemIds] = useState<string[]>([]);
 
 
-  const runAnalysis = async () => {
-    setIsLoading(true);
-    setError(null);
-    setAnalysisResult(null);
+  const runInefficiencyAnalysis = async () => {
+    setIsInefficiencyLoading(true);
+    setInefficiencyError(null);
+    setInefficiencyAnalysisResult(null);
     setIsSelectionDialogOpen(false);
 
     if (selectedProcessIds.length === 0 && selectedActivityIds.length === 0 && selectedSystemIds.length === 0) {
@@ -101,7 +115,7 @@ export default function MejorasPage() {
             description: "Por favor, seleccione al menos un elemento para analizar.",
             variant: "default",
         });
-        setIsLoading(false);
+        setIsInefficiencyLoading(false);
         return;
     }
     
@@ -131,7 +145,7 @@ export default function MejorasPage() {
                  deptoInfo +
                  `Puesto Principal: ${p.puesto}\n` +
                  `Descripción: ${p.descripcion}\n` +
-                 `Políticas Vinculadas (IDs): [${p.politicasAsociadasIds?.join(', ')}]\n` +
+                 `Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(pol => pol.policyId).join(', ')}]\n` +
                  (associatedActivitiesText ? `  Actividades:\n${associatedActivitiesText}` : '  Actividades: Ninguna definida.');
         })
         .join('\n\n---\n\n');
@@ -180,7 +194,7 @@ export default function MejorasPage() {
         existingActions: existingActionsText,
       });
 
-      setAnalysisResult(result);
+      setInefficiencyAnalysisResult(result);
       toast({
         title: "Análisis Completado",
         description: "Se han identificado posibles mejoras y redundancias.",
@@ -189,26 +203,73 @@ export default function MejorasPage() {
     } catch (err) {
       console.error("Error during AI analysis:", err);
       const errorMessage = err instanceof Error ? err.message : "Ocurrió un error desconocido durante el análisis.";
-      setError(`Error en el análisis con IA: ${errorMessage}`);
+      setInefficiencyError(`Error en el análisis con IA: ${errorMessage}`);
       toast({
         title: "Error en el Análisis",
         description: "No se pudo completar el análisis de mejoras. Intente de nuevo.",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsInefficiencyLoading(false);
     }
   };
+  
+  const handleRunJobProfileAnalysis = async () => {
+    if (!selectedPuestoId) {
+        toast({ title: 'Selección requerida', description: 'Por favor, seleccione un puesto para analizar.', variant: 'default' });
+        return;
+    }
+    setIsJobProfileLoading(true);
+    setJobProfileError(null);
+    setJobProfileAnalysisResult(null);
+
+    try {
+        const puestoSeleccionado = puestos.find(p => p.id === selectedPuestoId);
+        if (!puestoSeleccionado) {
+            throw new Error('Puesto no encontrado.');
+        }
+
+        const procesosDelPuesto = procesos.filter(p => p.puesto === puestoSeleccionado.nombre);
+        const procedimientosIds = procesosDelPuesto.flatMap(p => p.procedimientoOrder || []);
+        const procedimientosDelPuesto = procedimientos.filter(p => procedimientosIds.includes(p.id));
+        const actividadesIds = new Set(procedimientosDelPuesto.flatMap(p => p.activityOrder || []));
+        
+        const actividadesDelPuesto = actividades.filter(a => actividadesIds.has(a.id));
+
+        if (actividadesDelPuesto.length === 0) {
+            toast({ title: 'Sin actividades', description: 'El puesto seleccionado no tiene actividades asignadas para analizar.', variant: 'default' });
+            setIsJobProfileLoading(false);
+            return;
+        }
+
+        const actividadesContext = actividadesDelPuesto.map(a => `- ${a.nombre}: ${a.descripcionBreve || 'Sin descripción.'}`).join('\n');
+
+        const result = await analyzeJobProfile({
+            puestoNombre: puestoSeleccionado.nombre,
+            actividades: actividadesContext,
+        });
+
+        setJobProfileAnalysisResult(result);
+
+    } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
+        setJobProfileError(`Error en el análisis de perfil: ${errorMessage}`);
+        toast({ title: "Error en el Análisis", description: "No se pudo completar el análisis del perfil.", variant: "destructive" });
+    } finally {
+        setIsJobProfileLoading(false);
+    }
+};
+
 
   const handleGenerateProposedActions = () => {
-    if (!analysisResult) {
+    if (!inefficiencyAnalysisResult) {
       toast({ title: "Sin Análisis", description: "No hay resultados de análisis para generar acciones.", variant: "default" });
       return;
     }
 
     let actionsGeneratedCount = 0;
     
-    analysisResult.redundantSystems?.forEach(sys => {
+    inefficiencyAnalysisResult.redundantSystems?.forEach(sys => {
       const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
       const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}.`;
 
@@ -227,7 +288,7 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    analysisResult.duplicateProcesses?.forEach(dup => {
+    inefficiencyAnalysisResult.duplicateProcesses?.forEach(dup => {
       const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
       const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
       
@@ -244,7 +305,7 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    analysisResult.duplicateActivities?.forEach(dup => {
+    inefficiencyAnalysisResult.duplicateActivities?.forEach(dup => {
       const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
       const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA}/${dup.puestoA}, B: ${dup.areaB}/${dup.puestoB}).`;
       
@@ -261,7 +322,7 @@ export default function MejorasPage() {
       actionsGeneratedCount++;
     });
 
-    analysisResult.criticalProcessesWithoutPolicies?.forEach(proc => {
+    inefficiencyAnalysisResult.criticalProcessesWithoutPolicies?.forEach(proc => {
         addAccion({
             nombre: `Crear Política para Proceso Crítico: ${proc.processName}`,
             descripcion: `Sugerencia de IA: ${proc.reason}. Se recomienda crear una política que regule este proceso.`,
@@ -275,7 +336,7 @@ export default function MejorasPage() {
         actionsGeneratedCount++;
     });
 
-    analysisResult.obsoletePolicies?.forEach(pol => {
+    inefficiencyAnalysisResult.obsoletePolicies?.forEach(pol => {
         addAccion({
             nombre: `Revisar Política Obsoleta: ${pol.policyName}`,
             descripcion: `Sugerencia de IA: ${pol.reason}. La fecha de revisión (${pol.reviewDate}) ha pasado.`,
@@ -286,7 +347,7 @@ export default function MejorasPage() {
         actionsGeneratedCount++;
     });
     
-    analysisResult.duplicatePolicySuggestions?.forEach(sug => {
+    inefficiencyAnalysisResult.duplicatePolicySuggestions?.forEach(sug => {
         addAccion({
             nombre: `Consolidar Políticas: ${sug.policyA_Name} / ${sug.policyB_Name}`,
             descripcion: `Sugerencia de IA: ${sug.reason}.`,
@@ -321,253 +382,157 @@ export default function MejorasPage() {
           <CardTitle className="text-2xl font-headline">Análisis de Oportunidades con IA</CardTitle>
         </CardHeader>
         <CardContent>
-          <CardDescription className="mb-6">
-            Utilice la IA para analizar los procesos y sistemas registrados para detectar automáticamente duplicidades y oportunidades de mejora. Seleccione los elementos que desea analizar para obtener resultados más precisos.
-          </CardDescription>
-
-          <div className="mb-6 flex flex-wrap gap-2">
-            <Button onClick={() => setIsSelectionDialogOpen(true)} disabled={isLoading} size="lg">
-              <Sparkles className="mr-2 h-5 w-5" />
-              Analizar Ineficiencias con IA
-            </Button>
-            {analysisResult && !isLoading && (
-                 <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
-                    <Send className="mr-2 h-5 w-5" />
-                    Generar Acciones Propuestas
+          <Tabs defaultValue="ineficiencias">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ineficiencias">Análisis de Ineficiencias</TabsTrigger>
+              <TabsTrigger value="perfil_puesto">Análisis de Perfil de Puesto</TabsTrigger>
+            </TabsList>
+            <TabsContent value="ineficiencias" className="mt-4">
+              <CardDescription className="mb-6">
+                Utilice la IA para analizar procesos y sistemas y detectar duplicidades, redundancias y oportunidades de mejora.
+              </CardDescription>
+              <div className="mb-6 flex flex-wrap gap-2">
+                <Button onClick={() => setIsSelectionDialogOpen(true)} disabled={isInefficiencyLoading} size="lg">
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Analizar Ineficiencias con IA
                 </Button>
-            )}
-          </div>
-          
-          {isLoading && (
-              <div className="flex items-center justify-center p-8">
-                  <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
-                  <p className="text-lg text-muted-foreground">Analizando, por favor espere...</p>
+                {inefficiencyAnalysisResult && !isInefficiencyLoading && (
+                     <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
+                        <Send className="mr-2 h-5 w-5" />
+                        Generar Acciones Propuestas
+                    </Button>
+                )}
               </div>
-          )}
-
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error en el Análisis</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {analysisResult && !isLoading && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Resumen del Análisis de IA</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm whitespace-pre-wrap">{analysisResult.summary || "No se generó un resumen."}</p>
-                </CardContent>
-              </Card>
-
-              {analysisResult.duplicateProcesses && analysisResult.duplicateProcesses.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Procesos Duplicados Potenciales</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-sm">
-                        {analysisResult.duplicateProcesses.map((dup, index) => (
-                          <li key={index}>
-                            <strong>{dup.processA} y {dup.processB}:</strong> {dup.reason}
-                          </li>
-                        ))}
-                      </ul>
-                  </CardContent>
-                </Card>
-              )}
-
-              {analysisResult.duplicateActivities && analysisResult.duplicateActivities.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Actividades Duplicadas Potenciales</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-sm">
-                        {analysisResult.duplicateActivities.map((dup, index) => (
-                          <li key={index}>
-                            <strong>Actividad A:</strong> {dup.activityA} (en {dup.areaA || 'N/A'} / {dup.puestoA || 'N/A'})<br />
-                            <strong>Actividad B:</strong> {dup.activityB} (en {dup.areaB || 'N/A'} / {dup.puestoB || 'N/A'})<br />
-                            <strong>Razón:</strong> {dup.reason}
-                          </li>
-                        ))}
-                      </ul>
-                  </CardContent>
-                </Card>
-              )}
               
-              {analysisResult.redundantSystems && analysisResult.redundantSystems.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Sistemas Redundantes Potenciales</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="list-disc pl-5 space-y-2 text-sm">
-                      {analysisResult.redundantSystems.map((sys, index) => (
-                        <li key={index}>
-                          <strong>{sys.systemName}:</strong> {sys.reason}
-                           {sys.annualCost && (
-                            <span className="text-muted-foreground text-xs block">
-                              Costo Anual Estimado: {formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
-              
-               {analysisResult.criticalProcessesWithoutPolicies && analysisResult.criticalProcessesWithoutPolicies.length > 0 && (
-                <Card>
-                  <CardHeader><CardTitle>Procesos Críticos sin Políticas</CardTitle></CardHeader>
-                  <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-sm">
-                        {analysisResult.criticalProcessesWithoutPolicies.map((item, index) => (
-                          <li key={index}><strong>{item.processName}</strong> (en {item.area} / {item.puesto}): {item.reason}</li>
-                        ))}
-                      </ul>
-                  </CardContent>
-                </Card>
+              {isInefficiencyLoading && (
+                  <div className="flex items-center justify-center p-8">
+                      <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
+                      <p className="text-lg text-muted-foreground">Analizando, por favor espere...</p>
+                  </div>
               )}
 
-              {analysisResult.obsoletePolicies && analysisResult.obsoletePolicies.length > 0 && (
-                <Card>
-                  <CardHeader><CardTitle>Políticas Obsoletas o por Vencer</CardTitle></CardHeader>
-                  <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-sm">
-                        {analysisResult.obsoletePolicies.map((item, index) => (
-                          <li key={index}><strong>{item.policyName}</strong>: {item.reason} (Fecha de Revisión: {item.reviewDate})</li>
-                        ))}
-                      </ul>
-                  </CardContent>
-                </Card>
+              {inefficiencyError && (
+                <Alert variant="destructive" className="mb-6">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Error en el Análisis</AlertTitle>
+                  <AlertDescription>{inefficiencyError}</AlertDescription>
+                </Alert>
               )}
-              
-              {analysisResult.duplicatePolicySuggestions && analysisResult.duplicatePolicySuggestions.length > 0 && (
-                <Card>
-                  <CardHeader><CardTitle>Sugerencias de Consolidación de Políticas</CardTitle></CardHeader>
-                  <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-sm">
-                        {analysisResult.duplicatePolicySuggestions.map((item, index) => (
-                          <li key={index}><strong>{item.policyA_Name} / {item.policyB_Name}</strong>: {item.reason}</li>
-                        ))}
-                      </ul>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
 
-          {!analysisResult && !isLoading && !error && (
-             <div className="mt-10 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[200px] bg-muted/20">
-                <Sparkles className="h-16 w-16 text-muted-foreground mb-4" />
-                <p className="text-lg font-semibold text-foreground">Listo para el Análisis</p>
-                <p className="text-sm text-muted-foreground text-center">Haga clic en el botón "Analizar Ineficiencias con IA" para comenzar.</p>
-            </div>
-          )}
+              {inefficiencyAnalysisResult && !isInefficiencyLoading && (
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader><CardTitle>Resumen del Análisis de IA</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm whitespace-pre-wrap">{inefficiencyAnalysisResult.summary || "No se generó un resumen."}</p></CardContent>
+                  </Card>
+                  {inefficiencyAnalysisResult.duplicateProcesses?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Procesos Duplicados Potenciales</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicateProcesses.map((dup, index) => (<li key={index}><strong>{dup.processA} y {dup.processB}:</strong> {dup.reason}</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                  {inefficiencyAnalysisResult.duplicateActivities?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Actividades Duplicadas Potenciales</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicateActivities.map((dup, index) => (<li key={index}><strong>Actividad A:</strong> {dup.activityA} (en {dup.areaA || 'N/A'} / {dup.puestoA || 'N/A'})<br /><strong>Actividad B:</strong> {dup.activityB} (en {dup.areaB || 'N/A'} / {dup.puestoB || 'N/A'})<br /><strong>Razón:</strong> {dup.reason}</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                  {inefficiencyAnalysisResult.redundantSystems?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Sistemas Redundantes Potenciales</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.redundantSystems.map((sys, index) => (<li key={index}><strong>{sys.systemName}:</strong> {sys.reason} {sys.annualCost && (<span className="text-muted-foreground text-xs block">Costo Anual Estimado: {formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}</span>)}</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                  {inefficiencyAnalysisResult.criticalProcessesWithoutPolicies?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Procesos Críticos sin Políticas</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.criticalProcessesWithoutPolicies.map((item, index) => (<li key={index}><strong>{item.processName}</strong> (en {item.area} / {item.puesto}): {item.reason}</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                  {inefficiencyAnalysisResult.obsoletePolicies?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Políticas Obsoletas o por Vencer</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.obsoletePolicies.map((item, index) => (<li key={index}><strong>{item.policyName}</strong>: {item.reason} (Fecha de Revisión: {item.reviewDate})</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                  {inefficiencyAnalysisResult.duplicatePolicySuggestions?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Sugerencias de Consolidación de Políticas</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicatePolicySuggestions.map((item, index) => (<li key={index}><strong>{item.policyA_Name} / {item.policyB_Name}</strong>: {item.reason}</li>))}</ul></CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="perfil_puesto" className="mt-4">
+              <CardDescription className="mb-6">
+                Seleccione un puesto para generar un perfil de responsabilidades basado en sus actividades asignadas y validar su alineación.
+              </CardDescription>
+              <div className="flex flex-col sm:flex-row gap-4 items-center mb-6">
+                <Select value={selectedPuestoId} onValueChange={setSelectedPuestoId} disabled={isLoadingPuestos}>
+                    <SelectTrigger className="w-full sm:w-[300px]">
+                        <SelectValue placeholder={isLoadingPuestos ? "Cargando..." : "Seleccione un puesto"}/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {puestos.map(p => (<SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>))}
+                    </SelectContent>
+                </Select>
+                <Button onClick={handleRunJobProfileAnalysis} disabled={isJobProfileLoading || !selectedPuestoId}>
+                  {isJobProfileLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Briefcase className="mr-2 h-4 w-4"/>}
+                  Analizar Perfil
+                </Button>
+              </div>
+              {isJobProfileLoading && <div className="flex items-center justify-center p-8"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /><p className="text-lg text-muted-foreground">Analizando perfil...</p></div>}
+              {jobProfileError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error en Análisis</AlertTitle><AlertDescription>{jobProfileError}</AlertDescription></Alert>}
+              {jobProfileAnalysisResult && !isJobProfileLoading && (
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader><CardTitle>Perfil del Puesto Generado por IA</CardTitle></CardHeader>
+                        <CardContent><p className="text-sm whitespace-pre-wrap">{jobProfileAnalysisResult.perfilGenerado}</p></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader><CardTitle>Resumen del Análisis de Alineación</CardTitle></CardHeader>
+                        <CardContent><p className="text-sm whitespace-pre-wrap">{jobProfileAnalysisResult.resumenAnalisis}</p></CardContent>
+                    </Card>
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <Card><CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle className="text-green-600"/>Actividades Alineadas</CardTitle></CardHeader>
+                            <CardContent>
+                                {jobProfileAnalysisResult.actividadesAlineadas?.length > 0 ? 
+                                (<ul className="list-disc pl-5 text-sm space-y-1">{jobProfileAnalysisResult.actividadesAlineadas.map((act, i) => <li key={i}>{act}</li>)}</ul>) :
+                                (<p className="text-sm text-muted-foreground">No se encontraron actividades claramente alineadas.</p>)}
+                            </CardContent>
+                        </Card>
+                        <Card><CardHeader><CardTitle className="flex items-center gap-2"><XCircle className="text-amber-600"/>Actividades No Alineadas (Potencial de Reasignación)</CardTitle></CardHeader>
+                            <CardContent>
+                                {jobProfileAnalysisResult.actividadesNoAlineadas?.length > 0 ? 
+                                (<ul className="list-disc pl-5 text-sm space-y-1">{jobProfileAnalysisResult.actividadesNoAlineadas.map((act, i) => <li key={i}>{act}</li>)}</ul>) :
+                                (<p className="text-sm text-muted-foreground">Todas las actividades parecen estar alineadas.</p>)}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
-
+      
       <Dialog open={isSelectionDialogOpen} onOpenChange={setIsSelectionDialogOpen}>
           <DialogContent className="sm:max-w-3xl">
-              <DialogHeader>
-                  <DialogTitle>Seleccionar Elementos para Análisis de IA</DialogTitle>
-                  <DialogDescription>
-                      Elija qué procesos, actividades y sistemas desea incluir en el análisis para obtener resultados más precisos.
-                  </DialogDescription>
-              </DialogHeader>
+              <DialogHeader><DialogTitle>Seleccionar Elementos para Análisis de Ineficiencias</DialogTitle><DialogDescription>Elija qué procesos, actividades y sistemas desea incluir en el análisis.</DialogDescription></DialogHeader>
               <div className="py-4">
                   <Tabs defaultValue="procesos">
-                      <TabsList className="grid w-full grid-cols-3">
-                          <TabsTrigger value="procesos">Procesos</TabsTrigger>
-                          <TabsTrigger value="actividades">Actividades</TabsTrigger>
-                          <TabsTrigger value="sistemas">Sistemas</TabsTrigger>
-                      </TabsList>
+                      <TabsList className="grid w-full grid-cols-3"><TabsTrigger value="procesos">Procesos</TabsTrigger><TabsTrigger value="actividades">Actividades</TabsTrigger><TabsTrigger value="sistemas">Sistemas</TabsTrigger></TabsList>
                       <TabsContent value="procesos">
-                          <div className="flex justify-end my-2">
-                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds(procesos.map(p => p.id))}>Seleccionar Todos</Button>
-                            <Button variant="link" size="sm" onClick={() => setSelectedProcessIds([])}>Deseleccionar Todos</Button>
-                          </div>
-                          <ScrollArea className="h-[400px] border rounded-md p-2">
-                            {isLoadingProcesos ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
-                              <div className="space-y-2">
-                                {procesos.map(proc => (
-                                  <div key={proc.id} className="flex items-start space-x-2">
-                                    <Checkbox
-                                      id={`proc-${proc.id}`}
-                                      checked={selectedProcessIds.includes(proc.id)}
-                                      onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))}
-                                      className="mt-1"
-                                    />
-                                    <label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">
-                                      {proc.proceso}
-                                      <span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span>
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            }
-                          </ScrollArea>
+                          <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedProcessIds(procesos.map(p => p.id))}>Sel. Todos</Button><Button variant="link" size="sm" onClick={() => setSelectedProcessIds([])}>Desel. Todos</Button></div>
+                          <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{procesos.map(proc => (<div key={proc.id} className="flex items-start space-x-2"><Checkbox id={`proc-${proc.id}`} checked={selectedProcessIds.includes(proc.id)} onCheckedChange={(checked) => setSelectedProcessIds(prev => checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id))} className="mt-1"/><label htmlFor={`proc-${proc.id}`} className="text-sm font-medium leading-none cursor-pointer">{proc.proceso}<span className="block text-xs text-muted-foreground">{proc.area} / {proc.puesto}</span></label></div>))}</div></ScrollArea>
                       </TabsContent>
                        <TabsContent value="actividades">
-                           <div className="flex justify-end my-2">
-                              <Button variant="link" size="sm" onClick={() => setSelectedActivityIds(actividades.filter(a=>a.activa).map(a => a.id))}>Seleccionar Todas</Button>
-                              <Button variant="link" size="sm" onClick={() => setSelectedActivityIds([])}>Deseleccionar Todas</Button>
-                          </div>
-                          <ScrollArea className="h-[400px] border rounded-md p-2">
-                            {isLoadingActividades ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
-                              <div className="space-y-2">
-                                {actividades.filter(a => a.activa).map(act => (
-                                  <div key={act.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`act-${act.id}`}
-                                      checked={selectedActivityIds.includes(act.id)}
-                                      onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}
-                                    />
-                                    <label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">
-                                      {act.nombre}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            }
-                          </ScrollArea>
+                           <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedActivityIds(actividades.filter(a=>a.activa).map(a => a.id))}>Sel. Todas</Button><Button variant="link" size="sm" onClick={() => setSelectedActivityIds([])}>Desel. Todas</Button></div>
+                           <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{actividades.filter(a => a.activa).map(act => (<div key={act.id} className="flex items-center space-x-2"><Checkbox id={`act-${act.id}`} checked={selectedActivityIds.includes(act.id)} onCheckedChange={(checked) => setSelectedActivityIds(prev => checked ? [...prev, act.id] : prev.filter(id => id !== act.id))}/><label htmlFor={`act-${act.id}`} className="text-sm font-medium leading-none cursor-pointer">{act.nombre}</label></div>))}</div></ScrollArea>
                       </TabsContent>
                       <TabsContent value="sistemas">
-                          <div className="flex justify-end my-2">
-                              <Button variant="link" size="sm" onClick={() => setSelectedSystemIds(sistemas.map(s => s.id))}>Seleccionar Todos</Button>
-                              <Button variant="link" size="sm" onClick={() => setSelectedSystemIds([])}>Deseleccionar Todos</Button>
-                          </div>
-                          <ScrollArea className="h-[400px] border rounded-md p-2">
-                             {isLoadingSistemasCostos ? <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin" /> :
-                              <div className="space-y-2">
-                                {sistemas.map(sys => (
-                                  <div key={sys.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`sys-${sys.id}`}
-                                      checked={selectedSystemIds.includes(sys.id)}
-                                      onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}
-                                    />
-                                    <label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">
-                                      {sys.nombre}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            }
-                          </ScrollArea>
+                          <div className="flex justify-end my-2"><Button variant="link" size="sm" onClick={() => setSelectedSystemIds(sistemas.map(s => s.id))}>Sel. Todos</Button><Button variant="link" size="sm" onClick={() => setSelectedSystemIds([])}>Desel. Todos</Button></div>
+                           <ScrollArea className="h-[400px] border rounded-md p-2"><div className="space-y-2">{sistemas.map(sys => (<div key={sys.id} className="flex items-center space-x-2"><Checkbox id={`sys-${sys.id}`} checked={selectedSystemIds.includes(sys.id)} onCheckedChange={(checked) => setSelectedSystemIds(prev => checked ? [...prev, sys.id] : prev.filter(id => id !== sys.id))}/><label htmlFor={`sys-${sys.id}`} className="text-sm font-medium leading-none cursor-pointer">{sys.nombre}</label></div>))}</div></ScrollArea>
                       </TabsContent>
                   </Tabs>
               </div>
-              <DialogFooter>
-                  <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                  <Button onClick={runAnalysis}>Analizar Selección ({selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length})</Button>
-              </DialogFooter>
+              <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button onClick={runInefficiencyAnalysis}>Analizar Selección ({selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length})</Button></DialogFooter>
           </DialogContent>
       </Dialog>
     </div>
