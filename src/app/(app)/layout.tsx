@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AreasProvider } from '@/contexts/AreasContext';
-import { DepartamentosProvider } from '@/contexts/DepartamentosContext';
+import { DepartamentosProvider } from '@/contexts/DepartamentosProvider';
 import { PuestosProvider } from '@/contexts/PuestosContext';
 import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
@@ -47,29 +47,29 @@ export default function AuthenticatedAppLayout({
 
   return (
     <ActivityLogProvider>
-      <AreasProvider>
-        <DepartamentosProvider>
-          <PuestosProvider>
-            <SistemasCostosProvider>
-              <PoliticasProvider>
-                <ActividadesProvider>
-                  <ProcesosProvider>
-                    <ProcedimientosProvider>
-                      <AccionesProvider>
-                        <ExceptionsProvider>
-                          <PermissionsProvider>
+      <ExceptionsProvider>
+        <PermissionsProvider>
+          <AreasProvider>
+            <DepartamentosProvider>
+              <PuestosProvider>
+                <SistemasCostosProvider>
+                  <PoliticasProvider>
+                    <ActividadesProvider>
+                      <ProcesosProvider>
+                        <ProcedimientosProvider>
+                          <AccionesProvider>
                             <AppLayout>{children}</AppLayout>
-                          </PermissionsProvider>
-                        </ExceptionsProvider>
-                      </AccionesProvider>
-                    </ProcedimientosProvider>
-                  </ProcesosProvider>
-                </ActividadesProvider>
-              </PoliticasProvider>
-            </SistemasCostosProvider>
-          </PuestosProvider>
-        </DepartamentosProvider>
-      </AreasProvider>
+                          </AccionesProvider>
+                        </ProcedimientosProvider>
+                      </ProcesosProvider>
+                    </ActividadesProvider>
+                  </PoliticasProvider>
+                </SistemasCostosProvider>
+              </PuestosProvider>
+            </DepartamentosProvider>
+          </AreasProvider>
+        </PermissionsProvider>
+      </ExceptionsProvider>
     </ActivityLogProvider>
   );
 }
