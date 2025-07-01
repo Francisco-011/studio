@@ -1,98 +1,90 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if the user is authenticated.
-    function isUserAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper function to get the user's access level from their profile.
-    function getUserAccessLevel(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.nivelAcceso;
-    }
-
-    // Helper function to check if the user is an administrator by role.
-    function isUserRoleAdmin() {
+  
+    // Función para verificar si el usuario es Administrador
+    function esAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
     }
+    
+    // Función para obtener el nivel de acceso del usuario
+    function nivelAccesoUsuario() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivelAcceso;
+    }
 
-    // USERS collection rules
+    // Reglas para la colección de usuarios
     match /users/{userId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin() || request.auth.uid == userId;
+      // Los usuarios pueden leer su propio perfil.
+      // Los administradores pueden leer cualquier perfil.
+      allow read: if request.auth.uid == userId || esAdmin();
+      
+      // Los usuarios pueden actualizar su propio perfil.
+      // Los administradores pueden actualizar cualquier perfil.
+      allow update: if request.auth.uid == userId || esAdmin();
+
+      // Solo los administradores pueden crear o eliminar usuarios (la creación inicial se hace desde el backend).
+      allow create, delete: if esAdmin();
     }
 
-    // Configuration collections (Areas, Departamentos, Puestos, etc.)
+    // Reglas para colecciones de configuración (Catálogos)
     match /areas/{areaId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin();
-    }
-    match /departamentos/{deptoId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin();
-    }
-    match /puestos/{puestoId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin();
-    }
-
-    // Systems and Costs
-    match /sistemas/{sistemaId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin();
-    }
-    match /sistemas_costos/{costoId} {
-      allow read: if isUserAuthenticated();
-      allow write: if isUserRoleAdmin();
+      allow read: if request.auth.uid != null;
+      allow create, update, delete: if esAdmin();
     }
     
-    // Core operational data
+    match /departamentos/{deptoId} {
+      allow read: if request.auth.uid != null;
+      allow create, update, delete: if esAdmin();
+    }
+
+    match /puestos/{puestoId} {
+      allow read: if request.auth.uid != null;
+      allow create, update, delete: if esAdmin();
+    }
+    
+    match /sistemas/{sistemaId} {
+      allow read: if request.auth.uid != null;
+      allow create, update, delete: if esAdmin();
+    }
+    
+    match /sistemas_costos/{costoId} {
+      allow read: if request.auth.uid != null;
+      allow create, update, delete: if esAdmin();
+    }
+
+    // Reglas para colecciones operativas
     match /acciones/{accionId} {
-      allow read, write: if isUserAuthenticated();
+      allow read, write: if request.auth.uid != null;
     }
+    
     match /actividades/{actividadId} {
-      allow read, write: if isUserAuthenticated();
+      allow read, write: if request.auth.uid != null;
     }
-    match /procedimientos/{procedimientoId} {
-      allow read, write: if isUserAuthenticated();
-    }
-
-    // PROCESOS collection rules
+    
     match /procesos/{procesoId} {
-      allow read: if isUserAuthenticated(); // Further filtering done client-side for now
-      allow write: if isUserAuthenticated(); // Allow writes, can be refined later based on roles
+      allow read, write: if request.auth.uid != null;
     }
 
-    // POLITICAS collection rules
+    match /procedimientos/{procedimientoId} {
+      allow read, write: if request.auth.uid != null;
+    }
+    
+    // Reglas de acceso granular para Políticas
     match /politicas/{politicaId} {
-      // A user can read a policy if:
-      // 1. The policy is 'Público'.
-      // 2. The policy is 'Privado' and their access level is 'Departamental' or higher.
-      // 3. The policy is 'Confidencial' and their access level is 'Confidencial'.
-      allow read: if isUserAuthenticated() &&
-                  (resource.data.clasificacion == 'Público' ||
-                  (resource.data.clasificacion == 'Privado' && getUserAccessLevel(request.auth.uid) in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial']) ||
-                  (resource.data.clasificacion == 'Confidencial' && getUserAccessLevel(request.auth.uid) == 'Confidencial'));
+      allow get: if request.auth.uid != null;
+      
+      // Permite la lectura (listado) basado en el nivel de acceso
+      allow list: if 
+          // Administradores y Ejecutivos ven todo
+          (nivelAccesoUsuario() in ['Administrador', 'Ejecutivo', 'Confidencial']) ||
+          // Gerentes y otros ven Público y Privado
+          (nivelAccesoUsuario() in ['Gerente de Proyecto', 'Consultor', 'Jerárquico', 'Departamental'] && resource.data.clasificacion in ['Público', 'Privado']) ||
+          // Usuarios finales solo ven Público
+          (nivelAccesoUsuario() == 'Usuario Final' && resource.data.clasificacion == 'Público');
 
-      // A user can list (query) policies if their query only asks for classifications they are allowed to see.
-      allow list: if isUserAuthenticated() &&
-                   request.query.wheres[0].field == 'clasificacion' &&
-                   request.query.wheres[0].op == 'in' &&
-                   (
-                     (getUserAccessLevel(request.auth.uid) == 'Público' && request.query.wheres[0].value.hasOnly(['Público'])) ||
-                     (getUserAccessLevel(request.auth.uid) in ['Departamental', 'Jerárquico', 'Ejecutivo'] && request.query.wheres[0].value.hasOnly(['Público', 'Privado'])) ||
-                     (getUserAccessLevel(request.auth.uid) == 'Confidencial') // Admin can query all
-                   );
-                   
-      allow write: if isUserRoleAdmin();
-    }
-
-    // Exceptions collection rules
-    match /excepciones/{excepcionId} {
-       allow read, write: if isUserAuthenticated();
+      // Solo usuarios con los roles adecuados pueden escribir
+      allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
     }
   }
 }
