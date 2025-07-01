@@ -72,6 +72,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
+import { CheckCircle } from 'lucide-react';
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle } from "lucide-react";
 
@@ -431,27 +432,32 @@ export default function AuditoriaPage() {
   const handleFinalizeAudit = async () => {
     if (!currentAuditSession) return;
 
-    // Update lastAuditedAt on the corresponding entity
     const now = new Date().toISOString();
-    if (currentAuditSession.auditType === 'proceso') {
-        await updateProceso(currentAuditSession.targetId, { lastAuditedAt: now });
-    } else if (currentAuditSession.auditType === 'puesto') {
-        await updatePuesto(currentAuditSession.targetId, { lastAuditedAt: now });
-    }
-
-    const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
-    setPastAudits(prev => {
-        const existingIndex = prev.findIndex(a => a.id === finalAudit.id);
-        if (existingIndex > -1) {
-            const newAudits = [...prev];
-            newAudits[existingIndex] = finalAudit;
-            return newAudits;
+    try {
+        if (currentAuditSession.auditType === 'proceso') {
+            await updateProceso(currentAuditSession.targetId, { lastAuditedAt: now });
+        } else if (currentAuditSession.auditType === 'puesto') {
+            await updatePuesto(currentAuditSession.targetId, { lastAuditedAt: now });
         }
-        return [...prev, finalAudit];
-    });
-    addLogEntry({ user: finalAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
-    setCurrentAuditSession(null);
-    toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
+
+        const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
+        setPastAudits(prev => {
+            const existingIndex = prev.findIndex(a => a.id === finalAudit.id);
+            if (existingIndex > -1) {
+                const newAudits = [...prev];
+                newAudits[existingIndex] = finalAudit;
+                return newAudits;
+            }
+            return [...prev, finalAudit];
+        });
+        addLogEntry({ user: finalAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
+        setCurrentAuditSession(null);
+        toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
+
+    } catch (error) {
+        console.error("Error finalizing audit:", error);
+        toast({ title: "Error al Finalizar", description: "No se pudo actualizar la fecha de auditoría del elemento.", variant: "destructive" });
+    }
   };
 
   const promptCancelAudit = () => {
