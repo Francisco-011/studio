@@ -78,6 +78,10 @@ export default function PoliticasPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [politicaForHistory, setPoliticaForHistory] = useState<Politica | null>(null);
 
+  const [statusFilter, setStatusFilter] = useState<'all' | PoliticaEstado>('all');
+  const [complianceFilter, setComplianceFilter] = useState<'all' | NivelCompliance>('all');
+  const [areaFilter, setAreaFilter] = useState<'all' | string>('all');
+
 
   const form = useForm<PoliticaFormData>({
     resolver: zodResolver(politicaFormSchema),
@@ -160,8 +164,13 @@ export default function PoliticasPage() {
   }
 
   const filteredPoliticas = useMemo(() => 
-    politicas.filter(p => p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase()))
-  , [politicas, searchTerm]);
+    politicas.filter(p => 
+      (p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (statusFilter === 'all' || p.estado === statusFilter) &&
+      (complianceFilter === 'all' || p.nivelCompliance === complianceFilter) &&
+      (areaFilter === 'all' || p.areaResponsable === areaFilter)
+    )
+  , [politicas, searchTerm, statusFilter, complianceFilter, areaFilter]);
 
   const isLoadingAll = isLoadingPoliticas || isLoadingProcesos || isLoadingProcedimientos || isLoadingActividades || isLoadingAreas || isLoadingDepartamentos;
 
@@ -186,14 +195,40 @@ export default function PoliticasPage() {
           <CardDescription>Cree, edite y gestione el ciclo de vida de las políticas que rigen la organización.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 flex justify-between items-center">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input placeholder="Buscar por título o código..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
-            </div>
+           <div className="mb-6 space-y-4 md:space-y-0 md:flex md:justify-between md:items-end">
+             <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="md:col-span-4 lg:col-span-1">
+                    <label htmlFor="search" className="text-sm font-medium">Búsqueda</label>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input id="search" placeholder="Buscar por título o código..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
+                    </div>
+                </div>
+                <div>
+                    <label htmlFor="status-filter" className="text-sm font-medium">Estado</label>
+                    <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+                        <SelectTrigger id="status-filter"><SelectValue/></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{politicaEstados.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                </div>
+                 <div>
+                    <label htmlFor="compliance-filter" className="text-sm font-medium">Nivel Cumplimiento</label>
+                    <Select value={complianceFilter} onValueChange={v => setComplianceFilter(v as any)}>
+                        <SelectTrigger id="compliance-filter"><SelectValue/></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Todos los Niveles</SelectItem>{nivelesCompliance.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                    </Select>
+                </div>
+                 <div>
+                    <label htmlFor="area-filter" className="text-sm font-medium">Área Responsable</label>
+                    <Select value={areaFilter} onValueChange={v => setAreaFilter(v as any)}>
+                        <SelectTrigger id="area-filter"><SelectValue/></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
+                    </Select>
+                </div>
+             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingPolitica(null); setIsDialogOpen(true); }}>
+                <Button onClick={() => { setEditingPolitica(null); setIsDialogOpen(true); }} className="mt-4 md:mt-0 md:ml-4">
                   <PlusCircle className="mr-2 h-4 w-4" /> Agregar Política
                 </Button>
               </DialogTrigger>
