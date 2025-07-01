@@ -21,7 +21,7 @@ interface DepartamentosContextType {
   departamentos: Departamento[];
   addDepartamento: (nombre: string, areaId: string) => Promise<void>;
   updateDepartamento: (id: string, nombre: string, areaId: string) => Promise<void>;
-  deleteDepartamento: (id: string) => Promise<void>;
+  deleteDepartamento: (id: string, checkUsage: (deptoId: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -80,22 +80,19 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
     }
   }, [departamentos, addLogEntry]);
 
-  const deleteDepartamento = useCallback(async (id: string) => {
-    const deptoToDelete = departamentos.find(d => d.id === id);
-    
-    // Check if any puesto is using this department
-    const puestosQuery = query(collection(db, 'puestos'), where('departamentoId', '==', id));
-    const puestosSnapshot = await getDocs(puestosQuery);
-    if (!puestosSnapshot.empty) {
+  const deleteDepartamento = useCallback(async (id: string, checkUsage: (deptoId: string) => { isUsed: boolean; message: string }) => {
+    const { isUsed, message } = checkUsage(id);
+    if (isUsed) {
         toast({
             title: "Eliminación Bloqueada",
-            description: `El departamento "${deptoToDelete?.nombre}" está en uso por ${puestosSnapshot.size} puesto(s) y no puede ser eliminado.`,
+            description: message,
             variant: "destructive",
             duration: 7000
         });
         return;
     }
 
+    const deptoToDelete = departamentos.find(d => d.id === id);
     if(deptoToDelete){
       try {
         await deleteDoc(doc(db, DEPARTAMENTOS_COLLECTION, id));

@@ -120,7 +120,6 @@ const PlaceholderContent = ({ title, description, icon }: { title: string, descr
 
 
 export default function ConfiguracionPage() {
-  // Contexts
   const { areas, addArea, updateArea, deleteArea, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, addDepartamento, updateDepartamento, deleteDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos } = usePuestos();
@@ -151,10 +150,8 @@ export default function ConfiguracionPage() {
   const [puestoSearchTerm, setPuestoSearchTerm] = useState('');
   const [sistemaSearchTerm, setSistemaSearchTerm] = useState('');
 
-  // Deletion state
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema' } | null>(null);
   
-  // Forms
   const areaForm = useForm<AreaFormData>({ resolver: zodResolver(areaFormSchema), defaultValues: { nombre: '' } });
   const deptoForm = useForm<DepartamentoFormData>({ resolver: zodResolver(departamentoFormSchema) });
   const puestoForm = useForm<PuestoFormData>({ resolver: zodResolver(puestoFormSchema) });
@@ -163,99 +160,76 @@ export default function ConfiguracionPage() {
 
   const isLoading = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingSistemasCostos;
 
-  // Effects to reset forms when dialogs open/close
   useEffect(() => { areaForm.reset(editingArea ? { id: editingArea.id, nombre: editingArea.nombre } : { nombre: '' }); }, [editingArea, areaForm]);
   useEffect(() => { deptoForm.reset(editingDepto || { nombre: '', areaId: '' }); }, [editingDepto, deptoForm]);
   useEffect(() => { puestoForm.reset(editingPuesto || { nombre: '', areaId: '' }); }, [editingPuesto, puestoForm]);
   useEffect(() => { sistemaForm.reset(editingSistema || { nombre: '', scope: 'Empresa' }); }, [editingSistema, sistemaForm]);
-  useEffect(() => {
-    if (isCostoDialogOpen) {
-      costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', descripcion: '' });
-    }
-  }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
+  useEffect(() => { if (isCostoDialogOpen) { costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', descripcion: '' }); } }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
 
-  // Filtered data
   const filteredAreas = useMemo(() => areas.filter(a => a.nombre.toLowerCase().includes(areaSearchTerm.toLowerCase())), [areas, areaSearchTerm]);
   const filteredDeptos = useMemo(() => departamentos.map(d => ({ ...d, areaNombre: areas.find(a => a.id === d.areaId)?.nombre || 'N/A' })).filter(d => d.nombre.toLowerCase().includes(deptoSearchTerm.toLowerCase()) || d.areaNombre.toLowerCase().includes(deptoSearchTerm.toLowerCase())), [departamentos, areas, deptoSearchTerm]);
   const filteredPuestos = useMemo(() => puestos.map(p => ({ ...p, areaNombre: areas.find(a => a.id === p.areaId)?.nombre || 'N/A', deptoNombre: departamentos.find(d => d.id === p.departamentoId)?.nombre || 'N/A' })).filter(p => p.nombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.areaNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.deptoNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase())), [puestos, areas, departamentos, puestoSearchTerm]);
   const filteredSistemas = useMemo(() => sistemas.filter(s => s.nombre.toLowerCase().includes(sistemaSearchTerm.toLowerCase())), [sistemas, sistemaSearchTerm]);
 
-  // Submit Handlers
-  async function handleAreaSubmit(data: AreaFormData) {
-    if (editingArea) await updateArea(editingArea.id, data.nombre); else await addArea(data.nombre);
-    setIsAreaDialogOpen(false);
-  }
-  async function handleDeptoSubmit(data: DepartamentoFormData) {
-    if (editingDepto) await updateDepartamento(editingDepto.id, data.nombre, data.areaId); else await addDepartamento(data.nombre, data.areaId);
-    setIsDeptoDialogOpen(false);
-  }
-  async function handlePuestoSubmit(data: PuestoFormData) {
-    const puestoData: Partial<PuestoCreationData> = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId };
-    if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData as PuestoCreationData);
-    setIsPuestoDialogOpen(false);
-  }
-  async function handleSistemaSubmit(data: SistemaFormData) {
-    if (editingSistema) await updateSistema(editingSistema.id, data); else await addSistema(data);
-    setIsSistemaDialogOpen(false);
-  }
-  async function handleCostoSistemaSubmit(data: CostoSistemaFormData) {
-    const costoData = { ...data };
-    if (editingCosto) await updateCostoSistema(editingCosto.id, costoData); else await addCostoSistema(costoData);
-    setIsCostoDialogOpen(false);
-  }
+  async function handleAreaSubmit(data: AreaFormData) { if (editingArea) await updateArea(editingArea.id, data.nombre); else await addArea(data.nombre); setIsAreaDialogOpen(false); }
+  async function handleDeptoSubmit(data: DepartamentoFormData) { if (editingDepto) await updateDepartamento(editingDepto.id, data.nombre, data.areaId); else await addDepartamento(data.nombre, data.areaId); setIsDeptoDialogOpen(false); }
+  async function handlePuestoSubmit(data: PuestoFormData) { const puestoData: Partial<PuestoCreationData> = { ...data, departamentoId: data.departamentoId === 'none' ? undefined : data.departamentoId }; if (editingPuesto) await updatePuesto(editingPuesto.id, puestoData); else await addPuesto(puestoData as PuestoCreationData); setIsPuestoDialogOpen(false); }
+  async function handleSistemaSubmit(data: SistemaFormData) { if (editingSistema) await updateSistema(editingSistema.id, data); else await addSistema(data); setIsSistemaDialogOpen(false); }
+  async function handleCostoSistemaSubmit(data: CostoSistemaFormData) { const costoData = { ...data }; if (editingCosto) await updateCostoSistema(editingCosto.id, costoData); else await addCostoSistema(costoData); setIsCostoDialogOpen(false); }
 
-  // Edit Handlers
   function handleEdit<T>(item: T, setEditing: (item: T | null) => void, setOpen: (open: boolean) => void) { setEditing(item); setOpen(true); }
   
-  // Delete Logic
   async function executeDelete() {
     if (!itemToDelete) return;
-    const { id, type } = itemToDelete;
+    const { id, name, type } = itemToDelete;
 
-    let isUsed = false;
-    let usageMessage = '';
-    
-    switch (type) {
-        case 'area':
-            const isUsedInDeptos = departamentos.some(d => d.areaId === id);
-            const isUsedInPuestosForArea = puestos.some(p => p.areaId === id);
-            isUsed = isUsedInDeptos || isUsedInPuestosForArea;
+    const checkUsageFunctions = {
+        area: (areaId: string) => {
+            const isUsedInDeptos = departamentos.some(d => d.areaId === areaId);
+            const isUsedInPuestos = puestos.some(p => p.areaId === areaId);
+            const isUsed = isUsedInDeptos || isUsedInPuestos;
+            let message = '';
             if (isUsed) {
-                usageMessage = isUsedInDeptos ? 'Departamentos' : (isUsedInPuestosForArea ? 'Puestos' : '');
-                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
-            } else {
-                await deleteArea(id);
+                const usedBy = [isUsedInDeptos && 'Departamentos', isUsedInPuestos && 'Puestos'].filter(Boolean).join(' y ');
+                message = `El área "${name}" está en uso por ${usedBy} y no puede ser eliminada.`;
             }
-            break;
-        case 'departamento':
-            const isDeptoUsedInPuestos = puestos.some(p => p.departamentoId === id);
-             if (isDeptoUsedInPuestos) {
-                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por Puestos y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
-            } else {
-               await deleteDepartamento(id);
+            return { isUsed, message };
+        },
+        departamento: (deptoId: string) => {
+            const isUsed = puestos.some(p => p.departamentoId === deptoId);
+            return { isUsed, message: isUsed ? `El departamento "${name}" está en uso por Puestos y no puede ser eliminado.` : '' };
+        },
+        puesto: (puestoId: string, puestoName: string) => {
+            const isUsedInProcesos = procesos.some(p => p.puesto === puestoName);
+            const isUsedInAcciones = acciones.some(a => a.puesto === puestoName);
+            const isUsed = isUsedInProcesos || isUsedInAcciones;
+            let message = '';
+            if(isUsed) {
+                const usedBy = [isUsedInProcesos && 'Procesos', isUsedInAcciones && 'Acciones'].filter(Boolean).join(' y ');
+                message = `El puesto "${name}" está en uso por ${usedBy} y no puede ser eliminado.`;
             }
-            break;
-        case 'puesto':
-            isUsed = procesos.some(p => p.puesto === itemToDelete.name) || acciones.some(a => a.puesto === itemToDelete.name);
+            return { isUsed, message };
+        },
+        sistema: (sistemaId: string, sistemaName: string) => {
+             const isUsedInProcesos = procesos.some(p => p.sistemas?.includes(sistemaName));
+             const isUsedInActividades = actividades.some(a => a.sistemaUtilizado === sistemaName);
+             const isUsed = isUsedInProcesos || isUsedInActividades;
+             let message = '';
              if(isUsed) {
-                usageMessage = procesos.some(p => p.puesto === itemToDelete.name) ? 'Procesos Capturados' : 'Acciones de Mejora';
-                toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
-            } else {
-                await deletePuesto(id);
-            }
-            break;
-        case 'sistema':
-            isUsed = procesos.some(p => p.sistemas?.includes(itemToDelete.name)) || actividades.some(a => a.sistemaUtilizado === itemToDelete.name);
-             if (isUsed) {
-                usageMessage = procesos.some(p => p.sistemas?.includes(itemToDelete.name)) ? 'Procesos Capturados' : 'Actividades';
-                 toast({ title: "Eliminación Bloqueada", description: `"${itemToDelete.name}" está en uso por ${usageMessage} y no puede ser eliminado.`, variant: "destructive", duration: 7000 });
-            } else {
-              await deleteSistema(id);
-            }
-            break;
-        case 'costoSistema':
-            await deleteCostoSistema(id);
-            break;
+                const usedBy = [isUsedInProcesos && 'Procesos', isUsedInActividades && 'Actividades'].filter(Boolean).join(' y ');
+                message = `El sistema "${name}" está en uso por ${usedBy} y no puede ser eliminado.`;
+             }
+             return { isUsed, message };
+        },
+        costoSistema: () => ({ isUsed: false, message: '' })
+    };
+
+    switch (type) {
+        case 'area': await deleteArea(id, checkUsageFunctions.area); break;
+        case 'departamento': await deleteDepartamento(id, checkUsageFunctions.departamento); break;
+        case 'puesto': await deletePuesto(id, checkUsageFunctions.puesto); break;
+        case 'sistema': await deleteSistema(id, checkUsageFunctions.sistema); break;
+        case 'costoSistema': await deleteCostoSistema(id); break;
     }
     
     setItemToDelete(null);
@@ -287,31 +261,15 @@ export default function ConfiguracionPage() {
   const calculateTotalAnnualCost = (sistemaId: string) => {
     const costsForSystem = costosSistemas.filter(cost => cost.sistemaId === sistemaId);
     if (costsForSystem.length === 0) return [];
-
     const totalsByCurrency = new Map<TipoMoneda, number>();
-
     costsForSystem.forEach(cost => {
       const usageCost = cost.montoUso || 0;
       const licenseCost = (cost.costoPorLicencia || 0) * (cost.numeroLicencias || 0);
       const baseAmount = usageCost + licenseCost;
-      
-      let annualCost = 0;
-      if (cost.frecuencia === "Mensual") {
-        annualCost = baseAmount * 12;
-      } else { // "Anual" or "Otro" are treated as annual
-        annualCost = baseAmount;
-      }
-
-      if (cost.moneda) {
-        const currentTotal = totalsByCurrency.get(cost.moneda) || 0;
-        totalsByCurrency.set(cost.moneda, currentTotal + annualCost);
-      }
+      let annualCost = cost.frecuencia === "Mensual" ? baseAmount * 12 : baseAmount;
+      if (cost.moneda) totalsByCurrency.set(cost.moneda, (totalsByCurrency.get(cost.moneda) || 0) + annualCost);
     });
-
-    return Array.from(totalsByCurrency.entries()).map(([currency, total]) => ({
-      currency,
-      total,
-    }));
+    return Array.from(totalsByCurrency.entries()).map(([currency, total]) => ({ currency, total }));
   };
 
 
@@ -497,7 +455,6 @@ export default function ConfiguracionPage() {
         </CardContent>
       </Card>
       
-      {/* Dialogs */}
       <Dialog open={isAreaDialogOpen} onOpenChange={setIsAreaDialogOpen}>
         <DialogContent><DialogHeader><DialogTitle>{editingArea ? 'Editar Área' : 'Agregar Área'}</DialogTitle></DialogHeader>
           <Form {...areaForm}><form onSubmit={areaForm.handleSubmit(handleAreaSubmit)} className="space-y-4 py-4">

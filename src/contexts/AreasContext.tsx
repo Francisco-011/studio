@@ -6,6 +6,10 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useActivityLog } from './ActivityLogContext';
+import { useDepartamentos } from './DepartamentosContext';
+import { usePuestos } from './PuestosContext';
+import { toast } from '@/hooks/use-toast';
+
 
 export interface Area {
   id: string;
@@ -17,7 +21,7 @@ interface AreasContextType {
   areas: Area[];
   addArea: (nombre: string) => Promise<void>;
   updateArea: (id: string, nombre: string) => Promise<void>;
-  deleteArea: (id: string) => Promise<void>;
+  deleteArea: (id: string, checkUsage: (areaId: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -31,7 +35,6 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
-    // Set up the query to get areas ordered by name
     const q = query(collection(db, AREAS_COLLECTION), orderBy("nombre", "asc"));
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -79,7 +82,18 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry, areas]);
 
-  const deleteArea = useCallback(async (id: string) => {
+  const deleteArea = useCallback(async (id: string, checkUsage: (areaId: string) => { isUsed: boolean; message: string }) => {
+    const { isUsed, message } = checkUsage(id);
+    if (isUsed) {
+      toast({
+        title: "Eliminación Bloqueada",
+        description: message,
+        variant: "destructive",
+        duration: 7000
+      });
+      return;
+    }
+    
     const areaToDelete = areas.find(a => a.id === id);
     if(areaToDelete) {
       try {

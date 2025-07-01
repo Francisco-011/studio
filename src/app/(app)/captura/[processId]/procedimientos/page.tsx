@@ -37,7 +37,7 @@ export default function DefinirProcedimientosPage() {
   const params = useParams();
   const processId = params.processId as string;
 
-  const { procedimientos: globalProcedimientos, addProcedimiento, updateProcedimiento: updateGlobalProcedimiento, isLoadingProcedimientos } = useProcedimientos();
+  const { procedimientos: globalProcedimientos, addProcedimiento, updateProcedimiento: updateGlobalProcedimiento, deleteProcedimiento, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
   const { politicas, isLoadingPoliticas } = usePoliticas();
 
@@ -153,6 +153,14 @@ export default function DefinirProcedimientosPage() {
           idToLink = newProc.id;
         }
         finalProcedimientoIds.push(idToLink);
+      }
+
+      // Delete orphaned procedures
+      const originalProcedureIds = parentProcess.procedimientoOrder || [];
+      const newProcedureIdsSet = new Set(finalProcedimientoIds);
+      const proceduresToDelete = originalProcedureIds.filter(id => !newProcedureIdsSet.has(id));
+      for (const idToDelete of proceduresToDelete) {
+        await deleteProcedimiento(idToDelete);
       }
 
       await updateProceso(parentProcess.id, { procedimientoOrder: finalProcedimientoIds });

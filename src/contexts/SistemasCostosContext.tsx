@@ -51,7 +51,7 @@ interface SistemasCostosContextType {
   costosSistemas: SistemaCosto[];
   addSistema: (data: SistemaCreationData) => Promise<void>;
   updateSistema: (id: string, data: SistemaUpdateData) => Promise<void>;
-  deleteSistema: (id: string) => Promise<void>;
+  deleteSistema: (id: string, checkUsage: (sistemaId: string, sistemaName: string) => { isUsed: boolean; message: string }) => Promise<void>;
   addCostoSistema: (costoData: Omit<SistemaCosto, 'id'>) => Promise<void>;
   updateCostoSistema: (id: string, costoData: Partial<Omit<SistemaCosto, 'id' | 'sistemaId'>>) => Promise<void>;
   deleteCostoSistema: (id: string) => Promise<void>;
@@ -77,16 +77,13 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
 
     const unsubSistemas = onSnapshot(qSistemas, (snapshot) => {
         setSistemas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sistema)));
-        // We can set loading to false here or after both are loaded
     }, (error) => console.error("Error fetching sistemas: ", error));
 
     const unsubCostos = onSnapshot(qCostos, (snapshot) => {
         setCostosSistemas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SistemaCosto)));
     }, (error) => console.error("Error fetching costos: ", error));
     
-    // Set loading to false once both listeners have likely attached or fired once
-    // A more robust solution might use Promise.all if we were doing getDocs instead of onSnapshot
-    const timer = setTimeout(() => setIsLoadingSistemasCostos(false), 1500); // Simple heuristic
+    const timer = setTimeout(() => setIsLoadingSistemasCostos(false), 1500);
 
     return () => {
         unsubSistemas();
@@ -116,7 +113,7 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
     try {
         const updateData = { ...data };
         if (data.scope === 'Empresa') {
-            updateData.scopeId = undefined; // Or null if you prefer
+            updateData.scopeId = undefined;
         }
         await updateDoc(sistemaDocRef, updateData);
         if(originalSistema) {
@@ -128,17 +125,26 @@ export function SistemasCostosProvider({ children }: { children: ReactNode }) {
     }
   }, [sistemas, addLogEntry]);
 
-  const deleteSistema = useCallback(async (id: string) => {
+  const deleteSistema = useCallback(async (id: string, checkUsage: (sistemaId: string, sistemaName: string) => { isUsed: boolean; message: string }) => {
     const sistemaToDelete = sistemas.find(s => s.id === id);
     if (!sistemaToDelete) return;
+
+    const { isUsed, message } = checkUsage(id, sistemaToDelete.nombre);
+    if (isUsed) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: message,
+            variant: "destructive",
+            duration: 7000
+        });
+        return;
+    }
+
     try {
       const batch = writeBatch(db);
-      
-      // Delete the system itself
       const sistemaDocRef = doc(db, SISTEMAS_COLLECTION, id);
       batch.delete(sistemaDocRef);
       
-      // Find and delete all associated costs
       const costosQuery = query(collection(db, COSTOS_SISTEMAS_COLLECTION), where("sistemaId", "==", id));
       const costosSnapshot = await getDocs(costosQuery);
       costosSnapshot.forEach((costDoc) => {

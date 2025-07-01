@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, getDocs, where } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
@@ -93,7 +93,8 @@ export interface CapturedProcess extends CapturaFormData {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   politicasAsociadasIds?: string[];
-  puestoId?: string; // Added for filtering
+  puestoId?: string;
+  activityOrder?: string[];
 }
 
 interface ProcesosContextType {
@@ -250,27 +251,27 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         
         const newName = data.proceso;
         if (newName && newName !== originalProceso.proceso) {
-            const allProcessesSnapshot = await getDocs(query(collection(db, PROCESOS_COLLECTION)));
-            allProcessesSnapshot.forEach(docSnapshot => {
-                if (docSnapshot.id === id) return;
-                const p = docSnapshot.data() as CapturedProcess;
-                let needsUpdate = false;
-                const newProcesosEntrada = p.procesosEntrada?.map(entrada => {
-                    if (entrada === originalProceso.proceso) { needsUpdate = true; return newName; }
-                    return entrada;
-                });
-                const newProcesosSalida = p.procesosSalida?.map(salida => {
-                    if (salida === originalProceso.proceso) { needsUpdate = true; return newName; }
-                    return salida;
-                });
+            const qEntrada = query(collection(db, PROCESOS_COLLECTION), where('procesosEntrada', 'array-contains', originalProceso.proceso));
+            const qSalida = query(collection(db, PROCESOS_COLLECTION), where('procesosSalida', 'array-contains', originalProceso.proceso));
+            
+            const [entradaSnap, salidaSnap] = await Promise.all([getDocs(qEntrada), getDocs(qSalida)]);
+            
+            const updatedDocs = new Set<string>();
 
-                if (needsUpdate) {
-                    const linkedProcRef = doc(db, PROCESOS_COLLECTION, docSnapshot.id);
-                    const updatePayload: any = {};
-                    if (newProcesosEntrada) updatePayload.procesosEntrada = newProcesosEntrada;
-                    if (newProcesosSalida) updatePayload.procesosSalida = newProcesosSalida;
-                    batch.update(linkedProcRef, updatePayload);
-                }
+            entradaSnap.forEach(docSnapshot => {
+                if(updatedDocs.has(docSnapshot.id)) return;
+                const p = docSnapshot.data() as CapturedProcess;
+                const newProcesosEntrada = p.procesosEntrada?.map(entrada => entrada === originalProceso.proceso ? newName : entrada);
+                batch.update(docSnapshot.ref, { procesosEntrada: newProcesosEntrada });
+                updatedDocs.add(docSnapshot.id);
+            });
+
+            salidaSnap.forEach(docSnapshot => {
+                 if(updatedDocs.has(docSnapshot.id)) return;
+                const p = docSnapshot.data() as CapturedProcess;
+                const newProcesosSalida = p.procesosSalida?.map(salida => salida === originalProceso.proceso ? newName : salida);
+                batch.update(docSnapshot.ref, { procesosSalida: newProcesosSalida });
+                updatedDocs.add(docSnapshot.id);
             });
         }
         
@@ -281,7 +282,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         }
     } catch (e) {
         console.error("Error updating proceso: ", e);
-        toast({ title: "Error", description: "No se pudo actualizar el proceso.", variant: "destructive"});
+        toast({ title: "Error", description: "No se pudo actualizar el proceso y sus referencias.", variant: "destructive"});
     }
   }, [procesos, addLogEntry]);
   
@@ -294,31 +295,33 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
           batch.update(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), activo: false });
           
-          const allProcessesSnapshot = await getDocs(query(collection(db, PROCESOS_COLLECTION)));
-          allProcessesSnapshot.forEach(docSnapshot => {
-              if (docSnapshot.id === id) return;
-              const p = docSnapshot.data() as CapturedProcess;
-              let needsUpdate = false;
-              const newProcesosEntrada = p.procesosEntrada?.filter(entrada => entrada !== procesoToDelete.proceso);
-              if (newProcesosEntrada && newProcesosEntrada.length !== (p.procesosEntrada?.length || 0)) {
-                  needsUpdate = true;
-              }
-              const newProcesosSalida = p.procesosSalida?.filter(salida => salida !== procesoToDelete.proceso);
-              if (newProcesosSalida && newProcesosSalida.length !== (p.procesosSalida?.length || 0)) {
-                  needsUpdate = true;
-              }
+          const qEntrada = query(collection(db, PROCESOS_COLLECTION), where('procesosEntrada', 'array-contains', procesoToDelete.proceso));
+          const qSalida = query(collection(db, PROCESOS_COLLECTION), where('procesosSalida', 'array-contains', procesoToDelete.proceso));
+          const [entradaSnap, salidaSnap] = await Promise.all([getDocs(qEntrada), getDocs(qSalida)]);
 
-              if (needsUpdate) {
-                  const linkedProcRef = doc(db, PROCESOS_COLLECTION, docSnapshot.id);
-                  batch.update(linkedProcRef, { procesosEntrada: newProcesosEntrada, procesosSalida: newProcesosSalida });
-              }
+          const updatedDocs = new Set<string>();
+
+          entradaSnap.forEach(docSnapshot => {
+              if (updatedDocs.has(docSnapshot.id)) return;
+              const p = docSnapshot.data() as CapturedProcess;
+              const newProcesosEntrada = p.procesosEntrada?.filter(entrada => entrada !== procesoToDelete.proceso);
+              batch.update(docSnapshot.ref, { procesosEntrada: newProcesosEntrada });
+              updatedDocs.add(docSnapshot.id);
+          });
+          
+          salidaSnap.forEach(docSnapshot => {
+              if (updatedDocs.has(docSnapshot.id)) return;
+              const p = docSnapshot.data() as CapturedProcess;
+              const newProcesosSalida = p.procesosSalida?.filter(salida => salida !== procesoToDelete.proceso);
+              batch.update(docSnapshot.ref, { procesosSalida: newProcesosSalida });
+              updatedDocs.add(docSnapshot.id);
           });
           
           await batch.commit();
           addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: procesoToDelete.proceso, details: `Proceso "${procesoToDelete.proceso}" movido a la papelera.` });
       } catch (e) {
           console.error("Error deleting proceso: ", e);
-          toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive" });
+          toast({ title: "Error", description: "No se pudo eliminar el proceso y sus referencias.", variant: "destructive" });
       }
   }, [procesos, addLogEntry]);
 
@@ -364,5 +367,3 @@ export function useProcesos(): ProcesosContextType {
   }
   return context;
 }
-
-    

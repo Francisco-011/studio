@@ -56,7 +56,7 @@ interface PoliticasContextType {
   addPolitica: (data: Omit<PoliticaCreationData, 'estado'>) => Promise<string | null>;
   updatePolitica: (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => Promise<void>;
   updatePoliticaStatus: (id: string, estado: PoliticaEstado) => Promise<void>;
-  deletePolitica: (id: string) => Promise<void>;
+  deletePolitica: (id: string, checkUsage: (politicaId: string) => { isUsed: boolean, message: string }) => Promise<void>;
   isLoadingPoliticas: boolean;
 }
 
@@ -97,7 +97,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    // Fetch all policies, filtering will be done client-side to handle exceptions
     const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -144,7 +143,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         const docRef = await addDoc(collection(db, POLITICAS_COLLECTION), {
           ...data,
           codigo,
-          estado: 'Borrador', // Default state
+          estado: 'Borrador',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           historialDeCambios: [],
@@ -232,14 +231,19 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     }
   }, [politicas, addLogEntry]);
 
-
-  const deletePolitica = useCallback(async (id: string) => {
+  const deletePolitica = useCallback(async (id: string, checkUsage: (politicaId: string) => { isUsed: boolean, message: string }) => {
     const politicaToDelete = politicas.find(p => p.id === id);
     if (!politicaToDelete) return;
     
     if (politicaToDelete.estado === 'Aprobada' || politicaToDelete.estado === 'Archivada') {
        toast({ title: "Eliminación Bloqueada", description: "No se pueden eliminar políticas aprobadas o archivadas.", variant: 'destructive'});
        return;
+    }
+    
+    const { isUsed, message } = checkUsage(id);
+    if (isUsed) {
+      toast({ title: "Eliminación Bloqueada", description: message, variant: 'destructive', duration: 7000 });
+      return;
     }
 
     try {

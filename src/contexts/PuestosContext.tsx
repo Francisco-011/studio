@@ -30,7 +30,7 @@ interface PuestosContextType {
   puestos: Puesto[];
   addPuesto: (data: PuestoCreationData) => Promise<void>;
   updatePuesto: (id: string, data: Partial<PuestoCreationData>) => Promise<void>;
-  deletePuesto: (id: string) => Promise<void>;
+  deletePuesto: (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoadingPuestos: boolean;
 }
 
@@ -77,7 +77,6 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     const puestoDocRef = doc(db, PUESTOS_COLLECTION, id);
     const originalPuesto = puestos.find(p => p.id === id);
     try {
-      // Ensure no undefined fields are sent, which Firestore might reject
       const updateData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
       await updateDoc(puestoDocRef, updateData);
       if (originalPuesto && originalPuesto.nombre !== data.nombre) {
@@ -89,9 +88,21 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
     }
   }, [puestos, addLogEntry]);
 
-  const deletePuesto = useCallback(async (id: string) => {
+  const deletePuesto = useCallback(async (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => {
     const puestoToDelete = puestos.find(p => p.id === id);
     if (!puestoToDelete) return;
+    
+    const { isUsed, message } = checkUsage(id, puestoToDelete.nombre);
+    if (isUsed) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: message,
+            variant: "destructive",
+            duration: 7000
+        });
+        return;
+    }
+
     try {
       await deleteDoc(doc(db, PUESTOS_COLLECTION, id));
       addLogEntry({ action: 'delete', entityType: 'Puesto', entityName: puestoToDelete.nombre, details: `Se eliminó el puesto "${puestoToDelete.nombre}".` });
