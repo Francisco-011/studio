@@ -6,10 +6,11 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, where } from 'firebase/firestore';
-import type { clasificacionOptions } from './ProcesosContext';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
+import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
@@ -63,14 +64,29 @@ const PoliticasContext = createContext<PoliticasContextType | undefined>(undefin
 
 const POLITICAS_COLLECTION = 'politicas';
 
+const getAllowedClassifications = (level: NivelAcceso): (typeof clasificacionOptions[number])[] => {
+    switch (level) {
+        case 'Confidencial':
+        case 'Ejecutivo':
+            return ['Público', 'Privado', 'Confidencial'];
+        case 'Jerárquico':
+        case 'Departamental':
+            return ['Público', 'Privado'];
+        case 'Público':
+        default:
+            return ['Público'];
+    }
+};
+
 export function PoliticasProvider({ children }: { children: ReactNode }) {
   const [politicas, setPoliticas] = useState<Politica[]>([]);
   const [isLoadingPoliticas, setIsLoadingPoliticas] = useState(true);
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
+  const { exceptions, isLoadingExceptions } = useExceptions();
 
   useEffect(() => {
-    if (authLoading) {
+    if (authLoading || isLoadingExceptions) {
       setIsLoadingPoliticas(true);
       return;
     }
@@ -81,47 +97,11 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    const userRole = user.rol;
-    const userLevel = user.nivelAcceso;
-    let politicasQuery;
+    // Fetch all policies, filtering will be done client-side to handle exceptions
+    const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
 
-    if (userRole === 'Administrador') {
-      // Admin sees all policies, no 'where' filter needed.
-      politicasQuery = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
-    } else {
-      let allowedClassifications: string[];
-
-      switch (userLevel) {
-        case 'Ejecutivo':
-        case 'Confidencial':
-          allowedClassifications = ['Público', 'Privado', 'Confidencial'];
-          break;
-        case 'Jerárquico':
-        case 'Departamental':
-          allowedClassifications = ['Público', 'Privado'];
-          break;
-        case 'Público':
-        default:
-          allowedClassifications = ['Público'];
-          break;
-      }
-      
-      if (allowedClassifications.length > 0) {
-        politicasQuery = query(
-          collection(db, POLITICAS_COLLECTION),
-          where("clasificacion", "in", allowedClassifications),
-          orderBy("codigo", "asc")
-        );
-      } else {
-        // If for some reason a user has no allowed classifications, return empty.
-        setPoliticas([]);
-        setIsLoadingPoliticas(false);
-        return;
-      }
-    }
-
-    const unsubscribe = onSnapshot(politicasQuery, (snapshot) => {
-        const politicasData = snapshot.docs.map(doc => {
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allPoliticas = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
@@ -131,7 +111,23 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
                 historialDeCambios: data.historialDeCambios || [],
             } as Politica;
         });
-        setPoliticas(politicasData);
+
+        if (user.rol === 'Administrador') {
+            setPoliticas(allPoliticas);
+        } else {
+            const allowedClassifications = getAllowedClassifications(user.nivelAcceso);
+            const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()) && ex.documentType === 'politica');
+
+            const includeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
+            const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
+
+            const filtered = allPoliticas.filter(p => {
+                if (excludeIds.has(p.id)) return false;
+                if (includeIds.has(p.id)) return true;
+                return allowedClassifications.includes(p.clasificacion);
+            });
+            setPoliticas(filtered);
+        }
         setIsLoadingPoliticas(false);
     }, (error) => {
         console.error("Error fetching politicas: ", error);
@@ -140,7 +136,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading]);
+  }, [user, authLoading, exceptions, isLoadingExceptions]);
 
   const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {
@@ -167,7 +163,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     const originalPolitica = politicas.find(p => p.id === id);
     if (!originalPolitica) return;
     
-    // An approved policy should be moved back to draft or revision to be edited.
     if (originalPolitica.estado === 'Aprobada' || originalPolitica.estado === 'Archivada') {
         toast({ title: 'Acción no permitida', description: 'Las políticas aprobadas o archivadas no pueden ser editadas directamente. Cámbielas a estado "Borrador" primero.', variant: 'default', duration: 6000 });
         return;

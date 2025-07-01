@@ -9,6 +9,9 @@ import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
 import type { PoliticaLinkType, PoliticaVinculo } from './PoliticasContext';
+import { useAuth } from './AuthContext';
+import { useExceptions } from './ExceptionsContext';
+import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
@@ -76,8 +79,7 @@ export interface CapturedProcess extends CapturaFormData {
   deletedAt?: string;
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
-  // The 'politicasAsociadas' from CapturaFormData already handles this.
-  politicasAsociadasIds?: string[]; // Kept for backwards compatibility if needed, but should be deprecated.
+  politicasAsociadasIds?: string[];
 }
 
 interface ProcesosContextType {
@@ -94,15 +96,42 @@ const ProcesosContext = createContext<ProcesosContextType | undefined>(undefined
 
 const PROCESOS_COLLECTION = 'procesos';
 
+const getAllowedClassifications = (level: NivelAcceso): (typeof clasificacionOptions[number])[] => {
+    switch (level) {
+        case 'Confidencial':
+        case 'Ejecutivo':
+            return ['Público', 'Privado', 'Confidencial'];
+        case 'Jerárquico':
+        case 'Departamental':
+            return ['Público', 'Privado'];
+        case 'Público':
+        default:
+            return ['Público'];
+    }
+};
+
 export function ProcesosProvider({ children }: { children: ReactNode }) {
   const [procesos, setProcesos] = useState<CapturedProcess[]>([]);
   const [isLoadingProcesos, setIsLoadingProcesos] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const { user, loading: authLoading } = useAuth();
+  const { exceptions, isLoadingExceptions } = useExceptions();
 
   useEffect(() => {
+    if (authLoading || isLoadingExceptions) {
+      setIsLoadingProcesos(true);
+      return;
+    }
+
+    if (!user) {
+      setProcesos([]);
+      setIsLoadingProcesos(false);
+      return;
+    }
+
     const q = query(collection(db, PROCESOS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        const procesosData = snapshot.docs.map(doc => {
+        const allProcesos = snapshot.docs.map(doc => {
             const data = doc.data();
             const capturedAtData = data.capturedAt as Timestamp;
             const updatedAtData = data.updatedAt as Timestamp;
@@ -117,7 +146,23 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
                 politicasAsociadas: Array.isArray(data.politicasAsociadas) ? data.politicasAsociadas : [],
             } as CapturedProcess;
         });
-        setProcesos(procesosData);
+        
+        if (user.rol === 'Administrador') {
+            setProcesos(allProcesos);
+        } else {
+            const allowedClassifications = getAllowedClassifications(user.nivelAcceso);
+            const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()) && ex.documentType === 'proceso');
+
+            const includeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
+            const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
+
+            const filtered = allProcesos.filter(proc => {
+                if (excludeIds.has(proc.id)) return false;
+                if (includeIds.has(proc.id)) return true;
+                return allowedClassifications.includes(proc.clasificacion);
+            });
+            setProcesos(filtered);
+        }
         setIsLoadingProcesos(false);
     }, (error) => {
         console.error("Error fetching procesos: ", error);
@@ -126,7 +171,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, authLoading, exceptions, isLoadingExceptions]);
 
   const addProceso = useCallback(async (data: CapturaFormData): Promise<CapturedProcess | null> => {
     try {

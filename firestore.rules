@@ -1,93 +1,85 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
   
-    // --- Helper Functions ---
-    
+    // Función para verificar si el usuario es Administrador
     function esAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Administrador';
     }
     
+    // Función para obtener el nivel de acceso del usuario
     function nivelAccesoUsuario() {
       let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return userData.nivelAcceso;
+      return 'nivelAcceso' in userData ? userData.nivelAcceso : 'Público';
     }
 
-    // --- Collection Rules ---
-
-    // USERS: Users can read/update their own profile. Admins can manage all.
+    // Reglas para la colección de usuarios
     match /users/{userId} {
-      allow read, update: if request.auth.uid == userId || esAdmin();
+      allow read: if request.auth.uid == userId || esAdmin();
+      allow update: if request.auth.uid == userId || esAdmin();
       allow create, delete: if esAdmin();
     }
+    
+    // Colección para excepciones de acceso
+    match /access_exceptions/{exceptionId} {
+      allow read, write: if esAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'Gerente de Proyecto';
+    }
 
-    // CONFIGURATION: Only Admins can write, authenticated users can read.
+    // --- CATÁLOGOS BASE ---
+    // Cualquiera autenticado puede leer, solo admin puede escribir.
     match /areas/{areaId} {
       allow read: if request.auth.uid != null;
-      allow create, update, delete: if esAdmin();
+      allow write: if esAdmin();
     }
     
     match /departamentos/{deptoId} {
       allow read: if request.auth.uid != null;
-      allow create, update, delete: if esAdmin();
+      allow write: if esAdmin();
     }
 
     match /puestos/{puestoId} {
       allow read: if request.auth.uid != null;
-      allow create, update, delete: if esAdmin();
+      allow write: if esAdmin();
     }
     
     match /sistemas/{sistemaId} {
       allow read: if request.auth.uid != null;
-      allow create, update, delete: if esAdmin();
+      allow write: if esAdmin();
     }
     
     match /sistemas_costos/{costoId} {
-      allow read, write: if esAdmin();
+      allow read: if request.auth.uid != null;
+      allow write: if esAdmin();
     }
 
-    // OPERATIONAL: Authenticated users can read/write.
-    // Specific access is controlled by application logic and permissions context.
-    match /acciones/{accionId} {
-      allow read, write: if request.auth.uid != null;
-    }
-    
+    // --- COLECCIONES OPERATIVAS ---
+    // Cualquiera autenticado puede leer y escribir, la lógica de negocio se maneja en la app.
     match /actividades/{actividadId} {
       allow read, write: if request.auth.uid != null;
     }
     
     match /procedimientos/{procedimientoId} {
-      allow read, write: if request.auth.uid != null;
-    }
-
-    // --- Granular Access Control for Processes and Policies ---
-
-    function puedeVerDocumento(clasificacion) {
-      let nivel = nivelAccesoUsuario();
-      if (esAdmin()) { return true; }
-      if (clasificacion == 'Público') { return true; }
-      if (clasificacion == 'Privado') {
-        return nivel in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial'];
-      }
-      if (clasificacion == 'Confidencial') {
-        return nivel == 'Confidencial';
-      }
-      return false;
-    }
-
-    match /procesos/{procesoId} {
-      allow get: if puedeVerDocumento(resource.data.clasificacion);
-      allow list: if puedeVerDocumento(resource.data.clasificacion); // Firestore queries check this on each document
-      allow create, update, delete: if request.auth.uid != null; // Write permissions controlled by app logic
+        allow read, write: if request.auth.uid != null;
     }
     
+    match /acciones/{accionId} {
+      allow read, write: if request.auth.uid != null;
+    }
+    
+    // --- REGLAS DE LECTURA BASADAS EN LA APP ---
+    // Se permite la lectura a cualquier usuario autenticado.
+    // La app es responsable de filtrar según nivel de acceso y excepciones.
+    // Esto es necesario para que la lógica de "INCLUIR" de las excepciones funcione.
+    match /procesos/{procesoId} {
+        allow read: if request.auth.uid != null;
+        allow write: if esAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Gerente de Proyecto', 'Consultor'];
+    }
+
     match /politicas/{politicaId} {
-      allow get: if puedeVerDocumento(resource.data.clasificacion);
-      allow list: if puedeVerDocumento(resource.data.clasificacion);
-      allow create, update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
-      allow delete: if esAdmin();
+        allow read: if request.auth.uid != null;
+        allow create, update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['Administrador', 'Gerente de Proyecto', 'Consultor'];
+        allow delete: if esAdmin() && resource.data.estado != 'Aprobada' && resource.data.estado != 'Archivada';
     }
   }
 }

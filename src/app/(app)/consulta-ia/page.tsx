@@ -15,6 +15,7 @@ import { useProcesos } from '@/contexts/ProcesosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useExceptions } from '@/contexts/ExceptionsContext';
 import { queryConversationalAgent } from '@/ai/flows/conversational-query-flow';
 import { toast } from '@/hooks/use-toast';
 
@@ -34,6 +35,8 @@ export default function ConsultaIaPage() {
   const { procedimientos } = useProcedimientos();
   const { actividades } = useActividades();
   const { politicas } = usePoliticas();
+  const { exceptions } = useExceptions();
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -80,11 +83,17 @@ export default function ConsultaIaPage() {
           
       const fullContext = `--- INICIO CONTEXTO PROCESOS ---\n${processContext}\n--- FIN CONTEXTO PROCESOS ---\n\n--- INICIO CONTEXTO PROCEDIMIENTOS ---\n${procedimientoContext}\n--- FIN CONTEXTO PROCEDIMIENTOS ---\n\n--- INICIO CONTEXTO ACTIVIDADES ---\n${activityContext}\n--- FIN CONTEXTO ACTIVIDADES ---\n\n--- INICIO CONTEXTO POLÍTICAS ---\n${politicaContext}\n--- FIN CONTEXTO POLÍTICAS ---`;
 
+      const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()));
+      const userExceptionsText = userExceptions.length > 0
+          ? userExceptions.map(ex => `Tipo: ${ex.exceptionType}, Documento: ${ex.documentType} con ID ${ex.documentId}`).join('\n')
+          : undefined;
+
       const response = await queryConversationalAgent({
         question: input,
         contextData: fullContext,
         userRole: user.rol,
         userAccessLevel: user.nivelAcceso,
+        userExceptions: userExceptionsText,
       });
 
       const assistantMessage: Message = { role: 'assistant', content: response.answer };
