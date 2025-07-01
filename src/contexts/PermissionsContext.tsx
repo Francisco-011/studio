@@ -27,7 +27,7 @@ const defaultPermissions: Record<UserRole, Record<string, boolean>> = {
     'captura:create_process': true, 'captura:define_activities': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:toggle_status': true, 'procesosRegistrados:delete': true, 'procesosRegistrados:restore': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:toggle_status': true, 'actividades:delete': true, 'actividades:restore': true, 'actividades:export': true, 'actividades:view_history': true,
-    'politicas:view': true,
+    'politicas:view': true, 'politicas:create': true, 'politicas:delete': true, 'politicas:manage_status': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
     'consulta_ia:view': true,

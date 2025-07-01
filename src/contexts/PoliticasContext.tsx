@@ -15,11 +15,15 @@ import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
 
+export const politicaEstados = ["Borrador", "En Revisión", "Aprobada", "Archivada"] as const;
+export type PoliticaEstado = typeof politicaEstados[number];
+
 export interface Politica {
   id: string;
   codigo: string;
   titulo: string;
   descripcion: string;
+  estado: PoliticaEstado;
   areaResponsable: string;
   departamentoResponsable?: string;
   clasificacion: typeof clasificacionOptions[number];
@@ -41,7 +45,8 @@ export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' 
 interface PoliticasContextType {
   politicas: Politica[];
   addPolitica: (data: PoliticaCreationData) => Promise<void>;
-  updatePolitica: (id: string, data: Partial<PoliticaCreationData>) => Promise<void>;
+  updatePolitica: (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => Promise<void>;
+  updatePoliticaStatus: (id: string, estado: PoliticaEstado) => Promise<void>;
   deletePolitica: (id: string) => Promise<void>;
   isLoadingPoliticas: boolean;
 }
@@ -76,7 +81,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     }
 
     if (allowedClassifications.length === 0) {
-      // This should not happen now, but as a safeguard.
       setPoliticas([]);
       setIsLoadingPoliticas(false);
       return;
@@ -116,6 +120,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         await addDoc(collection(db, POLITICAS_COLLECTION), {
           ...data,
           codigo,
+          estado: 'Borrador', // Default state
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           historialDeCambios: [],
@@ -127,13 +132,19 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updatePolitica = useCallback(async (id: string, data: Partial<PoliticaCreationData>) => {
+  const updatePolitica = useCallback(async (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => {
     const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);
     const originalPolitica = politicas.find(p => p.id === id);
     if (!originalPolitica) return;
+    
+    // An approved policy should be moved back to draft or revision to be edited.
+    if (originalPolitica.estado === 'Aprobada' || originalPolitica.estado === 'Archivada') {
+        toast({ title: 'Acción no permitida', description: 'Las políticas aprobadas o archivadas no pueden ser editadas directamente. Cámbielas a estado "Borrador" primero.', variant: 'default', duration: 6000 });
+        return;
+    }
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof PoliticaCreationData)[] = [
+    const fieldsToCompare: (keyof typeof data)[] = [
       'titulo', 'descripcion', 'areaResponsable', 'departamentoResponsable',
       'clasificacion', 'nivelCompliance', 'fechaVigencia', 'fechaRevision',
       'consecuenciasIncumplimiento', 'referenciasLegales'
@@ -142,7 +153,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     fieldsToCompare.forEach(key => {
         const originalValue = originalPolitica[key as keyof Politica] ?? '';
         const newValue = data[key as keyof PoliticaCreationData] ?? '';
-        if (originalValue !== newValue) {
+        if (String(originalValue) !== String(newValue)) {
             changes.push({
                 timestamp: new Date().toISOString(),
                 field: key,
@@ -152,7 +163,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         }
     });
 
-    const arrayFields: (keyof PoliticaCreationData)[] = ['procesosAsociadosIds', 'procedimientosAsociadosIds', 'actividadesAsociadasIds'];
+    const arrayFields: (keyof typeof data)[] = ['procesosAsociadosIds', 'procedimientosAsociadosIds', 'actividadesAsociadasIds'];
     arrayFields.forEach(key => {
         const originalArray = (originalPolitica[key as keyof Politica] as string[] | undefined)?.sort() || [];
         const newArray = (data[key as keyof PoliticaCreationData] as string[] | undefined)?.sort() || [];
@@ -183,11 +194,42 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar.", variant: "default" });
     }
   }, [politicas, addLogEntry]);
+  
+  const updatePoliticaStatus = useCallback(async (id: string, estado: PoliticaEstado) => {
+    const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);
+    const originalPolitica = politicas.find(p => p.id === id);
+    if (!originalPolitica) return;
+
+    const change: CambioHistorial = {
+      timestamp: new Date().toISOString(),
+      field: 'estado',
+      before: originalPolitica.estado,
+      after: estado,
+    };
+    
+    try {
+      await updateDoc(politicaDocRef, { 
+        estado, 
+        updatedAt: serverTimestamp(),
+        historialDeCambios: [...(originalPolitica.historialDeCambios || []), change]
+      });
+      addLogEntry({ action: 'status_change', entityType: 'Política', entityName: originalPolitica.titulo, details: `El estado de la política "${originalPolitica.titulo}" cambió a "${estado}".` });
+      toast({ title: "Estado Actualizado", description: `La política ahora está en estado "${estado}".` });
+    } catch (e) {
+      console.error("Error updating política status: ", e);
+      toast({ title: "Error", description: "No se pudo actualizar el estado de la política.", variant: "destructive"});
+    }
+  }, [politicas, addLogEntry]);
 
 
   const deletePolitica = useCallback(async (id: string) => {
     const politicaToDelete = politicas.find(p => p.id === id);
     if (!politicaToDelete) return;
+    
+    if (politicaToDelete.estado === 'Aprobada' || politicaToDelete.estado === 'Archivada') {
+       toast({ title: "Eliminación Bloqueada", description: "No se pueden eliminar políticas aprobadas o archivadas.", variant: 'destructive'});
+       return;
+    }
 
     try {
       await deleteDoc(doc(db, POLITICAS_COLLECTION, id));
@@ -203,6 +245,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       politicas,
       addPolitica,
       updatePolitica,
+      updatePoliticaStatus,
       deletePolitica,
       isLoadingPoliticas
     }}>

@@ -130,6 +130,7 @@ const PERMISSION_CONFIG = {
       view: 'Ver Políticas',
       create: 'Crear/Editar Políticas',
       delete: 'Eliminar Políticas',
+      manage_status: 'Gestionar Estados (Aprobar, Archivar)',
     },
   },
   panelJerarquico: {

@@ -41,16 +41,22 @@ export default function PoliticasDashboardPage() {
       };
     }
     const ninetyDaysFromNow = addDays(new Date(), 90);
-    const politicasPorVencer = politicas.filter(p => {
+    const politicasAprobadas = politicas.filter(p => p.estado === 'Aprobada');
+
+    const politicasPorVencer = politicasAprobadas.filter(p => {
       const fechaRevision = parseISO(p.fechaRevision);
       return isValid(fechaRevision) && fechaRevision <= ninetyDaysFromNow;
     }).length;
 
-    const procesosConPoliticas = procesos.filter(p => p.politicasAsociadasIds && p.politicasAsociadasIds.length > 0).length;
-    const coberturaProcesos = procesos.length > 0 ? (procesosConPoliticas / procesos.length) * 100 : 0;
+    const politicasAprobadasIds = new Set(politicasAprobadas.map(p => p.id));
+    const procesosConPoliticasAprobadas = procesos.filter(p => 
+        p.politicasAsociadasIds && p.politicasAsociadasIds.some(id => politicasAprobadasIds.has(id))
+    ).length;
+    
+    const coberturaProcesos = procesos.length > 0 ? (procesosConPoliticasAprobadas / procesos.length) * 100 : 0;
     
     return {
-      totalPoliticas: politicas.length,
+      totalPoliticas: politicasAprobadas.length,
       coberturaProcesos: coberturaProcesos,
       politicasPorVencer: politicasPorVencer,
     };
@@ -59,7 +65,7 @@ export default function PoliticasDashboardPage() {
 
   const complianceChartData = useMemo(() => {
     if (isLoading) return [];
-    const complianceCount = politicas.reduce((acc, p) => {
+    const complianceCount = politicas.filter(p => p.estado === 'Aprobada').reduce((acc, p) => {
       acc[p.nivelCompliance] = (acc[p.nivelCompliance] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -81,7 +87,7 @@ export default function PoliticasDashboardPage() {
 
   const areaChartData = useMemo(() => {
     if (isLoading) return [];
-    const areaCount = politicas.reduce((acc, p) => {
+    const areaCount = politicas.filter(p => p.estado === 'Aprobada').reduce((acc, p) => {
       const areaName = p.areaResponsable || 'Sin Área';
       acc[areaName] = (acc[areaName] || 0) + 1;
       return acc;
@@ -98,10 +104,12 @@ export default function PoliticasDashboardPage() {
   const expiringPolicies = useMemo(() => {
     if (isLoading) return [];
     const ninetyDaysFromNow = addDays(new Date(), 90);
-    return politicas.filter(p => {
-      const fechaRevision = parseISO(p.fechaRevision);
-      return isValid(fechaRevision) && fechaRevision <= ninetyDaysFromNow;
-    }).sort((a,b) => parseISO(a.fechaRevision).getTime() - parseISO(b.fechaRevision).getTime());
+    return politicas
+      .filter(p => p.estado === 'Aprobada')
+      .filter(p => {
+        const fechaRevision = parseISO(p.fechaRevision);
+        return isValid(fechaRevision) && fechaRevision <= ninetyDaysFromNow;
+      }).sort((a,b) => parseISO(a.fechaRevision).getTime() - parseISO(b.fechaRevision).getTime());
   }, [politicas, isLoading]);
 
 
@@ -114,7 +122,7 @@ export default function PoliticasDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Políticas Activas</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Políticas Aprobadas</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.totalPoliticas, isLoading)}</div></CardContent>
         </Card>
         <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -179,7 +187,7 @@ export default function PoliticasDashboardPage() {
       <Card className="shadow-lg">
         <CardHeader>
             <CardTitle>Alertas: Políticas Próximas a Vencer</CardTitle>
-            <CardDescription>Políticas cuya fecha de revisión es en los próximos 90 días.</CardDescription>
+            <CardDescription>Políticas aprobadas cuya fecha de revisión es en los próximos 90 días.</CardDescription>
         </CardHeader>
         <CardContent>
              {isLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div> :
