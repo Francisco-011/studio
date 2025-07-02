@@ -32,6 +32,7 @@ import { toast } from '@/hooks/use-toast';
 import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered, History, CalendarCheck2, Calculator } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
+import type { Moneda } from '@/contexts/AccionesContext';
 
 
 const procedimientoFormSchema = z.object({
@@ -283,27 +284,48 @@ export default function ProcedimientosPage() {
   const handleRecalculateTotalsForProcedure = async (proc: Procedimiento) => {
     setIsRecalculating(proc.id);
     try {
-        const parentProcess = procesos.find(p => p.id === proc.procesoId);
-        if (!parentProcess) {
-            toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive"});
-            return;
+        const activitiesInProcedure = (proc.activityOrder || [])
+            .map(actId => actividades.find(a => a.id === actId))
+            .filter((act): act is Actividad => !!act && act.activa);
+
+        let totalTiempoProcedimiento = 0;
+        const costosPorMoneda = new Map<Moneda, number>();
+
+        activitiesInProcedure.forEach(activity => {
+            totalTiempoProcedimiento += activity.tiempoEstimado || 0;
+            
+            if (activity.puestoId && activity.tiempoEstimado) {
+                const puesto = puestos.find(p => p.id === activity.puestoId);
+                if (puesto && puesto.costoHora) {
+                    const costoPorMinuto = puesto.costoHora / 60;
+                    const costoActividad = activity.tiempoEstimado * costoPorMinuto;
+                    const moneda = puesto.monedaCosto || 'MXN';
+                    
+                    costosPorMoneda.set(moneda, (costosPorMoneda.get(moneda) || 0) + costoActividad);
+                }
+            }
+        });
+
+        let totalCostoProcedimiento = 0;
+        let monedaFinal: Moneda | undefined = undefined;
+
+        if (costosPorMoneda.size > 0) {
+            monedaFinal = Array.from(costosPorMoneda.keys())[0];
+            totalCostoProcedimiento = costosPorMoneda.get(monedaFinal) || 0;
+            if (costosPorMoneda.size > 1) {
+                toast({
+                    title: "Advertencia de Múltiples Monedas",
+                    description: `El procedimiento "${proc.nombre}" tiene actividades con costos en diferentes monedas. El total solo refleja la suma para ${monedaFinal}.`,
+                    variant: "default",
+                    duration: 8000
+                });
+            }
         }
 
-        const puesto = puestos.find(p => p.nombre === parentProcess.puesto);
-        const costoPorMinuto = (puesto?.costoHora ?? 0) / 60;
-        const moneda = puesto?.monedaCosto;
-
-        const timeForProcedure = (proc.activityOrder || [])
-            .map(actId => actividades.find(a => a.id === actId))
-            .filter((act): act is Actividad => !!act && act.activa)
-            .reduce((sum, act) => sum + (act.tiempoEstimado || 0), 0);
-        
-        const costForProcedure = timeForProcedure * costoPorMinuto;
-
         await updateProcedimiento(proc.id, {
-            tiempoEstimado: timeForProcedure,
-            costoEstimado: costForProcedure,
-            monedaCosto: moneda,
+            tiempoEstimado: totalTiempoProcedimiento,
+            costoEstimado: totalCostoProcedimiento,
+            monedaCosto: monedaFinal,
         });
         
         toast({ title: "Cálculo Completado", description: `Los totales para "${proc.nombre}" han sido actualizados.` });
@@ -402,7 +424,7 @@ export default function ProcedimientosPage() {
           />
           <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+            <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
             <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere auditoría periódica</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
           </div>
            <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>

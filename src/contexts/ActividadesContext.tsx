@@ -23,6 +23,7 @@ export interface Actividad {
   nombre: string;
   activa: boolean;
   procedimientoId?: string;
+  puestoId?: string;
   createdAt: number; 
   updatedAt?: number;
   deletedAt?: number; 
@@ -32,6 +33,9 @@ export interface Actividad {
   // New time and cost fields
   tiempoEstimado?: number; // in minutes
   tiempoIdeal?: number; // in minutes
+  costoEstimado?: number; // calculated field, maybe not stored
+  costoIdeal?: number; // calculated field, maybe not stored
+  monedaCosto?: Moneda; // currency for the cost
   frecuencia?: typeof frecuenciaOptions[number];
 }
 
@@ -131,7 +135,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia', 'puestoId'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

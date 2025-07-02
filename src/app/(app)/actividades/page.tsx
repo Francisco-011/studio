@@ -12,7 +12,7 @@ import { useActividades, type Actividad, type CambioHistorial, type ActividadCre
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
-import { frecuenciaOptions } from '@/contexts/ProcesosContext';
+import { frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
 import { formatMinutesToHours } from '@/lib/utils';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -64,7 +64,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow, Clock, DollarSign } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow, Clock, DollarSign, Users } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -73,6 +73,7 @@ const actividadFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   descripcionBreve: z.string().optional(),
+  puestoId: z.string().optional(),
   activa: z.boolean().default(true),
   tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
   tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
@@ -199,6 +200,7 @@ export default function ActividadesPage() {
       tiempoEstimado: undefined,
       tiempoIdeal: undefined,
       frecuencia: undefined,
+      puestoId: undefined,
     },
   });
 
@@ -236,6 +238,7 @@ export default function ActividadesPage() {
       if (editingActividad) {
         actividadForm.reset({
           ...editingActividad,
+          puestoId: editingActividad.puestoId || undefined,
           descripcionBreve: editingActividad.descripcionBreve || '',
         });
       } else {
@@ -246,6 +249,7 @@ export default function ActividadesPage() {
           tiempoEstimado: undefined,
           tiempoIdeal: undefined,
           frecuencia: undefined,
+          puestoId: undefined,
         });
       }
     }
@@ -253,7 +257,10 @@ export default function ActividadesPage() {
 
   async function handleActividadSubmit(data: ActividadFormData) {
     const { id, ...activityDataFromForm } = data;
-    const activityDataForStorage: ActividadCreationData = activityDataFromForm;
+    const activityDataForStorage: ActividadCreationData = {
+        ...activityDataFromForm,
+        puestoId: data.puestoId === 'none' ? undefined : data.puestoId,
+    };
 
     if (editingActividad && id) {
       await updateActividad(id, activityDataForStorage);
@@ -306,7 +313,7 @@ export default function ActividadesPage() {
   function executeDeleteActividad() {
     if (!activityToDelete) return;
     softDeleteActividad(activityToDelete.id);
-    toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: 'destructive' });
+    toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: "destructive" });
     setActivityToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
@@ -324,40 +331,24 @@ export default function ActividadesPage() {
   }
 
   const isLoadingAllData = isLoadingActividades || isLoadingProcedimientos || isLoadingProcesos || isLoadingPuestos;
-  const puestoNameToPuestoMap = useMemo(() => new Map(puestos.map(p => [p.nombre, p])), [puestos]);
-  const procedimientosMap = useMemo(() => new Map(procedimientos.map(p => [p.id, p])), [procedimientos]);
-  const procesosMap = useMemo(() => new Map(procesos.map(p => [p.id, p])), [procesos]);
+  const puestosMap = useMemo(() => new Map(puestos.map(p => [p.id, p])), [puestos]);
   
   const activityCostMap = useMemo(() => {
     const costMap = new Map<string, { cost: number; currency: string }>();
     if (isLoadingAllData) return costMap;
   
     actividades.forEach(act => {
-      if (!act.procedimientoId) {
+      const puesto = act.puestoId ? puestosMap.get(act.puestoId) : null;
+      if (puesto && puesto.costoHora && act.tiempoEstimado) {
+        const costPerMinute = puesto.costoHora / 60;
+        const activityCost = act.tiempoEstimado * costPerMinute;
+        costMap.set(act.id, { cost: activityCost, currency: puesto.monedaCosto || 'N/A' });
+      } else {
         costMap.set(act.id, { cost: 0, currency: 'N/A' });
-        return;
       }
-      const procedimiento = procedimientosMap.get(act.procedimientoId);
-      if (!procedimiento) {
-        costMap.set(act.id, { cost: 0, currency: 'N/A' });
-        return;
-      }
-      const proceso = procesosMap.get(procedimiento.procesoId);
-      if (!proceso) {
-        costMap.set(act.id, { cost: 0, currency: 'N/A' });
-        return;
-      }
-      const puesto = puestoNameToPuestoMap.get(proceso.puesto);
-      if (!puesto || !puesto.costoHora || !act.tiempoEstimado) {
-        costMap.set(act.id, { cost: 0, currency: 'N/A' });
-        return;
-      }
-      const costPerMinute = puesto.costoHora / 60;
-      const activityCost = act.tiempoEstimado * costPerMinute;
-      costMap.set(act.id, { cost: activityCost, currency: puesto.monedaCosto || 'N/A' });
     });
     return costMap;
-  }, [actividades, procedimientosMap, procesosMap, puestoNameToPuestoMap, isLoadingAllData]);
+  }, [actividades, puestosMap, isLoadingAllData]);
   
 
   const sortedAndFilteredActividades = useMemo(() => {
@@ -484,7 +475,7 @@ export default function ActividadesPage() {
     }
 
     const headers = [
-      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre", "Estado", "Asignaciones",
+      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre", "Puesto Asignado", "Estado", "Asignaciones",
       "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Moneda", "Frecuencia",
       "Fecha Creación", "Última Modificación"
     ];
@@ -493,12 +484,14 @@ export default function ActividadesPage() {
       headers.join(','),
       ...sortedAndFilteredActividades.map(act => {
         const costInfo = activityCostMap.get(act.id);
+        const puestoAsignado = act.puestoId ? puestosMap.get(act.puestoId)?.nombre : '';
         return [
           escapeCsvCell(act.id),
           escapeCsvCell(act.codigo),
           escapeCsvCell(act.nombre),
           escapeCsvCell(act.descripcionBreve),
           escapeCsvCell(act.procedimientoPadre),
+          escapeCsvCell(puestoAsignado),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
           escapeCsvCell(assignmentCounts.get(act.id) || 0),
           escapeCsvCell(act.tiempoEstimado),
@@ -696,13 +689,30 @@ export default function ActividadesPage() {
                       />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
                        
+                       <FormField
+                          control={actividadForm.control}
+                          name="puestoId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Puesto que Ejecuta (Opcional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || 'none'}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto..." /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="none">Sin Puesto Específico</SelectItem>
+                                    {puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>Si se asigna, su costo/hr se usará para esta actividad.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <FormField control={actividadForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 30" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                          <FormField control={actividadForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 20" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                        </div>
                        
                         <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                       
 
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
