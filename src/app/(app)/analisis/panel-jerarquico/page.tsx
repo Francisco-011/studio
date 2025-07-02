@@ -37,8 +37,8 @@ interface TreeNode {
   payload?: any;
 }
 
-type DraggedItemType = 'activityFromPool' | 'activityInProcedure' | 'procedureInProcess' | 'processInPuesto' | 'departamentoInArea';
-type DropTargetType = 'procedimiento' | 'activity-in-tree' | 'pool' | 'proceso' | 'puesto' | 'area';
+type DraggedItemType = 'activityFromPool' | 'activityInProcedure' | 'procedureInProcess' | 'processInPuesto' | 'departamentoInArea' | 'puestoInDepto';
+type DropTargetType = 'procedimiento' | 'activity-in-tree' | 'pool' | 'proceso' | 'puesto' | 'area' | 'departamento';
 
 interface DraggedItem {
     type: DraggedItemType;
@@ -114,7 +114,7 @@ export default function PanelJerarquicoPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, moveDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, updatePuestoProcessOrder, isLoading: isLoadingPuestos } = usePuestos();
+  const { puestos, updatePuestoProcessOrder, movePuesto, isLoading: isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
@@ -263,6 +263,7 @@ export default function PanelJerarquicoPage() {
             Object.values(areaNode.deptosMap).forEach(deptoNode => {
                 let puestoChildren: TreeNode[] = [];
                 Object.values(deptoNode.puestosMap).forEach(puestoNode => {
+                    puestoNode.payload.sourceParentId = deptoNode.originalId;
                     
                     const puestoData = puestos.find(p => p.id === puestoNode.originalId);
                     const orderForThisPuesto = puestoData?.procesoOrder || [];
@@ -437,6 +438,13 @@ export default function PanelJerarquicoPage() {
       canDrop = draggedItem.sourceParentId === parentId;
     } else if (draggedItem.type === 'departamentoInArea' && type === 'area') {
       canDrop = draggedItem.sourceParentId !== parentId; // Can't drop on the same area
+    } else if (draggedItem.type === 'puestoInDepto') {
+        if (type === 'departamento' && draggedItem.sourceParentId !== parentId) {
+            canDrop = true;
+        } else if (type === 'area') {
+            const puesto = puestos.find(p => p.id === draggedItem.id);
+            if (puesto && puesto.areaId !== parentId) canDrop = true;
+        }
     }
 
     if (canDrop) {
@@ -462,6 +470,19 @@ export default function PanelJerarquicoPage() {
       if (dropTargetInfo.type === 'area' && dropTargetInfo.parentId && draggedItem.sourceParentId !== dropTargetInfo.parentId) {
         await moveDepartamento(draggedItem.id, dropTargetInfo.parentId);
       }
+    }
+    // --- Puesto Drop Logic ---
+    else if (draggedItem.type === 'puestoInDepto') {
+        if (dropTargetInfo.type === 'departamento' && dropTargetInfo.parentId) {
+            const newDeptoId = dropTargetInfo.parentId;
+            const deptoTarget = departamentos.find(d => d.id === newDeptoId);
+            if (deptoTarget) {
+                await movePuesto(draggedItem.id, deptoTarget.areaId, newDeptoId);
+            }
+        } else if (dropTargetInfo.type === 'area' && dropTargetInfo.parentId) {
+            const newAreaId = dropTargetInfo.parentId;
+            await movePuesto(draggedItem.id, newAreaId, undefined);
+        }
     }
     // --- Activity Drop Logic ---
     else if (draggedItem.type.startsWith('activity')) {
@@ -532,11 +553,13 @@ export default function PanelJerarquicoPage() {
         const parentPuestoData = puestos.find(p => p.id === parentPuestoId);
         if (!parentPuestoData) return;
 
-        let currentOrder = [...(parentPuestoData.procesoOrder || [])];
-        if (draggedItem.sourceIndex !== undefined) {
+        const originalProcesos = [...(parentPuestoData.procesoOrder || [])];
+        let currentOrder = [...originalProcesos];
+
+        if (draggedItem.sourceIndex !== undefined && draggedItem.sourceIndex >= 0 && draggedItem.sourceIndex < currentOrder.length) {
             const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
             const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-            currentOrder.splice(dropIndex, 0, removedItem);
+            currentOrder.splice(dropIndex > draggedItem.sourceIndex ? dropIndex - 1 : dropIndex, 0, removedItem);
             
             await updatePuestoProcessOrder(parentPuestoId, currentOrder);
             toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
@@ -638,7 +661,7 @@ export default function PanelJerarquicoPage() {
           case 'departamento':
             nodeContent = (
               <div 
-                className={cn(baseClasses, "ml-4 font-medium")} 
+                className={cn(baseClasses, "ml-4 font-medium", dropTargetInfo?.type === 'departamento' && dropTargetInfo.id === node.id && "bg-primary/20")} 
                 id={node.id}
                 draggable={!!node.payload}
                 onDragStart={(e) => {
@@ -646,6 +669,10 @@ export default function PanelJerarquicoPage() {
                     handleDragStart(e, { type: 'departamentoInArea', id: node.originalId!, sourceParentId: node.payload.areaId })
                   }
                 }}
+                onDragOver={(e) => handleDragOver(e)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, 'departamento', node.originalId)}
+                onDragLeave={handleDragLeave}
               >
                 <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
@@ -659,13 +686,16 @@ export default function PanelJerarquicoPage() {
           case 'puesto':
             nodeContent = (
               <div 
-                className={cn(baseClasses, "ml-8 font-medium", dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && "bg-primary/20")}
+                className={cn(baseClasses, "ml-8 font-medium")}
                 id={node.id}
-                onDragOver={(e) => handleDragOver(e)}
-                onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, 'puesto', node.originalId)}
-                onDragLeave={handleDragLeave}
+                draggable={!!node.payload}
+                onDragStart={(e) => {
+                  if (node.payload) {
+                    handleDragStart(e, { type: 'puestoInDepto', id: node.originalId!, sourceParentId: node.payload.sourceParentId })
+                  }
+                }}
               >
+                <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
                   {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
                 </Button>

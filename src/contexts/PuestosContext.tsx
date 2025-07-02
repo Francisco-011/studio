@@ -35,6 +35,7 @@ interface PuestosContextType {
   addPuesto: (data: PuestoCreationData) => Promise<void>;
   updatePuesto: (id: string, data: Partial<PuestoCreationData>) => Promise<void>;
   updatePuestoProcessOrder: (id: string, procesoOrder: string[]) => Promise<void>;
+  movePuesto: (puestoId: string, newAreaId: string, newDepartamentoId?: string) => Promise<void>;
   deletePuesto: (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoadingPuestos: boolean;
 }
@@ -107,6 +108,24 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
       toast({ title: "Error", description: "No se pudo guardar el orden de los procesos.", variant: "destructive"});
     }
   }, []);
+  
+  const movePuesto = useCallback(async (puestoId: string, newAreaId: string, newDepartamentoId?: string) => {
+    const puestoDocRef = doc(db, PUESTOS_COLLECTION, puestoId);
+    const originalPuesto = puestos.find(p => p.id === puestoId);
+    if (!originalPuesto) return;
+    
+    try {
+      await updateDoc(puestoDocRef, {
+        areaId: newAreaId,
+        departamentoId: newDepartamentoId || null,
+      });
+      addLogEntry({ action: 'update', entityType: 'Puesto', entityName: originalPuesto.nombre, details: `Se movió el puesto "${originalPuesto.nombre}" a una nueva ubicación.` });
+      toast({ title: "Puesto Reasignado", description: `"${originalPuesto.nombre}" ha sido movido.` });
+    } catch (e) {
+      console.error("Error moving puesto:", e);
+      toast({ title: "Error", description: "No se pudo reasignar el puesto.", variant: "destructive" });
+    }
+  }, [puestos, addLogEntry]);
 
   const deletePuesto = useCallback(async (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => {
     const puestoToDelete = puestos.find(p => p.id === id);
@@ -134,7 +153,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   }, [puestos, addLogEntry]);
 
   return (
-    <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, updatePuestoProcessOrder, deletePuesto, isLoadingPuestos }}>
+    <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, updatePuestoProcessOrder, movePuesto, deletePuesto, isLoadingPuestos }}>
       {children}
     </PuestosContext.Provider>
   );
