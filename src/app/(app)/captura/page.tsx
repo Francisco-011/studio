@@ -70,7 +70,7 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
 
-function ActivitiesSection({ control, procIndex, allActivities, allPuestos }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[] }) {
+function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defaultPuestoId }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[], defaultPuestoId?: string }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
         name: `procedures.${procIndex}.activities`,
@@ -161,7 +161,7 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos }: { 
                     </div>
                 ))}
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: undefined, tiempoIdeal: undefined, puestoId: undefined, frecuencia: undefined, ejecucionesPorPeriodo: undefined })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: undefined, tiempoIdeal: undefined, puestoId: defaultPuestoId, frecuencia: undefined, ejecucionesPorPeriodo: undefined })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
             </Button>
         </div>
@@ -199,15 +199,16 @@ export default function CapturaPage() {
     },
   });
 
-  const { fields: procedureFields, append: appendProcedure, remove: removeProcedure, move: moveProcedure } = useFieldArray({
-      control: form.control,
-      name: "procedures",
-  });
-  
   const { watch, setValue } = form;
   const watchedAreaName = watch('area');
   const watchedDepartamentoName = watch('departamento');
   const watchedProcessName = watch('proceso');
+  const watchedPuestoName = watch('puesto');
+  
+  const selectedPuestoForActivities = useMemo(() => {
+    if (!watchedPuestoName) return null;
+    return puestos.find(p => p.nombre === watchedPuestoName) || null;
+  }, [watchedPuestoName, puestos]);
   
   const filteredDepartamentos = useMemo(() => {
     if (!watchedAreaName) return [];
@@ -252,6 +253,11 @@ export default function CapturaPage() {
       dragOverProcedureItem.current = null;
     }
   };
+  
+  const { fields: procedureFields, append: appendProcedure, remove: removeProcedure, move: moveProcedure } = useFieldArray({
+      control: form.control,
+      name: "procedures",
+  });
 
   const handleContinue = () => {
       form.trigger(['proceso', 'area', 'puesto', 'descripcion']).then(isValid => {
@@ -350,6 +356,7 @@ export default function CapturaPage() {
             activo: true,
             historialDeCambios: [],
             procedimientoOrder: procedureRefsAndData.map(p => p.ref.id),
+            politicasAsociadas: data.politicasAsociadas || [],
         };
         batch.set(processRef, processPayload);
 
@@ -393,6 +400,7 @@ export default function CapturaPage() {
                 <FormField control={form.control} name="proceso" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Nombre del Proceso</FormLabel><FormControl><Input placeholder="Ej: Gestión de Pedidos de Clientes" {...field} /></FormControl>{similarProcessWarning && (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{similarProcessWarning}</FormDescription>)}<FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Objetivo del Proceso</FormLabel><FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado." {...field} /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Frecuencia de Auditoría del Proceso</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="politicasAsociadas" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Políticas Vinculadas al Proceso</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Aprobadas</DropdownMenuLabel><DropdownMenuSeparator/><ScrollArea className="h-48">{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.some(v => v.policyId === p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), {policyId: p.id, linkType: 'Regula'}] : (field.value || []).filter(v => v.policyId !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
               </div>
 
               {!isDefiningFlow && (
@@ -467,7 +475,7 @@ export default function CapturaPage() {
                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
-                                    <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/><ScrollArea className="h-48">{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+                                    <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas al Procedimiento</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Aprobadas</DropdownMenuLabel><DropdownMenuSeparator/><ScrollArea className="h-48">{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
                                </div>
                                
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -476,7 +484,13 @@ export default function CapturaPage() {
                                   <FormField control={form.control} name={`procedures.${index}.procedimientosSalidaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Salida</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...'}<ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}>(Es un procedimiento finalizador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => {const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
                                   <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                </div>
-                              <ActivitiesSection control={form.control} procIndex={index} allActivities={allActivities} allPuestos={puestos} />
+                              <ActivitiesSection 
+                                control={form.control} 
+                                procIndex={index} 
+                                allActivities={allActivities} 
+                                allPuestos={puestos}
+                                defaultPuestoId={selectedPuestoForActivities?.id}
+                              />
                             </AccordionContent>
                           </AccordionItem>
                         </Accordion>
