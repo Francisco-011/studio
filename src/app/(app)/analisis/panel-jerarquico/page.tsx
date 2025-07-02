@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, type DragEvent, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 
 export default function PanelJerarquicoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoading: isLoadingPuestos } = usePuestos();
@@ -193,6 +194,40 @@ export default function PanelJerarquicoPage() {
         }
     }
   }, [puestoProcessOrders, isLoadingAllData]);
+
+  useEffect(() => {
+    if (isLoadingAllData) return;
+    
+    const areaParam = searchParams.get('area');
+    const deptoParam = searchParams.get('depto');
+    const puestoParam = searchParams.get('puesto');
+    const procesoIdParam = searchParams.get('procesoId');
+    const procedimientoIdParam = searchParams.get('procedimientoId');
+
+    if (areaParam) setSelectedAreaFilter(areaParam);
+    if (deptoParam) setSelectedDeptoFilter(deptoParam);
+    if (puestoParam) setSelectedPuestoFilter(puestoParam);
+
+    if (procesoIdParam || procedimientoIdParam) {
+        const targetProcessId = procesoIdParam || procedimientos.find(p => p.id === procedimientoIdParam)?.procesoId;
+        if (targetProcessId) {
+            const targetProcess = capturedProcesses.find(p => p.id === targetProcessId);
+            if (targetProcess) {
+                const areaNode = areas.find(a => a.nombre === targetProcess.area);
+                const deptoNode = departamentos.find(d => d.nombre === targetProcess.departamento && d.areaId === areaNode?.id);
+                const puestoNode = puestos.find(p => p.nombre === targetProcess.puesto && p.areaId === areaNode?.id);
+
+                const nodesToExpand: Record<string, boolean> = {};
+                if (areaNode) nodesToExpand[`area-${areaNode.id}`] = true;
+                if (deptoNode) nodesToExpand[`depto-${deptoNode.id}`] = true;
+                if (puestoNode) nodesToExpand[`puesto-${puestoNode.id}`] = true;
+                if (targetProcess) nodesToExpand[`proceso-${targetProcess.id}`] = true;
+
+                setExpandedNodes(prev => ({...prev, ...nodesToExpand}));
+            }
+        }
+    }
+  }, [searchParams, areas, departamentos, puestos, capturedProcesses, procedimientos, isLoadingAllData]);
 
 
   useEffect(() => {

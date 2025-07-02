@@ -61,6 +61,7 @@ const PROCEDIMIENTO_FINALIZADOR = "__FINALIZADOR__";
 
 
 export default function ProcedimientosPage() {
+  const router = useRouter();
   const { procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, toggleProcedimientoStatus, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
   const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
@@ -162,6 +163,7 @@ export default function ProcedimientosPage() {
     if (editingProcedimiento && id) {
       await updateProcedimiento(id, dataToSave);
       toast({ title: 'Procedimiento Actualizado', description: 'El procedimiento ha sido actualizado.' });
+      setIsDialogOpen(false);
     } else {
       const newProc = await addProcedimiento(dataToSave);
       if (newProc) {
@@ -170,10 +172,28 @@ export default function ProcedimientosPage() {
           const updatedOrder = [...(parentProcess.procedimientoOrder || []), newProc.id];
           await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
         }
+        
+        toast({ title: 'Procedimiento Creado', description: 'Redirigiendo para asignar actividades...' });
+
+        const parentProcessForRedirect = procesos.find(p => p.id === newProc.procesoId);
+        if (parentProcessForRedirect) {
+            const { area, departamento, puesto } = parentProcessForRedirect;
+            const params = new URLSearchParams();
+            if (area) params.set('area', area);
+            if (departamento) params.set('depto', departamento);
+            if (puesto) params.set('puesto', puesto);
+            params.set('procesoId', newProc.procesoId);
+            params.set('procedimientoId', newProc.id);
+            
+            router.push(`/analisis/panel-jerarquico?${params.toString()}`);
+        } else {
+            router.push('/analisis/panel-jerarquico');
+        }
+      } else {
+        toast({ title: 'Error', description: 'No se pudo crear el procedimiento.', variant: 'destructive'});
+        setIsDialogOpen(false);
       }
-      toast({ title: 'Procedimiento Creado', description: 'El nuevo procedimiento ha sido creado.' });
     }
-    setIsDialogOpen(false);
   }
 
   function handleEdit(procedimiento: Procedimiento) {
