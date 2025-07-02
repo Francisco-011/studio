@@ -47,7 +47,7 @@ const procedimientoFormSchema = z.object({
 
 type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
 
-type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'clasificacion' | 'updatedAt' | 'activo';
+type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'numActividades' | 'clasificacion' | 'updatedAt' | 'activo';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -187,7 +187,7 @@ export default function ProcedimientosPage() {
     let filtered = procedimientos
       .map(p => ({ ...p, procesoPadre: procesosMap.get(p.procesoId) || 'N/A' }))
       .filter(p => 
-        (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || p.procesoPadre.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (p.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) || p.procesoPadre.toLowerCase().includes(searchTerm.toLowerCase())) &&
         (procesoFilter === 'all' || p.procesoId === procesoFilter) &&
         (clasificacionFilter === 'all' || p.clasificacion === clasificacionFilter) &&
         (statusFilter === 'all' || (statusFilter === 'active' && p.activo) || (statusFilter === 'inactive' && !p.activo))
@@ -195,15 +195,21 @@ export default function ProcedimientosPage() {
 
     if (sortConfig) {
       filtered.sort((a, b) => {
-        let valA: any = a[sortConfig.key];
-        let valB: any = b[sortConfig.key];
+        let valA: any;
+        let valB: any;
         
-        if (sortConfig.key === 'activo') {
+        if (sortConfig.key === 'numActividades') {
+            valA = a.activityOrder?.length || 0;
+            valB = b.activityOrder?.length || 0;
+        } else if (sortConfig.key === 'activo') {
             valA = a.activo;
             valB = b.activo;
         } else if (sortConfig.key === 'updatedAt') {
             valA = a.updatedAt || 0;
             valB = b.updatedAt || 0;
+        } else {
+            valA = a[sortConfig.key as keyof Procedimiento];
+            valB = b[sortConfig.key as keyof Procedimiento];
         }
 
         if (typeof valA === 'string' && typeof valB === 'string') {
@@ -263,6 +269,7 @@ export default function ProcedimientosPage() {
                 <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('nombre')}>Nombre Procedimiento {getSortIcon('nombre')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('procesoPadre')}>Proceso Padre {getSortIcon('procesoPadre')}</TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => requestSort('numActividades')}>Nº Actividades {getSortIcon('numActividades')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('clasificacion')}>Clasificación {getSortIcon('clasificacion')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('activo')}>Estado {getSortIcon('activo')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
@@ -274,6 +281,9 @@ export default function ProcedimientosPage() {
                     <TableCell className="font-mono text-xs">{proc.codigo}</TableCell>
                     <TableCell className="font-medium">{proc.nombre}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{proc.procesoPadre}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary">{proc.activityOrder?.length || 0}</Badge>
+                    </TableCell>
                     <TableCell><Badge variant="outline">{proc.clasificacion}</Badge></TableCell>
                     <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
@@ -301,100 +311,100 @@ export default function ProcedimientosPage() {
             <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
             <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
           </div>
-           <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Procedimientos de Entrada</FormLabel>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between font-normal">
-                                {
-                                    field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' :
-                                    field.value?.length ? `${field.value.length} seleccionado(s)` :
-                                    'Seleccione...'
-                                } 
-                                <ChevronDown className="ml-2 h-4"/>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                            <DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel>
-                            <DropdownMenuSeparator/>
-                            <DropdownMenuCheckboxItem
-                                checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
-                                onCheckedChange={(checked) => {
-                                    field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
-                                }}
-                                disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
-                            >
-                                (Es un procedimiento iniciador)
-                            </DropdownMenuCheckboxItem>
-                            <DropdownMenuSeparator/>
-                            {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
-                                <DropdownMenuCheckboxItem 
-                                    key={p.id} 
-                                    checked={field.value?.includes(p.id)} 
-                                    onCheckedChange={checked => {
-                                        const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || [];
-                                        field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Procedimientos de Entrada</FormLabel>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between font-normal">
+                                    {
+                                        field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' :
+                                        field.value?.length ? `${field.value.length} seleccionado(s)` :
+                                        'Seleccione...'
+                                    } 
+                                    <ChevronDown className="ml-2 h-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                <DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel>
+                                <DropdownMenuSeparator/>
+                                <DropdownMenuCheckboxItem
+                                    checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                    onCheckedChange={(checked) => {
+                                        field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
                                     }}
-                                    disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
                                 >
-                                    {p.nombre}
+                                    (Es un procedimiento iniciador)
                                 </DropdownMenuCheckboxItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <FormMessage/>
-                </FormItem>
-            )}/>
-            <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor, Orden de compra aprobada..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-             <FormField control={form.control} name="procedimientosSalidaIds" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Procedimientos de Salida</FormLabel>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between font-normal">
-                                {
-                                    field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' :
-                                    field.value?.length ? `${field.value.length} seleccionado(s)` :
-                                    'Seleccione...'
-                                }
-                                <ChevronDown className="ml-2 h-4"/>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                            <DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel>
-                            <DropdownMenuSeparator/>
-                            <DropdownMenuCheckboxItem
-                                checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
-                                onCheckedChange={(checked) => {
-                                    field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
-                                }}
-                                disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
-                            >
-                                (Es un procedimiento finalizador)
-                            </DropdownMenuCheckboxItem>
-                            <DropdownMenuSeparator/>
-                            {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
-                                <DropdownMenuCheckboxItem 
-                                    key={p.id} 
-                                    checked={field.value?.includes(p.id)} 
-                                    onCheckedChange={checked => {
-                                        const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || [];
-                                        field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                <DropdownMenuSeparator/>
+                                {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
+                                    <DropdownMenuCheckboxItem 
+                                        key={p.id} 
+                                        checked={field.value?.includes(p.id)} 
+                                        onCheckedChange={checked => {
+                                            const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || [];
+                                            field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                        }}
+                                        disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                    >
+                                        {p.nombre}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <FormMessage/>
+                    </FormItem>
+                )}/>
+                <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor, Orden de compra aprobada..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                <FormField control={form.control} name="procedimientosSalidaIds" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Procedimientos de Salida</FormLabel>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between font-normal">
+                                    {
+                                        field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' :
+                                        field.value?.length ? `${field.value.length} seleccionado(s)` :
+                                        'Seleccione...'
+                                    }
+                                    <ChevronDown className="ml-2 h-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                <DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel>
+                                <DropdownMenuSeparator/>
+                                <DropdownMenuCheckboxItem
+                                    checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                    onCheckedChange={(checked) => {
+                                        field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
                                     }}
-                                    disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
                                 >
-                                    {p.nombre}
+                                    (Es un procedimiento finalizador)
                                 </DropdownMenuCheckboxItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <FormMessage/>
-                </FormItem>
-            )}/>
-          <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-          
-
+                                <DropdownMenuSeparator/>
+                                {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
+                                    <DropdownMenuCheckboxItem 
+                                        key={p.id} 
+                                        checked={field.value?.includes(p.id)} 
+                                        onCheckedChange={checked => {
+                                            const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || [];
+                                            field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                        }}
+                                        disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                    >
+                                        {p.nombre}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <FormMessage/>
+                    </FormItem>
+                )}/>
+                <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+            </div>
           <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
         </form></Form>
       </DialogContent></Dialog>
