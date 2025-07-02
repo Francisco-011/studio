@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp, FileText } from "lucide-react";
+import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp, FileText, HardDrive } from "lucide-react";
 import { parseISO } from 'date-fns';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
@@ -162,6 +162,14 @@ export default function DashboardPage() {
               <Button variant="outline" className="w-full h-24 flex-col gap-2">
                   <TrendingUp className="h-6 w-6 text-primary"/>
                   <span className="text-base">Impacto y Mejoras</span>
+              </Button>
+            </Link>
+          )}
+          {hasPermission('dashboard:view_sistemas') && (
+            <Link href="/dashboard/sistemas">
+              <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                  <HardDrive className="h-6 w-6 text-primary"/>
+                  <span className="text-base">Sistemas y Costos</span>
               </Button>
             </Link>
           )}

@@ -118,6 +118,7 @@ const PERMISSION_CONFIG = {
       view_resumen: 'Ver Resumen Ejecutivo',
       view_procesos: 'Ver Dash. Procesos',
       view_mejoras: 'Ver Dash. Mejoras',
+      view_sistemas: 'Ver Dash. Sistemas y Costos',
       view_auditoria: 'Ver Dash. Auditoría',
       view_politicas: 'Ver Dash. Políticas',
     },
@@ -276,7 +277,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     return { ...acc, ...modulePermissions };
   }, {}),
   Consultor: {
-    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
+    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
     'captura:create_process': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,

@@ -26,6 +26,7 @@ import {
   FileText,
   Info,
   ListOrdered,
+  HardDrive,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -55,11 +56,12 @@ const navItems: NavItem[] = [
         icon: LayoutDashboard, 
         matchPrefix: true,
         href: '/dashboard',
-        subItemPermissions: ['dashboard:view_resumen', 'dashboard:view_procesos', 'dashboard:view_mejoras', 'dashboard:view_auditoria', 'dashboard:view_politicas'],
+        subItemPermissions: ['dashboard:view_resumen', 'dashboard:view_procesos', 'dashboard:view_mejoras', 'dashboard:view_sistemas', 'dashboard:view_auditoria', 'dashboard:view_politicas'],
         subItems: [
             { href: '/dashboard', label: 'Resumen Ejecutivo', permission: 'dashboard:view_resumen' },
             { href: '/dashboard/procesos', label: 'Procesos y Eficiencia', permission: 'dashboard:view_procesos' },
             { href: '/dashboard/mejoras', label: 'Impacto y Mejoras', permission: 'dashboard:view_mejoras' },
+            { href: '/dashboard/sistemas', label: 'Sistemas y Costos', permission: 'dashboard:view_sistemas' },
             { href: '/dashboard/politicas', label: 'Políticas y Cumplimiento', permission: 'dashboard:view_politicas'},
             { href: '/dashboard/auditoria', label: 'Auditoría', permission: 'dashboard:view_auditoria' },
         ]

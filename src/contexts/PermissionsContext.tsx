@@ -23,10 +23,11 @@ const PermissionsContext = createContext<PermissionsContextType | undefined>(und
 const defaultPermissions: Record<UserRole, Record<string, boolean>> = {
   Administrador: {}, // Handled by proxy to always be true
   'Gerente de Proyecto': {
-    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
-    'captura:create_process': true, 'captura:define_activities': true,
+    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
+    'captura:create_process': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:toggle_status': true, 'procesosRegistrados:delete': true, 'procesosRegistrados:restore': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:toggle_status': true, 'actividades:delete': true, 'actividades:restore': true, 'actividades:export': true, 'actividades:view_history': true,
+    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true, 'procedimientos:delete': true,
     'politicas:view': true, 'politicas:create': true, 'politicas:delete': true, 'politicas:manage_status': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
@@ -38,10 +39,11 @@ const defaultPermissions: Record<UserRole, Record<string, boolean>> = {
     'ayuda:view': true,
   },
   Consultor: {
-    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
-    'captura:create_process': true, 'captura:define_activities': true,
+    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
+    'captura:create_process': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
+    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true,
     'politicas:view': true, 'politicas:create': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
@@ -56,6 +58,7 @@ const defaultPermissions: Record<UserRole, Record<string, boolean>> = {
     'dashboard:view_procesos': true,
     'procesosRegistrados:view': true,
     'actividades:view': true,
+    'procedimientos:view': true,
     'politicas:view': true,
     'panelJerarquico:view': true,
     'panelJerarquico:view_details': true,
