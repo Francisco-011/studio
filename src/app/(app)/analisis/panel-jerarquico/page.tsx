@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon, FileText, Edit2, Building } from "lucide-react";
+import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
@@ -250,8 +250,20 @@ export default function PanelJerarquicoPage() {
             Object.values(areaNode.deptosMap).forEach(deptoNode => {
                 let puestoChildren: TreeNode[] = [];
                 Object.values(deptoNode.puestosMap).forEach(puestoNode => {
+                    
+                    const puestoData = puestos.find(p => p.id === puestoNode.originalId);
+                    const orderForThisPuesto = puestoData?.procesoOrder || [];
+                    
+                    let orderedProcesses = [...puestoNode.processList].sort((a, b) => {
+                        const indexA = orderForThisPuesto.indexOf(a.id);
+                        const indexB = orderForThisPuesto.indexOf(b.id);
+                        if (indexA === -1 && indexB === -1) return a.proceso.localeCompare(b.proceso);
+                        if (indexA === -1) return 1;
+                        if (indexB === -1) return -1;
+                        return indexA - indexB;
+                    });
 
-                    let processTreeNodes = puestoNode.processList.map((proc, procIndex) => {
+                    let processTreeNodes = orderedProcesses.map((proc, procIndex) => {
                         const processPolicies = (proc.politicasAsociadas || [])
                             .map(link => {
                                 const pol = politicas.find(p => p.id === link.policyId);
@@ -334,22 +346,8 @@ export default function PanelJerarquicoPage() {
                         });
                     }
                     
-                    const puestoData = puestos.find(p => p.id === puestoNode.originalId);
-                    const orderForThisPuesto = puestoData?.procesoOrder;
-
-                    let sortedProcessNodes = orderForThisPuesto
-                      ? processTreeNodes.sort((a,b) => {
-                          const indexA = orderForThisPuesto.indexOf(a.originalId!);
-                          const indexB = orderForThisPuesto.indexOf(b.originalId!);
-                          if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name);
-                          if (indexA === -1) return 1;
-                          if (indexB === -1) return -1;
-                          return indexA - indexB;
-                        })
-                      : processTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
-                    
-                    if (sortedProcessNodes.length > 0) {
-                        puestoNode.children = sortedProcessNodes;
+                    if (processTreeNodes.length > 0) {
+                        puestoNode.children = processTreeNodes;
                         puestoChildren.push(puestoNode);
                     }
                 });
@@ -380,9 +378,6 @@ export default function PanelJerarquicoPage() {
         };
         expand(newTreeData);
         setExpandedNodes(allNodeIds);
-    } else if (!policySearchTerm && !treeGeneralSearchTerm) {
-        // Only collapse if not searching
-        // setExpandedNodes({}); Commenting out to prevent collapse on filter change
     }
 
 }, [
@@ -601,11 +596,74 @@ export default function PanelJerarquicoPage() {
         let nodeContent;
         const baseClasses = "flex items-center py-1 px-2 rounded group hover:bg-muted/50";
         switch (node.type) {
+          case 'area':
+            nodeContent = (
+              <div className={cn(baseClasses, "font-bold")} id={node.id}>
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
+                </Button>
+                <Building className="h-4 w-4 mr-2 text-purple-600" />
+                <span className="flex-grow">{node.name}</span>
+              </div>
+            );
+            break;
+          case 'departamento':
+            nodeContent = (
+              <div className={cn(baseClasses, "ml-4 font-medium")} id={node.id}>
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
+                </Button>
+                <Building className="h-4 w-4 mr-2 text-purple-500" />
+                <span className="flex-grow">{node.name}</span>
+              </div>
+            );
+            break;
+          case 'puesto':
+            nodeContent = (
+              <div 
+                className={cn(baseClasses, "ml-8 font-medium", dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && "bg-primary/20")}
+                id={node.id}
+                onDragOver={(e) => handleDragOver(e)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, 'puesto', node.originalId)}
+                onDragLeave={handleDragLeave}
+              >
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
+                  {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
+                </Button>
+                <Users className="h-4 w-4 mr-2 text-purple-400" />
+                <span className="flex-grow">{node.name}</span>
+              </div>
+            );
+            break;
+          case 'proceso':
+            nodeContent = (
+              <div 
+                className={cn(baseClasses, "ml-8 border-l-2", node.activo === false && "opacity-60", dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary")}
+                id={node.id}
+                draggable={node.activo}
+                onDragStart={(e) => node.activo && handleDragStart(e, { type: 'processInPuesto', id: node.originalId!, sourceParentId: node.payload.sourceParentId, sourceIndex: node.payload.sourceIndex })}
+                onDragOver={(e) => handleDragOver(e)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, 'proceso', node.payload.sourceParentId, node.payload.sourceIndex)}
+                onDragLeave={handleDragLeave}
+              >
+                <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground group-hover:text-foreground" : "text-transparent")}/>
+                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
+                <Workflow className="h-4 w-4 mr-2 text-blue-600" />
+                <span className={cn("font-semibold text-sm flex-grow", node.activo === false && "italic text-muted-foreground")}>{node.name}{node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
+                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'process')} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'process')} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                </div>
+              </div>
+            );
+            break;
           case 'procedimiento':
              const isInactiveProcedure = node.activo === false;
              nodeContent = (
               <div 
-                className={cn(baseClasses, "ml-4 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary", isInactiveProcedure && "opacity-60")}
+                className={cn(baseClasses, "ml-12 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary", isInactiveProcedure && "opacity-60")}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
                 onDragEnter={(e) => handleDragEnter(e, 'procedimiento', node.payload.sourceParentId, node.payload.sourceIndex)}
@@ -616,6 +674,7 @@ export default function PanelJerarquicoPage() {
               >
                 <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
+                <ListOrdered className="h-4 w-4 mr-2 text-green-600" />
                 <span className={cn("font-medium text-sm flex-grow", isInactiveProcedure && "italic text-muted-foreground")}>{node.name}{isInactiveProcedure && <Badge variant="destructive" className="ml-2 bg-slate-500 hover:bg-slate-600 text-white border-transparent">Inactivo</Badge>}</span>
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'procedure')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
@@ -633,10 +692,11 @@ export default function PanelJerarquicoPage() {
                 onDrop={(e) => handleDrop(e)}
                 onDragEnter={(e) => handleDragEnter(e, 'activity-in-tree', node.payload.sourceParentId, node.payload.sourceIndex)}
                 onDragLeave={handleDragLeave}
-                className={cn(baseClasses, "ml-8 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === node.id && "ring-2 ring-primary")}
+                className={cn(baseClasses, "ml-16 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === node.id && "ring-2 ring-primary")}
                 title={!node.activo ? "Esta actividad está inactiva" : node.name}
               >
                 <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground" : "text-transparent")}/>
+                <ListChecks className="h-3 w-3 mr-1.5 shrink-0 text-gray-500" />
                 <span className="flex-grow text-xs">{node.name}</span>
                  {!node.activo && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
@@ -648,56 +708,14 @@ export default function PanelJerarquicoPage() {
             break;
           case 'politica':
              nodeContent = (
-              <div className={cn(baseClasses, "ml-8 text-xs text-muted-foreground cursor-pointer")} onClick={() => openDetailDialog(node.payload, 'policy')}>
-                <FileText className="h-3 w-3 mr-1.5 shrink-0" />
+              <div className={cn(baseClasses, "ml-12 text-xs text-muted-foreground cursor-pointer")} onClick={() => openDetailDialog(node.payload, 'policy')}>
+                <FileText className="h-3 w-3 mr-1.5 shrink-0 text-orange-500" />
                 <span className="flex-grow truncate">{node.name}</span>
               </div>
             );
             break;
-           case 'proceso':
-            nodeContent = (
-              <div 
-                className={cn(baseClasses, "ml-8 border-l-2", node.activo === false && "opacity-60", dropTargetInfo?.type === 'proceso' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary")}
-                id={node.id}
-                draggable={node.activo}
-                onDragStart={(e) => node.activo && handleDragStart(e, { type: 'processInPuesto', id: node.originalId!, sourceParentId: node.payload.sourceParentId, sourceIndex: node.payload.sourceIndex })}
-                onDragOver={(e) => handleDragOver(e)}
-                onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, 'proceso', node.payload.sourceParentId, node.payload.sourceIndex)}
-                onDragLeave={handleDragLeave}
-              >
-                <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground group-hover:text-foreground" : "text-transparent")}/>
-                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
-                <span className={cn("font-semibold text-sm flex-grow", node.activo === false && "italic text-muted-foreground")}>{node.name}{node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
-                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'process')} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'process')} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
-                </div>
-              </div>
-            );
-            break;
-          default: // Puesto, Area, Depto
-            const isPuesto = node.type === 'puesto';
-            nodeContent = (
-              <div 
-                className={cn(baseClasses,
-                  {'ml-4': node.type === 'departamento', 'ml-8': node.type === 'puesto'},
-                  isPuesto && dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && "bg-primary/20"
-                )}
-                id={node.id}
-                onDragOver={isPuesto ? (e) => handleDragOver(e) : undefined}
-                onDrop={isPuesto ? (e) => handleDrop(e) : undefined}
-                onDragEnter={isPuesto ? (e) => handleDragEnter(e, 'puesto', node.originalId) : undefined}
-                onDragLeave={isPuesto ? handleDragLeave : undefined}
-              >
-                <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
-                  {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
-                </Button>
-                <span className={cn( "flex-grow", 
-                    { 'font-bold': node.type === 'area', 'font-medium': node.type === 'departamento' || node.type === 'puesto' }
-                )}>{node.name}</span>
-              </div>
-            );
+           default: // Should not happen
+            nodeContent = <div className={baseClasses}>{node.name}</div>
         }
 
         return (
@@ -810,3 +828,6 @@ function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto: s
 }
 
     
+type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
+type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
+type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
