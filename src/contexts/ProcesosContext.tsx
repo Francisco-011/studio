@@ -29,9 +29,9 @@ export const auditFrequencyOptions = [
 
 
 export const capturaFormSchema = z.object({
-  area: z.string().min(1, "El área es requerida."),
+  area: z.string({ required_error: "El área es requerida."}).min(1, "El área es requerida."),
   departamento: z.string().optional(),
-  puesto: z.string().min(1, "El puesto es requerido."),
+  puesto: z.string({ required_error: "El puesto es requerido."}).min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
   procedimientoOrder: z.array(z.string()).optional().default([]),
@@ -301,3 +301,5 @@ export function useProcesos(): ProcesosContextType {
   }
   return context;
 }
+
+  

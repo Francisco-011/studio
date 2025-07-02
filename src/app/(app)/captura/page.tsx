@@ -186,8 +186,12 @@ export default function CapturaPage() {
   const form = useForm<UnifiedCaptureFormData>({
     resolver: zodResolver(unifiedCaptureSchema),
     defaultValues: {
-        proceso: "",
-        procedures: [],
+      proceso: "",
+      descripcion: "",
+      area: undefined,
+      puesto: undefined,
+      departamento: undefined,
+      procedures: [],
     },
   });
 
@@ -433,7 +437,7 @@ export default function CapturaPage() {
                                   tabIndex={0} 
                                   aria-label="Eliminar procedimiento" 
                                   onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); removeProcedure(index); }}} 
-                                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }))} 
+                                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-0")} 
                                   onClick={(e) => { e.stopPropagation(); removeProcedure(index); }}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive"/>
@@ -478,3 +482,5 @@ export default function CapturaPage() {
     </div>
   );
 }
+
+  
