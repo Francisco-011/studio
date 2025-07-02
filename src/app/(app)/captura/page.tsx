@@ -281,27 +281,6 @@ export default function CapturaPage() {
                 )}
               />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="auditFrequencyInDays"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Frecuencia de Auditoría</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value?.toString()}>
-                        <FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione la frecuencia de auditoría" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">No requiere auditoría periódica</SelectItem>
-                          {auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Define cada cuánto debe auditarse este proceso.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <div className="flex justify-end space-x-2">
                 <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Procedimientos</Button>
               </div>

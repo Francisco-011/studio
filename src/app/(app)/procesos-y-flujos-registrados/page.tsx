@@ -45,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History, Workflow, Ban } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, Info, ChevronRight, Save, History, Workflow, Ban, Calculator } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -80,7 +80,7 @@ import { useProcedimientos, type Procedimiento } from '@/contexts/Procedimientos
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
-type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'updatedAt' | 'activo' | 'numActividades';
+type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'updatedAt' | 'activo' | 'numActividades' | 'tiempoEstimado' | 'costoEstimado';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -149,6 +149,8 @@ export default function ProcesosYFlujosRegistradosPage() {
   
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [processForHistory, setProcessForHistory] = useState<CapturedProcess | null>(null);
+  
+  const [isRecalculating, setIsRecalculating] = useState<string | null>(null);
 
   const handleEditActivity = (activityName: string) => {
     router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
@@ -267,6 +269,8 @@ export default function ProcesosYFlujosRegistradosPage() {
         if (sortConfig.key === 'numActividades') { valA = getTotalActivities(a); valB = getTotalActivities(b); }
         else if (sortConfig.key === 'updatedAt') { valA = a.updatedAt || 0; valB = b.updatedAt || 0; }
         else if (sortConfig.key === 'activo') { valA = a.activo !== false; valB = b.activo !== false; }
+        else if (sortConfig.key === 'tiempoEstimado') { valA = a.tiempoEstimado || 0; valB = b.tiempoEstimado || 0;}
+        else if (sortConfig.key === 'costoEstimado') { valA = a.costoEstimado || 0; valB = b.costoEstimado || 0;}
         else { valA = a[sortConfig.key as keyof CapturedProcess]; valB = b[sortConfig.key as keyof CapturedProcess]; }
         
         if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
@@ -342,6 +346,51 @@ export default function ProcesosYFlujosRegistradosPage() {
     setIsEditDialogOpen(false);
     setEditingProcess(null);
   }
+  
+  const handleRecalculateTotals = async (processId: string) => {
+    setIsRecalculating(processId);
+    try {
+        const process = allCapturedData.find(p => p.id === processId);
+        if (!process) {
+            toast({ title: "Error", description: "Proceso no encontrado.", variant: "destructive"});
+            return;
+        }
+
+        const puesto = puestos.find(p => p.nombre === process.puesto);
+        const costoPorMinuto = (puesto?.costoHora ?? 0) / 60;
+        const moneda = puesto?.monedaCosto;
+
+        let totalTiempoProceso = 0;
+
+        const proceduresInProcess = (process.procedimientoOrder || [])
+            .map(procId => allProcedimientos.find(p => p.id === procId))
+            .filter((p): p is Procedimiento => !!p && p.activo);
+
+        proceduresInProcess.forEach(procedure => {
+            const timeForProcedure = (procedure.activityOrder || [])
+                .map(actId => allActivities.find(a => a.id === actId))
+                .filter((act): act is Actividad => !!act && act.activa)
+                .reduce((sum, act) => sum + (act.tiempoEstimado || 0), 0);
+            totalTiempoProceso += timeForProcedure;
+        });
+
+        const totalCostoProceso = totalTiempoProceso * costoPorMinuto;
+        
+        await updateProceso(processId, {
+            tiempoEstimado: totalTiempoProceso,
+            costoEstimado: totalCostoProceso,
+            monedaCosto: moneda
+        });
+
+        toast({ title: "Cálculo Completado", description: `Los totales para "${process.proceso}" han sido actualizados.` });
+
+    } catch (error) {
+       console.error("Error recalculating totals:", error);
+       toast({ title: "Error", description: "No se pudo completar el recálculo.", variant: "destructive" });
+    } finally {
+       setIsRecalculating(null);
+    }
+  }
 
   const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
     if (cellData === undefined || cellData === null) {
@@ -369,7 +418,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
     const headers = [
       "ID", "Proceso", "Area", "Departamento", "Puesto", "Estado", "Objetivo",
-      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda",
+      "Tiempo Estimado (min)", "Costo Estimado", "Moneda",
       "Fecha Captura", "Última Modificación"
     ];
     
@@ -384,9 +433,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
         escapeCsvCell(proc.descripcion),
         escapeCsvCell(proc.tiempoEstimado),
-        escapeCsvCell(proc.tiempoIdeal),
         escapeCsvCell(proc.costoEstimado),
-        escapeCsvCell(proc.costoIdeal),
         escapeCsvCell(proc.monedaCosto),
         escapeCsvCell(proc.capturedAt ? format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
         escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
@@ -412,12 +459,6 @@ export default function ProcesosYFlujosRegistradosPage() {
   };
 
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
-
-  const availableProcessesForSelection = useMemo(() => {
-    return allCapturedData
-      .filter(p => !p.deletedAt && p.id !== editingProcess?.id)
-      .map(p => ({ id: p.id, nombre: p.proceso }));
-  }, [allCapturedData, editingProcess]);
 
   if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
@@ -461,14 +502,13 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[200px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('proceso')}><div className="flex items-center">Proceso {getSortIcon('proceso')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('area')}><div className="flex items-center">Área {getSortIcon('area')}</div></TableHead>
-              <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
-              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Tiempo Est.</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
-              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Costo Est.</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est. {getSortIcon('tiempoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est. {getSortIcon('costoEstimado')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
-              <TableHead className="text-right w-[140px]">Acciones</TableHead>
+              <TableHead className="text-right w-[180px]">Acciones</TableHead>
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
                 const isExpanded = expandedRows[proc.id];
                 const proceduresForProcess = (proc.procedimientoOrder || [])
@@ -490,27 +530,19 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell className="p-1"><Button variant="ghost" size="icon" onClick={() => toggleRow(proc.id)}><ChevronRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} /></Button></TableCell>
                     <TableCell className="font-medium">{proc.proceso}</TableCell>
                     <TableCell>{proc.area}</TableCell>
-                    <TableCell>{proc.departamento || '-'}</TableCell>
                     <TableCell>{proc.puesto}</TableCell>
                     <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-center text-xs">
                         {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'}
                     </TableCell>
                     <TableCell className="text-center text-xs">
-                        {proc.costoEstimado?.toFixed(2) ?? '-'}
+                        {proc.costoEstimado !== undefined ? proc.costoEstimado.toFixed(2) : '-'}
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
                     <TableCell className="text-right space-x-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleRecalculateTotals(proc.id)} disabled={isRecalculating === proc.id}>{isRecalculating === proc.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Calculator className="h-4 w-4"/>}</Button>
                       <Switch checked={proc.activo !== false} onCheckedChange={() => handleToggleProcessStatus(proc.id)} className="mr-1" />
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => router.push(`/procedimientos?proceso=${proc.id}`)}><Workflow className="h-4 w-4"/></Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Gestionar Procedimientos</p></TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
                       <Button variant="ghost" size="icon" onClick={() => handleViewHistory(proc)} disabled={!proc.historialDeCambios || proc.historialDeCambios.length === 0}><History className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => handleOpenEditDialog(proc)}><Edit2 className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => promptDeleteProcess(proc)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>

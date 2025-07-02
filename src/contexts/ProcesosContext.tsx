@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { ReactNode } from 'react';
@@ -14,6 +13,7 @@ import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 import { useProcedimientos, type Procedimiento } from './ProcedimientosContext';
+import type { Moneda } from './AccionesContext';
 
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
@@ -64,6 +64,10 @@ export interface CapturedProcess extends CapturaFormData {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   puestoId?: string;
+  // Calculated fields
+  tiempoEstimado?: number;
+  costoEstimado?: number;
+  monedaCosto?: Moneda;
 }
 
 interface ProcesosContextType {
@@ -209,7 +213,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
 
         const changes: CambioHistorial[] = [];
         const fieldsToCompare: (keyof typeof data)[] = [
-            'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'procedimientoOrder'
+            'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'procedimientoOrder',
+            'tiempoEstimado', 'costoEstimado', 'monedaCosto'
         ];
 
         fieldsToCompare.forEach(key => {
