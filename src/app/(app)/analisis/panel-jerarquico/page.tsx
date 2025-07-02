@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered, Building2 } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
-import { useDepartamentos } from '@/contexts/DepartamentosContext';
+import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcesos, type CapturedProcess, type CambioHistorial } from '@/contexts/ProcesosContext';
@@ -115,8 +115,8 @@ export default function PanelJerarquicoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
-  const { departamentos, moveDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, updatePuestoProcessOrder, movePuesto, isLoading: isLoadingPuestos } = usePuestos();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, updatePuesto, updatePuestoProcessOrder, isLoading: isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
@@ -265,9 +265,14 @@ export default function PanelJerarquicoPage() {
             Object.values(areaNode.deptosMap).forEach(deptoNode => {
                 let puestoChildren: TreeNode[] = [];
                 Object.values(deptoNode.puestosMap).forEach(puestoNode => {
-                    puestoNode.payload.sourceParentId = deptoNode.originalId;
-                    
                     const puestoData = puestos.find(p => p.id === puestoNode.originalId);
+                    if (puestoData) {
+                        puestoNode.payload = {
+                            ...puestoData,
+                            sourceParentId: deptoNode.originalId
+                        };
+                    }
+                    
                     const orderForThisPuesto = puestoData?.procesoOrder || [];
                     
                     const orderedProcesses = [...puestoNode.processList].sort((a, b) => {
@@ -278,7 +283,7 @@ export default function PanelJerarquicoPage() {
                         if (indexB === -1) return -1;
                         return indexA - indexB;
                     });
-
+                    
                     const processWithIndices = orderedProcesses.map((proc, index) => ({...proc, sourceIndex: index}));
                      
                     let processTreeNodes = processWithIndices.map((proc) => {
@@ -437,15 +442,14 @@ export default function PanelJerarquicoPage() {
     if (draggedItem.type.startsWith('activity') && (type === 'procedimiento' || type === 'activity-in-tree' || type === 'pool')) {
       canDrop = true;
     } else if (draggedItem.type === 'procedureInProcess' && (type === 'proceso' || type === 'procedimiento')) {
-      canDrop = draggedItem.sourceParentId === parentId;
+        // Can drop on any process to move, or on another procedure to re-order.
+        canDrop = true;
     } else if (draggedItem.type === 'processInPuesto') {
         if (type === 'proceso' && draggedItem.sourceParentId === parentId) {
             canDrop = true; // Reorder
         } else if (type === 'puesto' && draggedItem.sourceParentId !== parentId) {
             canDrop = true; // Reassign
         }
-    } else if (draggedItem.type === 'departamentoInArea' && type === 'area') {
-      canDrop = draggedItem.sourceParentId !== parentId; // Can't drop on the same area
     } else if (draggedItem.type === 'puestoInDepto') {
         if (type === 'departamento' && draggedItem.sourceParentId !== parentId) {
             canDrop = true;
@@ -473,23 +477,29 @@ export default function PanelJerarquicoPage() {
     e.preventDefault();
     if (!draggedItem || !dropTargetInfo) return;
     
-    // --- Department Drop Logic ---
-    if (draggedItem.type === 'departamentoInArea') {
-      if (dropTargetInfo.type === 'area' && dropTargetInfo.parentId && draggedItem.sourceParentId !== dropTargetInfo.parentId) {
-        await moveDepartamento(draggedItem.id, dropTargetInfo.parentId);
-      }
-    }
     // --- Puesto Drop Logic ---
-    else if (draggedItem.type === 'puestoInDepto') {
+    if (draggedItem.type === 'puestoInDepto') {
+        const puestoId = draggedItem.id;
+        const originalPuesto = puestos.find(p => p.id === puestoId);
+        if (!originalPuesto) return;
+
+        let newAreaId: string | undefined;
+        let newDepartamentoId: string | null = null;
+        
         if (dropTargetInfo.type === 'departamento' && dropTargetInfo.parentId) {
-            const newDeptoId = dropTargetInfo.parentId;
-            const deptoTarget = departamentos.find(d => d.id === newDeptoId);
-            if (deptoTarget) {
-                await movePuesto(draggedItem.id, deptoTarget.areaId, newDeptoId);
+            const newDepto = departamentos.find(d => d.id === dropTargetInfo.parentId);
+            if (newDepto) {
+                newAreaId = newDepto.areaId;
+                newDepartamentoId = newDepto.id;
             }
         } else if (dropTargetInfo.type === 'area' && dropTargetInfo.parentId) {
-            const newAreaId = dropTargetInfo.parentId;
-            await movePuesto(draggedItem.id, newAreaId, undefined);
+            newAreaId = dropTargetInfo.parentId;
+        }
+        
+        if (newAreaId) {
+            await updatePuesto(puestoId, { areaId: newAreaId, departamentoId: newDepartamentoId === null ? undefined : newDepartamentoId });
+            addLogEntry({ action: 'update', entityType: 'Puesto', entityName: originalPuesto.nombre, details: `Se movió el puesto "${originalPuesto.nombre}" a una nueva ubicación.` });
+            toast({ title: "Puesto Reasignado", description: `"${originalPuesto.nombre}" ha sido movido.` });
         }
     }
     // --- Activity Drop Logic ---
@@ -537,19 +547,60 @@ export default function PanelJerarquicoPage() {
     
     // --- Procedure Drop Logic ---
     else if (draggedItem.type === 'procedureInProcess') {
-        if (!dropTargetInfo.parentId || draggedItem.sourceParentId !== dropTargetInfo.parentId) return;
-        
-        const parentProcess = capturedProcesses.find(p => p.id === draggedItem.sourceParentId);
-        if (!parentProcess) return;
+        const procedureId = draggedItem.id;
+        const sourceProcessId = draggedItem.sourceParentId;
+        const targetProcessId = dropTargetInfo.parentId;
 
-        let currentOrder = [...(parentProcess.procedimientoOrder || [])];
-        if (draggedItem.sourceIndex !== undefined) {
-            const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
-            const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-            currentOrder.splice(dropIndex, 0, removedItem);
+        if (!targetProcessId) return;
 
-            await updateProceso(parentProcess.id, { procedimientoOrder: currentOrder });
-            toast({ title: "Flujo Actualizado", description: "Se ha reordenado un procedimiento." });
+        // Case 1: Reordering within the same process
+        if (sourceProcessId === targetProcessId) {
+            const parentProcess = capturedProcesses.find(p => p.id === sourceProcessId);
+            if (!parentProcess) return;
+
+            let currentOrder = [...(parentProcess.procedimientoOrder || [])];
+            if (draggedItem.sourceIndex !== undefined) {
+                const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
+                const dropIndex = dropTargetInfo.index ?? currentOrder.length;
+                currentOrder.splice(dropIndex, 0, removedItem);
+
+                await updateProceso(parentProcess.id, { procedimientoOrder: currentOrder });
+                toast({ title: "Flujo Actualizado", description: "Se ha reordenado un procedimiento." });
+            }
+        } 
+        // Case 2: Moving to a different process
+        else {
+            const sourceProcess = capturedProcesses.find(p => p.id === sourceProcessId);
+            const targetProcess = capturedProcesses.find(p => p.id === targetProcessId);
+            const procedure = procedimientos.find(p => p.id === procedureId);
+
+            if (!sourceProcess || !targetProcess || !procedure) {
+                toast({ title: "Error de Datos", description: "No se encontró información para completar el movimiento." });
+                return;
+            }
+            
+            const batch = writeBatch(db);
+
+            // 1. Update source process's order
+            const sourceProcessRef = doc(db, 'procesos', sourceProcessId);
+            const newSourceOrder = (sourceProcess.procedimientoOrder || []).filter(id => id !== procedureId);
+            batch.update(sourceProcessRef, { procedimientoOrder: newSourceOrder });
+
+            // 2. Update target process's order
+            const targetProcessRef = doc(db, 'procesos', targetProcessId);
+            let newTargetOrder = [...(targetProcess.procedimientoOrder || [])];
+            const dropIndex = dropTargetInfo.index ?? newTargetOrder.length;
+            newTargetOrder.splice(dropIndex, 0, procedureId);
+            batch.update(targetProcessRef, { procedimientoOrder: newTargetOrder });
+
+            // 3. Update procedure's parent process id
+            const procedureRef = doc(db, 'procedimientos', procedureId);
+            batch.update(procedureRef, { procesoId: targetProcessId, updatedAt: serverTimestamp() });
+
+            await batch.commit();
+
+            addLogEntry({ action: 'update', entityType: 'Procedimiento', entityName: procedure.nombre, details: `Procedimiento "${procedure.nombre}" movido al proceso "${targetProcess.proceso}".` });
+            toast({ title: "Procedimiento Reasignado", description: "El procedimiento ha sido movido al nuevo proceso." });
         }
     }
 
@@ -606,17 +657,18 @@ export default function PanelJerarquicoPage() {
     
             const originalProcesos = [...(parentPuestoData.procesoOrder || [])];
             let currentOrder = [...originalProcesos];
-    
-            if (draggedItem.sourceIndex !== undefined && draggedItem.sourceIndex >= 0 && currentOrder.length > draggedItem.sourceIndex) {
-                const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
-                
-                let dropIndex = dropTargetInfo.index;
-                if(dropIndex === undefined || dropIndex < 0 || dropIndex > currentOrder.length) {
-                    dropIndex = currentOrder.length;
+            
+            const fromIndex = draggedItem.sourceIndex;
+            if (fromIndex !== undefined && fromIndex >= 0 && currentOrder.length > fromIndex) {
+                 const [removedItem] = currentOrder.splice(fromIndex, 1);
+                 
+                let toIndex = dropTargetInfo.index;
+                if(toIndex === undefined || toIndex < 0 || toIndex > currentOrder.length) {
+                    toIndex = currentOrder.length;
                 }
                 
-                currentOrder.splice(dropIndex, 0, removedItem);
-                
+                currentOrder.splice(toIndex, 0, removedItem);
+
                 await updatePuestoProcessOrder(parentPuestoId, currentOrder);
                 toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
             }
