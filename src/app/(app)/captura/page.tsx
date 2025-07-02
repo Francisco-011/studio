@@ -23,6 +23,8 @@ import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useProcesos, capturaFormSchema, clasificacionOptions } from '@/contexts/ProcesosContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { useProcedimientos } from '@/contexts/ProcedimientosContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 const PROCESOS_COLLECTION = 'procesos';
@@ -49,7 +51,7 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
 
-function ActivitiesSection({ control, procIndex }: { control: Control<UnifiedCaptureFormData>, procIndex: number }) {
+function ActivitiesSection({ control, procIndex, allActivities }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[] }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
         name: `procedures.${procIndex}.activities`,
@@ -79,20 +81,29 @@ function ActivitiesSection({ control, procIndex }: { control: Control<UnifiedCap
                 {fields.map((field, index) => (
                     <div 
                         key={field.id}
-                        className="flex items-center gap-2 p-2 border rounded-md bg-background"
+                        className="flex items-start gap-2 p-2 border rounded-md bg-background"
                         draggable
                         onDragStart={() => handleDragStart(index)}
                         onDragEnter={() => handleDragEnter(index)}
                         onDragEnd={handleDrop}
                         onDragOver={(e) => e.preventDefault()}
                     >
-                         <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                         <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab mt-2" />
                          <FormField
                             control={control}
                             name={`procedures.${procIndex}.activities.${index}.nombre`}
                             render={({ field }) => (
                                 <FormItem className="flex-grow">
                                     <FormControl><Input placeholder={`Nombre de la actividad ${index + 1}`} {...field} /></FormControl>
+                                    {(() => {
+                                        const actName = field.value;
+                                        if (!actName) return null;
+                                        const existingAct = allActivities.find(a => a.nombre.trim().toLowerCase() === actName.trim().toLowerCase());
+                                        if (existingAct) {
+                                            return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{`Advertencia: ya existe una actividad con este nombre.`}</FormDescription>;
+                                        }
+                                        return null;
+                                    })()}
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -118,6 +129,8 @@ export default function CapturaPage() {
   const { puestos } = usePuestos();
   const { sistemas } = useSistemasCostos();
   const { procesos: allProcesses } = useProcesos();
+  const { procedimientos: allProcedimientos } = useProcedimientos();
+  const { actividades: allActivities } = useActividades();
   
   const [isDefiningFlow, setIsDefiningFlow] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -351,6 +364,16 @@ export default function CapturaPage() {
                                     render={({ field }) => (
                                         <FormItem className="flex-grow">
                                             <FormControl><Input placeholder={`Nombre del procedimiento ${index + 1}`} {...field} onClick={e => e.stopPropagation()} /></FormControl>
+                                            {(() => {
+                                                const procName = field.value;
+                                                if (!procName) return null;
+                                                const existingProc = allProcedimientos.find(p => p.nombre.trim().toLowerCase() === procName.trim().toLowerCase());
+                                                if (existingProc) {
+                                                const parentProcess = allProcesses.find(p => p.id === existingProc.procesoId);
+                                                return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{`Advertencia: ya existe un procedimiento con este nombre en el proceso "${parentProcess?.proceso || 'otro proceso'}".`}</FormDescription>;
+                                                }
+                                                return null;
+                                            })()}
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -361,7 +384,7 @@ export default function CapturaPage() {
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="p-4 border-t">
-                              <ActivitiesSection control={form.control} procIndex={index} />
+                              <ActivitiesSection control={form.control} procIndex={index} allActivities={allActivities} />
                             </AccordionContent>
                           </AccordionItem>
                         </Accordion>
@@ -385,4 +408,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-
