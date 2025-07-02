@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -11,8 +10,9 @@ import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad, type CambioHistorial, type ActividadCreationData } from '@/contexts/ActividadesContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+import { useProcesos } from '@/contexts/ProcesosContext';
+import { usePuestos } from '@/contexts/PuestosContext';
 import { frecuenciaOptions } from '@/contexts/ProcesosContext';
-import { monedaOptions } from '@/contexts/AccionesContext';
 import { formatMinutesToHours } from '@/lib/utils';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -76,9 +76,6 @@ const actividadFormSchema = z.object({
   activa: z.boolean().default(true),
   tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
   tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
-  costoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
-  costoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
-  monedaCosto: z.enum(monedaOptions).optional(),
   frecuencia: z.enum(frecuenciaOptions).optional(),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
@@ -112,7 +109,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null | string[]):
 };
 
 function formatCurrencyDisplay(amount?: number, currency?: string) {
-  if (amount === undefined || amount === null || currency === undefined) return "-";
+  if (amount === undefined || amount === null || currency === undefined || currency === 'N/A') return "-";
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
   } catch (e) {
@@ -132,6 +129,8 @@ export default function ActividadesPage() {
     isLoadingActividades
   } = useActividades();
   const { procedimientos, updateProcedimiento, isLoadingProcedimientos } = useProcedimientos();
+  const { procesos, isLoadingProcesos } = useProcesos();
+  const { puestos, isLoadingPuestos } = usePuestos();
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -199,9 +198,6 @@ export default function ActividadesPage() {
       activa: true,
       tiempoEstimado: undefined,
       tiempoIdeal: undefined,
-      costoEstimado: undefined,
-      costoIdeal: undefined,
-      monedaCosto: undefined,
       frecuencia: undefined,
     },
   });
@@ -249,9 +245,6 @@ export default function ActividadesPage() {
           activa: true,
           tiempoEstimado: undefined,
           tiempoIdeal: undefined,
-          costoEstimado: undefined,
-          costoIdeal: undefined,
-          monedaCosto: undefined,
           frecuencia: undefined,
         });
       }
@@ -330,6 +323,43 @@ export default function ActividadesPage() {
     toggleActividadStatus(actividad);
   }
 
+  const isLoadingAllData = isLoadingActividades || isLoadingProcedimientos || isLoadingProcesos || isLoadingPuestos;
+  const puestoNameToPuestoMap = useMemo(() => new Map(puestos.map(p => [p.nombre, p])), [puestos]);
+  const procedimientosMap = useMemo(() => new Map(procedimientos.map(p => [p.id, p])), [procedimientos]);
+  const procesosMap = useMemo(() => new Map(procesos.map(p => [p.id, p])), [procesos]);
+  
+  const activityCostMap = useMemo(() => {
+    const costMap = new Map<string, { cost: number; currency: string }>();
+    if (isLoadingAllData) return costMap;
+  
+    actividades.forEach(act => {
+      if (!act.procedimientoId) {
+        costMap.set(act.id, { cost: 0, currency: 'N/A' });
+        return;
+      }
+      const procedimiento = procedimientosMap.get(act.procedimientoId);
+      if (!procedimiento) {
+        costMap.set(act.id, { cost: 0, currency: 'N/A' });
+        return;
+      }
+      const proceso = procesosMap.get(procedimiento.procesoId);
+      if (!proceso) {
+        costMap.set(act.id, { cost: 0, currency: 'N/A' });
+        return;
+      }
+      const puesto = puestoNameToPuestoMap.get(proceso.puesto);
+      if (!puesto || !puesto.costoHora || !act.tiempoEstimado) {
+        costMap.set(act.id, { cost: 0, currency: 'N/A' });
+        return;
+      }
+      const costPerMinute = puesto.costoHora / 60;
+      const activityCost = act.tiempoEstimado * costPerMinute;
+      costMap.set(act.id, { cost: activityCost, currency: puesto.monedaCosto || 'N/A' });
+    });
+    return costMap;
+  }, [actividades, procedimientosMap, procesosMap, puestoNameToPuestoMap, isLoadingAllData]);
+  
+
   const sortedAndFilteredActividades = useMemo(() => {
     setCurrentPage(1); // Reset to first page on filter change
     
@@ -370,12 +400,15 @@ export default function ActividadesPage() {
         } else if (sortConfig.key === 'procedimientoPadre') {
             valA = a.procedimientoPadre;
             valB = b.procedimientoPadre;
+        } else if (sortConfig.key === 'costoEstimado') {
+            valA = activityCostMap.get(a.id)?.cost || 0;
+            valB = activityCostMap.get(b.id)?.cost || 0;
         } else {
             valA = safeGet(a, sortConfig.key);
             valB = safeGet(b, sortConfig.key);
         }
 
-        if (['createdAt', 'updatedAt', 'tiempoEstimado', 'costoEstimado'].includes(sortConfig.key)) {
+        if (['createdAt', 'updatedAt', 'tiempoEstimado'].includes(sortConfig.key)) {
             valA = valA || 0;
             valB = valB || 0;
         } else if (sortConfig.key === 'activa') {
@@ -404,7 +437,7 @@ export default function ActividadesPage() {
       filtered.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return filtered;
-  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts, activityToProceduresMap]);
+  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts, activityToProceduresMap, activityCostMap]);
 
   const totalPages = Math.ceil(sortedAndFilteredActividades.length / ITEMS_PER_PAGE);
   const paginatedActividades = useMemo(() => {
@@ -452,13 +485,14 @@ export default function ActividadesPage() {
 
     const headers = [
       "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre", "Estado", "Asignaciones",
-      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda", "Frecuencia",
+      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Moneda", "Frecuencia",
       "Fecha Creación", "Última Modificación"
     ];
 
     const csvRows = [
       headers.join(','),
       ...sortedAndFilteredActividades.map(act => {
+        const costInfo = activityCostMap.get(act.id);
         return [
           escapeCsvCell(act.id),
           escapeCsvCell(act.codigo),
@@ -469,9 +503,8 @@ export default function ActividadesPage() {
           escapeCsvCell(assignmentCounts.get(act.id) || 0),
           escapeCsvCell(act.tiempoEstimado),
           escapeCsvCell(act.tiempoIdeal),
-          escapeCsvCell(act.costoEstimado),
-          escapeCsvCell(act.costoIdeal),
-          escapeCsvCell(act.monedaCosto),
+          escapeCsvCell(costInfo?.cost.toFixed(2)),
+          escapeCsvCell(costInfo?.currency),
           escapeCsvCell(act.frecuencia),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
           escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
@@ -498,7 +531,7 @@ export default function ActividadesPage() {
   };
 
 
-  if (isLoadingActividades || isLoadingProcedimientos) {
+  if (isLoadingAllData) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -667,14 +700,9 @@ export default function ActividadesPage() {
                          <FormField control={actividadForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 30" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                          <FormField control={actividadForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 20" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                        </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField control={actividadForm.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Estimado</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 15.50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                         <FormField control={actividadForm.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 10.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                       </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField control={actividadForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda del Costo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{monedaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                          <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                       </div>
+                       
+                        <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                       
 
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
@@ -702,7 +730,9 @@ export default function ActividadesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedActividades.map((actividad) => (
+                  {paginatedActividades.map((actividad) => {
+                    const costInfo = activityCostMap.get(actividad.id) || { cost: 0, currency: 'N/A' };
+                    return (
                     <TableRow key={actividad.id}>
                       <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
@@ -711,7 +741,7 @@ export default function ActividadesPage() {
                         <Badge variant="outline" className="font-mono">{assignmentCounts.get(actividad.id) || 0}</Badge>
                       </TableCell>
                       <TableCell className="text-right text-sm">{actividad.tiempoEstimado ? formatMinutesToHours(actividad.tiempoEstimado) : '-'}</TableCell>
-                      <TableCell className="text-right text-sm">{formatCurrencyDisplay(actividad.costoEstimado, actividad.monedaCosto)}</TableCell>
+                      <TableCell className="text-right text-sm">{formatCurrencyDisplay(costInfo.cost, costInfo.currency)}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700": actividad.activa, "bg-slate-500 hover:bg-slate-600": !actividad.activa, "text-white": true})}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
@@ -724,7 +754,7 @@ export default function ActividadesPage() {
                         <Button variant="ghost" size="icon" onClick={() => promptDeleteActividad(actividad)} className="text-destructive" title={ (assignmentCounts.get(actividad.id) || 0) > 0 ? "No se puede eliminar: actividad asignada" : "Eliminar"}><Trash2 className="h-4 w-4" /></Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>

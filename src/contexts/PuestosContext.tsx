@@ -7,6 +7,7 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
+import type { TipoMoneda } from './SistemasCostosContext';
 
 export const nivelesOrganizacionales = ["Directivo", "Gerencial", "Supervisión", "Operativo", "Administrativo"] as const;
 export type NivelOrganizacional = typeof nivelesOrganizacionales[number];
@@ -22,6 +23,8 @@ export interface Puesto {
   auditFrequencyInDays?: number;
   lastAuditedAt?: string; // ISO String
   createdAt?: any;
+  costoHora?: number;
+  monedaCosto?: TipoMoneda;
 }
 
 export type PuestoCreationData = Omit<Puesto, 'id' | 'createdAt'>;

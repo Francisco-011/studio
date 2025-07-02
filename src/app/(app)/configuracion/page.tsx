@@ -76,6 +76,8 @@ const puestoFormSchema = z.object({
   nivelOrganizacional: z.enum(nivelesOrganizacionales, { errorMap: () => ({ message: "Seleccione un nivel." }) }),
   numeroPersonas: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
   auditFrequencyInDays: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().optional()),
+  costoHora: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative("Debe ser un número positivo").optional()),
+  monedaCosto: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
 });
 type PuestoFormData = z.infer<typeof puestoFormSchema>;
 
@@ -126,7 +128,7 @@ interface SortConfig<T> {
 }
 
 type SortableDeptoKeys = 'nombre' | 'areaNombre';
-type SortablePuestoKeys = 'nombre' | 'areaNombre' | 'deptoNombre' | 'nivelOrganizacional' | 'numeroPersonas';
+type SortablePuestoKeys = 'nombre' | 'areaNombre' | 'deptoNombre' | 'nivelOrganizacional' | 'numeroPersonas' | 'costoHora';
 
 
 export default function ConfiguracionPage() {
@@ -207,12 +209,12 @@ export default function ConfiguracionPage() {
 
     if (puestoSortConfig) {
         puestoData.sort((a,b) => {
-            const valA = a[puestoSortConfig.key];
-            const valB = b[puestoSortConfig.key];
+            const valA = a[puestoSortConfig.key as keyof typeof a];
+            const valB = b[puestoSortConfig.key as keyof typeof b];
 
-            if (puestoSortConfig.key === 'numeroPersonas') {
-                const numA = valA ?? 0;
-                const numB = valB ?? 0;
+            if (puestoSortConfig.key === 'numeroPersonas' || puestoSortConfig.key === 'costoHora') {
+                const numA = (valA as number) ?? 0;
+                const numB = (valB as number) ?? 0;
                 if (numA < numB) return puestoSortConfig.direction === 'ascending' ? -1 : 1;
                 if (numA > numB) return puestoSortConfig.direction === 'ascending' ? 1 : -1;
                 return 0;
@@ -453,13 +455,15 @@ export default function ConfiguracionPage() {
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nombre')}><div className="flex items-center">Puesto {getPuestoSortIcon('nombre')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('areaNombre')}><div className="flex items-center">Área {getPuestoSortIcon('areaNombre')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('deptoNombre')}><div className="flex items-center">Depto. {getPuestoSortIcon('deptoNombre')}</div></TableHead>
-                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nivelOrganizacional')}><div className="flex items-center">Nivel {getPuestoSortIcon('nivelOrganizacional')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('costoHora')}><div className="flex items-center">Costo/hr {getPuestoSortIcon('costoHora')}</div></TableHead>
                             <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('numeroPersonas')}><div className="flex items-center"># Personas {getPuestoSortIcon('numeroPersonas')}</div></TableHead>
                             <TableHead className="text-right w-[120px]">Acciones</TableHead>
                         </TableRow></TableHeader>
                             <TableBody>{filteredPuestos.map((puesto) => (
                                 <TableRow key={puesto.id}>
-                                  <TableCell>{puesto.nombre}</TableCell><TableCell>{puesto.areaNombre}</TableCell><TableCell>{puesto.deptoNombre}</TableCell><TableCell>{puesto.nivelOrganizacional}</TableCell><TableCell>{puesto.numeroPersonas || '-'}</TableCell>
+                                  <TableCell>{puesto.nombre}</TableCell><TableCell>{puesto.areaNombre}</TableCell><TableCell>{puesto.deptoNombre}</TableCell>
+                                  <TableCell>{puesto.costoHora ? `${puesto.costoHora.toFixed(2)} ${puesto.monedaCosto || ''}` : '-'}</TableCell>
+                                  <TableCell>{puesto.numeroPersonas || '-'}</TableCell>
                                   <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(puesto, setEditingPuesto, setIsPuestoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
                                     <Button variant="ghost" size="icon" onClick={() => promptDelete(puesto.id, puesto.nombre, 'puesto')} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -586,6 +590,10 @@ export default function ConfiguracionPage() {
             <FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel Organizacional</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione nivel..." /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel># Personas en el Puesto</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+            <div className="grid grid-cols-2 gap-4">
+                <FormField control={puestoForm.control} name="costoHora" render={({ field }) => (<FormItem><FormLabel>Costo por Hora</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 250.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={puestoForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{tiposDeMonedaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            </div>
             <FormField control={puestoForm.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={field.onChange} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
             <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
           </form></Form>
