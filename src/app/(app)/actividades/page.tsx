@@ -42,6 +42,11 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,7 +61,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -108,9 +113,11 @@ export default function ActividadesPage() {
     toggleActividadStatus,
     isLoadingActividades
   } = useActividades();
-  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
+  const { procedimientos, updateProcedimiento, isLoadingProcedimientos } = useProcedimientos();
 
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const procedimientoIdFromQuery = searchParams.get('procedimientoId');
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -135,6 +142,11 @@ export default function ActividadesPage() {
         setSearchTerm(searchQuery);
     }
   }, [searchParams]);
+
+  const procedureContext = useMemo(() => {
+      if (!procedimientoIdFromQuery) return null;
+      return procedimientos.find(p => p.id === procedimientoIdFromQuery);
+  }, [procedimientoIdFromQuery, procedimientos]);
   
   const assignmentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -175,16 +187,27 @@ export default function ActividadesPage() {
     }
   }, [editingActividad, isActividadDialogOpen, actividadForm]);
 
-  function handleActividadSubmit(data: ActividadFormData) {
+  async function handleActividadSubmit(data: ActividadFormData) {
     const { id, ...activityDataFromForm } = data;
     const activityDataForStorage: ActividadCreationData = activityDataFromForm;
 
     if (editingActividad && id) {
-      updateActividad(id, activityDataForStorage);
+      await updateActividad(id, activityDataForStorage);
       toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
-      addActividad(activityDataForStorage);
-      toast({ title: 'Actividad Agregada', description: 'La actividad ha sido agregada exitosamente.' });
+      const newActivity = await addActividad(activityDataForStorage);
+      if (newActivity && procedimientoIdFromQuery) {
+          const targetProcedure = procedimientos.find(p => p.id === procedimientoIdFromQuery);
+          if (targetProcedure) {
+              const updatedActivityOrder = [...(targetProcedure.activityOrder || []), newActivity.id];
+              await updateProcedimiento(targetProcedure.id, { activityOrder: updatedActivityOrder });
+              toast({ title: 'Actividad Agregada y Asignada', description: `La actividad "${newActivity.nombre}" fue creada y asignada al procedimiento.` });
+          } else {
+             toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" fue creada, pero no se encontró el procedimiento para asignarla.` });
+          }
+      } else if (newActivity) {
+         toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" ha sido agregada exitosamente.` });
+      }
     }
     setEditingActividad(null);
     setIsActividadDialogOpen(false);
@@ -406,6 +429,16 @@ export default function ActividadesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {procedureContext && (
+            <Alert className="mb-4 bg-primary/10 border-primary/20">
+                <Workflow className="h-4 w-4" />
+                <AlertTitle>Asignando Actividades</AlertTitle>
+                <AlertDescription>
+                    Las nuevas actividades que crees se asignarán automáticamente al procedimiento: <span className="font-semibold">{procedureContext.nombre}</span>.
+                    <Button variant="link" className="p-0 h-auto ml-2" onClick={() => router.push('/actividades')}>Salir del modo de asignación</Button>
+                </AlertDescription>
+            </Alert>
+          )}
           <div className="mb-6 space-y-4 md:flex md:items-end md:justify-between md:space-y-0 md:space-x-4">
             <div className="relative flex-1 md:flex-grow">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />

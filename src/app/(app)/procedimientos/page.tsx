@@ -173,22 +173,8 @@ export default function ProcedimientosPage() {
           await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
         }
         
-        toast({ title: 'Procedimiento Creado', description: 'Redirigiendo para asignar actividades...' });
-
-        const parentProcessForRedirect = procesos.find(p => p.id === newProc.procesoId);
-        if (parentProcessForRedirect) {
-            const { area, departamento, puesto } = parentProcessForRedirect;
-            const params = new URLSearchParams();
-            if (area) params.set('area', area);
-            if (departamento) params.set('depto', departamento);
-            if (puesto) params.set('puesto', puesto);
-            params.set('procesoId', newProc.procesoId);
-            params.set('procedimientoId', newProc.id);
-            
-            router.push(`/analisis/panel-jerarquico?${params.toString()}`);
-        } else {
-            router.push('/analisis/panel-jerarquico');
-        }
+        toast({ title: 'Procedimiento Creado', description: 'Redirigiendo para agregar actividades...' });
+        router.push(`/actividades?procedimientoId=${newProc.id}`);
       } else {
         toast({ title: 'Error', description: 'No se pudo crear el procedimiento.', variant: 'destructive'});
         setIsDialogOpen(false);
