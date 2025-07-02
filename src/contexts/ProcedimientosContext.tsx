@@ -9,6 +9,7 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
+import type { CambioHistorial } from './ActividadesContext';
 
 export interface Procedimiento {
   id: string;
@@ -25,15 +26,18 @@ export interface Procedimiento {
   clasificacion: typeof clasificacionOptions[number];
   createdAt: number;
   updatedAt: number;
+  activo: boolean;
+  historialDeCambios?: CambioHistorial[];
 }
 
-export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt'>;
+export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
 
 interface ProcedimientosContextType {
   procedimientos: Procedimiento[];
   addProcedimiento: (data: ProcedimientoCreationData) => Promise<Procedimiento | null>;
-  updateProcedimiento: (id: string, data: Partial<ProcedimientoCreationData>) => Promise<void>;
+  updateProcedimiento: (id: string, data: Partial<Omit<ProcedimientoCreationData, 'activityOrder'>>) => Promise<void>;
   deleteProcedimiento: (id: string) => Promise<void>;
+  toggleProcedimientoStatus: (procedimiento: Procedimiento) => Promise<void>;
   isLoadingProcedimientos: boolean;
 }
 
@@ -54,6 +58,8 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
             return {
                 id: doc.id,
                 ...docData,
+                activo: docData.activo !== false, // Default to true if not present
+                historialDeCambios: docData.historialDeCambios || [],
                 createdAt: (docData.createdAt as Timestamp)?.toMillis() || 0,
                 updatedAt: (docData.updatedAt as Timestamp)?.toMillis() || 0,
                 sistemasUtilizados: Array.isArray(docData.sistemasUtilizados) ? docData.sistemasUtilizados : [],
@@ -79,6 +85,8 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
         const payload: { [key: string]: any } = {
             ...data,
             codigo,
+            activo: true,
+            historialDeCambios: [],
             sistemasUtilizados: data.sistemasUtilizados || [],
             procedimientosEntradaIds: data.procedimientosEntradaIds || [],
             procedimientosSalidaIds: data.procedimientosSalidaIds || [],
@@ -93,6 +101,8 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
             ...data,
             id: docRef.id,
             codigo,
+            activo: true,
+            historialDeCambios: [],
             sistemasUtilizados: data.sistemasUtilizados || [],
             procedimientosEntradaIds: data.procedimientosEntradaIds || [],
             procedimientosSalidaIds: data.procedimientosSalidaIds || [],
@@ -112,8 +122,29 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     const originalProcedimiento = procedimientos.find(p => p.id === id);
     if (!originalProcedimiento) return;
 
+    const changes: CambioHistorial[] = [];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados'];
+    
+    fieldsToCompare.forEach(key => {
+        const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';
+        const newValue = data[key as keyof ProcedimientoCreationData] ?? '';
+        if (JSON.stringify(originalValue) !== JSON.stringify(newValue)) {
+             changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: Array.isArray(originalValue) ? originalValue.join(', ') : String(originalValue),
+                after: Array.isArray(newValue) ? newValue.join(', ') : String(newValue)
+             });
+        }
+    });
+
     try {
-      await updateDoc(procedimientoDocRef, { ...data, updatedAt: serverTimestamp() });
+      const payload: { [key: string]: any } = { 
+          ...data, 
+          updatedAt: serverTimestamp(),
+          historialDeCambios: [...(originalProcedimiento.historialDeCambios || []), ...changes]
+      };
+      await updateDoc(procedimientoDocRef, payload);
       addLogEntry({ action: 'update', entityType: 'Procedimiento', entityName: data.nombre || originalProcedimiento.nombre, details: `Se actualizó el procedimiento "${originalProcedimiento.nombre}".` });
     } catch (e) {
       console.error("Error updating procedimiento: ", e);
@@ -135,8 +166,31 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     }
   }, [procedimientos, addLogEntry]);
 
+  const toggleProcedimientoStatus = useCallback(async (procedimiento: Procedimiento) => {
+    const docRef = doc(db, PROCEDIMIENTOS_COLLECTION, procedimiento.id);
+    const newStatus = !procedimiento.activo;
+    const change: CambioHistorial = {
+        timestamp: new Date().toISOString(),
+        field: 'activo',
+        before: procedimiento.activo,
+        after: newStatus,
+    };
+    try {
+        await updateDoc(docRef, {
+            activo: newStatus,
+            updatedAt: serverTimestamp(),
+            historialDeCambios: [...(procedimiento.historialDeCambios || []), change],
+        });
+        addLogEntry({ action: 'status_change', entityType: 'Procedimiento', entityName: procedimiento.nombre, details: `El estado cambió a ${newStatus ? 'Activo' : 'Inactivo'}.` });
+    } catch (e) {
+        console.error("Error toggling status:", e);
+        toast({ title: "Error", description: "No se pudo cambiar el estado.", variant: "destructive" });
+    }
+  }, [addLogEntry]);
+
+
   return (
-    <ProcedimientosContext.Provider value={{ procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, isLoadingProcedimientos }}>
+    <ProcedimientosContext.Provider value={{ procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, toggleProcedimientoStatus, isLoadingProcedimientos }}>
       {children}
     </ProcedimientosContext.Provider>
   );

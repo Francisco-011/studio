@@ -286,7 +286,7 @@ export default function PanelJerarquicoPage() {
                                   });
                                 return {
                                   id: `procedure-${procedure.id}`,
-                                  name: procedure.nombre, type: 'procedimiento' as const, originalId: procedure.id, activo: true,
+                                  name: procedure.nombre, type: 'procedimiento' as const, originalId: procedure.id, activo: procedure.activo,
                                   children: [...procedurePolicies, ...activityNodes], payload: procedure
                                 };
                             });
@@ -524,7 +524,7 @@ export default function PanelJerarquicoPage() {
   const handleEditItem = (item: any, type: 'process' | 'activity' | 'procedure' | 'policy') => {
     if (type === 'process') router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(item.proceso)}`);
     if (type === 'activity') router.push(`/actividades?search=${encodeURIComponent(item.nombre)}`);
-    if (type === 'procedure') router.push(`/procesos-y-flujos-registrados`); // No direct link yet
+    if (type === 'procedure') router.push(`/procedimientos?search=${encodeURIComponent(item.nombre)}`);
     if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
   };
 
@@ -587,9 +587,10 @@ export default function PanelJerarquicoPage() {
         const baseClasses = "flex items-center py-1 px-2 rounded group hover:bg-muted/50";
         switch (node.type) {
           case 'procedimiento':
+             const isInactiveProcedure = node.activo === false;
              nodeContent = (
               <div 
-                className={cn(baseClasses, "ml-4 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary")}
+                className={cn(baseClasses, "ml-4 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary", isInactiveProcedure && "opacity-60")}
                 onDragOver={(e) => handleDragOver(e, 'procedimiento', node.originalId)}
                 onDrop={(e) => handleDrop(e)}
                 onDragEnter={(e) => handleDragEnter(e, node.id, 'procedimiento', { procedureId: node.originalId })}
@@ -597,7 +598,7 @@ export default function PanelJerarquicoPage() {
                 id={node.id}
               >
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
-                <span className="font-medium text-sm flex-grow">{node.name}</span>
+                <span className={cn("font-medium text-sm flex-grow", isInactiveProcedure && "italic text-muted-foreground")}>{node.name}{isInactiveProcedure && <Badge variant="secondary" className="ml-2">Inactivo</Badge>}</span>
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'procedure')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
@@ -717,25 +718,25 @@ export default function PanelJerarquicoPage() {
                 {detailItemType === 'process' && selectedItemForDetail && (
                     <div className="space-y-3">
                         <DetailSectionDisplay title="Proceso" value={(selectedItemForDetail as CapturedProcess).proceso} />
-                        <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as CapturedProcess).descripcion} isTextarea />
+                        <DetailSectionDisplay title="Objetivo" value={(selectedItemForDetail as CapturedProcess).descripcion} isTextarea />
                         <DetailSectionDisplay title="Área" value={(selectedItemForDetail as CapturedProcess).area} />
                         <DetailSectionDisplay title="Puesto" value={(selectedItemForDetail as CapturedProcess).puesto} />
-                        <DetailSectionDisplay title="Frecuencia" value={(selectedItemForDetail as CapturedProcess).frecuencia} />
-                        <DetailSectionDisplay title="Tiempo Estimado" value={formatMinutesToHours((selectedItemForDetail as CapturedProcess).tiempoEstimado || 0)} />
-                        <DetailSectionDisplay title="Costo Estimado" value={`${(selectedItemForDetail as CapturedProcess).costoEstimado || 0} ${(selectedItemForDetail as CapturedProcess).monedaCosto || ''}`} />
                     </div>
                 )}
                 {detailItemType === 'activity' && selectedItemForDetail && (
                     <div className="space-y-3">
                         <DetailSectionDisplay title="Actividad" value={(selectedItemForDetail as Actividad).nombre} />
                         <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Actividad).descripcionBreve} isTextarea />
-                        <DetailSectionDisplay title="Sistema Utilizado" value={(selectedItemForDetail as Actividad).sistemaUtilizado} />
+                        <DetailSectionDisplay title="Tiempo Estimado (min)" value={(selectedItemForDetail as Actividad).tiempoEstimado} />
+                        <DetailSectionDisplay title="Costo Estimado" value={formatMejorasCurrency((selectedItemForDetail as Actividad).costoEstimado, (selectedItemForDetail as Actividad).monedaCosto)} />
                     </div>
                 )}
                 {detailItemType === 'procedure' && selectedItemForDetail && (
                     <div className="space-y-3">
                         <DetailSectionDisplay title="Procedimiento" value={(selectedItemForDetail as Procedimiento).nombre} />
                         <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Procedimiento).descripcion} isTextarea />
+                        <DetailSectionDisplay title="Clasificación" value={(selectedItemForDetail as Procedimiento).clasificacion} />
+                        <DetailSectionDisplay title="Sistemas Utilizados" value={(selectedItemForDetail as Procedimiento).sistemasUtilizados} isList />
                     </div>
                 )}
                 {detailItemType === 'policy' && selectedItemForDetail && (

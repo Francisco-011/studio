@@ -45,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History, Workflow } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, DollarSign, Clock, Info, ChevronRight, Save, ChevronDown, History, Workflow, Ban } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -494,10 +494,10 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell>{proc.puesto}</TableCell>
                     <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-center text-xs">
-                        {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'} / {proc.tiempoIdeal !== undefined ? formatMinutesToHours(proc.tiempoIdeal) : '-'}
+                        {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'}
                     </TableCell>
                     <TableCell className="text-center text-xs">
-                        {proc.costoEstimado?.toFixed(2) ?? '-'} / {proc.costoIdeal?.toFixed(2) ?? '-'} {proc.monedaCosto || ''}
+                        {proc.costoEstimado?.toFixed(2) ?? '-'}
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
@@ -506,9 +506,9 @@ export default function ProcesosYFlujosRegistradosPage() {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => router.push(`/captura/${proc.id}/procedimientos`)}><Workflow className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" onClick={() => router.push(`/procedimientos?proceso=${proc.id}`)}><Workflow className="h-4 w-4"/></Button>
                           </TooltipTrigger>
-                          <TooltipContent><p>Definir Procedimientos</p></TooltipContent>
+                          <TooltipContent><p>Gestionar Procedimientos</p></TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                       <Button variant="ghost" size="icon" onClick={() => handleViewHistory(proc)} disabled={!proc.historialDeCambios || proc.historialDeCambios.length === 0}><History className="h-4 w-4" /></Button>
@@ -536,6 +536,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                            {proceduresForProcess.length > 0 ? (
                                 <Accordion type="multiple" className="w-full space-y-2">
                                   {proceduresForProcess.map((procedure, procIndex) => {
+                                      const isInactive = procedure.activo === false;
                                       const activitiesToShow = (procedure.activityOrder || [])
                                         .map(actId => allActivities.find(a => a.id === actId))
                                         .filter((act): act is Actividad => !!act)
@@ -551,7 +552,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                               <AccordionTrigger className="p-4 hover:no-underline">
                                                   <div className="flex items-center gap-4 text-left">
                                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
-                                                      <span className="text-base font-medium flex items-center gap-2">{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge></span>
+                                                      <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge> {isInactive && <Badge variant="destructive">Inactivo</Badge>}</span>
                                                   </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-3">

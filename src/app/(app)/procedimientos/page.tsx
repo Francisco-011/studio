@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -25,8 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered } from "lucide-react";
+import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered, History } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 
 const procedimientoFormSchema = z.object({
@@ -36,12 +38,12 @@ const procedimientoFormSchema = z.object({
   procesoId: z.string({ required_error: 'Debe seleccionar un proceso padre.' }),
   sistemasUtilizados: z.array(z.string()).optional().default([]),
   clasificacion: z.enum(clasificacionOptions).default('Privado'),
-  activityOrder: z.array(z.string()).optional().default([]), // Keep this for updates
+  activityOrder: z.array(z.string()).optional().default([]), 
 });
 
 type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
 
-type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'clasificacion' | 'updatedAt';
+type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'clasificacion' | 'updatedAt' | 'activo';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -52,7 +54,7 @@ interface SortConfig {
 const ITEMS_PER_PAGE = 10;
 
 export default function ProcedimientosPage() {
-  const { procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, isLoadingProcedimientos } = useProcedimientos();
+  const { procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, toggleProcedimientoStatus, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
   const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const searchParams = useSearchParams();
@@ -60,6 +62,7 @@ export default function ProcedimientosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [procesoFilter, setProcesoFilter] = useState('all');
   const [clasificacionFilter, setClasificacionFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProcedimiento, setEditingProcedimiento] = useState<Procedimiento | null>(null);
@@ -69,6 +72,9 @@ export default function ProcedimientosPage() {
   
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [procedimientoForHistory, setProcedimientoForHistory] = useState<Procedimiento | null>(null);
+
 
   const form = useForm<ProcedimientoFormData>({
     resolver: zodResolver(procedimientoFormSchema),
@@ -102,7 +108,7 @@ export default function ProcedimientosPage() {
 
   async function handleSubmit(data: ProcedimientoFormData) {
     const { id, ...formData } = data;
-    const dataToSave: ProcedimientoCreationData = formData;
+    const dataToSave = { ...formData } as ProcedimientoCreationData;
 
     if (editingProcedimiento && id) {
       await updateProcedimiento(id, dataToSave);
@@ -124,6 +130,11 @@ export default function ProcedimientosPage() {
   function handleEdit(procedimiento: Procedimiento) {
     setEditingProcedimiento(procedimiento);
     setIsDialogOpen(true);
+  }
+  
+  function handleViewHistory(procedimiento: Procedimiento) {
+    setProcedimientoForHistory(procedimiento);
+    setIsHistoryDialogOpen(true);
   }
 
   function promptDelete(procedimiento: Procedimiento) {
@@ -155,13 +166,25 @@ export default function ProcedimientosPage() {
       .filter(p => 
         (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || p.procesoPadre.toLowerCase().includes(searchTerm.toLowerCase())) &&
         (procesoFilter === 'all' || p.procesoId === procesoFilter) &&
-        (clasificacionFilter === 'all' || p.clasificacion === clasificacionFilter)
+        (clasificacionFilter === 'all' || p.clasificacion === clasificacionFilter) &&
+        (statusFilter === 'all' || (statusFilter === 'active' && p.activo) || (statusFilter === 'inactive' && !p.activo))
       );
 
     if (sortConfig) {
       filtered.sort((a, b) => {
-        const valA = a[sortConfig.key];
-        const valB = b[sortConfig.key];
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+        
+        if (sortConfig.key === 'activo') {
+            valA = a.activo;
+            valB = b.activo;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+
         if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -170,7 +193,7 @@ export default function ProcedimientosPage() {
       filtered.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
     }
     return filtered;
-  }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, sortConfig]);
+  }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, statusFilter, sortConfig]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -201,9 +224,10 @@ export default function ProcedimientosPage() {
         <CardContent>
           <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
             <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar por nombre, código..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10" /></div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Select value={procesoFilter} onValueChange={setProcesoFilter}><SelectTrigger className="flex-1"><SelectValue placeholder="Filtrar por proceso..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Procesos</SelectItem>{procesos.filter(p => !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select>
-              <Select value={clasificacionFilter} onValueChange={setClasificacionFilter}><SelectTrigger className="flex-1"><SelectValue placeholder="Filtrar por clasificación..."/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
+              <Select value={procesoFilter} onValueChange={setProcesoFilter}><SelectTrigger className="flex-1 min-w-[150px]"><SelectValue placeholder="Filtrar por proceso..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Procesos</SelectItem>{procesos.filter(p => !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select>
+              <Select value={clasificacionFilter} onValueChange={setClasificacionFilter}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Clasificación..."/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter as any}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Estado..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select>
               <Button onClick={() => setIsDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar</Button>
             </div>
           </div>
@@ -214,8 +238,9 @@ export default function ProcedimientosPage() {
                 <TableHead className="cursor-pointer" onClick={() => requestSort('nombre')}>Nombre Procedimiento {getSortIcon('nombre')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('procesoPadre')}>Proceso Padre {getSortIcon('procesoPadre')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('clasificacion')}>Clasificación {getSortIcon('clasificacion')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => requestSort('activo')}>Estado {getSortIcon('activo')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
-                <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                <TableHead className="text-right w-[160px]">Acciones</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {paginatedData.map(proc => (
@@ -224,8 +249,14 @@ export default function ProcedimientosPage() {
                     <TableCell className="font-medium">{proc.nombre}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{proc.procesoPadre}</TableCell>
                     <TableCell><Badge variant="outline">{proc.clasificacion}</Badge></TableCell>
+                    <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
-                    <TableCell className="text-right space-x-1"><Button variant="ghost" size="icon" onClick={() => handleEdit(proc)}><Edit2 className="h-4 w-4"/></Button><Button variant="ghost" size="icon" onClick={() => promptDelete(proc)} className="text-destructive"><Trash2 className="h-4 w-4"/></Button></TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Switch checked={proc.activo} onCheckedChange={() => toggleProcedimientoStatus(proc)} aria-label="Cambiar estado" className="mr-2"/>
+                      <Button variant="ghost" size="icon" onClick={() => handleViewHistory(proc)} disabled={!proc.historialDeCambios || proc.historialDeCambios.length === 0} title="Ver historial"><History className="h-4 w-4"/></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(proc)}><Edit2 className="h-4 w-4"/></Button>
+                      <Button variant="ghost" size="icon" onClick={() => promptDelete(proc)} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -249,6 +280,46 @@ export default function ProcedimientosPage() {
       </DialogContent></Dialog>
       
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><AlertTriangle className="inline-block mr-2 text-destructive"/>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Seguro que desea eliminar el procedimiento "{procedimientoToDelete?.nombre}"? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={()=>setProcedimientoToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDelete} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Cambios para: {procedimientoForHistory?.nombre}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {procedimientoForHistory?.historialDeCambios && procedimientoForHistory.historialDeCambios.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Campo Modificado</TableHead>
+                    <TableHead>Valor Anterior</TableHead>
+                    <TableHead>Valor Nuevo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {procedimientoForHistory.historialDeCambios
+                    .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .map((cambio, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
+                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-center">No hay historial de cambios registrado.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
