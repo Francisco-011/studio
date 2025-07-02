@@ -239,25 +239,25 @@ export default function ProcesosDashboardPage() {
   }, [comparisonProcesses, isComparing, globalActividades, isLoadingData, isLoadingActividades]);
 
   const availableDepartamentos = useMemo(() => {
-    if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
-    const area = areas.find(a => a.nombre === selectedAreaFilter);
+    if (isLoadingDepartamentos || selectedArea === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedArea);
     return area ? departamentos.filter(d => d.areaId === area.id) : [];
-  }, [selectedAreaFilter, areas, departamentos, isLoadingDepartamentos]);
+  }, [selectedArea, areas, departamentos, isLoadingDepartamentos]);
 
   const availablePuestos = useMemo(() => {
       if (isLoadingPuestos) return puestos;
       let scopedPuestos = puestos;
 
-      if (selectedAreaFilter !== 'all') {
-          const area = areas.find(a => a.nombre === selectedAreaFilter);
+      if (selectedArea !== 'all') {
+          const area = areas.find(a => a.nombre === selectedArea);
           if (area) {
               scopedPuestos = scopedPuestos.filter(p => p.areaId === area.id);
           } else {
               return [];
           }
       }
-      if (selectedDeptoFilter !== 'all') {
-          const depto = departamentos.find(d => d.nombre === selectedDeptoFilter);
+      if (selectedDepartamento !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
           if (depto) {
              scopedPuestos = scopedPuestos.filter(p => p.departamentoId === depto.id);
           } else {
@@ -265,7 +265,7 @@ export default function ProcesosDashboardPage() {
           }
       }
       return scopedPuestos;
-  }, [selectedAreaFilter, selectedDeptoFilter, areas, departamentos, puestos, isLoadingPuestos]);
+  }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
   const workloadAnalysis = useMemo(() => {
     if (isLoadingPuestos || isLoadingActividades) return [];
@@ -285,12 +285,14 @@ export default function ProcesosDashboardPage() {
         const puesto = analysisByPuesto[act.puestoId];
         if (puesto) {
           const monthlyMultiplier = getMonthlyMultiplier(act.frecuencia);
-          const monthlyMinutes = (act.tiempoEstimado || 0) * monthlyMultiplier * (act.ejecucionesPorPeriodo || 1);
-          puesto.totalMonthlyMinutes += monthlyMinutes;
+          const monthlyExecutions = monthlyMultiplier * (act.ejecucionesPorPeriodo || 1);
+          
+          puesto.totalMonthlyMinutes += (act.tiempoEstimado || 0) * monthlyExecutions;
   
           if (puesto.puesto.costoHora) {
             const costPerMinute = puesto.puesto.costoHora / 60;
-            puesto.totalMonthlyCost += monthlyMinutes * costPerMinute;
+            const costoActividad = act.tiempoEstimado * costPerMinute;
+            puesto.totalMonthlyCost += costoActividad * monthlyExecutions;
           }
         }
       }
