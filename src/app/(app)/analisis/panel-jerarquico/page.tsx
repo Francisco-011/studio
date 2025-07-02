@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, type DragEvent, type ReactNode } from 'react';
@@ -248,7 +247,7 @@ export default function PanelJerarquicoPage() {
 
             const deptoId = deptoObj?.id || 'unassigned-depto';
             if (!areaNodesMap[areaId].deptosMap[deptoId]) {
-                areaNodesMap[areaId].deptosMap[deptoId] = { id: `depto-${deptoId}`, name: deptoObj?.nombre || 'Sin Departamento', type: 'departamento', originalId: deptoId, puestosMap: {} };
+                areaNodesMap[areaId].deptosMap[deptoId] = { id: `depto-${deptoId}`, name: deptoObj?.nombre || 'Sin Departamento', type: 'departamento', originalId: deptoId, puestosMap: {}, payload: deptoObj };
             }
 
             const puestoId = puestoObj?.id || 'unassigned-puesto';
@@ -641,8 +640,12 @@ export default function PanelJerarquicoPage() {
               <div 
                 className={cn(baseClasses, "ml-4 font-medium")} 
                 id={node.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, { type: 'departamentoInArea', id: node.originalId!, sourceParentId: node.payload.areaId })}
+                draggable={!!node.payload}
+                onDragStart={(e) => {
+                  if (node.payload) {
+                    handleDragStart(e, { type: 'departamentoInArea', id: node.originalId!, sourceParentId: node.payload.areaId })
+                  }
+                }}
               >
                 <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
@@ -866,4 +869,6 @@ function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto: s
 type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
+    
+
     
