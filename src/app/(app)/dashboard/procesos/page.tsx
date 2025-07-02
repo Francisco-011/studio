@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Layers, CopyCheck, PackageX, Brain, AreaChart, UserSquare2, Users, Factory, FileText, CalendarRange, Building2 } from "lucide-react";
+import { Loader2, Layers, CopyCheck, PackageX, Brain, Factory, FileText, CalendarRange, Users, AlertTriangle } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import {
   Table,
@@ -22,7 +22,6 @@ import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
 import { DateRange } from "react-day-picker";
@@ -59,17 +58,29 @@ const getComparisonText = (current: number, previous: number): string => {
     return "Sin cambios vs periodo anterior";
 }
 
+const formatDashboardCurrency = (amount: number, currency: string) => {
+  if (currency === 'N/A' || !currency) return amount.toLocaleString('es-MX');
+  try {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency, currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+  } catch (e) {
+    return `${amount.toFixed(0)} ${currency}`;
+  }
+}
 
-const escapeCsvCell = (cellData: string | number | undefined | null): string => {
-  if (cellData === undefined || cellData === null) {
-    return '';
-  }
-  const stringValue = String(cellData);
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
-};
+const getMonthlyMultiplier = (frequency?: string): number => {
+    switch (frequency) {
+        case 'Diario': return 22;
+        case 'Semanal': return 4.33;
+        case 'Quincenal': return 2;
+        case 'Mensual': return 1;
+        case 'Bimestral': return 1 / 2;
+        case 'Trimestral': return 1 / 3;
+        case 'Semestral': return 1 / 6;
+        case 'Anual': return 1 / 12;
+        case 'A demanda': return 1; // Default assumption for 'on demand'
+        default: return 0;
+    }
+}
 
 
 export default function ProcesosDashboardPage() {
@@ -252,62 +263,52 @@ export default function ProcesosDashboardPage() {
       return scopedPuestos;
   }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
-  const staffSummary = useMemo(() => {
-    if (isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) {
-        return { total: 0, breakdown: [] };
-    }
+  const workloadAnalysis = useMemo(() => {
+    if (isLoadingPuestos || isLoadingActividades) return [];
     
-    let filteredPuestos = puestos;
-    if (selectedArea !== 'all') {
-        const area = areas.find(a => a.nombre === selectedArea);
-        if (area) {
-            filteredPuestos = filteredPuestos.filter(p => p.areaId === area.id);
-        } else {
-            filteredPuestos = [];
-        }
-    }
-    if (selectedDepartamento !== 'all') {
-        const depto = departamentos.find(d => d.nombre === selectedDepartamento);
-        if (depto) {
-             filteredPuestos = filteredPuestos.filter(p => p.departamentoId === depto.id);
-        } else {
-             filteredPuestos = [];
-        }
-    }
-    if (selectedPuesto !== 'all') {
-        filteredPuestos = filteredPuestos.filter(p => p.nombre === selectedPuesto);
-    }
-
-    const total = filteredPuestos.reduce((acc, puesto) => acc + (puesto.numeroPersonas || 0), 0);
-    const breakdownByArea: Map<string, { areaName: string; totalInArea: number; deptos: { deptoName: string, deptoId: string, totalInDepto: number, puestos: { puestoName: string; puestoId: string; count: number }[] }[] }> = new Map();
-
-    areas.forEach(area => {
-        breakdownByArea.set(area.id, { areaName: area.nombre, totalInArea: 0, deptos: [] });
+    const analysisByPuesto: { [key: string]: { totalMonthlyMinutes: number, totalMonthlyCost: number, puesto: any } } = {};
+  
+    puestos.forEach(puesto => {
+      analysisByPuesto[puesto.id] = {
+        totalMonthlyMinutes: 0,
+        totalMonthlyCost: 0,
+        puesto: puesto
+      };
     });
-
-    filteredPuestos.forEach(puesto => {
-        const areaId = puesto.areaId;
-        const areaData = breakdownByArea.get(areaId);
-        if (areaData) {
-            areaData.totalInArea += (puesto.numeroPersonas || 0);
-            let deptoData = areaData.deptos.find(d => d.deptoId === (puesto.departamentoId || 'unassigned'));
-            if (!deptoData) {
-                const deptoName = departamentos.find(d => d.id === puesto.departamentoId)?.nombre || "Sin Departamento Asignado";
-                deptoData = { deptoName, deptoId: puesto.departamentoId || 'unassigned', totalInDepto: 0, puestos: [] };
-                areaData.deptos.push(deptoData);
-            }
-            deptoData.totalInDepto += (puesto.numeroPersonas || 0);
-            deptoData.puestos.push({ puestoName: puesto.nombre, puestoId: puesto.id, count: puesto.numeroPersonas || 0 });
+  
+    globalActividades.forEach(act => {
+      if (act.puestoId && act.tiempoEstimado) {
+        const puesto = analysisByPuesto[act.puestoId];
+        if (puesto) {
+          const monthlyMultiplier = getMonthlyMultiplier(act.frecuencia);
+          const monthlyMinutes = act.tiempoEstimado * monthlyMultiplier;
+          puesto.totalMonthlyMinutes += monthlyMinutes;
+  
+          if (puesto.puesto.costoHora) {
+            const costPerMinute = puesto.puesto.costoHora / 60;
+            puesto.totalMonthlyCost += monthlyMinutes * costPerMinute;
+          }
         }
+      }
     });
-    
-    const finalBreakdown = Array.from(breakdownByArea.values()).filter(area => area.totalInArea > 0).sort((a,b) => b.totalInArea - a.totalInArea);
-    finalBreakdown.forEach(area => {
-        area.deptos.sort((a, b) => b.totalInDepto - a.totalInDepto);
-        area.deptos.forEach(depto => depto.puestos.sort((a,b) => b.count - a.count));
-    });
-    return { total, breakdown: finalBreakdown };
-  }, [areas, departamentos, puestos, isLoadingAreas, isLoadingDepartamentos, isLoadingPuestos, selectedArea, selectedDepartamento, selectedPuesto]);
+  
+    return Object.values(analysisByPuesto)
+      .filter(data => data.totalMonthlyMinutes > 0)
+      .map(data => {
+        const estimatedMonthlySalary = (data.puesto.costoHora || 0) * (40 * 4.33); // 40 hrs/week
+        const loadRatio = estimatedMonthlySalary > 0 ? (data.totalMonthlyCost / estimatedMonthlySalary) * 100 : 0;
+        return {
+          puestoName: data.puesto.nombre,
+          totalMonthlyHours: data.totalMonthlyMinutes / 60,
+          totalMonthlyCost: data.totalMonthlyCost,
+          estimatedMonthlySalary: estimatedMonthlySalary,
+          loadRatio: loadRatio,
+          currency: data.puesto.monedaCosto || 'N/A'
+        };
+      })
+      .sort((a, b) => b.loadRatio - a.loadRatio);
+  
+  }, [puestos, globalActividades, isLoadingPuestos, isLoadingActividades]);
 
 
   const handleGenerateSummary = async () => {
@@ -467,11 +468,14 @@ export default function ProcesosDashboardPage() {
 
         case 'personal':
         default:
-            description = 'Distribución porcentual del personal en las áreas principales.';
-            data = staffSummary.breakdown.map((area) => ({
-                name: area.areaName,
-                value: area.totalInArea,
-            }));
+            description = 'Distribución del número total de procesos por área.';
+            const countByArea = filteredProcesses.reduce((acc, proc) => {
+              if (proc.area) {
+                acc[proc.area] = (acc[proc.area] || 0) + 1;
+              }
+              return acc;
+            }, {} as Record<string, number>);
+            data = Object.entries(countByArea).map(([name, value]) => ({name, value}));
             break;
     }
 
@@ -490,38 +494,7 @@ export default function ProcesosDashboardPage() {
 
     return { chartData: coloredData, chartConfig: config, chartDescription: description };
 
-  }, [chartDataType, filteredProcesses, staffSummary.breakdown, isLoadingAll, globalActividades, allCapturedProcesses]);
-
-  const handleExport = () => {
-    if (staffSummary.breakdown.length === 0) {
-        toast({ title: "Nada que exportar", description: "No hay datos de distribución de personal para exportar.", variant: "default" });
-        return;
-    }
-    const headers = ["Área", "Departamento", "Puesto", "Número de Personas"];
-    const csvRows = [headers.join(',')];
-    staffSummary.breakdown.forEach(area => {
-        area.deptos.forEach(depto => {
-            depto.puestos.forEach(puesto => {
-                csvRows.push([
-                    escapeCsvCell(area.areaName),
-                    escapeCsvCell(depto.deptoName),
-                    escapeCsvCell(puesto.puestoName),
-                    escapeCsvCell(puesto.count)
-                ].join(','));
-            });
-        });
-    });
-
-    const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `distribucion_personal_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-  };
+  }, [chartDataType, filteredProcesses, isLoadingAll, globalActividades, allCapturedProcesses]);
 
 
   return (
@@ -587,44 +560,44 @@ export default function ProcesosDashboardPage() {
        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
          <Card className="shadow-lg lg:col-span-3">
           <CardHeader>
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-primary" />
-                    <CardTitle>Distribución de Personal</CardTitle>
-                </div>
-                <Button variant="outline" onClick={handleExport} disabled={staffSummary.breakdown.length === 0}>
-                    <FileText className="mr-2 h-4 w-4" /> Exportar CSV
-                </Button>
+            <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <CardTitle>Análisis de Carga de Trabajo por Puesto</CardTitle>
             </div>
-            <CardDescription className="pt-2">Resumen del personal total y desglose por área, departamento y puesto.</CardDescription>
+            <CardDescription className="pt-2">Análisis del costo operativo mensual de las actividades de cada puesto, comparado con un sueldo base estimado.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold mb-4">Total: {renderMetric(staffSummary.total, isLoadingAll)} personas</div>
-            {isLoadingAll ? (<div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : 
-             staffSummary.breakdown.length === 0 ? (<p className="text-muted-foreground text-sm">No hay datos de personal para los filtros seleccionados.</p>) : (
-                <Accordion type="multiple" className="w-full max-h-[400px] overflow-y-auto">
-                {staffSummary.breakdown.map(areaData => (
-                    <AccordionItem value={areaData.areaName} key={areaData.areaName}>
-                        <AccordionTrigger><div className="flex justify-between w-full pr-4 items-center"><span className="font-semibold">{areaData.areaName}</span><Badge>{areaData.totalInArea} personas</Badge></div></AccordionTrigger>
-                        <AccordionContent>
-                           {areaData.deptos.length > 0 ? (
-                            <Accordion type="multiple" className="w-full pl-4" collapsible>
-                                {areaData.deptos.map(deptoData => (
-                                    <AccordionItem value={deptoData.deptoId} key={deptoData.deptoId}>
-                                        <AccordionTrigger className="text-sm"><div className="flex justify-between w-full pr-4 items-center"><span className="font-medium">{deptoData.deptoName}</span><Badge variant="secondary">{deptoData.totalInDepto} personas</Badge></div></AccordionTrigger>
-                                        <AccordionContent>
-                                            <Table><TableHeader><TableRow><TableHead>Puesto</TableHead><TableHead className="text-right w-[150px]">Nº Personas</TableHead></TableRow></TableHeader>
-                                                <TableBody>{deptoData.puestos.map(puesto => (<TableRow key={puesto.puestoId}><TableCell>{puesto.puestoName}</TableCell><TableCell className="text-right">{puesto.count}</TableCell></TableRow>))}</TableBody>
-                                            </Table>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                ))}
-                            </Accordion>
-                           ) : ( <p className="text-sm text-muted-foreground p-4">No hay departamentos con personal asignado en esta área.</p> )}
-                        </AccordionContent>
-                    </AccordionItem>
-                ))}
-                </Accordion>
+             {isLoadingAll ? (<div className="flex items-center justify-center p-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : 
+             workloadAnalysis.length === 0 ? (<p className="text-muted-foreground text-sm">No hay datos de carga de trabajo para mostrar.</p>) : (
+                <div className="max-h-[400px] overflow-y-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Puesto</TableHead>
+                                <TableHead className="text-right">Horas/Mes (Actividades)</TableHead>
+                                <TableHead className="text-right">Costo Operativo Mensual</TableHead>
+                                <TableHead className="text-right">Sueldo Mensual Estimado</TableHead>
+                                <TableHead className="text-right">% de Carga vs Sueldo</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {workloadAnalysis.map(item => (
+                                <TableRow key={item.puestoName}>
+                                    <TableCell className="font-medium">{item.puestoName}</TableCell>
+                                    <TableCell className="text-right">{item.totalMonthlyHours.toFixed(1)} hrs</TableCell>
+                                    <TableCell className="text-right">{formatDashboardCurrency(item.totalMonthlyCost, item.currency)}</TableCell>
+                                    <TableCell className="text-right text-muted-foreground">{formatDashboardCurrency(item.estimatedMonthlySalary, item.currency)}</TableCell>
+                                    <TableCell className="text-right font-bold">
+                                        <div className="flex items-center justify-end gap-2">
+                                           {item.loadRatio > 90 && <AlertTriangle className="h-4 w-4 text-destructive" title="Carga económica alta en comparación al sueldo."/>}
+                                           <span className={item.loadRatio > 90 ? 'text-destructive' : ''}>{item.loadRatio.toFixed(0)}%</span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             )}
           </CardContent>
         </Card>
@@ -638,7 +611,7 @@ export default function ProcesosDashboardPage() {
                               <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                              <SelectItem value="personal">Distribución de Personal</SelectItem>
+                              <SelectItem value="personal">Procesos por Área</SelectItem>
                               <SelectItem value="procesos">Procesos por Área</SelectItem>
                               <SelectItem value="variaciones">Variaciones por Área</SelectItem>
                               <SelectItem value="sinActividades">Procesos sin Flujo</SelectItem>
@@ -672,7 +645,7 @@ export default function ProcesosDashboardPage() {
         <CardHeader><div className="flex items-center gap-2"><Brain className="h-6 w-6 text-primary" /><CardTitle>Análisis de Entidad por IA</CardTitle></div><CardDescription>Seleccione una área, departamento o puesto para obtener un resumen de sus funciones basado en los procesos del periodo seleccionado.</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
-              <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'departamento'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><AreaChart className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="departamento"><Building2 className="inline-block h-4 w-4 mr-2" />Departamento</SelectItem><SelectItem value="puesto"><UserSquare2 className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
+              <div><label htmlFor="entityTypeSelect" className="text-sm font-medium">Tipo</label><Select value={selectedEntityType} onValueChange={(v: 'area'|'puesto'|'departamento'|'none') => { setSelectedEntityType(v); setSelectedEntityName(''); setGeneratedSummary(''); }}><SelectTrigger id="entityTypeSelect"><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Seleccione tipo...</SelectItem><SelectItem value="area"><Factory className="inline-block h-4 w-4 mr-2" />Área</SelectItem><SelectItem value="departamento"><Users className="inline-block h-4 w-4 mr-2" />Departamento</SelectItem><SelectItem value="puesto"><Users className="inline-block h-4 w-4 mr-2" />Puesto</SelectItem></SelectContent></Select></div>
               <div className="md:col-span-2"><label htmlFor="entityNameSelect" className="text-sm font-medium">Nombre</label><Select value={selectedEntityName} onValueChange={setSelectedEntityName} disabled={selectedEntityType === 'none' || isLoadingAll || entityList.length === 0}><SelectTrigger id="entityNameSelect"><SelectValue placeholder={selectedEntityType === 'none' ? "Seleccione tipo" : "Seleccione nombre..."} /></SelectTrigger><SelectContent>{entityList.map(e => (<SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>))}</SelectContent></Select></div>
           </div>
           <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || selectedEntityType === 'none' || !selectedEntityName} className="w-full mb-4">{isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}Generar Resumen</Button>
