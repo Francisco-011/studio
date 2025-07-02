@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { Label } from '@/components/ui/label';
+import { usePermissions } from '@/contexts/PermissionsContext';
 
 function formatMejorasCurrency(amount: number | undefined, currency: TipoMoneda | string = "USD"): string {
   if (amount === undefined || isNaN(amount)) return "N/A";
@@ -98,6 +99,7 @@ export default function MejorasPage() {
   const { politicas, isLoadingPoliticas } = usePoliticas();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { hasPermission } = usePermissions();
 
   const [isSelectionDialogOpen, setIsSelectionDialogOpen] = useState(false);
   const { procesos, isLoadingProcesos } = useProcesos();
@@ -273,9 +275,7 @@ export default function MejorasPage() {
         `Política (ID: ${p.id}): "${p.titulo}"\n` +
         `  Descripción: ${p.descripcion}\n` +
         `  Fecha de Revisión: ${p.fechaRevision}\n` +
-        `  Vinculada a Procesos (IDs): [${p.procesosAsociadosIds?.join(', ')}]\n` +
-        `  Vinculada a Procedimientos (IDs): [${p.procedimientosAsociadosIds?.join(', ')}]\n` +
-        `  Vinculada a Actividades (IDs): [${p.actividadesAsociadasIds?.join(', ')}]`
+        `  Vinculada a Procesos (IDs): [${p.procesosAsociadosIds?.join(', ')}]\n`
       ).join('\n\n---\n\n');
 
       const result = await analyzeProcesses({
@@ -355,119 +355,42 @@ export default function MejorasPage() {
     }
 };
 
-
-  const handleGenerateProposedActions = () => {
-    if (!inefficiencyAnalysisResult) {
-      toast({ title: "Sin Análisis", description: "No hay resultados de análisis para generar acciones.", variant: "default" });
-      return;
-    }
-
-    let actionsGeneratedCount = 0;
-    
-    inefficiencyAnalysisResult.redundantSystems?.forEach(sys => {
-      const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
-      const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}.`;
-
-      addAccion({
-          nombre: title,
-          descripcion: description,
-          responsable: 'Por definir',
-          estado: 'En Revisión' as AccionEstado,
-          origenMejora: 'Análisis IA - Mejoras',
-          area: sys.area,
-          puesto: sys.puesto,
-          procesoId: sys.processId,
-          ahorroEstimado: sys.annualCost,
-          monedaAhorro: sys.currency as Moneda,
-      });
-      actionsGeneratedCount++;
-    });
-
-    inefficiencyAnalysisResult.duplicateProcesses?.forEach(dup => {
-      const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
-      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
-      
-      addAccion({
-          nombre: title,
-          descripcion: description,
-          responsable: 'Por definir',
-          estado: 'En Revisión' as AccionEstado,
-          origenMejora: 'Análisis IA - Mejoras',
-          area: dup.areaA,
-          puesto: dup.puestoA,
-          procesoId: dup.processA_Id
-      });
-      actionsGeneratedCount++;
-    });
-
-    inefficiencyAnalysisResult.duplicateActivities?.forEach(dup => {
-      const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
-      const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA || 'N/A'}/${dup.puestoA || 'N/A'}, B: ${dup.areaB || 'N/A'}/${dup.puestoB || 'N/A'}).`;
-      
-      addAccion({
-          nombre: title,
-          descripcion: description,
-          responsable: 'Por definir',
-          estado: 'En Revisión' as AccionEstado,
-          origenMejora: 'Análisis IA - Mejoras',
-          actividadId: dup.activityA_Id,
-          area: dup.areaA,
-          puesto: dup.puestoA,
-      });
-      actionsGeneratedCount++;
-    });
-
-    inefficiencyAnalysisResult.criticalProcessesWithoutPolicies?.forEach(proc => {
-        addAccion({
-            nombre: `Crear Política para Proceso Crítico: ${proc.processName}`,
-            descripcion: `Sugerencia de IA: ${proc.reason}. Se recomienda crear una política que regule este proceso.`,
-            responsable: 'Por definir',
-            estado: 'En Revisión',
-            origenMejora: 'Análisis IA - Políticas',
-            area: proc.area,
-            puesto: proc.puesto,
-            procesoId: proc.processId,
-        });
-        actionsGeneratedCount++;
-    });
-
-    inefficiencyAnalysisResult.obsoletePolicies?.forEach(pol => {
-        addAccion({
-            nombre: `Revisar Política Obsoleta: ${pol.policyName}`,
-            descripcion: `Sugerencia de IA: ${pol.reason}. La fecha de revisión (${pol.reviewDate}) ha pasado.`,
-            responsable: 'Por definir',
-            estado: 'En Revisión',
-            origenMejora: 'Análisis IA - Políticas',
-        });
-        actionsGeneratedCount++;
-    });
-    
-    inefficiencyAnalysisResult.duplicatePolicySuggestions?.forEach(sug => {
-        addAccion({
-            nombre: `Consolidar Políticas: ${sug.policyA_Name} / ${sug.policyB_Name}`,
-            descripcion: `Sugerencia de IA: ${sug.reason}.`,
-            responsable: 'Por definir',
-            estado: 'En Revisión',
-            origenMejora: 'Análisis IA - Políticas',
-        });
-        actionsGeneratedCount++;
-    });
-
-    if (actionsGeneratedCount > 0) {
-      toast({
-        title: "Acciones Propuestas Generadas",
-        description: `${actionsGeneratedCount} acciones han sido creadas con estado "En Revisión". Revíselas en el módulo de Acciones.`,
-        duration: 6000,
-      });
-    } else {
-      toast({
-        title: "No se generaron nuevas acciones",
-        description: "El análisis de IA no arrojó elementos claros o no cubiertos por acciones existentes.",
-        variant: "default"
-      });
-    }
+  const isActionCreated = (title: string): boolean => {
+    return allAcciones.some(
+        acc => acc.nombre === title && acc.origenMejora?.startsWith('Análisis IA')
+    );
   };
-  
+
+  const handleCreateAction = (
+    title: string,
+    description: string,
+    area?: string,
+    puesto?: string,
+    procesoId?: string,
+    actividadId?: string,
+    ahorro?: number,
+    moneda?: Moneda
+  ) => {
+    if (isActionCreated(title)) {
+        toast({ title: "Acción ya existe", description: "Ya se ha creado una acción para esta sugerencia.", variant: "default" });
+        return;
+    }
+    addAccion({
+        nombre: title,
+        descripcion,
+        responsable: 'Por definir',
+        estado: 'En Revisión',
+        origenMejora: 'Análisis IA - Mejoras',
+        area,
+        puesto,
+        procesoId,
+        actividadId,
+        ahorroEstimado: ahorro,
+        monedaAhorro: moneda,
+    });
+    toast({ title: "Acción Creada", description: "La acción de mejora ha sido registrada." });
+  }
+
   const totalSelected = selectedProcessIds.length + selectedActivityIds.length + selectedSystemIds.length + selectedProcedimientoIds.length + selectedPuestoAnalysisIds.length;
 
   return (
@@ -492,12 +415,6 @@ export default function MejorasPage() {
                   <Sparkles className="mr-2 h-5 w-5" />
                   Analizar Ineficiencias con IA
                 </Button>
-                {inefficiencyAnalysisResult && !isInefficiencyLoading && (
-                     <Button onClick={handleGenerateProposedActions} variant="outline" size="lg">
-                        <Send className="mr-2 h-5 w-5" />
-                        Generar Acciones Propuestas
-                    </Button>
-                )}
               </div>
               
               {isInefficiencyLoading && (
@@ -521,34 +438,65 @@ export default function MejorasPage() {
                     <CardHeader><CardTitle>Resumen del Análisis de IA</CardTitle></CardHeader>
                     <CardContent><p className="text-sm whitespace-pre-wrap">{inefficiencyAnalysisResult.summary || "No se generó un resumen."}</p></CardContent>
                   </Card>
+                  
+                  {inefficiencyAnalysisResult.redundantSystems?.length > 0 && (
+                    <Card><CardHeader><CardTitle>Sistemas Redundantes Potenciales</CardTitle></CardHeader>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.redundantSystems.map((sys, index) => {
+                          const title = `Evaluar Sistema Redundante: ${sys.systemName}`;
+                          const description = `Sugerencia de IA: ${sys.reason}. Ahorro anual estimado de ${formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}.`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>{sys.systemName}:</strong> {sys.reason} {sys.annualCost && (<span className="text-muted-foreground text-xs block">Costo Anual Estimado: {formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}</span>)}</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description, sys.area, sys.puesto, sys.processId, undefined, sys.annualCost, sys.currency as Moneda)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>);
+                      })}</ul></CardContent>
+                    </Card>
+                  )}
                   {inefficiencyAnalysisResult.duplicateProcesses?.length > 0 && (
                     <Card><CardHeader><CardTitle>Procesos Duplicados Potenciales</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicateProcesses.map((dup, index) => (<li key={index}><strong>{dup.processA} y {dup.processB}:</strong> {dup.reason}</li>))}</ul></CardContent>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.duplicateProcesses.map((dup, index) => {
+                          const title = `Revisar Procesos Duplicados: ${dup.processA} / ${dup.processB}`;
+                          const description = `Sugerencia de IA: ${dup.reason}. Se sugiere consolidar para ahorrar tiempo y estandarizar.`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>{dup.processA} y {dup.processB}:</strong> {dup.reason}</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description, dup.areaA, dup.puestoA, dup.processA_Id)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>);
+                      })}</ul></CardContent>
                     </Card>
                   )}
                   {inefficiencyAnalysisResult.duplicateActivities?.length > 0 && (
                     <Card><CardHeader><CardTitle>Actividades Duplicadas Potenciales</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicateActivities.map((dup, index) => (<li key={index}><strong>Actividad A:</strong> {dup.activityA} (en {dup.areaA || 'N/A'} / {dup.puestoA || 'N/A'})<br /><strong>Actividad B:</strong> {dup.activityB} (en {dup.areaB || 'N/A'} / {dup.puestoB || 'N/A'})<br /><strong>Razón:</strong> {dup.reason}</li>))}</ul></CardContent>
-                    </Card>
-                  )}
-                  {inefficiencyAnalysisResult.redundantSystems?.length > 0 && (
-                    <Card><CardHeader><CardTitle>Sistemas Redundantes Potenciales</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.redundantSystems.map((sys, index) => (<li key={index}><strong>{sys.systemName}:</strong> {sys.reason} {sys.annualCost && (<span className="text-muted-foreground text-xs block">Costo Anual Estimado: {formatMejorasCurrency(sys.annualCost, sys.currency as TipoMoneda)}</span>)}</li>))}</ul></CardContent>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.duplicateActivities.map((dup, index) => {
+                          const title = `Revisar Actividades Duplicadas: ${dup.activityA} / ${dup.activityB}`;
+                          const description = `Sugerencia de IA: ${dup.reason}. Se sugiere revisar y consolidar estas actividades para estandarizar la operación entre las áreas/puestos: (A: ${dup.areaA || 'N/A'}/${dup.puestoA || 'N/A'}, B: ${dup.areaB || 'N/A'}/${dup.puestoB || 'N/A'}).`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>Actividad A:</strong> {dup.activityA} (en {dup.areaA || 'N/A'} / {dup.puestoA || 'N/A'})<br /><strong>Actividad B:</strong> {dup.activityB} (en {dup.areaB || 'N/A'} / {dup.puestoB || 'N/A'})<br /><strong>Razón:</strong> {dup.reason}</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description, dup.areaA, dup.puestoA, undefined, dup.activityA_Id)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>);
+                      })}</ul></CardContent>
                     </Card>
                   )}
                   {inefficiencyAnalysisResult.criticalProcessesWithoutPolicies?.length > 0 && (
                     <Card><CardHeader><CardTitle>Procesos Críticos sin Políticas</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.criticalProcessesWithoutPolicies.map((item, index) => (<li key={index}><strong>{item.processName}</strong> (en {item.area} / {item.puesto}): {item.reason}</li>))}</ul></CardContent>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.criticalProcessesWithoutPolicies.map((proc, index) => {
+                          const title = `Crear Política para Proceso Crítico: ${proc.processName}`;
+                          const description = `Sugerencia de IA: ${proc.reason}. Se recomienda crear una política que regule este proceso.`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>{proc.processName}</strong> (en {proc.area} / {proc.puesto}): {proc.reason}</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description, proc.area, proc.puesto, proc.processId)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>)
+                      })}</ul></CardContent>
                     </Card>
                   )}
                   {inefficiencyAnalysisResult.obsoletePolicies?.length > 0 && (
                     <Card><CardHeader><CardTitle>Políticas Obsoletas o por Vencer</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.obsoletePolicies.map((item, index) => (<li key={index}><strong>{item.policyName}</strong>: {item.reason} (Fecha de Revisión: {item.reviewDate})</li>))}</ul></CardContent>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.obsoletePolicies.map((pol, index) => {
+                          const title = `Revisar Política Obsoleta: ${pol.policyName}`;
+                          const description = `Sugerencia de IA: ${pol.reason}. La fecha de revisión (${pol.reviewDate}) ha pasado.`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>{pol.policyName}</strong>: {pol.reason} (Fecha de Revisión: {pol.reviewDate})</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>)
+                      })}</ul></CardContent>
                     </Card>
                   )}
-                  {inefficiencyAnalysisResult.duplicatePolicySuggestions?.length > 0 && (
+                   {inefficiencyAnalysisResult.duplicatePolicySuggestions?.length > 0 && (
                     <Card><CardHeader><CardTitle>Sugerencias de Consolidación de Políticas</CardTitle></CardHeader>
-                      <CardContent><ul className="list-disc pl-5 space-y-2 text-sm">{inefficiencyAnalysisResult.duplicatePolicySuggestions.map((item, index) => (<li key={index}><strong>{item.policyA_Name} / {item.policyB_Name}</strong>: {item.reason}</li>))}</ul></CardContent>
+                      <CardContent><ul className="list-disc pl-5 space-y-4 text-sm">{inefficiencyAnalysisResult.duplicatePolicySuggestions.map((sug, index) => {
+                          const title = `Consolidar Políticas: ${sug.policyA_Name} / ${sug.policyB_Name}`;
+                          const description = `Sugerencia de IA: ${sug.reason}.`;
+                          const actionExists = isActionCreated(title);
+                          return (<li key={index} className="flex justify-between items-center"><div><strong>{sug.policyA_Name} / {sug.policyB_Name}</strong>: {sug.reason}</div><Button size="sm" variant="outline" onClick={() => handleCreateAction(title, description)} disabled={actionExists || !hasPermission('analisis_ia:generate_actions')}><Send className="mr-2 h-4 w-4" />{actionExists ? 'Acción Creada' : 'Crear Acción'}</Button></li>)
+                      })}</ul></CardContent>
                     </Card>
                   )}
                 </div>
