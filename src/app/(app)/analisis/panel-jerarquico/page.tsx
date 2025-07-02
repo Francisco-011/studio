@@ -25,6 +25,8 @@ import { cn, formatMinutesToHours } from '@/lib/utils';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
+import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 
 interface TreeNode {
@@ -275,9 +277,11 @@ export default function PanelJerarquicoPage() {
                         if (indexA === -1) return 1;
                         if (indexB === -1) return -1;
                         return indexA - indexB;
-                    }).map((proc, procIndex) => ({ ...proc, sourceIndex: procIndex }));
+                    });
+
+                    const processWithIndices = orderedProcesses.map((proc, index) => ({...proc, sourceIndex: index}));
                      
-                    let processTreeNodes = orderedProcesses.map((proc) => {
+                    let processTreeNodes = processWithIndices.map((proc) => {
                         const processPolicies = (proc.politicasAsociadas || [])
                             .map(link => {
                                 const pol = politicas.find(p => p.id === link.policyId);
@@ -434,8 +438,12 @@ export default function PanelJerarquicoPage() {
       canDrop = true;
     } else if (draggedItem.type === 'procedureInProcess' && (type === 'proceso' || type === 'procedimiento')) {
       canDrop = draggedItem.sourceParentId === parentId;
-    } else if (draggedItem.type === 'processInPuesto' && (type === 'puesto' || type === 'proceso')) {
-      canDrop = draggedItem.sourceParentId === parentId;
+    } else if (draggedItem.type === 'processInPuesto') {
+        if (type === 'proceso' && draggedItem.sourceParentId === parentId) {
+            canDrop = true; // Reorder
+        } else if (type === 'puesto' && draggedItem.sourceParentId !== parentId) {
+            canDrop = true; // Reassign
+        }
     } else if (draggedItem.type === 'departamentoInArea' && type === 'area') {
       canDrop = draggedItem.sourceParentId !== parentId; // Can't drop on the same area
     } else if (draggedItem.type === 'puestoInDepto') {
@@ -547,22 +555,71 @@ export default function PanelJerarquicoPage() {
 
     // --- Process Drop Logic ---
     else if (draggedItem.type === 'processInPuesto') {
-        if (!dropTargetInfo.parentId || draggedItem.sourceParentId !== dropTargetInfo.parentId) return;
-
-        const parentPuestoId = draggedItem.sourceParentId;
-        const parentPuestoData = puestos.find(p => p.id === parentPuestoId);
-        if (!parentPuestoData) return;
-
-        const originalProcesos = [...(parentPuestoData.procesoOrder || [])];
-        let currentOrder = [...originalProcesos];
-
-        if (draggedItem.sourceIndex !== undefined && draggedItem.sourceIndex >= 0 && draggedItem.sourceIndex < currentOrder.length) {
-            const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
-            const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-            currentOrder.splice(dropIndex > draggedItem.sourceIndex ? dropIndex - 1 : dropIndex, 0, removedItem);
-            
-            await updatePuestoProcessOrder(parentPuestoId, currentOrder);
-            toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
+        if (dropTargetInfo.type === 'puesto' && dropTargetInfo.parentId && draggedItem.sourceParentId !== dropTargetInfo.parentId) {
+            // Reassign Process to a new Puesto
+            const procesoId = draggedItem.id;
+            const newPuestoId = dropTargetInfo.parentId;
+    
+            const proceso = capturedProcesses.find(p => p.id === procesoId);
+            const sourcePuesto = puestos.find(p => p.id === draggedItem.sourceParentId);
+            const targetPuesto = puestos.find(p => p.id === newPuestoId);
+            const targetArea = areas.find(a => a.id === targetPuesto?.areaId);
+            const targetDepto = departamentos.find(d => d.id === targetPuesto?.departamentoId);
+    
+            if (!proceso || !targetPuesto || !targetArea) {
+                toast({ title: "Error de Datos", description: "No se encontró información para completar el movimiento." });
+            } else {
+                const batch = writeBatch(db);
+                
+                // 1. Update Proceso document
+                const procesoDocRef = doc(db, 'procesos', procesoId);
+                batch.update(procesoDocRef, {
+                    puesto: targetPuesto.nombre,
+                    area: targetArea.nombre,
+                    departamento: targetDepto?.nombre || null,
+                    puestoId: targetPuesto.id,
+                    updatedAt: serverTimestamp(),
+                });
+    
+                // 2. Update source puesto's procesoOrder
+                if (sourcePuesto) {
+                    const sourcePuestoDocRef = doc(db, 'puestos', sourcePuesto.id);
+                    const newSourceOrder = (sourcePuesto.procesoOrder || []).filter(id => id !== procesoId);
+                    batch.update(sourcePuestoDocRef, { procesoOrder: newSourceOrder });
+                }
+    
+                // 3. Update target puesto's procesoOrder
+                const targetPuestoDocRef = doc(db, 'puestos', targetPuesto.id);
+                const newTargetOrder = [...(targetPuesto.procesoOrder || []), procesoId];
+                batch.update(targetPuestoDocRef, { procesoOrder: newTargetOrder });
+    
+                await batch.commit();
+    
+                addLogEntry({ action: 'update', entityType: 'Proceso', entityName: proceso.proceso, details: `Proceso "${proceso.proceso}" reasignado al puesto "${targetPuesto.nombre}".` });
+                toast({ title: "Proceso Reasignado", description: "El proceso ha sido movido al nuevo puesto." });
+            }
+        } else if (dropTargetInfo.type === 'proceso' && dropTargetInfo.parentId === draggedItem.sourceParentId) {
+            // Reorder Process within the same Puesto
+            const parentPuestoId = draggedItem.sourceParentId;
+            const parentPuestoData = puestos.find(p => p.id === parentPuestoId);
+            if (!parentPuestoData) return;
+    
+            const originalProcesos = [...(parentPuestoData.procesoOrder || [])];
+            let currentOrder = [...originalProcesos];
+    
+            if (draggedItem.sourceIndex !== undefined && draggedItem.sourceIndex >= 0 && currentOrder.length > draggedItem.sourceIndex) {
+                const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
+                
+                let dropIndex = dropTargetInfo.index;
+                if(dropIndex === undefined || dropIndex < 0 || dropIndex > currentOrder.length) {
+                    dropIndex = currentOrder.length;
+                }
+                
+                currentOrder.splice(dropIndex, 0, removedItem);
+                
+                await updatePuestoProcessOrder(parentPuestoId, currentOrder);
+                toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
+            }
         }
     }
     
@@ -686,14 +743,18 @@ export default function PanelJerarquicoPage() {
           case 'puesto':
             nodeContent = (
               <div 
-                className={cn(baseClasses, "ml-8 font-medium")}
+                className={cn(baseClasses, "ml-8 font-medium", dropTargetInfo?.type === 'puesto' && dropTargetInfo.id === node.id && "bg-primary/20")}
                 id={node.id}
                 draggable={!!node.payload}
                 onDragStart={(e) => {
                   if (node.payload) {
-                    handleDragStart(e, { type: 'puestoInDepto', id: node.originalId!, sourceParentId: node.payload.sourceParentId })
+                    handleDragStart(e, { type: 'puestoInDepto', id: node.originalId!, sourceParentId: node.payload.departamentoId! })
                   }
                 }}
+                onDragOver={(e) => handleDragOver(e)}
+                onDrop={(e) => handleDrop(e)}
+                onDragEnter={(e) => handleDragEnter(e, 'puesto', node.originalId)}
+                onDragLeave={handleDragLeave}
               >
                 <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
