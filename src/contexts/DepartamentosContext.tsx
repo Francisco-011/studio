@@ -21,6 +21,7 @@ interface DepartamentosContextType {
   departamentos: Departamento[];
   addDepartamento: (nombre: string, areaId: string) => Promise<void>;
   updateDepartamento: (id: string, nombre: string, areaId: string) => Promise<void>;
+  moveDepartamento: (id: string, newAreaId: string) => Promise<void>;
   deleteDepartamento: (id: string, checkUsage: (deptoId: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoading: boolean;
 }
@@ -80,6 +81,21 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
     }
   }, [departamentos, addLogEntry]);
 
+  const moveDepartamento = useCallback(async (id: string, newAreaId: string) => {
+    const deptoDocRef = doc(db, DEPARTAMENTOS_COLLECTION, id);
+    try {
+        await updateDoc(deptoDocRef, { areaId: newAreaId });
+        const depto = departamentos.find(d => d.id === id);
+        if (depto) {
+            addLogEntry({ action: 'update', entityType: 'Departamento', entityName: depto.nombre, details: `Se movió el departamento "${depto.nombre}" a una nueva área.` });
+            toast({ title: "Departamento Movido", description: `"${depto.nombre}" ha sido reasignado a la nueva área.` });
+        }
+    } catch (e) {
+        console.error("Error moving departamento: ", e);
+        toast({ title: "Error", description: "No se pudo mover el departamento.", variant: "destructive" });
+    }
+  }, [departamentos, addLogEntry]);
+
   const deleteDepartamento = useCallback(async (id: string, checkUsage: (deptoId: string) => { isUsed: boolean; message: string }) => {
     const { isUsed, message } = checkUsage(id);
     if (isUsed) {
@@ -106,7 +122,7 @@ export function DepartamentosProvider({ children }: { children: ReactNode }) {
   }, [departamentos, addLogEntry]);
 
   return (
-    <DepartamentosContext.Provider value={{ departamentos, addDepartamento, updateDepartamento, deleteDepartamento, isLoading }}>
+    <DepartamentosContext.Provider value={{ departamentos, addDepartamento, updateDepartamento, moveDepartamento, deleteDepartamento, isLoading }}>
       {children}
     </DepartamentosContext.Provider>
   );
