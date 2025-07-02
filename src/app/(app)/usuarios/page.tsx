@@ -126,7 +126,6 @@ const PERMISSION_CONFIG = {
     label: 'Captura de Procesos',
     permissions: {
       create_process: 'Iniciar Nueva Captura de Proceso',
-      define_activities: 'Definir/Editar Actividades de Proceso',
     },
   },
   procesosRegistrados: {
@@ -152,6 +151,15 @@ const PERMISSION_CONFIG = {
       restore: 'Recuperar Actividades Eliminadas',
       export: 'Exportar CSV de Actividades',
       view_history: 'Ver Historial de Cambios de Actividad',
+    },
+  },
+  procedimientos: {
+    label: 'Procedimientos',
+    permissions: {
+      view: 'Ver Lista de Procedimientos',
+      create: 'Crear Procedimientos',
+      edit: 'Editar Procedimientos',
+      delete: 'Eliminar Procedimientos',
     },
   },
    politicas: {
@@ -262,13 +270,17 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     }
     if (mod === 'usuarios') modulePermissions[`${mod}:manage_permissions`] = false;
     if (mod === 'auditoria') modulePermissions[`${mod}:delete`] = false;
+    if (mod === 'procedimientos') {
+        Object.keys(modulePermissions).forEach(key => { modulePermissions[key] = true; });
+    }
     return { ...acc, ...modulePermissions };
   }, {}),
   Consultor: {
     'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
-    'captura:create_process': true, 'captura:define_activities': true,
+    'captura:create_process': true,
     'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
+    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true,
     'politicas:view': true, 'politicas:create': true,
     'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
@@ -283,6 +295,7 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
     'dashboard:view_procesos': true,
     'procesosRegistrados:view': true,
     'actividades:view': true,
+    'procedimientos:view': true,
     'politicas:view': true,
     'panelJerarquico:view': true,
     'panelJerarquico:view_details': true,

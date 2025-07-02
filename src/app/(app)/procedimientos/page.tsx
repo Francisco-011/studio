@@ -1,0 +1,254 @@
+
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { format, isValid, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+import { useProcedimientos, type Procedimiento, type ProcedimientoCreationData } from '@/contexts/ProcedimientosContext';
+import { useProcesos, type CapturedProcess, clasificacionOptions } from '@/contexts/ProcesosContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { toast } from '@/hooks/use-toast';
+import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered } from "lucide-react";
+import { cn } from '@/lib/utils';
+
+
+const procedimientoFormSchema = z.object({
+  id: z.string().optional(),
+  nombre: z.string().min(3, 'El nombre es requerido (mínimo 3 caracteres).'),
+  descripcion: z.string().optional(),
+  procesoId: z.string({ required_error: 'Debe seleccionar un proceso padre.' }),
+  sistemasUtilizados: z.array(z.string()).optional().default([]),
+  clasificacion: z.enum(clasificacionOptions).default('Privado'),
+  activityOrder: z.array(z.string()).optional().default([]), // Keep this for updates
+});
+
+type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
+
+type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'clasificacion' | 'updatedAt';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig {
+  key: SortableKeys;
+  direction: SortDirection;
+}
+
+const ITEMS_PER_PAGE = 10;
+
+export default function ProcedimientosPage() {
+  const { procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, isLoadingProcedimientos } = useProcedimientos();
+  const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
+  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const searchParams = useSearchParams();
+  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [procesoFilter, setProcesoFilter] = useState('all');
+  const [clasificacionFilter, setClasificacionFilter] = useState('all');
+
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingProcedimiento, setEditingProcedimiento] = useState<Procedimiento | null>(null);
+
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+  const [procedimientoToDelete, setProcedimientoToDelete] = useState<Procedimiento | null>(null);
+  
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const form = useForm<ProcedimientoFormData>({
+    resolver: zodResolver(procedimientoFormSchema),
+    defaultValues: { nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado' },
+  });
+  
+  useEffect(() => {
+    const processFromQuery = searchParams.get('proceso');
+    if (processFromQuery) {
+        setProcesoFilter(processFromQuery);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      if (editingProcedimiento) {
+        form.reset({
+          id: editingProcedimiento.id,
+          nombre: editingProcedimiento.nombre,
+          descripcion: editingProcedimiento.descripcion,
+          procesoId: editingProcedimiento.procesoId,
+          sistemasUtilizados: editingProcedimiento.sistemasUtilizados || [],
+          clasificacion: editingProcedimiento.clasificacion,
+          activityOrder: editingProcedimiento.activityOrder,
+        });
+      } else {
+        form.reset({ nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado' });
+      }
+    }
+  }, [editingProcedimiento, isDialogOpen, form]);
+
+  async function handleSubmit(data: ProcedimientoFormData) {
+    const { id, ...formData } = data;
+    const dataToSave: ProcedimientoCreationData = formData;
+
+    if (editingProcedimiento && id) {
+      await updateProcedimiento(id, dataToSave);
+      toast({ title: 'Procedimiento Actualizado', description: 'El procedimiento ha sido actualizado.' });
+    } else {
+      const newProc = await addProcedimiento(dataToSave);
+      if (newProc) {
+        const parentProcess = procesos.find(p => p.id === newProc.procesoId);
+        if (parentProcess) {
+          const updatedOrder = [...(parentProcess.procedimientoOrder || []), newProc.id];
+          await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
+        }
+      }
+      toast({ title: 'Procedimiento Creado', description: 'El nuevo procedimiento ha sido creado.' });
+    }
+    setIsDialogOpen(false);
+  }
+
+  function handleEdit(procedimiento: Procedimiento) {
+    setEditingProcedimiento(procedimiento);
+    setIsDialogOpen(true);
+  }
+
+  function promptDelete(procedimiento: Procedimiento) {
+    setProcedimientoToDelete(procedimiento);
+    setIsConfirmDeleteDialogOpen(true);
+  }
+
+  async function executeDelete() {
+    if (!procedimientoToDelete) return;
+
+    // Remove from parent process's order first
+    const parentProcess = procesos.find(p => p.id === procedimientoToDelete.procesoId);
+    if (parentProcess) {
+        const updatedOrder = (parentProcess.procedimientoOrder || []).filter(id => id !== procedimientoToDelete.id);
+        await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
+    }
+
+    await deleteProcedimiento(procedimientoToDelete.id);
+    setProcedimientoToDelete(null);
+    setIsConfirmDeleteDialogOpen(false);
+  }
+
+  const sortedAndFilteredData = useMemo(() => {
+    setCurrentPage(1);
+    const procesosMap = new Map(procesos.map(p => [p.id, p.proceso]));
+    
+    let filtered = procedimientos
+      .map(p => ({ ...p, procesoPadre: procesosMap.get(p.procesoId) || 'N/A' }))
+      .filter(p => 
+        (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || p.procesoPadre.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (procesoFilter === 'all' || p.procesoId === procesoFilter) &&
+        (clasificacionFilter === 'all' || p.clasificacion === clasificacionFilter)
+      );
+
+    if (sortConfig) {
+      filtered.sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      filtered.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+    }
+    return filtered;
+  }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, sortConfig]);
+
+  const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
+  const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
+  
+  const requestSort = (key: SortableKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig?.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  const getSortIcon = (key: SortableKeys) => {
+    if (!sortConfig || sortConfig.key !== key) return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const isLoadingAll = isLoadingProcedimientos || isLoadingProcesos || isLoadingSistemasCostos;
+
+  if (isLoadingAll) return <div className="container mx-auto py-8 flex justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
+
+  return (
+    <div className="container mx-auto py-8">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2 mb-1"><Workflow className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Gestión de Procedimientos</CardTitle></div>
+          <CardDescription>Catálogo centralizado para crear, editar y administrar todos los procedimientos del sistema.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+            <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input placeholder="Buscar por nombre, código..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10" /></div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Select value={procesoFilter} onValueChange={setProcesoFilter}><SelectTrigger className="flex-1"><SelectValue placeholder="Filtrar por proceso..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Procesos</SelectItem>{procesos.filter(p => !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select>
+              <Select value={clasificacionFilter} onValueChange={setClasificacionFilter}><SelectTrigger className="flex-1"><SelectValue placeholder="Filtrar por clasificación..."/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+              <Button onClick={() => setIsDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar</Button>
+            </div>
+          </div>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => requestSort('nombre')}>Nombre Procedimiento {getSortIcon('nombre')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => requestSort('procesoPadre')}>Proceso Padre {getSortIcon('procesoPadre')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => requestSort('clasificacion')}>Clasificación {getSortIcon('clasificacion')}</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
+                <TableHead className="text-right w-[120px]">Acciones</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {paginatedData.map(proc => (
+                  <TableRow key={proc.id}>
+                    <TableCell className="font-mono text-xs">{proc.codigo}</TableCell>
+                    <TableCell className="font-medium">{proc.nombre}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{proc.procesoPadre}</TableCell>
+                    <TableCell><Badge variant="outline">{proc.clasificacion}</Badge></TableCell>
+                    <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
+                    <TableCell className="text-right space-x-1"><Button variant="ghost" size="icon" onClick={() => handleEdit(proc)}><Edit2 className="h-4 w-4"/></Button><Button variant="ghost" size="icon" onClick={() => promptDelete(proc)} className="text-destructive"><Trash2 className="h-4 w-4"/></Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredData.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>Siguiente</Button></div></div>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>{editingProcedimiento ? 'Editar' : 'Agregar'} Procedimiento</DialogTitle></DialogHeader>
+        <Form {...form}><form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
+          <FormField control={form.control} name="procesoId" render={({ field }) => (<FormItem><FormLabel>Proceso Padre</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso..."/></SelectTrigger></FormControl><SelectContent>{procesos.filter(p => p.activo !== false && !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+          <FormField control={form.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)}/>
+          <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+            <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+          </div>
+          <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+        </form></Form>
+      </DialogContent></Dialog>
+      
+      <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><AlertTriangle className="inline-block mr-2 text-destructive"/>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Seguro que desea eliminar el procedimiento "{procedimientoToDelete?.nombre}"? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={()=>setProcedimientoToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDelete} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    </div>
+  );
+}

@@ -25,6 +25,7 @@ import {
   MessageCircleQuestion,
   FileText,
   Info,
+  ListOrdered,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
     { href: '/captura', label: 'Captura', icon: ClipboardEdit, permission: 'captura:create_process' },
     { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database, permission: 'procesosRegistrados:view' },
     { href: '/actividades', label: 'Actividades', icon: ListChecks, permission: 'actividades:view' },
+    { href: '/procedimientos', label: 'Procedimientos', icon: ListOrdered, permission: 'procedimientos:view' },
     { href: '/politicas', label: 'Políticas', icon: FileText, permission: 'politicas:view' },
     { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree, matchPrefix: true, permission: 'panelJerarquico:view' },
     { href: '/mejoras', label: 'Análisis de Mejoras', icon: TrendingUp, permission: 'analisis_ia:view' },

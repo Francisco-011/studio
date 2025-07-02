@@ -153,9 +153,9 @@ export default function CapturaPage() {
       if (newProcess) {
         toast({
           title: "Proceso Registrado",
-          description: "El proceso ha sido guardado. Defina sus procedimientos a continuación.",
+          description: "El proceso ha sido guardado. Ahora puede definir sus procedimientos.",
         });
-        router.push(`/captura/${newProcess.id}/procedimientos`);
+        router.push(`/procedimientos?proceso=${newProcess.id}`);
       } else {
         throw new Error("La función addProceso no retornó un proceso nuevo.");
       }
