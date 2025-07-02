@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -410,10 +411,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   };
 
-  const getEffectiveCost = (proc: CapturedProcess) => {
-    if (proc.costoEstimado !== undefined && proc.costoEstimado !== null) return { value: proc.costoEstimado, isDerived: false };
-    return { value: 0, isDerived: false };
-  };
   const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
 
   const availableProcessesForSelection = useMemo(() => {
@@ -474,7 +471,6 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="text-right w-[140px]">Acciones</TableHead>
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
                 const isExpanded = expandedRows[proc.id];
-                const { value: effectiveCost, isDerived } = getEffectiveCost(proc);
                 const proceduresForProcess = (proc.procedimientoOrder || [])
                     .map(procId => allProcedimientos.find(p => p.id === procId))
                     .filter((p): p is Procedimiento => !!p);
@@ -555,7 +551,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                               <AccordionTrigger className="p-4 hover:no-underline">
                                                   <div className="flex items-center gap-4 text-left">
                                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
-                                                      <span className="text-base font-medium flex items-center gap-2">{procedure.nombre}</span>
+                                                      <span className="text-base font-medium flex items-center gap-2">{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge></span>
                                                   </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-3">

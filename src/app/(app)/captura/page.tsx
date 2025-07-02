@@ -31,7 +31,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useProcesos, capturaFormSchema, type CapturaFormData, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, capturaFormSchema, type CapturaFormData, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -43,7 +43,6 @@ const defaultFormValues: Partial<CapturaFormData> = {
   puesto: undefined,
   proceso: "",
   descripcion: "",
-  clasificacion: "Privado",
   procedimientoOrder: [],
   politicasAsociadas: [],
   auditFrequencyInDays: undefined,
@@ -283,21 +282,6 @@ export default function CapturaPage() {
               />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="clasificacion"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Clasificación de Visibilidad</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione la clasificación" /></SelectTrigger></FormControl>
-                        <SelectContent>{(clasificacionOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <FormDescription>Define quién podrá ver la información de este proceso.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="auditFrequencyInDays"

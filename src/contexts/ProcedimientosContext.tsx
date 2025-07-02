@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -7,6 +8,7 @@ import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { clasificacionOptions } from './ProcesosContext';
 
 export interface Procedimiento {
   id: string;
@@ -20,6 +22,7 @@ export interface Procedimiento {
   procedimientosEntradaIds?: string[];
   informacionEntrega?: string;
   procedimientosSalidaIds?: string[];
+  clasificacion: typeof clasificacionOptions[number];
   createdAt: number;
   updatedAt: number;
 }
@@ -56,6 +59,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
                 sistemasUtilizados: Array.isArray(docData.sistemasUtilizados) ? docData.sistemasUtilizados : [],
                 procedimientosEntradaIds: Array.isArray(docData.procedimientosEntradaIds) ? docData.procedimientosEntradaIds : [],
                 procedimientosSalidaIds: Array.isArray(docData.procedimientosSalidaIds) ? docData.procedimientosSalidaIds : [],
+                clasificacion: docData.clasificacion || 'Privado',
             } as Procedimiento;
         });
         setProcedimientos(data);

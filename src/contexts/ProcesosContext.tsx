@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -31,7 +32,6 @@ export const capturaFormSchema = z.object({
   puesto: z.string().min(1, "El puesto es requerido."),
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
-  clasificacion: z.enum(clasificacionOptions).default('Privado'),
   procedimientoOrder: z.array(z.string()).optional().default([]),
   politicasAsociadas: z.array(z.object({
     policyId: z.string(),
@@ -62,13 +62,6 @@ export interface CapturedProcess extends CapturaFormData {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   puestoId?: string;
-  // These fields are calculated from activities/procedures, but stored for convenience
-  tiempoEstimado?: number;
-  tiempoIdeal?: number;
-  costoEstimado?: number;
-  costoIdeal?: number;
-  monedaCosto?: (typeof monedaOptions)[number];
-  frecuencia?: (typeof frecuenciaOptions)[number];
 }
 
 interface ProcesosContextType {
@@ -136,22 +129,11 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             } as CapturedProcess;
         });
         
-        if (user.rol === 'Administrador') {
-            setProcesos(allProcesos);
-        } else {
-            const allowedClassifications = getAllowedClassifications(user.nivelAcceso);
-            const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()) && ex.documentType === 'proceso');
-
-            const includeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
-            const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
-
-            const filtered = allProcesos.filter(proc => {
-                if (excludeIds.has(proc.id)) return false;
-                if (includeIds.has(proc.id)) return true;
-                return allowedClassifications.includes(proc.clasificacion);
-            });
-            setProcesos(filtered);
-        }
+        // Note: The filtering logic for processes based on classification has been moved to the
+        // `usePoliticas` context because classification is now at the procedure level.
+        // This context will now return all processes the user can see, and the UI will
+        // determine which procedures within them are visible.
+        setProcesos(allProcesos);
         setIsLoadingProcesos(false);
     }, (error) => {
         console.error("Error fetching procesos: ", error);
