@@ -1,68 +1,140 @@
-
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray, type Control } from "react-hook-form";
+import { z } from 'zod';
+import { db } from '@/lib/firebase';
+import { collection, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ClipboardEdit, Save, AlertTriangle, CalendarCheck2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useProcesos, capturaFormSchema, type CapturaFormData, auditFrequencyOptions } from '@/contexts/ProcesosContext';
-
+import { useProcesos, capturaFormSchema, clasificacionOptions } from '@/contexts/ProcesosContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
+// Schemas for the new unified form
+const activitySchema = z.object({
+    nombre: z.string().min(1, "El nombre es requerido."),
+    descripcionBreve: z.string().optional(),
+    tiempoEstimado: z.preprocess(val => val ? parseInt(String(val), 10) : undefined, z.number().int().nonnegative().optional()),
+});
 
-const defaultFormValues: Partial<CapturaFormData> = {
-  area: undefined,
-  departamento: undefined,
-  puesto: undefined,
-  proceso: "",
-  descripcion: "",
-  procedimientoOrder: [],
-  politicasAsociadas: [],
-  auditFrequencyInDays: undefined,
-};
+const procedureSchema = z.object({
+    nombre: z.string().min(1, "El nombre es requerido."),
+    descripcion: z.string().optional(),
+    clasificacion: z.enum(clasificacionOptions).default('Privado'),
+    sistemasUtilizados: z.array(z.string()).optional().default([]),
+    activities: z.array(activitySchema).optional().default([]),
+});
+
+const unifiedCaptureSchema = capturaFormSchema.extend({
+  procedures: z.array(procedureSchema).optional().default([]),
+});
+
+type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
+
+
+function ActivitiesSection({ control, procIndex }: { control: Control<UnifiedCaptureFormData>, procIndex: number }) {
+    const { fields, append, remove, move } = useFieldArray({
+        control,
+        name: `procedures.${procIndex}.activities`,
+    });
+
+    const dragItem = useRef<number | null>(null);
+    const dragOverItem = useRef<number | null>(null);
+
+    const handleDragStart = (index: number) => {
+        dragItem.current = index;
+    };
+    const handleDragEnter = (index: number) => {
+        dragOverItem.current = index;
+    };
+    const handleDrop = () => {
+        if (dragItem.current !== null && dragOverItem.current !== null) {
+            move(dragItem.current, dragOverItem.current);
+            dragItem.current = null;
+            dragOverItem.current = null;
+        }
+    };
+    
+    return (
+        <div className="pl-4 mt-4 space-y-3">
+            <h4 className="font-semibold text-md flex items-center gap-2"><ListChecks className="h-5 w-5 text-amber-600"/> Actividades del Procedimiento</h4>
+            <div className="space-y-2">
+                {fields.map((field, index) => (
+                    <div 
+                        key={field.id}
+                        className="flex items-center gap-2 p-2 border rounded-md bg-background"
+                        draggable
+                        onDragStart={() => handleDragStart(index)}
+                        onDragEnter={() => handleDragEnter(index)}
+                        onDragEnd={handleDrop}
+                        onDragOver={(e) => e.preventDefault()}
+                    >
+                         <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                         <FormField
+                            control={control}
+                            name={`procedures.${procIndex}.activities.${index}.nombre`}
+                            render={({ field }) => (
+                                <FormItem className="flex-grow">
+                                    <FormControl><Input placeholder={`Nombre de la actividad ${index + 1}`} {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                    </div>
+                ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: 0 })}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
+            </Button>
+        </div>
+    );
+}
 
 
 export default function CapturaPage() {
   const router = useRouter();
-  const { areas, isLoading: isLoadingAreas } = useAreas();
-  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, isLoadingPuestos } = usePuestos();
-  const { procesos: allProcesses, addProceso, isLoadingProcesos } = useProcesos();
-
+  const { areas } = useAreas();
+  const { departamentos } = useDepartamentos();
+  const { puestos } = usePuestos();
+  const { sistemas } = useSistemasCostos();
+  const { procesos: allProcesses } = useProcesos();
+  
+  const [isDefiningFlow, setIsDefiningFlow] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [similarProcessWarning, setSimilarProcessWarning] = useState<string | null>(null);
   
-  const isMounted = useRef(false);
+  const dragProcedureItem = useRef<number | null>(null);
+  const dragOverProcedureItem = useRef<number | null>(null);
 
-  const form = useForm<CapturaFormData>({
-    resolver: zodResolver(capturaFormSchema),
-    defaultValues: defaultFormValues as CapturaFormData,
+  const form = useForm<UnifiedCaptureFormData>({
+    resolver: zodResolver(unifiedCaptureSchema),
+    defaultValues: {
+        proceso: "",
+        procedures: [],
+    },
+  });
+
+  const { fields: procedureFields, append: appendProcedure, remove: removeProcedure, move: moveProcedure } = useFieldArray({
+      control: form.control,
+      name: "procedures",
   });
   
   const { watch, setValue } = form;
@@ -71,14 +143,13 @@ export default function CapturaPage() {
   const watchedProcessName = watch('proceso');
   
   const filteredDepartamentos = useMemo(() => {
-    if (!watchedAreaName || isLoadingDepartamentos || isLoadingAreas) return [];
+    if (!watchedAreaName) return [];
     const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
-    if (!areaId) return [];
-    return departamentos.filter(d => d.areaId === areaId);
-  }, [watchedAreaName, areas, departamentos, isLoadingDepartamentos, isLoadingAreas]);
+    return areaId ? departamentos.filter(d => d.areaId === areaId) : [];
+  }, [watchedAreaName, areas, departamentos]);
 
   const filteredPuestos = useMemo(() => {
-    if (!watchedAreaName || isLoadingPuestos || isLoadingAreas) return [];
+    if (!watchedAreaName) return [];
     const areaId = areas.find(a => a.nombre === watchedAreaName)?.id;
     if (!areaId) return [];
     
@@ -86,31 +157,15 @@ export default function CapturaPage() {
 
     if (watchedDepartamentoName && watchedDepartamentoName !== NO_DEPARTAMENTO_SELECTED) {
       const deptoId = departamentos.find(d => d.nombre === watchedDepartamentoName && d.areaId === areaId)?.id;
-      if (deptoId) {
-        return puestosInArea.filter(p => p.departamentoId === deptoId);
-      }
+      if (deptoId) return puestosInArea.filter(p => p.departamentoId === deptoId);
     }
-    // Return puestos in area but not in any depto if 'Sin Departamento' is selected
-    if (watchedDepartamentoName === NO_DEPARTAMENTO_SELECTED) {
-       return puestosInArea.filter(p => !p.departamentoId);
-    }
-
+    if (watchedDepartamentoName === NO_DEPARTAMENTO_SELECTED) return puestosInArea.filter(p => !p.departamentoId);
     return puestosInArea;
-  }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
+  }, [watchedAreaName, watchedDepartamentoName, areas, departamentos, puestos]);
 
-  
   useEffect(() => {
-    if (watchedProcessName && allProcesses.length > 0) {
-      const trimmedLowerName = watchedProcessName.trim().toLowerCase();
-      if (!trimmedLowerName) {
-        setSimilarProcessWarning(null);
-        return;
-      }
-      
-      const existingProcess = allProcesses.find(
-        p => p.proceso.trim().toLowerCase() === trimmedLowerName && !p.deletedAt
-      );
-      
+    if (watchedProcessName) {
+      const existingProcess = allProcesses.find(p => p.proceso.trim().toLowerCase() === watchedProcessName.trim().toLowerCase());
       if (existingProcess) {
         setSimilarProcessWarning(`Advertencia: ya existe un proceso con un nombre idéntico: "${existingProcess.proceso}" en el área de "${existingProcess.area}".`);
       } else {
@@ -120,170 +175,207 @@ export default function CapturaPage() {
       setSimilarProcessWarning(null);
     }
   }, [watchedProcessName, allProcesses]);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (isMounted.current) {
-        setValue('departamento', undefined);
-        setValue('puesto', undefined);
+  
+  const handleDragProcedureStart = (index: number) => { dragProcedureItem.current = index; };
+  const handleDragProcedureEnter = (index: number) => { dragOverProcedureItem.current = index; };
+  const handleDropProcedure = () => {
+    if (dragProcedureItem.current !== null && dragOverProcedureItem.current !== null) {
+      moveProcedure(dragProcedureItem.current, dragOverProcedureItem.current);
+      dragProcedureItem.current = null;
+      dragOverProcedureItem.current = null;
     }
-  }, [watchedAreaName, setValue]);
+  };
 
-  useEffect(() => {
-    if (isMounted.current) {
-        setValue('puesto', undefined);
-    }
-  }, [watchedDepartamentoName, setValue]);
+  const handleContinue = () => {
+      form.trigger(['proceso', 'area', 'puesto', 'descripcion']).then(isValid => {
+          if(isValid) {
+              setIsDefiningFlow(true);
+          } else {
+              toast({
+                  title: "Campos Incompletos",
+                  description: "Por favor, complete los datos principales del proceso antes de continuar.",
+                  variant: "destructive"
+              });
+          }
+      });
+  }
 
-
-  async function onSubmit(values: CapturaFormData) {
+  async function onSubmit(data: UnifiedCaptureFormData) {
+    setIsSaving(true);
     try {
-      const dataToSave: CapturaFormData = {
-        ...values,
-        departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
-        procedimientoOrder: values.procedimientoOrder || [],
-      };
-      
-      const newProcess = await addProceso(dataToSave);
+        const batch = writeBatch(db);
 
-      if (newProcess) {
-        toast({
-          title: "Proceso Registrado",
-          description: "El proceso ha sido guardado. Ahora puede definir sus procedimientos.",
-        });
-        router.push(`/procedimientos?proceso=${newProcess.id}`);
-      } else {
-        throw new Error("La función addProceso no retornó un proceso nuevo.");
-      }
+        // 1. Create Process reference and get its ID
+        const processRef = doc(collection(db, PROCESOS_COLLECTION));
+        const newProcessId = processRef.id;
+
+        // 2. Prepare procedure and activity data with references
+        const procedureRefsAndData: { ref: any, data: any }[] = [];
+        
+        for (const procData of data.procedures || []) {
+            const procedureRef = doc(collection(db, 'procedimientos'));
+            const newProcedureId = procedureRef.id;
+            
+            const activityRefsAndData: { ref: any, data: any }[] = [];
+            if (procData.activities) {
+                for (const actData of procData.activities) {
+                    const activityRef = doc(collection(db, 'actividades'));
+                    activityRefsAndData.push({
+                        ref: activityRef,
+                        data: {
+                            ...actData,
+                            codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
+                            procedimientoId: newProcedureId,
+                            activa: true,
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp(),
+                            historialDeCambios: []
+                        }
+                    });
+                }
+            }
+            
+            procedureRefsAndData.push({
+                ref: procedureRef,
+                data: {
+                    ...procData,
+                    codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
+                    procesoId: newProcessId,
+                    activityOrder: activityRefsAndData.map(a => a.ref.id),
+                    activo: true,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    historialDeCambios: []
+                }
+            });
+            
+            activityRefsAndData.forEach(a => batch.set(a.ref, a.data));
+        }
+
+        procedureRefsAndData.forEach(p => batch.set(p.ref, p.data));
+        
+        // 3. Prepare Process payload
+        const processPayload = {
+            proceso: data.proceso,
+            descripcion: data.descripcion,
+            area: data.area,
+            departamento: data.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : data.departamento,
+            puesto: data.puesto,
+            codigo: `PR-${Date.now().toString().slice(-6)}`,
+            capturedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            activo: true,
+            historialDeCambios: [],
+            procedimientoOrder: procedureRefsAndData.map(p => p.ref.id),
+        };
+        batch.set(processRef, processPayload);
+
+        // 4. Commit batch
+        await batch.commit();
+
+        toast({ title: "Captura Completa", description: "El proceso, sus procedimientos y actividades han sido guardados exitosamente." });
+        router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(data.proceso)}`);
 
     } catch (error) {
-      console.error("Error saving process:", error);
-      toast({
-        title: "Error al Guardar",
-        description: "No se pudo guardar el proceso. Revise la consola para más detalles.",
-        variant: "destructive",
-      });
+        console.error("Error en guardado masivo:", error);
+        toast({ title: "Error Crítico", description: "No se pudo guardar el proceso completo. Revise la consola.", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
     }
   }
 
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg">
-        <CardHeader className="flex flex-row items-center gap-2">
-          <ClipboardEdit className="h-6 w-6 text-primary" />
-          <CardTitle className="text-2xl font-headline">
-            Módulo de Captura de Proceso
-          </CardTitle>
+        <CardHeader>
+          <div className="flex items-center gap-2 mb-1">
+            <ClipboardEdit className="h-6 w-6 text-primary" />
+            <CardTitle className="text-2xl font-headline">Módulo de Captura Integral</CardTitle>
+          </div>
+          <CardDescription>
+            Defina un proceso completo, incluyendo sus procedimientos y actividades, desde una única pantalla.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <CardDescription className="mb-6">
-            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Los tiempos y costos se calculan automáticamente a partir de las actividades que defina más adelante.
-          </CardDescription>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField
-                  control={form.control}
-                  name="area"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Área / División</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          form.setValue('departamento', undefined);
-                          form.setValue('puesto', undefined);
-                        }}
-                        value={field.value}
-                        disabled={isLoadingAreas}
-                      >
-                        <FormControl><SelectTrigger><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Seleccione un área"} /></SelectTrigger></FormControl>
-                        <SelectContent>{areas.map((area) => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="departamento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Departamento (Opcional)</FormLabel>
-                       <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          form.setValue('puesto', undefined);
-                        }}
-                        value={field.value}
-                        disabled={!watchedAreaName || isLoadingDepartamentos || filteredDepartamentos.length === 0}
-                      >
-                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : (filteredDepartamentos.length === 0 ? "Sin deptos. para esta área" : "Seleccione un depto.")} /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value={NO_DEPARTAMENTO_SELECTED}>Sin Departamento</SelectItem>
-                          {filteredDepartamentos.map((depto) => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="puesto"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Puesto / Rol Principal</FormLabel>
-                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        disabled={!watchedAreaName || isLoadingPuestos || filteredPuestos.length === 0}
-                      >
-                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione un área primero" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
-                        <SelectContent>{filteredPuestos.map((puesto) => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <FormDescription>Puestos disponibles para el área/depto. seleccionado.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {/* Process Details Section */}
+              <div className="p-4 border rounded-lg">
+                <h3 className="text-lg font-semibold flex items-center gap-2 mb-4"><Workflow className="h-5 w-5 text-blue-600"/>1. Datos del Proceso Principal</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <FormField control={form.control} name="area" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={v => { field.onChange(v); setValue('departamento', undefined); setValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => (<SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="departamento" render={({ field }) => (<FormItem><FormLabel>Departamento</FormLabel><Select onValueChange={v => { field.onChange(v); setValue('puesto', undefined); }} value={field.value} disabled={!watchedAreaName}><FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione área" : "Opcional"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_SELECTED}>Sin Departamento</SelectItem>{filteredDepartamentos.map(d => (<SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="puesto" render={({ field }) => (<FormItem><FormLabel>Puesto Principal</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!watchedAreaName}><FormControl><SelectTrigger><SelectValue placeholder={!watchedAreaName ? "Seleccione área" : "Seleccione un puesto"} /></SelectTrigger></FormControl><SelectContent>{filteredPuestos.map(p => (<SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                </div>
+                <FormField control={form.control} name="proceso" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Nombre del Proceso</FormLabel><FormControl><Input placeholder="Ej: Gestión de Pedidos de Clientes" {...field} /></FormControl>{similarProcessWarning && (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{similarProcessWarning}</FormDescription>)}<FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Objetivo del Proceso</FormLabel><FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado." {...field} /></FormControl><FormMessage /></FormItem>)} />
               </div>
 
-              <FormField
-                control={form.control}
-                name="proceso"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre del Proceso</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Gestión de Pedidos de Clientes, Cierre Contable Mensual" {...field} />
-                    </FormControl>
-                     {similarProcessWarning ? (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" /> {similarProcessWarning}</FormDescription>) : (<FormDescription>Ingrese el nombre descriptivo del proceso que está capturando.</FormDescription>)}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {!isDefiningFlow && (
+                  <div className="text-center">
+                      <Button type="button" size="lg" onClick={handleContinue}>
+                          Definir Procedimientos y Flujo
+                      </Button>
+                  </div>
+              )}
+              
+              {isDefiningFlow && (
+                <>
+                <div className="p-4 border rounded-lg space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold flex items-center gap-2"><ListOrdered className="h-5 w-5 text-green-600"/>2. Procedimientos</h3>
+                    <Button type="button" variant="outline" onClick={() => appendProcedure({ nombre: '', activities: [] })}><PlusCircle className="mr-2 h-4 w-4"/>Agregar Procedimiento</Button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {procedureFields.map((field, index) => (
+                      <div 
+                        key={field.id}
+                        draggable
+                        onDragStart={() => handleDragProcedureStart(index)}
+                        onDragEnter={() => handleDragProcedureEnter(index)}
+                        onDragEnd={handleDropProcedure}
+                        onDragOver={e => e.preventDefault()}
+                      >
+                        <Accordion type="single" collapsible defaultValue="item-1">
+                          <AccordionItem value="item-1" className="bg-muted/50 rounded-lg border">
+                            <AccordionTrigger className="px-4 hover:no-underline">
+                              <div className="flex items-center gap-2 flex-grow">
+                                <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
+                                <span className="font-bold text-primary">{index + 1}.</span>
+                                <FormField
+                                    control={form.control}
+                                    name={`procedures.${index}.nombre`}
+                                    render={({ field }) => (
+                                        <FormItem className="flex-grow">
+                                            <FormControl><Input placeholder={`Nombre del procedimiento ${index + 1}`} {...field} onClick={e => e.stopPropagation()} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <Button type="button" variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); removeProcedure(index); }}>
+                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                </Button>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="p-4 border-t">
+                              <ActivitiesSection control={form.control} procIndex={index} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-              <FormField
-                control={form.control}
-                name="descripcion"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Objetivo</FormLabel>
-                    <FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado de este proceso." className="min-h-[120px]" {...field} /></FormControl>
-                    <FormDescription>Proporcione una explicación clara y concisa del objetivo del proceso.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end space-x-2">
-                <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Procedimientos</Button>
-              </div>
+                <div className="flex justify-end">
+                    <Button type="submit" size="lg" disabled={isSaving}>
+                        {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                        Guardar Proceso Completo
+                    </Button>
+                </div>
+                </>
+              )}
             </form>
           </Form>
         </CardContent>
