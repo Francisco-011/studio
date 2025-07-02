@@ -75,7 +75,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
-
+import type { Moneda } from '@/contexts/AccionesContext';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
@@ -356,30 +356,26 @@ export default function ProcesosYFlujosRegistradosPage() {
             return;
         }
 
-        const puesto = puestos.find(p => p.nombre === process.puesto);
-        const costoPorMinuto = (puesto?.costoHora ?? 0) / 60;
-        const moneda = puesto?.monedaCosto;
-
-        let totalTiempoProceso = 0;
-
         const proceduresInProcess = (process.procedimientoOrder || [])
             .map(procId => allProcedimientos.find(p => p.id === procId))
             .filter((p): p is Procedimiento => !!p && p.activo);
+        
+        let totalTiempoProceso = 0;
+        let totalCostoProceso = 0;
+        let monedaProceso: Moneda | undefined;
 
         proceduresInProcess.forEach(procedure => {
-            const timeForProcedure = (procedure.activityOrder || [])
-                .map(actId => allActivities.find(a => a.id === actId))
-                .filter((act): act is Actividad => !!act && act.activa)
-                .reduce((sum, act) => sum + (act.tiempoEstimado || 0), 0);
-            totalTiempoProceso += timeForProcedure;
+            totalTiempoProceso += procedure.tiempoEstimado || 0;
+            totalCostoProceso += procedure.costoEstimado || 0;
+            if (procedure.monedaCosto && !monedaProceso) {
+                monedaProceso = procedure.monedaCosto;
+            }
         });
-
-        const totalCostoProceso = totalTiempoProceso * costoPorMinuto;
         
         await updateProceso(processId, {
             tiempoEstimado: totalTiempoProceso,
             costoEstimado: totalCostoProceso,
-            monedaCosto: moneda
+            monedaCosto: monedaProceso
         });
 
         toast({ title: "Cálculo Completado", description: `Los totales para "${process.proceso}" han sido actualizados.` });

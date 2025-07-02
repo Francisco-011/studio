@@ -10,6 +10,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
+import type { Moneda } from './AccionesContext';
 
 export interface Procedimiento {
   id: string;
@@ -30,6 +31,9 @@ export interface Procedimiento {
   historialDeCambios?: CambioHistorial[];
   auditFrequencyInDays?: number;
   lastAuditedAt?: string; // ISO String
+  tiempoEstimado?: number; // Sum of activities' time in minutes
+  costoEstimado?: number; // Sum of activities' cost
+  monedaCosto?: Moneda;
 }
 
 export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
@@ -125,7 +129,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     if (!originalProcedimiento) return;
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado'];
     
     fieldsToCompare.forEach(key => {
         const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';

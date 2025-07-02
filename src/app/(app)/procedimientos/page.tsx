@@ -13,6 +13,9 @@ import { es } from 'date-fns/locale';
 import { useProcedimientos, type Procedimiento, type ProcedimientoCreationData } from '@/contexts/ProcedimientosContext';
 import { useProcesos, type CapturedProcess, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+import { formatMinutesToHours } from '@/lib/utils';
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -26,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered, History, CalendarCheck2 } from "lucide-react";
+import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered, History, CalendarCheck2, Calculator } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 
@@ -52,7 +55,7 @@ const procedimientoFormSchema = z.object({
 
 type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
 
-type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'numActividades' | 'clasificacion' | 'updatedAt' | 'activo';
+type SortableKeys = 'codigo' | 'nombre' | 'procesoPadre' | 'numActividades' | 'clasificacion' | 'updatedAt' | 'activo' | 'tiempoEstimado' | 'costoEstimado';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -70,6 +73,8 @@ export default function ProcedimientosPage() {
   const { procedimientos, addProcedimiento, updateProcedimiento, deleteProcedimiento, toggleProcedimientoStatus, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
   const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
+  const { actividades, isLoadingActividades } = useActividades();
+  const { puestos, isLoadingPuestos } = usePuestos();
   const searchParams = useSearchParams();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,6 +92,7 @@ export default function ProcedimientosPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [procedimientoForHistory, setProcedimientoForHistory] = useState<Procedimiento | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState<string | null>(null);
 
   const [similarProcedimientoWarning, setSimilarProcedimientoWarning] = useState<string | null>(null);
 
@@ -169,7 +175,7 @@ export default function ProcedimientosPage() {
         }
         
         toast({ title: 'Procedimiento Creado', description: 'Redirigiendo para gestionar sus actividades...' });
-        router.push(`/analisis/panel-jerarquico?procedimientoId=${newProc.id}`);
+        router.push(`/actividades?procedimientoId=${newProc.id}`);
       } else {
         toast({ title: 'Error', description: 'No se pudo crear el procedimiento.', variant: 'destructive'});
         setIsDialogOpen(false);
@@ -234,6 +240,9 @@ export default function ProcedimientosPage() {
         } else if (sortConfig.key === 'updatedAt') {
             valA = a.updatedAt || 0;
             valB = b.updatedAt || 0;
+        } else if (sortConfig.key === 'tiempoEstimado' || sortConfig.key === 'costoEstimado') {
+            valA = a[sortConfig.key] ?? -1;
+            valB = b[sortConfig.key] ?? -1;
         } else {
             valA = a[sortConfig.key as keyof Procedimiento];
             valB = b[sortConfig.key as keyof Procedimiento];
@@ -269,7 +278,44 @@ export default function ProcedimientosPage() {
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAll = isLoadingProcedimientos || isLoadingProcesos || isLoadingSistemasCostos;
+  const isLoadingAll = isLoadingProcedimientos || isLoadingProcesos || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos;
+
+  const handleRecalculateTotalsForProcedure = async (proc: Procedimiento) => {
+    setIsRecalculating(proc.id);
+    try {
+        const parentProcess = procesos.find(p => p.id === proc.procesoId);
+        if (!parentProcess) {
+            toast({ title: "Error", description: "Proceso padre no encontrado.", variant: "destructive"});
+            return;
+        }
+
+        const puesto = puestos.find(p => p.nombre === parentProcess.puesto);
+        const costoPorMinuto = (puesto?.costoHora ?? 0) / 60;
+        const moneda = puesto?.monedaCosto;
+
+        const timeForProcedure = (proc.activityOrder || [])
+            .map(actId => actividades.find(a => a.id === actId))
+            .filter((act): act is Actividad => !!act && act.activa)
+            .reduce((sum, act) => sum + (act.tiempoEstimado || 0), 0);
+        
+        const costForProcedure = timeForProcedure * costoPorMinuto;
+
+        await updateProcedimiento(proc.id, {
+            tiempoEstimado: timeForProcedure,
+            costoEstimado: costForProcedure,
+            monedaCosto: moneda,
+        });
+        
+        toast({ title: "Cálculo Completado", description: `Los totales para "${proc.nombre}" han sido actualizados.` });
+
+    } catch (error) {
+       console.error("Error recalculating totals:", error);
+       toast({ title: "Error", description: "No se pudo completar el recálculo.", variant: "destructive" });
+    } finally {
+        setIsRecalculating(null);
+    }
+  }
+
 
   if (isLoadingAll) return <div className="container mx-auto py-8 flex justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
 
@@ -296,11 +342,11 @@ export default function ProcedimientosPage() {
                 <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('nombre')}>Nombre Procedimiento {getSortIcon('nombre')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('procesoPadre')}>Proceso Padre {getSortIcon('procesoPadre')}</TableHead>
-                <TableHead className="cursor-pointer text-center" onClick={() => requestSort('numActividades')}>Nº Actividades {getSortIcon('numActividades')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => requestSort('clasificacion')}>Clasificación {getSortIcon('clasificacion')}</TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => requestSort('numActividades')}>Nº Act. {getSortIcon('numActividades')}</TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('tiempoEstimado')}>T. Est. {getSortIcon('tiempoEstimado')}</TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('costoEstimado')}>C. Est. {getSortIcon('costoEstimado')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('activo')}>Estado {getSortIcon('activo')}</TableHead>
-                <TableHead className="cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
-                <TableHead className="text-right w-[160px]">Acciones</TableHead>
+                <TableHead className="text-right w-[180px]">Acciones</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {paginatedData.map(proc => (
@@ -311,10 +357,13 @@ export default function ProcedimientosPage() {
                     <TableCell className="text-center">
                       <Badge variant="outline" className="font-mono">{proc.activityOrder?.length || 0}</Badge>
                     </TableCell>
-                    <TableCell><Badge variant="outline">{proc.clasificacion}</Badge></TableCell>
-                    <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
-                    <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
+                    <TableCell className="text-right text-xs">{proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'}</TableCell>
+                    <TableCell className="text-right text-xs">{proc.costoEstimado !== undefined ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : '-'}</TableCell>
+                    <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700 text-white": proc.activo, "bg-slate-500 hover:bg-slate-600 text-white": !proc.activo})}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-right space-x-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleRecalculateTotalsForProcedure(proc)} disabled={isRecalculating === proc.id} title="Recalcular totales">
+                        {isRecalculating === proc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+                      </Button>
                       <Switch checked={proc.activo} onCheckedChange={() => toggleProcedimientoStatus(proc)} aria-label="Cambiar estado" className="mr-2"/>
                       <Button variant="ghost" size="icon" onClick={() => handleViewHistory(proc)} disabled={!proc.historialDeCambios || proc.historialDeCambios.length === 0} title="Ver historial"><History className="h-4 w-4"/></Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(proc)}><Edit2 className="h-4 w-4"/></Button>
