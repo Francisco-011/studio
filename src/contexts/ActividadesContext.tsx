@@ -25,14 +25,16 @@ export interface Actividad {
   deletedAt?: number; 
   descripcionBreve?: string;
   historialDeCambios?: CambioHistorial[];
-  procedimientoId?: string; // This is a helper property, not stored in DB
+  // No hay vinculos a sistemas o politicas aqui
 }
+
+export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
 
 interface ActividadesContextType {
   actividades: Actividad[];
   deletedActividades: Actividad[];
-  addActividad: (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' >) => Promise<Actividad>;
-  updateActividad: (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>) => Promise<void>;
+  addActividad: (data: ActividadCreationData) => Promise<Actividad | null>;
+  updateActividad: (id: string, data: Partial<ActividadCreationData>) => Promise<void>;
   softDeleteActividad: (id: string) => Promise<void>;
   restoreActividad: (id: string) => Promise<void>;
   toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
@@ -79,7 +81,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const addActividad = useCallback(async (data: Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo' >): Promise<Actividad> => {
+  const addActividad = useCallback(async (data: ActividadCreationData): Promise<Actividad | null> => {
     try {
       const codigo = `AC-${Date.now().toString().slice(-6)}`;
       const payload: { [key: string]: any } = {
@@ -114,7 +116,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     }
   }, [addLogEntry]);
 
-  const updateActividad = useCallback(async (id: string, data: Partial<Omit<Actividad, 'id' | 'createdAt' | 'updatedAt' | 'codigo'>>) => {
+  const updateActividad = useCallback(async (id: string, data: Partial<ActividadCreationData>) => {
     const allKnownActivities = [...actividades, ...deletedActividades];
     const originalActividad = allKnownActivities.find(a => a.id === id);
     if (!originalActividad) return;

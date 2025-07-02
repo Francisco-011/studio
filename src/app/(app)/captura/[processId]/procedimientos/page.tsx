@@ -1,14 +1,15 @@
 
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useProcedimientos, type Procedimiento, type ProcedimientoCreationData } from '@/contexts/ProcedimientosContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
-import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -24,7 +25,7 @@ import { PlusCircle, Save, Edit2, Trash2, ArrowUp, ArrowDown, Workflow, Loader2,
 const procedimientoCaptureFormSchema = z.object({
   nombre: z.string().min(3, 'El nombre del procedimiento es requerido (mínimo 3 caracteres).'),
   descripcion: z.string().optional(),
-  politicasAsociadasIds: z.array(z.string()).optional().default([]),
+  sistemasUtilizados: z.array(z.string()).optional().default([]),
 });
 type ProcedimientoCaptureFormData = z.infer<typeof procedimientoCaptureFormSchema>;
 
@@ -39,7 +40,7 @@ export default function DefinirProcedimientosPage() {
 
   const { procedimientos: globalProcedimientos, addProcedimiento, updateProcedimiento: updateGlobalProcedimiento, deleteProcedimiento, isLoadingProcedimientos } = useProcedimientos();
   const { procesos, updateProceso, isLoadingProcesos } = useProcesos();
-  const { politicas, isLoadingPoliticas } = usePoliticas();
+  const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
 
   const [parentProcess, setParentProcess] = useState<CapturedProcess | null>(null);
   const [definedProcedimientos, setDefinedProcedimientos] = useState<LocalProcedimientoDefinition[]>([]);
@@ -51,7 +52,7 @@ export default function DefinirProcedimientosPage() {
 
   const form = useForm<ProcedimientoCaptureFormData>({
     resolver: zodResolver(procedimientoCaptureFormSchema),
-    defaultValues: { nombre: '', descripcion: '', politicasAsociadasIds: [] },
+    defaultValues: { nombre: '', descripcion: '', sistemasUtilizados: [] },
   });
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function DefinirProcedimientosPage() {
                           tempId: globalProc.id, 
                           nombre: globalProc.nombre, 
                           descripcion: globalProc.descripcion,
-                          politicasAsociadasIds: globalProc.politicasAsociadas?.map(p => p.policyId) || [],
+                          sistemasUtilizados: globalProc.sistemasUtilizados || [],
                         };
                     }
                     return null;
@@ -87,7 +88,7 @@ export default function DefinirProcedimientosPage() {
   }, [processId, router, procesos, globalProcedimientos, isLoadingProcedimientos, isLoadingProcesos]);
 
   const openAddDialog = () => {
-    form.reset({ nombre: '', descripcion: '', politicasAsociadasIds: [] });
+    form.reset({ nombre: '', descripcion: '', sistemasUtilizados: [] });
     setEditingProcedimiento(null);
     setIsFormOpen(true);
   };
@@ -135,10 +136,7 @@ export default function DefinirProcedimientosPage() {
         const payload: Partial<ProcedimientoCreationData> = {
           nombre: localProc.nombre,
           descripcion: localProc.descripcion,
-          politicasAsociadas: (localProc.politicasAsociadasIds || []).map(id => ({
-            policyId: id,
-            linkType: 'Aplica a' as const,
-          })),
+          sistemasUtilizados: localProc.sistemasUtilizados || [],
         };
         
         const isExistingGlobal = globalProcedimientosMap.has(localProc.tempId);
@@ -227,35 +225,35 @@ export default function DefinirProcedimientosPage() {
               <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción (Opcional)</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
               <FormField
                   control={form.control}
-                  name="politicasAsociadasIds"
+                  name="sistemasUtilizados"
                   render={({ field }) => (
                       <FormItem>
-                          <FormLabel>Políticas Asociadas (Opcional)</FormLabel>
+                          <FormLabel>Sistemas Utilizados (Opcional)</FormLabel>
                           <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                   <Button variant="outline" className="w-full justify-between font-normal">
-                                      {field.value?.length || 0} seleccionadas
+                                      {field.value?.length || 0} seleccionados
                                       <ChevronDown className="ml-2 h-4 w-4" />
                                   </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                  <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
+                                  <DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
-                                  {isLoadingPoliticas ? <DropdownMenuCheckboxItem disabled>Cargando...</DropdownMenuCheckboxItem>
-                                  : politicas.map(p => (
+                                  {isLoadingSistemasCostos ? <DropdownMenuCheckboxItem disabled>Cargando...</DropdownMenuCheckboxItem>
+                                  : sistemas.map(s => (
                                       <DropdownMenuCheckboxItem
-                                          key={p.id}
-                                          checked={field.value?.includes(p.id)}
+                                          key={s.id}
+                                          checked={field.value?.includes(s.nombre)}
                                           onCheckedChange={checked => {
                                               const currentSelected = field.value || [];
                                               if (checked) {
-                                                  field.onChange([...currentSelected, p.id]);
+                                                  field.onChange([...currentSelected, s.nombre]);
                                               } else {
-                                                  field.onChange(currentSelected.filter(id => id !== p.id));
+                                                  field.onChange(currentSelected.filter(name => name !== s.nombre));
                                               }
                                           }}
                                       >
-                                          {p.codigo} - {p.titulo}
+                                          {s.nombre}
                                       </DropdownMenuCheckboxItem>
                                   ))}
                               </DropdownMenuContent>

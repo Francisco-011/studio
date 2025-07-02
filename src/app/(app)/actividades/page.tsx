@@ -9,9 +9,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { usePoliticas } from '@/contexts/PoliticasContext';
+import { useActividades, type Actividad, type CambioHistorial, type ActividadCreationData } from '@/contexts/ActividadesContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -56,34 +54,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
 import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const NO_SYSTEM_SELECTED_VALUE = "__NO_SYSTEM_SELECTED__";
-
 
 const actividadFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   descripcionBreve: z.string().optional(),
-  sistemaUtilizado: z.string().optional(),
   activa: z.boolean().default(true),
-  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve' | 'politicasAsociadas'> | 'asignaciones';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -122,8 +108,6 @@ export default function ActividadesPage() {
     toggleActividadStatus,
     isLoadingActividades
   } = useActividades();
-  const { sistemas: availableSystems, isLoadingSistemasCostos } = useSistemasCostos();
-  const { politicas, isLoadingPoliticas } = usePoliticas();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
 
   const searchParams = useSearchParams();
@@ -168,9 +152,7 @@ export default function ActividadesPage() {
     defaultValues: {
       nombre: '',
       descripcionBreve: '',
-      sistemaUtilizado: undefined,
       activa: true,
-      politicasAsociadasIds: [],
     },
   });
 
@@ -181,17 +163,13 @@ export default function ActividadesPage() {
           id: editingActividad.id,
           nombre: editingActividad.nombre,
           descripcionBreve: editingActividad.descripcionBreve || '',
-          sistemaUtilizado: editingActividad.sistemaUtilizado || undefined,
           activa: editingActividad.activa,
-          politicasAsociadasIds: editingActividad.politicasAsociadas?.map(p => p.policyId) || [],
         });
       } else {
         actividadForm.reset({
           nombre: '',
           descripcionBreve: '',
-          sistemaUtilizado: undefined,
           activa: true,
-          politicasAsociadasIds: [],
         });
       }
     }
@@ -199,12 +177,7 @@ export default function ActividadesPage() {
 
   function handleActividadSubmit(data: ActividadFormData) {
     const { id, ...activityDataFromForm } = data;
-
-    const activityDataForStorage = {
-      ...activityDataFromForm,
-      sistemaUtilizado: data.sistemaUtilizado === NO_SYSTEM_SELECTED_VALUE ? undefined : data.sistemaUtilizado,
-      politicasAsociadas: (data.politicasAsociadasIds || []).map(polId => ({ policyId: polId, linkType: 'Aplica a' as const })),
-    };
+    const activityDataForStorage: ActividadCreationData = activityDataFromForm;
 
     if (editingActividad && id) {
       updateActividad(id, activityDataForStorage);
@@ -369,7 +342,7 @@ export default function ActividadesPage() {
     }
 
     const headers = [
-      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Sistema Utilizado", 
+      "ID", "Código", "Nombre Actividad", "Descripción Breve",
       "Estado", "Asignaciones",
       "Fecha Creación", "Última Modificación"
     ];
@@ -382,7 +355,6 @@ export default function ActividadesPage() {
           escapeCsvCell(act.codigo),
           escapeCsvCell(act.nombre),
           escapeCsvCell(act.descripcionBreve),
-          escapeCsvCell(act.sistemaUtilizado),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
           escapeCsvCell(assignmentCounts.get(act.id) || 0),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
@@ -410,7 +382,7 @@ export default function ActividadesPage() {
   };
 
 
-  if (isLoadingActividades || isLoadingSistemasCostos || isLoadingProcedimientos) {
+  if (isLoadingActividades || isLoadingProcedimientos) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -546,37 +518,6 @@ export default function ActividadesPage() {
                     <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
                       <FormField control={actividadForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre de la Actividad</FormLabel><FormControl><Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} /></FormControl><FormMessage /></FormItem>)} />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
-                       <FormField control={actividadForm.control} name="sistemaUtilizado" render={({ field }) => (<FormItem><FormLabel>Sistema Utilizado (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SYSTEM_SELECTED_VALUE} disabled={isLoadingSistemasCostos}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingSistemasCostos ? "Cargando..." : "Seleccione"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SYSTEM_SELECTED_VALUE}>Ninguno</SelectItem>{availableSystems.map((sys) => (<SelectItem key={sys.id} value={sys.nombre}>{sys.nombre}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      
-                      <FormField
-                        control={actividadForm.control}
-                        name="politicasAsociadasIds"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Políticas Asociadas</FormLabel>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="w-full justify-between font-normal">
-                                  <span className="truncate">
-                                    {field.value && field.value.length > 0
-                                      ? `${field.value.length} política(s) seleccionada(s)`
-                                      : "Seleccionar políticas..."}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-                                <DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {isLoadingPoliticas ? <div className="px-2 py-1.5 text-sm">Cargando...</div> : politicas.map((politica) => (
-                                    <DropdownMenuCheckboxItem key={politica.id} checked={field.value?.includes(politica.id)} onCheckedChange={(checked) => field.onChange(checked ? [...(field.value || []), politica.id] : (field.value || []).filter(id => id !== politica.id))}>{politica.codigo} - {politica.titulo}</DropdownMenuCheckboxItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
                     </form>

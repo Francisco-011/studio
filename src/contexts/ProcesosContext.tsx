@@ -83,7 +83,7 @@ export interface CambioHistorial {
   after: any;
 }
 
-export interface CapturedProcess extends Omit<CapturaFormData, 'sistemas'> {
+export interface CapturedProcess extends CapturaFormData {
   id: string;
   codigo: string;
   capturedAt: string;
@@ -92,7 +92,6 @@ export interface CapturedProcess extends Omit<CapturaFormData, 'sistemas'> {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   puestoId?: string;
-  activityOrder?: string[];
 }
 
 interface ProcesosContextType {
