@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronRight, ChevronDown, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, XCircle, Eye, Ban, CheckSquare, Share2, ListTree as ListTreeIcon, FileText, Edit2, Building } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
-import { usePuestos } from '@/contexts/PuestosContext';
+import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcesos, type CapturedProcess, type CambioHistorial } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
@@ -470,7 +470,7 @@ export default function PanelJerarquicoPage() {
              const targetProcedure = procedimientos.find(p => p.id === dropTargetInfo.parentId);
              if (!targetProcedure) return;
 
-             // Remove from source if it's a move
+             // Remove from source if it's a move between different procedures
              if (draggedItem.type === 'activityInProcedure' && draggedItem.sourceParentId !== targetProcedure.id) {
                 const sourceProc = procedimientos.find(p => p.id === draggedItem.sourceParentId);
                 if(sourceProc) {
@@ -482,8 +482,9 @@ export default function PanelJerarquicoPage() {
              let currentOrder = [...(targetProcedure.activityOrder || [])];
              // Remove instance if it's a reorder within the same procedure
              if (draggedItem.sourceParentId === targetProcedure.id) {
-                 currentOrder.splice(draggedItem.sourceIndex, 1);
+                 const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
              }
+             
              const dropIndex = dropTargetInfo.index ?? currentOrder.length;
              currentOrder.splice(dropIndex, 0, draggedItem.id);
              
@@ -500,9 +501,9 @@ export default function PanelJerarquicoPage() {
         if (!parentProcess) return;
 
         let currentOrder = [...(parentProcess.procedimientoOrder || [])];
-        currentOrder.splice(draggedItem.sourceIndex, 1); // Remove from old position
+        const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
         const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-        currentOrder.splice(dropIndex, 0, draggedItem.id); // Add to new position
+        currentOrder.splice(dropIndex, 0, removedItem);
 
         await updateProceso(parentProcess.id, { procedimientoOrder: currentOrder });
         toast({ title: "Flujo Actualizado", description: "Se ha reordenado un procedimiento." });
@@ -517,17 +518,9 @@ export default function PanelJerarquicoPage() {
         if (!parentPuestoData) return;
 
         let currentOrder = [...(parentPuestoData.procesoOrder || [])];
-        const processExists = currentOrder.includes(draggedItem.id);
-        
-        if (processExists) {
-            currentOrder = currentOrder.filter(id => id !== draggedItem.id);
-        } else {
-             // This case is less likely if we are only reordering existing ones
-             // but good for robustness
-        }
-        
+        const [removedItem] = currentOrder.splice(draggedItem.sourceIndex, 1);
         const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-        currentOrder.splice(dropIndex, 0, draggedItem.id); // Add to new position
+        currentOrder.splice(dropIndex, 0, removedItem);
         
         await updatePuestoProcessOrder(parentPuestoId, currentOrder);
         toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
