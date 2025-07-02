@@ -16,6 +16,7 @@ import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useActividades, type Actividad, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { formatMinutesToHours } from '@/lib/utils';
+import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -52,6 +53,7 @@ const procedimientoFormSchema = z.object({
     z.number().int().optional()
   ),
   lastAuditedAt: z.string().optional(),
+  politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 
 type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
@@ -76,6 +78,7 @@ export default function ProcedimientosPage() {
   const { sistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { actividades, isLoadingActividades } = useActividades();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { politicas, updatePolitica: updatePoliticaContext, isLoadingPoliticas } = usePoliticas();
   const searchParams = useSearchParams();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,7 +102,7 @@ export default function ProcedimientosPage() {
 
   const form = useForm<ProcedimientoFormData>({
     resolver: zodResolver(procedimientoFormSchema),
-    defaultValues: { nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado', auditFrequencyInDays: undefined, lastAuditedAt: undefined },
+    defaultValues: { nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado', auditFrequencyInDays: undefined, lastAuditedAt: undefined, politicasAsociadasIds: [] },
   });
 
   const watchedNombre = form.watch('nombre');
@@ -140,6 +143,7 @@ export default function ProcedimientosPage() {
       if (editingProcedimiento) {
         form.reset({
           ...editingProcedimiento,
+          politicasAsociadasIds: editingProcedimiento.politicasAsociadasIds || [],
         });
       } else {
         const processFromQuery = searchParams.get('proceso');
@@ -153,6 +157,7 @@ export default function ProcedimientosPage() {
           procedimientosEntradaIds: [],
           informacionEntrega: '',
           procedimientosSalidaIds: [],
+          politicasAsociadasIds: [],
         });
       }
     }
@@ -160,11 +165,33 @@ export default function ProcedimientosPage() {
 
   async function handleSubmit(data: ProcedimientoFormData) {
     const { id, ...formData } = data;
-    const dataToSave = { ...formData } as ProcedimientoCreationData;
+    const dataToSave: ProcedimientoCreationData = { ...formData } as ProcedimientoCreationData;
+
+    const originalPolicyIds = editingProcedimiento ? new Set(editingProcedimiento.politicasAsociadasIds || []) : new Set<string>();
+    const newPolicyIds = new Set(data.politicasAsociadasIds || []);
 
     if (editingProcedimiento && id) {
       await updateProcedimiento(id, dataToSave);
-      toast({ title: 'Procedimiento Actualizado', description: 'El procedimiento ha sido actualizado.' });
+      
+      const addedPolicies = [...newPolicyIds].filter(x => !originalPolicyIds.has(x));
+      const removedPolicies = [...originalPolicyIds].filter(x => !newPolicyIds.has(x));
+
+      for (const policyId of addedPolicies) {
+        const policy = politicas.find(p => p.id === policyId);
+        if (policy) {
+          const updatedProcIds = [...(policy.procedimientosAsociadosIds || []), id];
+          await updatePoliticaContext(policyId, { procedimientosAsociadosIds: updatedProcIds });
+        }
+      }
+      for (const policyId of removedPolicies) {
+        const policy = politicas.find(p => p.id === policyId);
+        if (policy) {
+          const updatedProcIds = (policy.procedimientosAsociadosIds || []).filter(procId => procId !== id);
+          await updatePoliticaContext(policyId, { procedimientosAsociadosIds: updatedProcIds });
+        }
+      }
+
+      toast({ title: 'Procedimiento Actualizado', description: 'El procedimiento y sus vínculos han sido actualizados.' });
       setIsDialogOpen(false);
     } else {
       const newProc = await addProcedimiento(dataToSave);
@@ -173,6 +200,14 @@ export default function ProcedimientosPage() {
         if (parentProcess) {
           const updatedOrder = [...(parentProcess.procedimientoOrder || []), newProc.id];
           await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
+        }
+
+        for (const policyId of newPolicyIds) {
+          const policy = politicas.find(p => p.id === policyId);
+          if (policy) {
+            const updatedProcIds = [...(policy.procedimientosAsociadosIds || []), newProc.id];
+            await updatePoliticaContext(policyId, { procedimientosAsociadosIds: updatedProcIds });
+          }
         }
         
         toast({ title: 'Procedimiento Creado', description: 'Redirigiendo para gestionar sus actividades...' });
@@ -207,6 +242,17 @@ export default function ProcedimientosPage() {
     if (parentProcess) {
         const updatedOrder = (parentProcess.procedimientoOrder || []).filter(id => id !== procedimientoToDelete.id);
         await updateProceso(parentProcess.id, { procedimientoOrder: updatedOrder });
+    }
+
+    // Remove links from associated policies
+    if (procedimientoToDelete.politicasAsociadasIds) {
+      for (const policyId of procedimientoToDelete.politicasAsociadasIds) {
+        const policy = politicas.find(p => p.id === policyId);
+        if (policy) {
+          const updatedProcIds = (policy.procedimientosAsociadosIds || []).filter(procId => procId !== procedimientoToDelete.id);
+          await updatePoliticaContext(policyId, { procedimientosAsociadosIds: updatedProcIds });
+        }
+      }
     }
 
     await deleteProcedimiento(procedimientoToDelete.id);
@@ -279,7 +325,7 @@ export default function ProcedimientosPage() {
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAll = isLoadingProcedimientos || isLoadingProcesos || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos;
+  const isLoadingAll = isLoadingProcedimientos || isLoadingProcesos || isLoadingSistemasCostos || isLoadingActividades || isLoadingPuestos || isLoadingPoliticas;
 
   const handleRecalculateTotalsForProcedure = async (proc: Procedimiento) => {
     setIsRecalculating(proc.id);
@@ -445,7 +491,10 @@ export default function ProcedimientosPage() {
             <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
             <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere auditoría periódica</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
           </div>
-           <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+            <FormField control={form.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+          </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (
                   <FormItem>

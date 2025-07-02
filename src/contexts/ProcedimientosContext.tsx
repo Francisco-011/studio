@@ -34,6 +34,7 @@ export interface Procedimiento {
   tiempoEstimado?: number; // Sum of activities' time in minutes
   costoEstimado?: number; // Sum of activities' cost
   monedaCosto?: Moneda;
+  politicasAsociadasIds?: string[];
 }
 
 export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
@@ -129,7 +130,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     if (!originalProcedimiento) return;
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds'];
     
     fieldsToCompare.forEach(key => {
         const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';

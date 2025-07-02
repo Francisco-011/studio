@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -21,6 +22,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ import { es } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
+import { formatMinutesToHours } from '@/lib/utils';
 
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
@@ -91,6 +94,7 @@ export default function ProcesosDashboardPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
+  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   
   const [selectedEntityType, setSelectedEntityType] = useState<'area' | 'puesto' | 'departamento' | 'none'>('none');
   const [selectedEntityName, setSelectedEntityName] = useState<string>('');
@@ -235,25 +239,25 @@ export default function ProcesosDashboardPage() {
   }, [comparisonProcesses, isComparing, globalActividades, isLoadingData, isLoadingActividades]);
 
   const availableDepartamentos = useMemo(() => {
-    if (isLoadingDepartamentos || selectedArea === 'all') return departamentos;
-    const area = areas.find(a => a.nombre === selectedArea);
+    if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
+    const area = areas.find(a => a.nombre === selectedAreaFilter);
     return area ? departamentos.filter(d => d.areaId === area.id) : [];
-  }, [selectedArea, areas, departamentos, isLoadingDepartamentos]);
+  }, [selectedAreaFilter, areas, departamentos, isLoadingDepartamentos]);
 
   const availablePuestos = useMemo(() => {
       if (isLoadingPuestos) return puestos;
       let scopedPuestos = puestos;
 
-      if (selectedArea !== 'all') {
-          const area = areas.find(a => a.nombre === selectedArea);
+      if (selectedAreaFilter !== 'all') {
+          const area = areas.find(a => a.nombre === selectedAreaFilter);
           if (area) {
               scopedPuestos = scopedPuestos.filter(p => p.areaId === area.id);
           } else {
               return [];
           }
       }
-      if (selectedDepartamento !== 'all') {
-          const depto = departamentos.find(d => d.nombre === selectedDepartamento);
+      if (selectedDeptoFilter !== 'all') {
+          const depto = departamentos.find(d => d.nombre === selectedDeptoFilter);
           if (depto) {
              scopedPuestos = scopedPuestos.filter(p => p.departamentoId === depto.id);
           } else {
@@ -261,7 +265,7 @@ export default function ProcesosDashboardPage() {
           }
       }
       return scopedPuestos;
-  }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
+  }, [selectedAreaFilter, selectedDeptoFilter, areas, departamentos, puestos, isLoadingPuestos]);
 
   const workloadAnalysis = useMemo(() => {
     if (isLoadingPuestos || isLoadingActividades) return [];
@@ -385,7 +389,19 @@ export default function ProcesosDashboardPage() {
     }
   };
 
-  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos;
+  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcedimientos;
+
+  const topCostlyProcedures = useMemo(() => {
+    if (isLoadingAll) return [];
+    return procedimientos
+      .filter(p => p.activo && p.costoEstimado && p.costoEstimado > 0)
+      .sort((a,b) => (b.costoEstimado || 0) - (a.costoEstimado || 0))
+      .slice(0, 5)
+      .map(p => ({
+        ...p,
+        procesoPadre: allCapturedProcesses.find(proc => proc.id === p.procesoId)?.proceso || 'N/A'
+      }));
+  }, [procedimientos, allCapturedProcesses, isLoadingAll]);
 
   const { chartData, chartConfig, chartDescription } = useMemo(() => {
     if (isLoadingAll) {
@@ -636,6 +652,33 @@ export default function ProcesosDashboardPage() {
                             </ResponsiveContainer>
                         </ChartContainer>
                      ) : <p className="text-muted-foreground text-sm h-[200px] flex items-center">No hay datos para graficar.</p>}
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Top 5 Procedimientos Más Costosos (Mensual)</CardTitle>
+                    <CardDescription>Basado en cálculos de actividad y costos de puesto.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                {isLoadingAll ? <div className="flex items-center justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> :
+                    topCostlyProcedures.length > 0 ? (
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Procedimiento</TableHead><TableHead className="text-right">Costo Est.</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                        {topCostlyProcedures.map(p => (
+                            <TableRow key={p.id}>
+                            <TableCell>
+                                <p className="font-medium">{p.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{p.procesoPadre}</p>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">{formatDashboardCurrency(p.costoEstimado || 0, p.monedaCosto || 'USD')}</TableCell>
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
+                    ) : (
+                    <p className="text-muted-foreground text-sm text-center py-4">No hay datos de costos para mostrar. Recalcule los totales en los módulos de Procedimientos y Procesos.</p>
+                    )}
                 </CardContent>
             </Card>
         </div>
