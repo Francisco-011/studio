@@ -16,12 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2, CalendarCheck2, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
-import { usePuestos } from "@/contexts/PuestosContext";
-import { useProcesos, capturaFormSchema, clasificacionOptions } from '@/contexts/ProcesosContext';
+import { usePuestos, type Puesto } from "@/contexts/PuestosContext";
+import { useProcesos, capturaFormSchema, clasificacionOptions, frecuenciaOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
@@ -29,12 +30,17 @@ import { cn } from '@/lib/utils';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 const PROCESOS_COLLECTION = 'procesos';
+const PROCEDIMIENTO_INICIADOR = "__INICIADOR__";
+const PROCEDIMIENTO_FINALIZADOR = "__FINALIZADOR__";
 
 // Schemas for the new unified form
 const activitySchema = z.object({
     nombre: z.string().min(1, "El nombre es requerido."),
     descripcionBreve: z.string().optional(),
     tiempoEstimado: z.preprocess(val => val ? parseInt(String(val), 10) : undefined, z.number().int().nonnegative().optional()),
+    tiempoIdeal: z.preprocess(val => val ? parseInt(String(val), 10) : undefined, z.number().int().nonnegative().optional()),
+    puestoId: z.string().optional(),
+    frecuencia: z.enum(frecuenciaOptions).optional(),
 });
 
 const procedureSchema = z.object({
@@ -43,6 +49,14 @@ const procedureSchema = z.object({
     clasificacion: z.enum(clasificacionOptions).default('Privado'),
     sistemasUtilizados: z.array(z.string()).optional().default([]),
     activities: z.array(activitySchema).optional().default([]),
+    informacionRecibe: z.string().optional(),
+    procedimientosEntradaIds: z.array(z.string()).optional().default([]),
+    informacionEntrega: z.string().optional(),
+    procedimientosSalidaIds: z.array(z.string()).optional().default([]),
+    auditFrequencyInDays: z.preprocess(
+      (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
+      z.number().int().optional()
+    ),
 });
 
 const unifiedCaptureSchema = capturaFormSchema.extend({
@@ -52,7 +66,7 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
 
-function ActivitiesSection({ control, procIndex, allActivities }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[] }) {
+function ActivitiesSection({ control, procIndex, allActivities, allPuestos }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[] }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
         name: `procedures.${procIndex}.activities`,
@@ -82,40 +96,65 @@ function ActivitiesSection({ control, procIndex, allActivities }: { control: Con
                 {fields.map((field, index) => (
                     <div 
                         key={field.id}
-                        className="flex items-start gap-2 p-2 border rounded-md bg-background"
-                        draggable
-                        onDragStart={() => handleDragStart(index)}
-                        onDragEnter={() => handleDragEnter(index)}
-                        onDragEnd={handleDrop}
-                        onDragOver={(e) => e.preventDefault()}
+                        className="flex flex-col gap-2 p-3 border rounded-md bg-background"
                     >
-                         <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab mt-2" />
-                         <FormField
-                            control={control}
-                            name={`procedures.${procIndex}.activities.${index}.nombre`}
-                            render={({ field }) => (
-                                <FormItem className="flex-grow">
-                                    <FormControl><Input placeholder={`Nombre de la actividad ${index + 1}`} {...field} /></FormControl>
-                                    {(() => {
-                                        const actName = field.value;
-                                        if (!actName) return null;
-                                        const existingAct = allActivities.find(a => a.nombre.trim().toLowerCase() === actName.trim().toLowerCase());
-                                        if (existingAct) {
-                                            return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{`Advertencia: ya existe una actividad con este nombre.`}</FormDescription>;
-                                        }
-                                        return null;
-                                    })()}
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                         <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-start gap-2">
+                             <div 
+                                draggable
+                                onDragStart={() => handleDragStart(index)}
+                                onDragEnter={() => handleDragEnter(index)}
+                                onDragEnd={handleDrop}
+                                onDragOver={(e) => e.preventDefault()}
+                                className="cursor-grab pt-2"
+                             >
+                                <GripVertical className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                             <FormField
+                                control={control}
+                                name={`procedures.${procIndex}.activities.${index}.nombre`}
+                                render={({ field }) => (
+                                    <FormItem className="flex-grow">
+                                        <FormLabel className="text-xs">Nombre Actividad {index + 1}</FormLabel>
+                                        <FormControl><Input placeholder={`Nombre de la actividad`} {...field} /></FormControl>
+                                        {(() => {
+                                            const actName = field.value;
+                                            if (!actName) return null;
+                                            const existingAct = allActivities.find(a => a.nombre.trim().toLowerCase() === actName.trim().toLowerCase());
+                                            if (existingAct) {
+                                                return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1 text-xs"><AlertTriangle className="h-3 w-3" />{`Advertencia: ya existe una actividad con este nombre.`}</FormDescription>;
+                                            }
+                                            return null;
+                                        })()}
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                             <div 
+                                role="button"
+                                tabIndex={0}
+                                aria-label="Eliminar actividad"
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(index); }}}
+                                className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-6")}
+                                onClick={(e) => { e.stopPropagation(); remove(index); }}
+                            >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </div>
+                        </div>
+                        <div className="pl-8 space-y-4">
+                           <FormField control={control} name={`procedures.${procIndex}.activities.${index}.descripcionBreve`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Descripción</FormLabel><FormControl><Textarea placeholder="Un resumen conciso..." {...field} value={field.value ?? ''} rows={2} /></FormControl><FormMessage /></FormItem>)} />
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <FormField control={control} name={`procedures.${procIndex}.activities.${index}.puestoId`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Puesto que Ejecuta</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Sin Puesto Específico</SelectItem>{allPuestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                             <FormField control={control} name={`procedures.${procIndex}.activities.${index}.frecuencia`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                           </div>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <FormField control={control} name={`procedures.${procIndex}.activities.${index}.tiempoEstimado`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Tiempo Estimado (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 30" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             <FormField control={control} name={`procedures.${procIndex}.activities.${index}.tiempoIdeal`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 20" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                           </div>
+                        </div>
                     </div>
                 ))}
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: 0 })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: undefined, tiempoIdeal: undefined, puestoId: undefined, frecuencia: undefined })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
             </Button>
         </div>
@@ -340,7 +379,7 @@ export default function CapturaPage() {
                 <div className="p-4 border rounded-lg space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold flex items-center gap-2"><ListOrdered className="h-5 w-5 text-green-600"/>2. Procedimientos</h3>
-                    <Button type="button" variant="outline" onClick={() => appendProcedure({ nombre: '', activities: [] })}><PlusCircle className="mr-2 h-4 w-4"/>Agregar Procedimiento</Button>
+                    <Button type="button" variant="outline" onClick={() => appendProcedure({ nombre: '', activities: [] } as any)}><PlusCircle className="mr-2 h-4 w-4"/>Agregar Procedimiento</Button>
                   </div>
                   
                   <div className="space-y-3">
@@ -371,7 +410,7 @@ export default function CapturaPage() {
                                                 const existingProc = allProcedimientos.find(p => p.nombre.trim().toLowerCase() === procName.trim().toLowerCase());
                                                 if (existingProc) {
                                                 const parentProcess = allProcesses.find(p => p.id === existingProc.procesoId);
-                                                return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{`Advertencia: ya existe un procedimiento con este nombre en el proceso "${parentProcess?.proceso || 'otro proceso'}".`}</FormDescription>;
+                                                return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1 text-xs"><AlertTriangle className="h-3 w-3" />{`Advertencia: ya existe un procedimiento con este nombre en "${parentProcess?.proceso || 'otro proceso'}".`}</FormDescription>;
                                                 }
                                                 return null;
                                             })()}
@@ -391,8 +430,21 @@ export default function CapturaPage() {
                                 </div>
                               </div>
                             </AccordionTrigger>
-                            <AccordionContent className="p-4 border-t">
-                              <ActivitiesSection control={form.control} procIndex={index} allActivities={allActivities} />
+                            <AccordionContent className="p-4 border-t space-y-4">
+                               <FormField control={form.control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                               </div>
+                               <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                               
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <FormField control={form.control} name={`procedures.${index}.procedimientosEntradaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Entrada</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...' } <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}>(Es un procedimiento iniciador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => ( <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => { const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.procedimientosSalidaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Salida</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...'}<ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}>(Es un procedimiento finalizador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => {const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                               </div>
+                              <ActivitiesSection control={form.control} procIndex={index} allActivities={allActivities} allPuestos={puestos} />
                             </AccordionContent>
                           </AccordionItem>
                         </Accordion>
