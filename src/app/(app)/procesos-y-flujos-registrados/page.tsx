@@ -224,9 +224,11 @@ export default function ProcesosYFlujosRegistradosPage() {
     return areaPuestos;
   }, [puestos, areas, departamentos, selectedAreaFilter, selectedDeptoFilter, isLoadingPuestos]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
 
   const sortedAndFilteredData = useMemo(() => {
-    setCurrentPage(1);
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
 
     if (searchTerm) {
@@ -697,3 +699,5 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
+
+    
