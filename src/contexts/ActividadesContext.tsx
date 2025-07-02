@@ -7,6 +7,8 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
+import type { Moneda } from './AccionesContext';
+import type { frecuenciaOptions } from './ProcesosContext';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -25,7 +27,14 @@ export interface Actividad {
   deletedAt?: number; 
   descripcionBreve?: string;
   historialDeCambios?: CambioHistorial[];
-  // No hay vinculos a sistemas o politicas aqui
+  
+  // New time and cost fields
+  tiempoEstimado?: number; // in minutes
+  tiempoIdeal?: number; // in minutes
+  costoEstimado?: number;
+  costoIdeal?: number;
+  monedaCosto?: Moneda;
+  frecuencia?: typeof frecuenciaOptions[number];
 }
 
 export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
@@ -124,7 +133,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'costoEstimado', 'costoIdeal', 'monedaCosto', 'frecuencia'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

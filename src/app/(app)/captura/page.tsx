@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
-import { useProcesos, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, capturaFormSchema, type CapturaFormData, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 
 const SPECIAL_ENTRADA_OPTION = "Iniciador";
@@ -56,12 +56,6 @@ const defaultFormValues: Partial<CapturaFormData> = {
   proceso: "",
   descripcion: "",
   clasificacion: "Privado",
-  frecuencia: undefined,
-  tiempoEstimado: undefined,
-  tiempoIdeal: undefined,
-  costoEstimado: undefined,
-  costoIdeal: undefined,
-  monedaCosto: undefined,
   informacionRecibe: "",
   procesosEntrada: [],
   informacionEntrega: "",
@@ -298,7 +292,7 @@ export default function CapturaPage() {
         </CardHeader>
         <CardContent>
           <CardDescription className="mb-6">
-            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Después de guardar, podrá definir sus procedimientos y actividades.
+            Este es el punto de entrada principal para registrar de forma detallada todos los procesos operativos. Los tiempos y costos se calculan automáticamente a partir de las actividades que defina más adelante.
           </CardDescription>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -432,35 +426,6 @@ export default function CapturaPage() {
                     </FormItem>
                   )}
                 />
-              </div>
-              
-              <div className="space-y-2">
-                 <h3 className="text-lg font-medium">Métricas del Proceso</h3>
-                 <p className="text-sm text-muted-foreground">Establezca los tiempos y costos estimados vs. ideales para este proceso.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="frecuencia"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Frecuencia</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione la frecuencia" /></SelectTrigger></FormControl>
-                        <SelectContent>{(frecuenciaOptions as readonly string[]).map((option) => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <FormDescription>Periodicidad con la que se realiza este proceso.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField control={form.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda de Costos</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione una moneda" /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as readonly string[]).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormDescription>Moneda para los costos del proceso.</FormDescription><FormMessage /></FormItem>)} />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <FormField control={form.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><div className="relative"><Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 60" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl></div><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><div className="relative"><Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 45" {...field} value={field.value ?? ''} min="0" className="pl-9" /></FormControl></div><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Estimado</FormLabel><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 100" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl></div><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><FormControl><Input type="number" placeholder="Ej: 80" {...field} value={field.value ?? ''} min="0" step="any" className="pl-9"/></FormControl></div><FormMessage /></FormItem>)} />
               </div>
 
               <div className="space-y-2">

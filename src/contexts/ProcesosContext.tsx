@@ -32,24 +32,6 @@ export const capturaFormSchema = z.object({
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
   clasificacion: z.enum(clasificacionOptions).default('Privado'),
-  frecuencia: z.enum(frecuenciaOptions, { errorMap: () => ({ message: "Seleccione una frecuencia válida."}) }),
-  tiempoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo estimado debe ser un número positivo o cero.").optional()
-  ),
-  tiempoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo ideal debe ser un número positivo o cero.").optional()
-  ),
-  costoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo estimado debe ser un número positivo.").optional()
-  ),
-  costoIdeal: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El costo ideal debe ser un número positivo.").optional()
-  ),
-  monedaCosto: z.enum(monedaOptions as [string, ...string[]]).optional(),
   informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
   procesosEntrada: z.array(z.string()).optional().default([]),
   informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
@@ -64,14 +46,6 @@ export const capturaFormSchema = z.object({
     z.number().int().optional()
   ),
   lastAuditedAt: z.string().optional(),
-}).refine(data => {
-  if ((data.costoEstimado !== undefined || data.costoIdeal !== undefined) && !data.monedaCosto) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debe seleccionar una moneda si especifica un costo.",
-  path: ["monedaCosto"],
 });
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
@@ -83,6 +57,8 @@ export interface CambioHistorial {
   after: any;
 }
 
+// NOTE: The time/cost fields on CapturedProcess now represent calculated totals.
+// They are not direct inputs anymore.
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   codigo: string;
@@ -92,6 +68,13 @@ export interface CapturedProcess extends CapturaFormData {
   activo?: boolean;
   historialDeCambios?: CambioHistorial[];
   puestoId?: string;
+  // These fields are calculated from activities/procedures, but stored for convenience
+  tiempoEstimado?: number;
+  tiempoIdeal?: number;
+  costoEstimado?: number;
+  costoIdeal?: number;
+  monedaCosto?: (typeof monedaOptions)[number];
+  frecuencia?: (typeof frecuenciaOptions)[number];
 }
 
 interface ProcesosContextType {
@@ -225,8 +208,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
 
         const changes: CambioHistorial[] = [];
         const fieldsToCompare: (keyof typeof data)[] = [
-            'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'frecuencia', 
-            'tiempoEstimado', 'tiempoIdeal', 'costoEstimado', 'costoIdeal', 'monedaCosto',
+            'proceso', 'area', 'puesto', 'departamento', 'descripcion',
             'informacionRecibe', 'informacionEntrega', 'procedimientoOrder'
         ];
 
