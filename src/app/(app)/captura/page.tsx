@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ import { useProcesos, capturaFormSchema, clasificacionOptions } from '@/contexts
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { cn } from '@/lib/utils';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 const PROCESOS_COLLECTION = 'procesos';
@@ -378,9 +379,16 @@ export default function CapturaPage() {
                                         </FormItem>
                                     )}
                                 />
-                                <Button type="button" variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); removeProcedure(index); }}>
-                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                </Button>
+                                <div 
+                                  role="button" 
+                                  tabIndex={0} 
+                                  aria-label="Eliminar procedimiento" 
+                                  onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); removeProcedure(index); }}} 
+                                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }))} 
+                                  onClick={(e) => { e.stopPropagation(); removeProcedure(index); }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive"/>
+                                </div>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="p-4 border-t">
