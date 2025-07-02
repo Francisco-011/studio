@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered } from "lucide-react";
+import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered, Building2 } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
@@ -95,6 +95,20 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
   return stringValue;
 };
 
+const Legend = () => (
+    <div className="mb-4 p-3 border rounded-lg bg-muted/30">
+      <h4 className="text-sm font-semibold mb-2">Leyenda de Iconos</h4>
+      <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+        <div className="flex items-center gap-1.5"><Building className="h-4 w-4 text-purple-600" /><span>Área</span></div>
+        <div className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-teal-600" /><span>Departamento</span></div>
+        <div className="flex items-center gap-1.5"><Users className="h-4 w-4 text-purple-400" /><span>Puesto</span></div>
+        <div className="flex items-center gap-1.5"><Workflow className="h-4 w-4 text-blue-600" /><span>Proceso</span></div>
+        <div className="flex items-center gap-1.5"><ListOrdered className="h-4 w-4 text-green-600" /><span>Procedimiento</span></div>
+        <div className="flex items-center gap-1.5"><ListChecks className="h-4 w-4 text-amber-600" /><span>Actividad</span></div>
+        <div className="flex items-center gap-1.5"><FileText className="h-4 w-4 text-orange-500" /><span>Política</span></div>
+      </div>
+    </div>
+);
 
 export default function PanelJerarquicoPage() {
   const router = useRouter();
@@ -613,7 +627,7 @@ export default function PanelJerarquicoPage() {
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
                   {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
                 </Button>
-                <Building className="h-4 w-4 mr-2 text-purple-500" />
+                <Building2 className="h-4 w-4 mr-2 text-teal-600" />
                 <span className="flex-grow">{node.name}</span>
               </div>
             );
@@ -696,7 +710,7 @@ export default function PanelJerarquicoPage() {
                 title={!node.activo ? "Esta actividad está inactiva" : node.name}
               >
                 <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground" : "text-transparent")}/>
-                <ListChecks className="h-3 w-3 mr-1.5 shrink-0 text-gray-500" />
+                <ListChecks className="h-3 w-3 mr-1.5 shrink-0 text-amber-600" />
                 <span className="flex-grow text-xs">{node.name}</span>
                  {!node.activo && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
@@ -748,7 +762,7 @@ export default function PanelJerarquicoPage() {
                   <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar por política..." value={policySearchTerm} onChange={(e) => setPolicySearchTerm(e.target.value)} className="w-full pl-9"/></div>
                 </div>
               </div>
-
+              <Legend />
               <div className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
                 <Card><CardHeader><CardTitle className="text-lg">Árbol de Procesos, Procedimientos y Políticas</CardTitle></CardHeader><CardContent><ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">{treeData.length > 0 ? renderTree(treeData) : <div className="flex flex-col items-center justify-center h-full text-center p-4"><FolderTree className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay procesos para mostrar.</p><p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p></div>}</ScrollArea></CardContent></Card>
                 
@@ -831,3 +845,4 @@ function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto: s
 type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
+    
