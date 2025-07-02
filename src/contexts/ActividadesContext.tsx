@@ -39,7 +39,7 @@ export interface Actividad {
   frecuencia?: typeof frecuenciaOptions[number];
 }
 
-export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'procedimientoId'>;
+export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'procedimientoId' | 'costoEstimado' | 'costoIdeal'>;
 
 interface ActividadesContextType {
   actividades: Actividad[];
@@ -118,6 +118,8 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
           createdAt: currentTime,
           updatedAt: currentTime,
           historialDeCambios: [],
+          puestoId: data.puestoId,
+          frecuencia: data.frecuencia,
       };
       return newActividad;
     } catch(e) {

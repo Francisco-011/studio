@@ -81,7 +81,7 @@ const actividadFormSchema = z.object({
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones' | 'procedimientoPadre' | 'tiempoEstimado' | 'costoEstimado';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones' | 'procedimientoPadre' | 'tiempoEstimado' | 'costoEstimado' | 'frecuencia';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -735,6 +735,7 @@ export default function ActividadesPage() {
                     <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('asignaciones')}>Asign. {getSortIcon('asignaciones')}</TableHead>
                     <TableHead className="w-[120px] text-right cursor-pointer" onClick={() => requestSort('tiempoEstimado')}>Tiempo Est. {getSortIcon('tiempoEstimado')}</TableHead>
                     <TableHead className="w-[120px] text-right cursor-pointer" onClick={() => requestSort('costoEstimado')}>Costo Est. {getSortIcon('costoEstimado')}</TableHead>
+                    <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('frecuencia')}>Frecuencia {getSortIcon('frecuencia')}</TableHead>
                     <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('activa')}>Estado {getSortIcon('activa')}</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
@@ -752,6 +753,7 @@ export default function ActividadesPage() {
                       </TableCell>
                       <TableCell className="text-right text-sm">{actividad.tiempoEstimado ? formatMinutesToHours(actividad.tiempoEstimado) : '-'}</TableCell>
                       <TableCell className="text-right text-sm">{formatCurrencyDisplay(costInfo.cost, costInfo.currency)}</TableCell>
+                      <TableCell className="text-sm">{actividad.frecuencia || '-'}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700": actividad.activa, "bg-slate-500 hover:bg-slate-600": !actividad.activa, "text-white": true})}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
