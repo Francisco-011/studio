@@ -74,7 +74,7 @@ const actividadFormSchema = z.object({
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones' | 'procedimientoPadre';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -157,6 +157,19 @@ export default function ActividadesPage() {
         });
     });
     return counts;
+  }, [procedimientos]);
+
+  const activityToProceduresMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    procedimientos.forEach(proc => {
+        (proc.activityOrder || []).forEach(actId => {
+            if (!map.has(actId)) {
+                map.set(actId, []);
+            }
+            map.get(actId)!.push(proc.nombre);
+        });
+    });
+    return map;
   }, [procedimientos]);
 
 
@@ -291,10 +304,20 @@ export default function ActividadesPage() {
 
   const sortedAndFilteredActividades = useMemo(() => {
     setCurrentPage(1); // Reset to first page on filter change
-    let filtered = actividades.filter(actividad => {
+    
+    const augmentedActivities = actividades.map(act => {
+      const parentProcedures = activityToProceduresMap.get(act.id);
+      return {
+        ...act,
+        procedimientoPadre: parentProcedures && parentProcedures.length > 0 ? parentProcedures.join(', ') : 'No asignado',
+      };
+    });
+
+    let filtered = augmentedActivities.filter(actividad => {
       const count = assignmentCounts.get(actividad.id) || 0;
       const matchesSearchTerm = actividad.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase());
+                                (actividad.descripcionBreve || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                actividad.procedimientoPadre.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus =
         statusFilter === 'all' ||
         (statusFilter === 'active' && actividad.activa) ||
@@ -314,6 +337,9 @@ export default function ActividadesPage() {
         if (sortConfig.key === 'asignaciones') {
             valA = assignmentCounts.get(a.id) || 0;
             valB = assignmentCounts.get(b.id) || 0;
+        } else if (sortConfig.key === 'procedimientoPadre') {
+            valA = a.procedimientoPadre;
+            valB = b.procedimientoPadre;
         } else {
             valA = a[sortConfig.key as keyof Actividad];
             valB = b[sortConfig.key as keyof Actividad];
@@ -348,7 +374,7 @@ export default function ActividadesPage() {
       filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
     return filtered;
-  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts]);
+  }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts, activityToProceduresMap]);
 
   const totalPages = Math.ceil(sortedAndFilteredActividades.length / ITEMS_PER_PAGE);
   const paginatedActividades = useMemo(() => {
@@ -395,7 +421,7 @@ export default function ActividadesPage() {
     }
 
     const headers = [
-      "ID", "Código", "Nombre Actividad", "Descripción Breve",
+      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre",
       "Estado", "Asignaciones",
       "Fecha Creación", "Última Modificación"
     ];
@@ -408,6 +434,7 @@ export default function ActividadesPage() {
           escapeCsvCell(act.codigo),
           escapeCsvCell(act.nombre),
           escapeCsvCell(act.descripcionBreve),
+          escapeCsvCell(act.procedimientoPadre),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
           escapeCsvCell(assignmentCounts.get(act.id) || 0),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
@@ -616,7 +643,8 @@ export default function ActividadesPage() {
                   <TableRow>
                     <TableHead className="w-[100px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
                     <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('nombre')}>Nombre {getSortIcon('nombre')}</TableHead>
-                    <TableHead className="w-[150px] cursor-pointer" onClick={() => requestSort('asignaciones')}>Asignaciones {getSortIcon('asignaciones')}</TableHead>
+                    <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('procedimientoPadre')}>Procedimiento Padre {getSortIcon('procedimientoPadre')}</TableHead>
+                    <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('asignaciones')}>Asignaciones {getSortIcon('asignaciones')}</TableHead>
                      <TableHead className="w-[140px] cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
                     <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('activa')}>Estado {getSortIcon('activa')}</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
@@ -627,8 +655,9 @@ export default function ActividadesPage() {
                     <TableRow key={actividad.id}>
                       <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
-                      <TableCell className="text-sm">
-                        <Badge variant="secondary" className="cursor-default">{assignmentCounts.get(actividad.id) || 0} Asign.</Badge>
+                      <TableCell className="text-xs text-muted-foreground">{actividad.procedimientoPadre}</TableCell>
+                      <TableCell className="text-sm text-center">
+                        <Badge variant="secondary" className="cursor-default">{assignmentCounts.get(actividad.id) || 0}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
                       <TableCell className="text-center"><Badge variant={actividad.activa ? 'default' : 'secondary'}>{actividad.activa ? 'Activa' : 'Inactiva'}</Badge></TableCell>
