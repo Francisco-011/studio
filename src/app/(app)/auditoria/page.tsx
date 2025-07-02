@@ -340,7 +340,7 @@ export default function AuditoriaPage() {
         if(!sistema) return nullDetails;
 
         const costosDelSistema = costosSistemas.filter(c => c.sistemaId === sistema.id);
-        const procesosQueUsanSistema = allProcesses.filter(p => (p.sistemasUtilizados || []).includes(sistema.nombre));
+        const procesosQueUsanSistema = allProcesses.filter(p => (p.sistemas || []).includes(sistema.nombre));
 
         const policyIds = new Set<string>();
         procesosQueUsanSistema.forEach(proc => {
@@ -791,22 +791,11 @@ export default function AuditoriaPage() {
                                 <Card>
                                     <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
                                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        <DetailDisplay title="Descripción" value={auditTargetDetails.process.descripcion} isTextarea />
+                                        <DetailDisplay title="Objetivo" value={auditTargetDetails.process.descripcion} isTextarea />
                                         <DetailDisplay title="Área" value={auditTargetDetails.process.area} />
                                         <DetailDisplay title="Departamento" value={auditTargetDetails.departamento?.nombre} />
                                         <DetailDisplay title="Puesto que Ejecuta" value={auditTargetDetails.process.puesto} />
                                         <DetailDisplay title="Jefe Inmediato del Puesto" value={auditTargetDetails.jefeInmediato?.nombre} />
-                                        <DetailDisplay title="Frecuencia" value={auditTargetDetails.process.frecuencia} />
-                                        <DetailDisplay title="Tiempo Estimado" value={auditTargetDetails.process.tiempoEstimado !== undefined ? formatMinutesToHours(auditTargetDetails.process.tiempoEstimado) : null} />
-                                        <DetailDisplay title="Tiempo Ideal" value={auditTargetDetails.process.tiempoIdeal !== undefined ? formatMinutesToHours(auditTargetDetails.process.tiempoIdeal) : null} />
-                                        <DetailDisplay title="Costo Estimado" value={auditTargetDetails.process.costoEstimado !== undefined ? `${auditTargetDetails.process.costoEstimado} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
-                                        <DetailDisplay title="Costo Ideal" value={auditTargetDetails.process.costoIdeal !== undefined ? `${auditTargetDetails.process.costoIdeal} ${auditTargetDetails.process.monedaCosto || ''}`: null} />
-                                        <DetailDisplay title="Procesos de Entrada" value={auditTargetDetails.process.procesosEntrada} isList />
-                                        <DetailDisplay title="Procesos de Salida" value={auditTargetDetails.process.procesosSalida} isList />
-                                        <div className="col-span-full space-y-2">
-                                           <DetailDisplay title="Información que Recibe (Entradas)" value={auditTargetDetails.process.informacionRecibe} isTextarea />
-                                           <DetailDisplay title="Información que Entrega (Salidas)" value={auditTargetDetails.process.informacionEntrega} isTextarea />
-                                        </div>
                                     </CardContent>
                                 </Card>
                                 
@@ -831,33 +820,19 @@ export default function AuditoriaPage() {
                                                             {activitiesToShow.map((act, actIndex) => (
                                                                 <Card key={act.id} className="bg-background/50">
                                                                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
-                                                                        <div className="flex items-start gap-3 flex-grow min-w-0">
-                                                                            <span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>
-                                                                            <div className="flex-grow">
-                                                                                <p className="font-medium text-sm break-words">{act.nombre}</p>
-                                                                                {act.descripcionBreve && (
-                                                                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{act.descripcionBreve}</p>
-                                                                                )}
-                                                                                {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
-                                                                            </div>
+                                                                        <div className="flex-grow">
+                                                                            <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
+                                                                            {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
                                                                         </div>
                                                                         <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                     </CardHeader>
-                                                                    <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3">
+                                                                    <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
+                                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
                                                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                                                            <div>
-                                                                                <span className="font-semibold">Código: </span>
-                                                                                <span className="text-muted-foreground">{act.codigo}</span>
-                                                                            </div>
-                                                                            <div>
-                                                                                <span className="font-semibold">Sistema: </span>
-                                                                                <span className="text-muted-foreground">{act.sistemaUtilizado || 'N/A'}</span>
-                                                                            </div>
+                                                                            <DetailDisplay title="Código" value={act.codigo} />
+                                                                            <DetailDisplay title="Sistema" value={act.sistemaUtilizado} />
                                                                             <div className="col-span-2">
-                                                                                <span className="font-semibold">Últ. Modif.: </span>
-                                                                                <span className="text-muted-foreground">
-                                                                                    {act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')}
-                                                                                </span>
+                                                                                <DetailDisplay title="Últ. Modif." value={act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')} />
                                                                             </div>
                                                                         </div>
                                                                     </CardContent>
@@ -900,12 +875,9 @@ export default function AuditoriaPage() {
                                                                 <Card>
                                                                     <CardHeader className="pb-2"><CardTitle className="text-base">Detalles del Proceso</CardTitle></CardHeader>
                                                                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                                                                        <DetailDisplay title="Descripción" value={process.descripcion} isTextarea />
-                                                                        <DetailDisplay title="Frecuencia" value={process.frecuencia} />
+                                                                        <DetailDisplay title="Objetivo" value={process.descripcion} isTextarea />
                                                                         <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : '-'} / ${process.tiempoIdeal !== undefined ? formatMinutesToHours(process.tiempoIdeal) : '-'}`} />
                                                                         <DetailDisplay title="Costo Est./Ideal" value={`${process.costoEstimado ?? '-'} / ${process.costoIdeal ?? '-'} ${process.monedaCosto || ''}`} />
-                                                                        <DetailDisplay title="Procesos de Entrada" value={process.procesosEntrada} isList />
-                                                                        <DetailDisplay title="Procesos de Salida" value={process.procesosSalida} isList />
                                                                     </CardContent>
                                                                 </Card>
                                                                 
@@ -928,30 +900,17 @@ export default function AuditoriaPage() {
                                                                                             {activitiesToShow.map((act, actIndex) => (
                                                                                                 <Card key={act.id} className="bg-background/50">
                                                                                                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
-                                                                                                        <div className="flex items-start gap-3 flex-grow min-w-0">
-                                                                                                            <span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>
-                                                                                                            <div className="flex-grow">
-                                                                                                                <p className="font-medium text-sm break-words">{act.nombre}</p>
-                                                                                                                {act.descripcionBreve && (
-                                                                                                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{act.descripcionBreve}</p>
-                                                                                                                )}
-                                                                                                                {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
-                                                                                                            </div>
+                                                                                                        <div className="flex-grow">
+                                                                                                            <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
+                                                                                                            {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
                                                                                                         </div>
                                                                                                         <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                                                     </CardHeader>
-                                                                                                    <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3">
+                                                                                                    <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
+                                                                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
                                                                                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                                                                                            <div>
-                                                                                                                <span className="font-semibold">Código: </span>
-                                                                                                                <span className="text-muted-foreground">{act.codigo}</span>
-                                                                                                            </div>
-                                                                                                            <div>
-                                                                                                                <span className="font-semibold">Últ. Modif.: </span>
-                                                                                                                <span className="text-muted-foreground">
-                                                                                                                    {act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')}
-                                                                                                                </span>
-                                                                                                            </div>
+                                                                                                            <DetailDisplay title="Código" value={act.codigo} />
+                                                                                                            <DetailDisplay title="Últ. Modif." value={act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')} />
                                                                                                         </div>
                                                                                                     </CardContent>
                                                                                                 </Card>
@@ -981,7 +940,6 @@ export default function AuditoriaPage() {
                                 <Card>
                                     <CardHeader><CardTitle className="text-lg">Detalles del Sistema</CardTitle></CardHeader>
                                     <CardContent className="space-y-4">
-                                        <DetailDisplay title="Alcance del Sistema" value={auditTargetDetails.sistema.scope} />
                                         
                                         {auditTargetDetails.sistema.costos && auditTargetDetails.sistema.costos.length > 0 && (
                                             <div>

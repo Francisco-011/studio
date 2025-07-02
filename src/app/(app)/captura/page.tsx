@@ -274,9 +274,9 @@ export default function CapturaPage() {
                 name="descripcion"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descripción Detallada del Proceso</FormLabel>
-                    <FormControl><Textarea placeholder="Describa el objetivo, alcance, inicio, fin y los pasos principales del proceso." className="min-h-[120px]" {...field} /></FormControl>
-                    <FormDescription>Proporcione una explicación clara y concisa del proceso.</FormDescription>
+                    <FormLabel>Objetivo</FormLabel>
+                    <FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado de este proceso." className="min-h-[120px]" {...field} /></FormControl>
+                    <FormDescription>Proporcione una explicación clara y concisa del objetivo del proceso.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

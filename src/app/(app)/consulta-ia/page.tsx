@@ -71,7 +71,7 @@ Entidad: Proceso
 ID: ${p.id}
 Nombre: ${p.proceso}
 Código: ${p.codigo}
-Descripción: ${p.descripcion}
+Objetivo: ${p.descripcion}
 Clasificación: ${p.clasificacion}
 Área: ${p.area}
 Puesto: ${p.puesto}
@@ -88,7 +88,6 @@ Entidad: Procedimiento
 ID: ${p.id}
 Nombre: ${p.nombre}
 Código: ${p.codigo}
-Descripción: ${p.descripcion || 'N/A'}
 Proceso Padre: ${parentProcess?.proceso || 'N/A'} (ID: ${p.procesoId})
 Sistemas Utilizados: [${p.sistemasUtilizados?.join(', ') || 'Ninguno'}]
 ---
@@ -97,7 +96,7 @@ Sistemas Utilizados: [${p.sistemasUtilizados?.join(', ') || 'Ninguno'}]
 
       const activityContext = actividades
         .map(a => {
-           const parentProcedimiento = procedimientos.find(p => p.id === a.procedimientoId);
+           const parentProcedimiento = procedimientos.find(p => p.procedimientoId === a.procedimientoId);
            return `
 ---
 Entidad: Actividad

@@ -223,7 +223,7 @@ export default function MejorasPage() {
           const deptoInfo = p.departamento ? `Departamento: ${p.departamento}\n` : '';
           return `Proceso (ID: ${p.id}): ${p.proceso}\n` +
                  `Área: ${p.area}\n` + deptoInfo + `Puesto Principal: ${p.puesto}\n` +
-                 `Descripción: ${p.descripcion}\n` +
+                 `Objetivo: ${p.descripcion}\n` +
                  `Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(pol => pol.policyId).join(', ')}]\n`;
         })
         .join('\n\n---\n\n');

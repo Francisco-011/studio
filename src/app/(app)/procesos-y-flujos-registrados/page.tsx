@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -72,17 +71,15 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData, frecuenciaOptions, monedaOptions } from '@/contexts/ProcesosContext';
+import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 
 
-const SPECIAL_ENTRADA_OPTION = "Iniciador";
-const SPECIAL_SALIDA_OPTION = "Finalizador";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
-type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'frecuencia' | 'tiempoEstimado' | 'costoEstimado' | 'updatedAt' | 'activo' | 'numActividades';
+type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'updatedAt' | 'activo' | 'numActividades';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -119,7 +116,6 @@ export default function ProcesosYFlujosRegistradosPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades: allActivities, isLoadingActividades } = useActividades();
-  const { sistemas: allConfiguredSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
   const { procedimientos: allProcedimientos, isLoadingProcedimientos } = useProcedimientos();
   
@@ -186,20 +182,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
     return puestosInArea;
   }, [watchedEditAreaName, watchedEditDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
-
-  const availableEditSistemas = useMemo(() => {
-    if (isLoadingSistemasCostos || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos) return [];
-    const selectedAreaObj = areas.find(a => a.nombre === watchedEditAreaName);
-    const selectedDeptoObj = departamentos.find(d => d.nombre === watchedEditDepartamentoName && d.areaId === selectedAreaObj?.id);
-    const selectedPuestoObj = puestos.find(p => p.nombre === editForm.getValues('puesto') && p.areaId === selectedAreaObj?.id);
-    return allConfiguredSistemas.filter(sistema => {
-      if (sistema.scope === "Empresa") return true;
-      if (sistema.scope === "Área" && selectedAreaObj && sistema.scopeId === selectedAreaObj.id) return true;
-      if (sistema.scope === "Departamento" && selectedDeptoObj && sistema.scopeId === selectedDeptoObj.id) return true;
-      if (sistema.scope === "Puesto" && selectedPuestoObj && sistema.scopeId === selectedPuestoObj.id) return true;
-      return false;
-    });
-  }, [allConfiguredSistemas, watchedEditAreaName, watchedEditDepartamentoName, editForm, areas, departamentos, puestos, isLoadingSistemasCostos, isLoadingAreas, isLoadingPuestos, isLoadingDepartamentos]);
 
   useEffect(() => {
     if (editingProcess) {
@@ -385,10 +367,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     const headers = [
-      "ID", "Proceso", "Area", "Departamento", "Puesto", "Estado", "Descripción",
-      "Frecuencia", "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda",
-      "Sistemas", "Información Recibe", "Procesos de Entrada",
-      "Información Entrega", "Procesos de Salida",
+      "ID", "Proceso", "Area", "Departamento", "Puesto", "Estado", "Objetivo",
+      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda",
       "Fecha Captura", "Última Modificación"
     ];
     
@@ -402,17 +382,11 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.puesto),
         escapeCsvCell(proc.activo !== false ? 'Activo' : 'Inactivo'),
         escapeCsvCell(proc.descripcion),
-        escapeCsvCell(proc.frecuencia),
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.tiempoIdeal),
         escapeCsvCell(proc.costoEstimado),
         escapeCsvCell(proc.costoIdeal),
         escapeCsvCell(proc.monedaCosto),
-        escapeCsvCell(proc.sistemas),
-        escapeCsvCell(proc.informacionRecibe),
-        escapeCsvCell(proc.procesosEntrada),
-        escapeCsvCell(proc.informacionEntrega),
-        escapeCsvCell(proc.procesosSalida),
         escapeCsvCell(proc.capturedAt ? format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
         escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
       ].join(','))
@@ -447,92 +421,6 @@ export default function ProcesosYFlujosRegistradosPage() {
       .filter(p => !p.deletedAt && p.id !== editingProcess?.id)
       .map(p => ({ id: p.id, nombre: p.proceso }));
   }, [allCapturedData, editingProcess]);
-
-  const renderMultiSelectDropdown = (
-    field: any, 
-    label: string,
-    placeholder: string,
-    options: { id: string; nombre: string }[],
-    isLoading: boolean,
-    specialOption?: string
-  ) => {
-    const currentSelectionNames = (field.value || [])
-      .map((val: string) => {
-        if (specialOption && val === specialOption) return specialOption;
-        return options.find(opt => opt.nombre === val)?.nombre || val;
-      })
-      .filter(Boolean);
-
-    return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <FormControl>
-          <Button variant="outline" className="w-full justify-between text-left font-normal h-auto min-h-10">
-            {currentSelectionNames.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {currentSelectionNames.map((itemName: string) => (
-                  <Badge key={itemName} variant="secondary" className="font-normal">
-                    {itemName}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="text-muted-foreground">{isLoading ? "Cargando opciones..." : placeholder}</span>
-            )}
-            <ChevronDown className="ml-auto h-4 w-4 opacity-50 shrink-0" />
-          </Button>
-        </FormControl>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-        <DropdownMenuLabel>{label}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {isLoading ? (
-           <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
-        ) : (
-          <>
-            {specialOption && (
-              <DropdownMenuCheckboxItem
-                key={specialOption}
-                checked={field.value?.includes(specialOption)}
-                onCheckedChange={(checked) => {
-                  const currentSelected = field.value || [];
-                  if (checked) {
-                    field.onChange([...currentSelected, specialOption]);
-                  } else {
-                    field.onChange(currentSelected.filter((s: string) => s !== specialOption));
-                  }
-                }}
-              >
-                {specialOption}
-              </DropdownMenuCheckboxItem>
-            )}
-            {options.length === 0 && !specialOption ? (
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                No hay elementos configurados.
-              </div>
-            ) : (
-              options.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option.id}
-                  checked={field.value?.includes(option.nombre)}
-                  onCheckedChange={(checked) => {
-                    const currentSelected = field.value || [];
-                    if (checked) {
-                      field.onChange([...currentSelected, option.nombre]);
-                    } else {
-                      field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
-                    }
-                  }}
-                >
-                  {option.nombre}
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )};
 
   if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
@@ -579,8 +467,8 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
-              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est./Ideal {getSortIcon('tiempoEstimado')}</div></TableHead>
-              <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est./Ideal {getSortIcon('costoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Tiempo Est./Ideal</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
+              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Costo Est./Ideal</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
               <TableHead className="text-right w-[140px]">Acciones</TableHead>
@@ -613,12 +501,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                         {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'} / {proc.tiempoIdeal !== undefined ? formatMinutesToHours(proc.tiempoIdeal) : '-'}
                     </TableCell>
                     <TableCell className="text-center text-xs">
-                        <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                            <span>
-                                {effectiveCost.toFixed(2)} / {proc.costoIdeal?.toFixed(2) ?? '-'} {proc.monedaCosto || ''}
-                                {isDerived && <Info className="h-3 w-3 inline ml-1 text-muted-foreground" />}
-                            </span>
-                        </TooltipTrigger>{isDerived && <TooltipContent><p>Costo derivado de la suma de actividades.</p></TooltipContent>}</Tooltip></TooltipProvider>
+                        {proc.costoEstimado?.toFixed(2) ?? '-'} / {proc.costoIdeal?.toFixed(2) ?? '-'} {proc.monedaCosto || ''}
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
@@ -644,18 +527,12 @@ export default function ProcesosYFlujosRegistradosPage() {
                         <Card>
                           <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
                           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              <DetailDisplay title="Descripción" value={proc.descripcion} isTextarea />
-                              <DetailDisplay title="Frecuencia" value={proc.frecuencia} />
-                              <DetailDisplay title="Sistemas" value={proc.sistemas} isList />
+                              <DetailDisplay title="Objetivo" value={proc.descripcion} isTextarea />
                               <DetailDisplay 
                                 title="Políticas Vinculadas"
                                 value={linkedPolicies?.map(p => `${p!.titulo} (${p!.linkType})`)}
                                 isList
                               />
-                              <DetailDisplay title="Entradas" value={proc.informacionRecibe} isTextarea />
-                              <DetailDisplay title="Salidas" value={proc.informacionEntrega} isTextarea />
-                              <DetailDisplay title="Procesos de Entrada" value={proc.procesosEntrada} isList />
-                              <DetailDisplay title="Procesos de Salida" value={proc.procesosSalida} isList />
                           </CardContent>
                         </Card>
                         <div>
@@ -738,22 +615,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 <FormField control={editForm.control} name="puesto" render={({ field }) => (<FormItem><FormLabel>Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{filteredEditPuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
               <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField control={editForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(frecuenciaOptions as readonly string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={editForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{(monedaOptions as readonly string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <FormField control={editForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Est. (min)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={editForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={editForm.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Est.</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={editForm.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-              </div>
-              <FormField control={editForm.control} name="sistemas" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel>{renderMultiSelectDropdown(field, "Sistemas", "Seleccionar...", availableEditSistemas, isLoadingSistemasCostos)}<FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Info. Recibida</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosEntrada" render={({ field }) => (<FormItem><FormLabel>Procesos Entrada</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_ENTRADA_OPTION)}<FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Info. Entregada</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={editForm.control} name="procesosSalida" render={({ field }) => (<FormItem><FormLabel>Procesos Salida</FormLabel>{renderMultiSelectDropdown(field, "Procesos", "Seleccionar...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_SALIDA_OPTION)}<FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Objetivo</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
                 <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>
@@ -802,9 +664,7 @@ export default function ProcesosYFlujosRegistradosPage() {
             )}
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cerrar</Button>
-            </DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
