@@ -25,13 +25,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
                                 <SistemasCostosProvider>
                                     <PoliticasProvider>
                                         <ActividadesProvider>
-                                            <ProcesosProvider>
-                                                <ProcedimientosProvider>
+                                            <ProcedimientosProvider>
+                                                <ProcesosProvider>
                                                     <AccionesProvider>
                                                         {children}
                                                     </AccionesProvider>
-                                                </ProcedimientosProvider>
-                                            </ProcesosProvider>
+                                                </ProcesosProvider>
+                                            </ProcedimientosProvider>
                                         </ActividadesProvider>
                                     </PoliticasProvider>
                                 </SistemasCostosProvider>

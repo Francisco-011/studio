@@ -13,6 +13,8 @@ import type { PoliticaLinkType, PoliticaVinculo } from './PoliticasContext';
 import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso } from '@/app/(app)/usuarios/page';
+import { useProcedimientos, type Procedimiento } from './ProcedimientosContext';
+
 
 export const frecuenciaOptions = ["Diario", "Semanal", "Quincenal", "Mensual", "Bimestral", "Trimestral", "Semestral", "Anual", "A demanda", "Otro"] as const;
 export const monedaOptions = ["USD", "MXN", "EUR", "CAD", "GBP"] as const;
@@ -98,9 +100,10 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
   const { exceptions, isLoadingExceptions } = useExceptions();
+  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
 
   useEffect(() => {
-    if (authLoading || isLoadingExceptions) {
+    if (authLoading || isLoadingExceptions || isLoadingProcedimientos) {
       setIsLoadingProcesos(true);
       return;
     }
@@ -113,7 +116,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
 
     const q = query(collection(db, PROCESOS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        const allProcesos = snapshot.docs.map(doc => {
+        const allProcesosFromDB = snapshot.docs.map(doc => {
             const data = doc.data();
             const capturedAtData = data.capturedAt as Timestamp;
             const updatedAtData = data.updatedAt as Timestamp;
@@ -129,11 +132,34 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             } as CapturedProcess;
         });
         
-        // Note: The filtering logic for processes based on classification has been moved to the
-        // `usePoliticas` context because classification is now at the procedure level.
-        // This context will now return all processes the user can see, and the UI will
-        // determine which procedures within them are visible.
-        setProcesos(allProcesos);
+        if (user.rol === 'Administrador') {
+            setProcesos(allProcesosFromDB);
+        } else {
+            const allowedClassifications = getAllowedClassifications(user.nivelAcceso);
+            const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()) && ex.documentType === 'proceso');
+
+            const includeProcessIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
+            const excludeProcessIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
+            
+            const visibleProcesses = allProcesosFromDB.filter(proc => {
+                if (excludeProcessIds.has(proc.id)) return false;
+                if (includeProcessIds.has(proc.id)) return true;
+
+                if (!proc.procedimientoOrder || proc.procedimientoOrder.length === 0) {
+                    return false;
+                }
+
+                const hasVisibleProcedure = proc.procedimientoOrder.some(procId => {
+                    const procedure = procedimientos.find(p => p.id === procId);
+                    if (!procedure) return false;
+                    return allowedClassifications.includes(procedure.clasificacion);
+                });
+
+                return hasVisibleProcedure;
+            });
+
+            setProcesos(visibleProcesses);
+        }
         setIsLoadingProcesos(false);
     }, (error) => {
         console.error("Error fetching procesos: ", error);
@@ -142,7 +168,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, exceptions, isLoadingExceptions]);
+  }, [user, authLoading, exceptions, isLoadingExceptions, procedimientos, isLoadingProcedimientos]);
 
   const addProceso = useCallback(async (data: CapturaFormData): Promise<CapturedProcess | null> => {
     try {
