@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray, type Control } from "react-hook-form";
@@ -24,6 +25,7 @@ import { useProcesos, capturaFormSchema, clasificacionOptions } from '@/contexts
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
+const PROCESOS_COLLECTION = 'procesos';
 
 // Schemas for the new unified form
 const activitySchema = z.object({
@@ -383,3 +385,4 @@ export default function CapturaPage() {
     </div>
   );
 }
+
