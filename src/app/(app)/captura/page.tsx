@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2, CalendarCheck2, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAreas } from "@/contexts/AreasContext";
@@ -26,6 +27,7 @@ import { useProcesos, capturaFormSchema, clasificacionOptions, frecuenciaOptions
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
 import { cn } from '@/lib/utils';
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -58,6 +60,7 @@ const procedureSchema = z.object({
       (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
       z.number().int().optional()
     ),
+    politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 
 const unifiedCaptureSchema = capturaFormSchema.extend({
@@ -175,6 +178,7 @@ export default function CapturaPage() {
   const { procesos: allProcesses } = useProcesos();
   const { procedimientos: allProcedimientos } = useProcedimientos();
   const { actividades: allActivities } = useActividades();
+  const { politicas } = usePoliticas();
   
   const [isDefiningFlow, setIsDefiningFlow] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -315,6 +319,17 @@ export default function CapturaPage() {
                     historialDeCambios: []
                 }
             });
+
+            if (procData.politicasAsociadasIds && procData.politicasAsociadasIds.length > 0) {
+              for (const policyId of procData.politicasAsociadasIds) {
+                  const policy = politicas.find(p => p.id === policyId);
+                  if (policy) {
+                      const policyRef = doc(db, 'politicas', policyId);
+                      const updatedProcIds = [...(policy.procedimientosAsociadosIds || []), newProcedureId];
+                      batch.update(policyRef, { procedimientosAsociadosIds: updatedProcIds });
+                  }
+              }
+            }
             
             activityRefsAndData.forEach(a => batch.set(a.ref, a.data));
         }
@@ -450,7 +465,10 @@ export default function CapturaPage() {
                                   <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
                                   <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                                </div>
-                               <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                    <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/><ScrollArea className="h-48">{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+                               </div>
                                
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <FormField control={form.control} name={`procedures.${index}.procedimientosEntradaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Entrada</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...' } <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}>(Es un procedimiento iniciador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => ( <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => { const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
@@ -482,5 +500,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-
-  
