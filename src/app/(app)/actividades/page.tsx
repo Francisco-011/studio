@@ -134,6 +134,7 @@ export default function ActividadesPage() {
 
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [activityForHistory, setActivityForHistory] = useState<Actividad | null>(null);
+  const [similarActividadWarning, setSimilarActividadWarning] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -167,6 +168,35 @@ export default function ActividadesPage() {
       activa: true,
     },
   });
+
+  const watchedNombre = actividadForm.watch('nombre');
+
+  useEffect(() => {
+    if (isActividadDialogOpen && watchedNombre && actividades.length > 0) {
+        const trimmedLowerName = watchedNombre.trim().toLowerCase();
+        if (!trimmedLowerName) {
+            setSimilarActividadWarning(null);
+            return;
+        }
+
+        const existingActividad = actividades.find(
+            a => a.nombre.trim().toLowerCase() === trimmedLowerName && a.id !== editingActividad?.id
+        );
+
+        if (existingActividad) {
+            const parentProcedimiento = procedimientos.find(p => (p.activityOrder || []).includes(existingActividad.id));
+            let warningMessage = `Advertencia: ya existe una actividad con este nombre.`;
+            if (parentProcedimiento) {
+                warningMessage += ` Está asignada al procedimiento "${parentProcedimiento.nombre}".`;
+            }
+            setSimilarActividadWarning(warningMessage);
+        } else {
+            setSimilarActividadWarning(null);
+        }
+    } else if (!isActividadDialogOpen) {
+        setSimilarActividadWarning(null);
+    }
+  }, [watchedNombre, actividades, procedimientos, editingActividad, isActividadDialogOpen]);
 
   useEffect(() => {
     if (isActividadDialogOpen) {
@@ -549,7 +579,25 @@ export default function ActividadesPage() {
                   </DialogHeader>
                   <Form {...actividadForm}>
                     <form onSubmit={actividadForm.handleSubmit(handleActividadSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                      <FormField control={actividadForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre de la Actividad</FormLabel><FormControl><Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField
+                        control={actividadForm.control}
+                        name="nombre"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nombre de la Actividad</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Ej: Revisar Facturas, Aprobar Solicitud" {...field} />
+                            </FormControl>
+                            {similarActividadWarning && (
+                              <FormDescription className="text-amber-600 flex items-start gap-1.5 pt-1">
+                                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                  <span>{similarActividadWarning}</span>
+                              </FormDescription>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
