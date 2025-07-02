@@ -16,8 +16,8 @@ const AnalyzeProcessesInputSchema = z.object({
   processDescriptions: z.string().describe('Una lista de descripciones de procesos para analizar, incluyendo IDs, área, puesto y sistemas.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
   allProcedimientos: z.string().optional().describe('Una lista de todos los procedimientos definidos en el sistema, incluyendo su nombre, ID, descripción y el proceso al que están asociados.'),
-  allPuestos: z.string().optional().describe('Una lista de todos los puestos de trabajo, incluyendo nombre, área y departamento.'),
-  allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción y el procedimiento al que están asociadas.'),
+  allPuestos: z.string().optional().describe('Una lista de todos los puestos de trabajo, incluyendo nombre, área, departamento y su costo por hora.'),
+  allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción, tiempo estimado y frecuencia.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
   existingActions: z.string().optional().describe('Un resumen de las acciones de mejora existentes que ya están pendientes, en progreso o en revisión. La IA debe evitar sugerir mejoras para estos temas.'),
   policyData: z.string().optional().describe('Una lista de todas las políticas, incluyendo su título, descripción, estado (ej. "Aprobada") y fecha de revisión.'),
@@ -86,6 +86,24 @@ const DuplicatePolicySuggestionSchema = z.object({
   reason: z.string().describe('La razón para sospechar la duplicación (ej: descripciones o títulos muy similares).'),
 });
 
+const HighCostActivitySchema = z.object({
+  activityName: z.string().describe('El nombre de la actividad de alto costo.'),
+  activityId: z.string().describe('El ID de la actividad.'),
+  puesto: z.string().describe('El puesto que actualmente realiza la actividad.'),
+  estimatedMonthlyCost: z.number().describe('El costo mensual total estimado de realizar esta actividad.'),
+  estimatedMonthlyHours: z.number().describe('Las horas mensuales totales estimadas dedicadas a esta actividad.'),
+  reason: z.string().describe('La justificación de por qué se considera una actividad de alto costo (combinación de tiempo, frecuencia y costo del puesto).'),
+});
+
+const TaskReassignmentSuggestionSchema = z.object({
+  activityName: z.string().describe('El nombre de la actividad que se sugiere reasignar.'),
+  activityId: z.string().describe('El ID de la actividad.'),
+  currentPuesto: z.string().describe('El puesto que actualmente realiza la actividad.'),
+  suggestedPuesto: z.string().describe('El puesto al que se sugiere reasignar la actividad (un rol más económico).'),
+  reason: z.string().describe('La justificación para la reasignación (ej. tarea administrativa realizada por un rol gerencial).'),
+  estimatedMonthlySavings: z.number().describe('El ahorro mensual estimado en costos si se realiza la reasignación.'),
+});
+
 
 const AnalyzeProcessesOutputSchema = z.object({
   redundantSystems: z.array(RedundantSystemSchema).describe('Una lista de sistemas identificados como potencialmente redundantes, incluyendo su costo anual.'),
@@ -94,7 +112,9 @@ const AnalyzeProcessesOutputSchema = z.object({
   criticalProcessesWithoutPolicies: z.array(CriticalProcessWithoutPolicySchema).describe('Una lista de procesos críticos que no tienen políticas asociadas.'),
   obsoletePolicies: z.array(ObsoletePolicySchema).describe('Una lista de políticas que están obsoletas o cuya fecha de revisión ha pasado.'),
   duplicatePolicySuggestions: z.array(DuplicatePolicySuggestionSchema).describe('Sugerencias para consolidar políticas que parecen ser duplicadas.'),
-  summary: z.string().describe('Un resumen de alto nivel de todos los hallazgos, incluyendo los de políticas.'),
+  highCostActivities: z.array(HighCostActivitySchema).describe('Una lista de actividades que tienen el mayor impacto en costos operativos, para priorizar su optimización o automatización.'),
+  taskReassignmentSuggestions: z.array(TaskReassignmentSuggestionSchema).describe('Sugerencias para reasignar tareas de roles de alto costo a roles más económicos, cuantificando el ahorro.'),
+  summary: z.string().describe('Un resumen de alto nivel de todos los hallazgos, incluyendo los de políticas, costos y eficiencia.'),
 });
 export type AnalyzeProcessesOutput = z.infer<typeof AnalyzeProcessesOutputSchema>;
 
@@ -107,24 +127,29 @@ const analyzeProcessesPrompt = ai.definePrompt({
   name: 'analyzeProcessesPrompt',
   input: {schema: AnalyzeProcessesInputSchema},
   output: {schema: AnalyzeProcessesOutputSchema},
-  prompt: `Eres un analista de negocios experto en optimización de procesos y gobernanza corporativa, impulsado por IA. Tu misión es identificar duplicidades, oportunidades de ahorro cuantificables y gaps de cumplimiento.
+  prompt: `Eres un analista de negocios experto en optimización de procesos y gobernanza corporativa, impulsado por IA. Tu misión es identificar duplicidades, oportunidades de ahorro cuantificables, gaps de cumplimiento y **focos de ineficiencia operativa**.
 
 Se te proporcionan descripciones detalladas de procesos, procedimientos, actividades, puestos, uso de sistemas y políticas.
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
-Tu análisis debe centrarse en CUATRO áreas clave y debes devolver la salida en el formato JSON estructurado solicitado.
+Tu análisis debe centrarse en CINCO áreas clave:
 
-1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes. La redundancia ocurre cuando sistemas diferentes se usan para lograr el mismo resultado de negocio.
+1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes.
 
 2.  **Análisis de Duplicados (Procesos y Actividades)**:
-    - **Procesos Duplicados (duplicateProcesses)**: Encuentra procesos que son funcionalmente idénticos aunque tengan nombres diferentes.
-    - **Actividades Duplicadas (duplicateActivities)**: Encuentra actividades funcionalmente idénticas, considerando el contexto. Si el contexto (área, puesto, proceso) es diferente, NO lo reportes como duplicado a menos que el resultado sea idéntico.
+    - **Procesos Duplicados (duplicateProcesses)**: Encuentra procesos funcionalmente idénticos.
+    - **Actividades Duplicadas (duplicateActivities)**: Encuentra actividades funcionalmente idénticas.
 
-3.  **Análisis de Gaps de Políticas (Policy Gap Analysis)**: Utilizando la información de políticas proporcionada, identifica las siguientes áreas de riesgo y oportunidad. **IMPORTANTE: Al buscar gaps de cobertura (ej. procesos críticos sin políticas), considera que un proceso solo está 'cubierto' si está vinculado a una política en estado 'Aprobada'.**
-    - **Procesos Críticos sin Políticas (criticalProcessesWithoutPolicies)**: Identifica procesos que, por su naturaleza (ej: manejan finanzas, datos sensibles, seguridad), deberían tener políticas asociadas pero no las tienen.
-    - **Políticas Obsoletas (obsoletePolicies)**: Revisa las fechas de revisión de las políticas. Identifica y lista aquellas cuya fecha de revisión ya ha pasado.
-    - **Sugerencias de Duplicidad de Políticas (duplicatePolicySuggestions)**: Compara los títulos y descripciones de las políticas. Si encuentras dos o más que cubren el mismo tema de forma muy similar, sugiérelas para consolidación.
+3.  **Análisis de Gaps de Políticas (Policy Gap Analysis)**: Utilizando la información de políticas y su vinculación, identifica:
+    - **Procesos Críticos sin Políticas (criticalProcessesWithoutPolicies)**: Procesos importantes (financieros, datos sensibles) sin políticas 'Aprobadas' asociadas.
+    - **Políticas Obsoletas (obsoletePolicies)**: Políticas cuya fecha de revisión ya ha pasado.
+    - **Sugerencias de Duplicidad de Políticas (duplicatePolicySuggestions)**: Políticas con contenido similar que podrían consolidarse.
+    
+4.  **Análisis de Costo y Eficiencia Operativa**: Basado en los tiempos de actividad, frecuencias y costos por hora de los puestos, identifica las mayores ineficiencias.
+    - **Actividades de Alto Costo (highCostActivities)**: Identifica las actividades que, por su combinación de duración, frecuencia y costo del puesto que la ejecuta, representan los mayores costos operativos mensuales. Calcula este costo.
+    - **Sugerencias de Reasignación de Tareas (taskReassignmentSuggestions)**: Compara las actividades con el nivel de seniority y costo de los puestos. Si una actividad de bajo valor (ej. administrativa, repetitiva) es ejecutada por un puesto de alto costo (ej. Gerencial, Directivo), sugiérela para reasignación a un puesto más apropiado y económico. Cuantifica el ahorro mensual potencial basado en la diferencia de costo por hora.
+
 
 **Datos de Entrada:**
 
@@ -137,11 +162,11 @@ Tu análisis debe centrarse en CUATRO áreas clave y debes devolver la salida en
 {{/if}}
 
 {{#if allPuestos}}
-**Lista Completa de Puestos:**
+**Lista Completa de Puestos (incluyendo su costo por hora si está disponible):**
 {{{allPuestos}}}
 {{/if}}
 
-**Lista Completa de Actividades y su Contexto:**
+**Lista Completa de Actividades (incluyendo su tiempo estimado y frecuencia):**
 {{{allActivities}}}
 
 **Uso General de Sistemas:**
