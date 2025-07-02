@@ -17,7 +17,7 @@ import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -82,11 +82,37 @@ export default function ProcedimientosPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [procedimientoForHistory, setProcedimientoForHistory] = useState<Procedimiento | null>(null);
 
+  const [similarProcedimientoWarning, setSimilarProcedimientoWarning] = useState<string | null>(null);
 
   const form = useForm<ProcedimientoFormData>({
     resolver: zodResolver(procedimientoFormSchema),
     defaultValues: { nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado' },
   });
+
+  const watchedNombre = form.watch('nombre');
+
+  useEffect(() => {
+    if (isDialogOpen && watchedNombre && procedimientos.length > 0) {
+        const trimmedLowerName = watchedNombre.trim().toLowerCase();
+        if (!trimmedLowerName) {
+            setSimilarProcedimientoWarning(null);
+            return;
+        }
+
+        const existingProcedimiento = procedimientos.find(
+            p => p.nombre.trim().toLowerCase() === trimmedLowerName && p.id !== editingProcedimiento?.id
+        );
+
+        if (existingProcedimiento) {
+            const parentProcess = procesos.find(p => p.id === existingProcedimiento.procesoId);
+            setSimilarProcedimientoWarning(`Advertencia: ya existe un procedimiento con este nombre en el proceso "${parentProcess?.proceso || 'otro proceso'}".`);
+        } else {
+            setSimilarProcedimientoWarning(null);
+        }
+    } else if (!isDialogOpen) {
+        setSimilarProcedimientoWarning(null);
+    }
+  }, [watchedNombre, procedimientos, editingProcedimiento, isDialogOpen, procesos]);
   
   useEffect(() => {
     const processFromQuery = searchParams.get('proceso');
@@ -305,7 +331,25 @@ export default function ProcedimientosPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>{editingProcedimiento ? 'Editar' : 'Agregar'} Procedimiento</DialogTitle></DialogHeader>
         <Form {...form}><form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
           <FormField control={form.control} name="procesoId" render={({ field }) => (<FormItem><FormLabel>Proceso Padre</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso..."/></SelectTrigger></FormControl><SelectContent>{procesos.filter(p => p.activo !== false && !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-          <FormField control={form.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)}/>
+          <FormField
+            control={form.control}
+            name="nombre"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Nombre</FormLabel>
+                    <FormControl>
+                        <Input {...field} placeholder="Ej: Revisión de Facturas de Proveedores"/>
+                    </FormControl>
+                    {similarProcedimientoWarning && (
+                        <FormDescription className="text-amber-600 flex items-start gap-1.5 pt-1">
+                            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                            <span>{similarProcedimientoWarning}</span>
+                        </FormDescription>
+                    )}
+                    <FormMessage />
+                </FormItem>
+            )}
+          />
           <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
           <div className="grid grid-cols-2 gap-4">
             <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
