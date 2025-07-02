@@ -32,10 +32,6 @@ export const capturaFormSchema = z.object({
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
   clasificacion: z.enum(clasificacionOptions).default('Privado'),
-  informacionRecibe: z.string().min(1, "La descripción de la información que recibe es requerida."),
-  procesosEntrada: z.array(z.string()).optional().default([]),
-  informacionEntrega: z.string().min(1, "La descripción de la información que entrega es requerida."),
-  procesosSalida: z.array(z.string()).optional().default([]),
   procedimientoOrder: z.array(z.string()).optional().default([]),
   politicasAsociadas: z.array(z.object({
     policyId: z.string(),
@@ -57,8 +53,6 @@ export interface CambioHistorial {
   after: any;
 }
 
-// NOTE: The time/cost fields on CapturedProcess now represent calculated totals.
-// They are not direct inputs anymore.
 export interface CapturedProcess extends CapturaFormData {
   id: string;
   codigo: string;
@@ -203,13 +197,11 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     if (!originalProceso) return;
 
     try {
-        const batch = writeBatch(db);
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
 
         const changes: CambioHistorial[] = [];
         const fieldsToCompare: (keyof typeof data)[] = [
-            'proceso', 'area', 'puesto', 'departamento', 'descripcion',
-            'informacionRecibe', 'informacionEntrega', 'procedimientoOrder'
+            'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'procedimientoOrder'
         ];
 
         fieldsToCompare.forEach(key => {
@@ -229,42 +221,14 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             historialDeCambios: [...(originalProceso.historialDeCambios || []), ...changes]
         };
         Object.keys(dataWithHistory).forEach(key => dataWithHistory[key] === undefined && delete dataWithHistory[key]);
-        batch.update(procesoDocRef, dataWithHistory);
-        
-        const newName = data.proceso;
-        if (newName && newName !== originalProceso.proceso) {
-            const qEntrada = query(collection(db, PROCESOS_COLLECTION), where('procesosEntrada', 'array-contains', originalProceso.proceso));
-            const qSalida = query(collection(db, PROCESOS_COLLECTION), where('procesosSalida', 'array-contains', originalProceso.proceso));
-            
-            const [entradaSnap, salidaSnap] = await Promise.all([getDocs(qEntrada), getDocs(qSalida)]);
-            
-            const updatedDocs = new Set<string>();
-
-            entradaSnap.forEach(docSnapshot => {
-                if(updatedDocs.has(docSnapshot.id)) return;
-                const p = docSnapshot.data() as CapturedProcess;
-                const newProcesosEntrada = p.procesosEntrada?.map(entrada => entrada === originalProceso.proceso ? newName : entrada);
-                batch.update(docSnapshot.ref, { procesosEntrada: newProcesosEntrada });
-                updatedDocs.add(docSnapshot.id);
-            });
-
-            salidaSnap.forEach(docSnapshot => {
-                 if(updatedDocs.has(docSnapshot.id)) return;
-                const p = docSnapshot.data() as CapturedProcess;
-                const newProcesosSalida = p.procesosSalida?.map(salida => salida === originalProceso.proceso ? newName : salida);
-                batch.update(docSnapshot.ref, { procesosSalida: newProcesosSalida });
-                updatedDocs.add(docSnapshot.id);
-            });
-        }
-        
-        await batch.commit();
+        await updateDoc(procesoDocRef, dataWithHistory);
 
         if (changes.length > 0) {
            addLogEntry({ action: 'update', entityType: 'Proceso', entityName: data.proceso || originalProceso.proceso, details: `Se actualizó el proceso "${originalProceso.proceso}".` });
         }
     } catch (e) {
         console.error("Error updating proceso: ", e);
-        toast({ title: "Error", description: "No se pudo actualizar el proceso y sus referencias.", variant: "destructive"});
+        toast({ title: "Error", description: "No se pudo actualizar el proceso.", variant: "destructive"});
     }
   }, [procesos, addLogEntry]);
   
@@ -273,37 +237,12 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
       if (!procesoToDelete) return;
 
       try {
-          const batch = writeBatch(db);
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
-          batch.update(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), activo: false });
-          
-          const qEntrada = query(collection(db, PROCESOS_COLLECTION), where('procesosEntrada', 'array-contains', procesoToDelete.proceso));
-          const qSalida = query(collection(db, PROCESOS_COLLECTION), where('procesosSalida', 'array-contains', procesoToDelete.proceso));
-          const [entradaSnap, salidaSnap] = await Promise.all([getDocs(qEntrada), getDocs(qSalida)]);
-
-          const updatedDocs = new Set<string>();
-
-          entradaSnap.forEach(docSnapshot => {
-              if (updatedDocs.has(docSnapshot.id)) return;
-              const p = docSnapshot.data() as CapturedProcess;
-              const newProcesosEntrada = p.procesosEntrada?.filter(entrada => entrada !== procesoToDelete.proceso);
-              batch.update(docSnapshot.ref, { procesosEntrada: newProcesosEntrada });
-              updatedDocs.add(docSnapshot.id);
-          });
-          
-          salidaSnap.forEach(docSnapshot => {
-              if (updatedDocs.has(docSnapshot.id)) return;
-              const p = docSnapshot.data() as CapturedProcess;
-              const newProcesosSalida = p.procesosSalida?.filter(salida => salida !== procesoToDelete.proceso);
-              batch.update(docSnapshot.ref, { procesosSalida: newProcesosSalida });
-              updatedDocs.add(docSnapshot.id);
-          });
-          
-          await batch.commit();
+          await updateDoc(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), activo: false });
           addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: procesoToDelete.proceso, details: `Proceso "${procesoToDelete.proceso}" movido a la papelera.` });
       } catch (e) {
           console.error("Error deleting proceso: ", e);
-          toast({ title: "Error", description: "No se pudo eliminar el proceso y sus referencias.", variant: "destructive" });
+          toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive" });
       }
   }, [procesos, addLogEntry]);
 

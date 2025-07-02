@@ -16,6 +16,10 @@ export interface Procedimiento {
   procesoId: string;
   activityOrder: string[];
   sistemasUtilizados?: string[];
+  informacionRecibe?: string;
+  procedimientosEntradaIds?: string[];
+  informacionEntrega?: string;
+  procedimientosSalidaIds?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -50,6 +54,8 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
                 createdAt: (docData.createdAt as Timestamp)?.toMillis() || 0,
                 updatedAt: (docData.updatedAt as Timestamp)?.toMillis() || 0,
                 sistemasUtilizados: Array.isArray(docData.sistemasUtilizados) ? docData.sistemasUtilizados : [],
+                procedimientosEntradaIds: Array.isArray(docData.procedimientosEntradaIds) ? docData.procedimientosEntradaIds : [],
+                procedimientosSalidaIds: Array.isArray(docData.procedimientosSalidaIds) ? docData.procedimientosSalidaIds : [],
             } as Procedimiento;
         });
         setProcedimientos(data);
@@ -66,10 +72,12 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const addProcedimiento = useCallback(async (data: ProcedimientoCreationData): Promise<Procedimiento | null> => {
     try {
         const codigo = `PC-${Date.now().toString().slice(-6)}`;
-        const payload = {
+        const payload: { [key: string]: any } = {
             ...data,
             codigo,
             sistemasUtilizados: data.sistemasUtilizados || [],
+            procedimientosEntradaIds: data.procedimientosEntradaIds || [],
+            procedimientosSalidaIds: data.procedimientosSalidaIds || [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -77,14 +85,17 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
         addLogEntry({ action: 'create', entityType: 'Procedimiento', entityName: data.nombre, details: `Se creó el procedimiento "${data.nombre}" (${codigo}).` });
         
         const currentTime = Date.now();
-        return {
+        const newProcedimiento: Procedimiento = {
             ...data,
             id: docRef.id,
             codigo,
             sistemasUtilizados: data.sistemasUtilizados || [],
+            procedimientosEntradaIds: data.procedimientosEntradaIds || [],
+            procedimientosSalidaIds: data.procedimientosSalidaIds || [],
             createdAt: currentTime,
             updatedAt: currentTime,
         };
+        return newProcedimiento;
     } catch(e) {
         console.error("Error adding procedimiento:", e);
         toast({ title: "Error", description: "No se pudo agregar el procedimiento.", variant: "destructive"});

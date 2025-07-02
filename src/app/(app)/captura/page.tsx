@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -27,25 +26,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardEdit, Save, ChevronDown, DollarSign, Clock, AlertTriangle, CalendarCheck2 } from "lucide-react";
+import { ClipboardEdit, Save, AlertTriangle, CalendarCheck2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos } from "@/contexts/PuestosContext";
 import { useProcesos, capturaFormSchema, type CapturaFormData, clasificacionOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 
 
-const SPECIAL_ENTRADA_OPTION = "Iniciador";
-const SPECIAL_SALIDA_OPTION = "Finalizador";
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 
@@ -56,10 +44,6 @@ const defaultFormValues: Partial<CapturaFormData> = {
   proceso: "",
   descripcion: "",
   clasificacion: "Privado",
-  informacionRecibe: "",
-  procesosEntrada: [],
-  informacionEntrega: "",
-  procesosSalida: [],
   procedimientoOrder: [],
   politicasAsociadas: [],
   auditFrequencyInDays: undefined,
@@ -162,8 +146,6 @@ export default function CapturaPage() {
       const dataToSave: CapturaFormData = {
         ...values,
         departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
-        procesosEntrada: values.procesosEntrada || [],
-        procesosSalida: values.procesosSalida || [],
         procedimientoOrder: values.procedimientoOrder || [],
       };
       
@@ -188,98 +170,6 @@ export default function CapturaPage() {
       });
     }
   }
-
-  const renderMultiSelectDropdown = (
-    field: any, 
-    label: string,
-    placeholder: string,
-    options: { id: string; nombre: string }[],
-    isLoading: boolean,
-    specialOption?: string
-  ) => {
-    const currentSelectionNames = (field.value || [])
-      .map((val: string) => {
-        if (specialOption && val === specialOption) return specialOption;
-        return options.find(opt => opt.nombre === val)?.nombre || val;
-      })
-      .filter(Boolean);
-    
-    let finalOptions = options;
-    
-    return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <FormControl>
-          <Button variant="outline" className="w-full justify-between text-left font-normal h-auto min-h-10">
-            {currentSelectionNames.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {currentSelectionNames.map((itemName: string) => (
-                  <Badge key={itemName} variant="secondary" className="font-normal">
-                    {itemName}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="text-muted-foreground">{isLoading ? "Cargando opciones..." : placeholder}</span>
-            )}
-            <ChevronDown className="ml-auto h-4 w-4 opacity-50 shrink-0" />
-          </Button>
-        </FormControl>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-        <DropdownMenuLabel>{label}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {isLoading ? (
-           <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando...</div>
-        ) : (
-          <>
-            {specialOption && (
-              <DropdownMenuCheckboxItem
-                key={specialOption}
-                checked={field.value?.includes(specialOption)}
-                onCheckedChange={(checked) => {
-                  const currentSelected = field.value || [];
-                  if (checked) {
-                    field.onChange([...currentSelected, specialOption]);
-                  } else {
-                    field.onChange(currentSelected.filter((s: string) => s !== specialOption));
-                  }
-                }}
-              >
-                {specialOption}
-              </DropdownMenuCheckboxItem>
-            )}
-            {finalOptions.length === 0 && !specialOption ? (
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                No hay elementos configurados.
-              </div>
-            ) : (
-              finalOptions.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option.id}
-                  checked={field.value?.includes(option.nombre)}
-                  onCheckedChange={(checked) => {
-                    const currentSelected = field.value || [];
-                    if (checked) {
-                      field.onChange([...currentSelected, option.nombre]);
-                    } else {
-                      field.onChange(currentSelected.filter((s: string) => s !== option.nombre));
-                    }
-                  }}
-                >
-                  {option.nombre}
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )};
-  
-  const availableProcessesForSelection = allProcesses
-    .filter(p => !p.deletedAt) 
-    .map(p => ({ id: p.id, nombre: p.proceso }));
 
   return (
     <div className="container mx-auto py-8">
@@ -427,16 +317,6 @@ export default function CapturaPage() {
                   )}
                 />
               </div>
-
-              <div className="space-y-2">
-                 <h3 className="text-lg font-medium">Flujo de Información Asociado</h3>
-                 <p className="text-sm text-muted-foreground">Detalle las entradas, salidas y transformaciones clave de información.</p>
-              </div>
-
-              <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso recibe como entrada..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle qué información es necesaria para iniciar o ejecutar el proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosEntrada" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Entradas (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de entrada...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_ENTRADA_OPTION)}<FormDescription>Seleccione procesos capturados que preceden o inician este, o marque como 'Iniciador'.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Describa la información o documentos que el proceso genera o entrega como resultado..." className="min-h-[80px]" {...field} /></FormControl><FormDescription>Detalle cuál es el producto o resultado informativo del proceso.</FormDescription><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="procesosSalida" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Procesos de Salida (Opcional)</FormLabel>{renderMultiSelectDropdown(field, "Procesos Disponibles y Opción Especial", "Seleccionar procesos de salida...", availableProcessesForSelection, isLoadingProcesos, SPECIAL_SALIDA_OPTION)}<FormDescription>Seleccione procesos capturados que siguen a este, o marque como 'Finalizador'.</FormDescription><FormMessage /></FormItem>)} />
 
               <div className="flex justify-end space-x-2">
                 <Button type="submit" size="lg"><Save className="mr-2 h-5 w-5" />Guardar Proceso y Definir Procedimientos</Button>
