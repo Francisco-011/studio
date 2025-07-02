@@ -213,7 +213,7 @@ export default function ProcedimientosPage() {
         return 0;
       });
     } else {
-      filtered.sort((a, b) => a.codigo.localeCompare(b.codigo));
+      filtered.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return filtered;
   }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, statusFilter, sortConfig]);

@@ -277,7 +277,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         return 0;
       });
     } else {
-       dataToFilter.sort((a, b) => a.codigo.localeCompare(b.codigo));
+       dataToFilter.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return dataToFilter;
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig, allProcedimientos]);
@@ -464,8 +464,8 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('departamento')}><div className="flex items-center">Departamento {getSortIcon('departamento')}</div></TableHead>
               <TableHead className="w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('puesto')}><div className="flex items-center">Puesto {getSortIcon('puesto')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
-              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Tiempo Est./Ideal</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
-              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Costo Est./Ideal</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
+              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Tiempo Est.</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
+              <TableHead className="text-center w-[120px]"><TooltipProvider><Tooltip><TooltipTrigger>Costo Est.</TooltipTrigger><TooltipContent>Calculado de actividades</TooltipContent></Tooltip></TooltipProvider></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
               <TableHead className="text-right w-[140px]">Acciones</TableHead>
