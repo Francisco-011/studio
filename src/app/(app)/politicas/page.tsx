@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -290,13 +291,29 @@ export default function PoliticasPage() {
                       <TableCell className="font-mono text-xs">{politica.codigo}</TableCell>
                       <TableCell className="font-medium">{politica.titulo}</TableCell>
                        <TableCell>
-                        <Badge variant={
-                           politica.estado === 'Aprobada' ? 'default' :
-                           politica.estado === 'En Revisión' ? 'secondary' :
-                           politica.estado === 'Archivada' ? 'destructive' : 'outline'
-                        }>{politica.estado}</Badge>
+                         <Badge
+                           className={cn("text-white border-transparent", {
+                             "bg-green-600 hover:bg-green-700": politica.estado === 'Aprobada',
+                             "bg-purple-600 hover:bg-purple-700": politica.estado === 'En Revisión',
+                             "bg-slate-600 hover:bg-slate-700": politica.estado === 'Archivada',
+                             "bg-amber-600 hover:bg-amber-700": politica.estado === 'Borrador',
+                           })}
+                         >
+                          {politica.estado}
+                         </Badge>
                       </TableCell>
-                      <TableCell><Badge variant="outline" className={politica.nivelCompliance === 'Obligatorio' ? 'border-amber-500 text-amber-600' : ''}>{politica.nivelCompliance}</Badge></TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn({
+                            'border-red-500 text-red-600 font-semibold': politica.nivelCompliance === 'Obligatorio',
+                            'border-blue-500 text-blue-600': politica.nivelCompliance === 'Recomendado',
+                            'border-gray-400 text-gray-500': politica.nivelCompliance === 'Informativo',
+                          })}
+                        >
+                          {politica.nivelCompliance}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{politica.fechaRevision ? format(parseISO(politica.fechaRevision), 'dd MMM, yyyy', { locale: es }) : 'N/A'}</TableCell>
                       <TableCell className="text-right">
                          <DropdownMenu>

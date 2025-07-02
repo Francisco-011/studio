@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -1055,7 +1056,15 @@ export default function AuditoriaPage() {
                                 <Card key={finding.id} className="bg-muted/20">
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                    <Badge variant={ finding.type === 'Conforme' ? 'default' : finding.type === 'No Conforme' ? 'destructive' : 'secondary' } className={cn(finding.type === 'Conforme' && 'bg-green-600 hover:bg-green-700 text-white border-transparent')}>{finding.type}</Badge>
+                                    <Badge
+                                      className={cn("text-white border-transparent", {
+                                        "bg-green-600 hover:bg-green-700": finding.type === 'Conforme',
+                                        "bg-red-600 hover:bg-red-700": finding.type === 'No Conforme',
+                                        "bg-amber-600 hover:bg-amber-700": finding.type === 'Oportunidad de Mejora',
+                                      })}
+                                    >
+                                      {finding.type}
+                                    </Badge>
                                     Hallazgo #{finding.id.slice(-4)}
                                     </CardTitle>
                                     <div>

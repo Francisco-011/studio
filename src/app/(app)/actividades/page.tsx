@@ -657,10 +657,19 @@ export default function ActividadesPage() {
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{actividad.procedimientoPadre}</TableCell>
                       <TableCell className="text-sm text-center">
-                        <Badge variant="secondary" className="cursor-default">{assignmentCounts.get(actividad.id) || 0}</Badge>
+                        <Badge variant="outline" className="cursor-default font-mono">{assignmentCounts.get(actividad.id) || 0}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
-                      <TableCell className="text-center"><Badge variant={actividad.activa ? 'default' : 'secondary'}>{actividad.activa ? 'Activa' : 'Inactiva'}</Badge></TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          className={cn(
+                            "text-white border-transparent",
+                            actividad.activa ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-500 hover:bg-slate-600'
+                          )}
+                        >
+                          {actividad.activa ? 'Activa' : 'Inactiva'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right space-x-1">
                         <Switch checked={actividad.activa} onCheckedChange={() => handleToggleActividadStatus(actividad)} aria-label="Cambiar estado" className="mr-2"/>
                         <Button variant="ghost" size="icon" onClick={() => handleViewHistory(actividad)} disabled={!actividad.historialDeCambios || actividad.historialDeCambios.length === 0} title="Ver historial"><History className="h-4 w-4" /></Button>
