@@ -87,7 +87,8 @@ type FindingType = typeof findingTypes[number];
 
 const auditStatuses = ["En Progreso", "Completada", "Cancelada"] as const;
 type AuditStatus = typeof auditStatuses[number];
-const auditTypes = ["proceso", "puesto", "sistema", "politica"] as const;
+const auditTypes = ["proceso", "puesto", "sistema", "politica", "procedimiento"] as const;
+type AuditType = typeof auditTypes[number];
 
 const auditFindingSchema = z.object({
   type: z.enum(findingTypes, { errorMap: () => ({ message: "Seleccione un tipo válido."})}),
@@ -111,7 +112,7 @@ interface AuditFinding extends AuditFindingFormData {
 
 export interface Audit {
   id: string;
-  auditType: 'proceso' | 'puesto' | 'sistema' | 'politica';
+  auditType: AuditType;
   targetId: string;
   targetName: string;
   processIdsToAudit?: string[];
@@ -165,7 +166,7 @@ export default function AuditoriaPage() {
   const { sistemas, costosSistemas, isLoadingSistemasCostos } = useSistemasCostos();
   const { addLogEntry, logEntries, isLoadingLog } = useActivityLog();
   const { procesos: allProcesses, updateProceso, isLoadingProcesos } = useProcesos();
-  const { procedimientos: allProcedimientos, isLoading: isLoadingProcedimientos } = useProcedimientos();
+  const { procedimientos: allProcedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
   const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
 
   const [pastAudits, setPastAudits] = useState<Audit[]>([]);
@@ -174,7 +175,7 @@ export default function AuditoriaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartAuditDialogOpen, setIsStartAuditDialogOpen] = useState(false);
   
-  const [newAuditType, setNewAuditType] = useState<'proceso' | 'puesto' | 'sistema' | 'politica' | ''>('');
+  const [newAuditType, setNewAuditType] = useState<AuditType | ''>('');
   const [newAuditTargetId, setNewAuditTargetId] = useState<string>('');
   const [newAuditProcessIds, setNewAuditProcessIds] = useState<string[]>([]);
   const [newAuditorName, setNewAuditorName] = useState('Auditor Principal');
@@ -192,7 +193,7 @@ export default function AuditoriaPage() {
   const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
-  const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | 'proceso' | 'puesto' | 'sistema' | 'politica'>('all');
+  const [auditTypeFilter, setAuditTypeFilter] = useState<'all' | AuditType>('all');
   const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | AuditStatus>('all');
   const [pendingActionsFilter, setPendingActionsFilter] = useState<'all' | 'with_pending' | 'no_pending'>('all');
   const [auditSortConfig, setAuditSortConfig] = useState<SortConfig<SortableAuditKeys> | null>(null);
@@ -260,7 +261,7 @@ export default function AuditoriaPage() {
   }, [newAuditType, newAuditTargetId]);
 
   const auditTargetDetails = useMemo(() => {
-    const nullDetails = { name: "No encontrado", process: null, puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null, procedimientos: [], policy: null, linkedProcesses: [], relatedPolicies: [] };
+    const nullDetails = { name: "No encontrado", process: null, puesto: null, relatedProcesses: [], sistema: null, departamento: null, jefeInmediato: null, procedimientos: [], policy: null, procedimiento: null, linkedProcesses: [], relatedPolicies: [] };
 
     if (!currentAuditSession) return null;
 
@@ -366,6 +367,24 @@ export default function AuditoriaPage() {
         return {
             ...nullDetails, name: policy.titulo, policy, linkedProcesses,
         }
+    } else if (currentAuditSession.auditType === 'procedimiento') {
+        const procedimiento = procedimientosMap.get(currentAuditSession.targetId);
+        if(!procedimiento) return nullDetails;
+
+        const parentProcess = procesosMap.get(procedimiento.procesoId);
+
+        const activities = (procedimiento.activityOrder || [])
+            .map(actId => actividadesMap.get(actId))
+            .filter((act): act is Actividad => !!act)
+            .filter(activityFilterFunc);
+        
+        const relatedPolicies = (procedimiento.politicasAsociadas || []).map(link => politicasMap.get(link.policyId)).filter((p): p is Politica => !!p);
+
+        return {
+            ...nullDetails, name: procedimiento.nombre, procedimiento, process: parentProcess,
+            procedimientos: [{ procedimiento, activities }], // Re-using this structure for display
+            relatedPolicies,
+        }
     }
     return null;
   }, [currentAuditSession, activityDisplayFilter, procesosMap, procedimientosMap, actividadesMap, puestosMap, puestoNameToPuestoMap, departamentosMap, sistemasMap, politicasMap, allProcesses, costosSistemas]);
@@ -390,7 +409,9 @@ export default function AuditoriaPage() {
       ? procesosMap.get(newAuditTargetId)?.proceso
       : newAuditType === 'puesto' ? puestosMap.get(newAuditTargetId)?.nombre
       : newAuditType === 'sistema' ? sistemasMap.get(newAuditTargetId)?.nombre
-      : politicasMap.get(newAuditTargetId)?.titulo;
+      : newAuditType === 'politica' ? politicasMap.get(newAuditTargetId)?.titulo
+      : newAuditType === 'procedimiento' ? procedimientosMap.get(newAuditTargetId)?.nombre
+      : undefined;
 
 
     if (!targetName) {
@@ -417,7 +438,7 @@ export default function AuditoriaPage() {
     setNewAuditProcessIds([]);
   };
 
-  const handleStartAuditFromAlert = (type: 'proceso' | 'puesto', id: string) => {
+  const handleStartAuditFromAlert = (type: 'proceso' | 'puesto' | 'procedimiento', id: string) => {
     setNewAuditType(type);
     setNewAuditTargetId(id);
     setIsStartAuditDialogOpen(true);
@@ -504,6 +525,8 @@ export default function AuditoriaPage() {
             await updateProceso(currentAuditSession.targetId, { lastAuditedAt: now });
         } else if (currentAuditSession.auditType === 'puesto') {
             await updatePuesto(currentAuditSession.targetId, { lastAuditedAt: now });
+        } else if (currentAuditSession.auditType === 'procedimiento') {
+            await updateProcedimiento(currentAuditSession.targetId, { lastAuditedAt: now });
         }
 
         const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
@@ -696,7 +719,7 @@ export default function AuditoriaPage() {
     if (isLoadingAllData) return [];
     
     const now = new Date();
-    const alerts: { id: string; type: 'proceso' | 'puesto'; name: string; lastAudited?: string; daysOverdue: number }[] = [];
+    const alerts: { id: string; type: AuditType; name: string; lastAudited?: string; daysOverdue: number }[] = [];
 
     allProcesses.forEach(proc => {
       if (proc.auditFrequencyInDays) {
@@ -725,10 +748,24 @@ export default function AuditoriaPage() {
         }
       }
     });
+
+    allProcedimientos.forEach(proc => {
+      if (proc.auditFrequencyInDays) {
+        const lastAudit = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+        if (!lastAudit) {
+          alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, daysOverdue: 9999 });
+        } else {
+          const nextDueDate = new Date(lastAudit.getTime() + proc.auditFrequencyInDays * 24 * 60 * 60 * 1000);
+          if (now > nextDueDate) {
+            alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
+        }
+      }
+    });
     
     return alerts.sort((a,b) => b.daysOverdue - a.daysOverdue);
 
-  }, [allProcesses, puestos, isLoadingAllData]);
+  }, [allProcesses, puestos, allProcedimientos, isLoadingAllData]);
 
 
   if (isLoadingAllData) {
@@ -787,7 +824,7 @@ export default function AuditoriaPage() {
                                     </Select>
                                 </div>
                             </div>
-                            {auditTargetDetails?.process && (
+                            {auditTargetDetails?.process && !auditTargetDetails.procedimiento && (
                                 <>
                                 <Card>
                                     <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
@@ -823,7 +860,7 @@ export default function AuditoriaPage() {
                                                                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
                                                                         <div className="flex-grow">
                                                                             <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
-                                                                            {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
+                                                                            {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                                         </div>
                                                                         <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                     </CardHeader>
@@ -903,7 +940,7 @@ export default function AuditoriaPage() {
                                                                                                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
                                                                                                         <div className="flex-grow">
                                                                                                             <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
-                                                                                                            {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1 border-destructive text-destructive">Inactiva</Badge>}
+                                                                                                            {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                                                                         </div>
                                                                                                         <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                                                     </CardHeader>
@@ -936,6 +973,44 @@ export default function AuditoriaPage() {
                                         )}
                                     </CardContent>
                                 </Card>
+                            )}
+                            {auditTargetDetails?.procedimiento && (
+                                <>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-lg">Detalles del Procedimiento</CardTitle></CardHeader>
+                                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <DetailDisplay title="Proceso Padre" value={auditTargetDetails.process?.proceso} />
+                                        <DetailDisplay title="Clasificación" value={auditTargetDetails.procedimiento.clasificacion} />
+                                        <DetailDisplay title="Sistemas Utilizados" value={auditTargetDetails.procedimiento.sistemasUtilizados} isList />
+                                        <div className="md:col-span-2 lg:col-span-3">
+                                          <DetailDisplay title="Descripción" value={auditTargetDetails.procedimiento.descripcion} isTextarea />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <div>
+                                    <h4 className="font-semibold text-lg mb-2">Actividades del Procedimiento</h4>
+                                    {auditTargetDetails.procedimientos[0].activities.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {auditTargetDetails.procedimientos[0].activities.map((act, actIndex) => (
+                                                <Card key={act.id} className="bg-background/50">
+                                                    <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
+                                                        <div className="flex-grow">
+                                                            <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{actIndex + 1}</span>{act.nombre}</p>
+                                                            {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
+                                                        </div>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
+                                                    </CardHeader>
+                                                    <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
+                                                        <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground italic">Este procedimiento no tiene actividades definidas o no coinciden con el filtro.</p>
+                                    )}
+                                </div>
+                                </>
                             )}
                             {auditTargetDetails?.sistema && (
                                 <Card>
@@ -1210,10 +1285,11 @@ export default function AuditoriaPage() {
                         </div>
                         <div>
                             <Label htmlFor="auditTypeSelect">Tipo de Auditoría</Label>
-                            <Select value={newAuditType} onValueChange={(v: 'proceso' | 'puesto' | 'sistema' | 'politica' | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
+                            <Select value={newAuditType} onValueChange={(v: AuditType | '') => { setNewAuditType(v); setNewAuditTargetId(''); }}>
                                 <SelectTrigger id="auditTypeSelect"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="proceso">Proceso</SelectItem>
+                                    <SelectItem value="procedimiento">Procedimiento</SelectItem>
                                     <SelectItem value="puesto">Puesto</SelectItem>
                                     <SelectItem value="sistema">Sistema</SelectItem>
                                     <SelectItem value="politica">Política</SelectItem>
@@ -1234,6 +1310,8 @@ export default function AuditoriaPage() {
                                         sistemas.map(s => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)
                                     ) : newAuditType === 'politica' ? (
                                         allPoliticas.map(p => <SelectItem key={p.id} value={p.id}>{p.codigo} - {p.titulo}</SelectItem>)
+                                    ) : newAuditType === 'procedimiento' ? (
+                                        allProcedimientos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
                                     ) : null}
                                 </SelectContent>
                             </Select>
@@ -1300,7 +1378,7 @@ export default function AuditoriaPage() {
                       <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Última Auditoría</TableHead><TableHead>Días de Atraso</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {auditAlerts.map(alert => (
-                          <TableRow key={alert.id}>
+                          <TableRow key={`${alert.type}-${alert.id}`}>
                             <TableCell className="font-medium">{alert.name}</TableCell>
                             <TableCell className="capitalize">{alert.type}</TableCell>
                             <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy') : 'Nunca auditado'}</TableCell>

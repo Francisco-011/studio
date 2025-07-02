@@ -28,6 +28,8 @@ export interface Procedimiento {
   updatedAt: number;
   activo: boolean;
   historialDeCambios?: CambioHistorial[];
+  auditFrequencyInDays?: number;
+  lastAuditedAt?: string; // ISO String
 }
 
 export type ProcedimientoCreationData = Omit<Procedimiento, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
@@ -123,7 +125,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     if (!originalProcedimiento) return;
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays'];
     
     fieldsToCompare.forEach(key => {
         const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';
