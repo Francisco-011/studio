@@ -510,6 +510,7 @@ export default function PanelJerarquicoPage() {
             setDraggedItem(null); setDropTargetInfo(null); return;
         }
 
+        // Case 1: Unassigning activity (dragging back to the pool)
         if (dropTargetInfo.type === 'pool' && draggedItem.type === 'activityInProcedure') {
             const sourceProc = procedimientos.find(p => p.id === draggedItem.sourceParentId);
             if(sourceProc) {
@@ -518,30 +519,53 @@ export default function PanelJerarquicoPage() {
                 toast({ title: "Actividad Desasignada", description: `"${activity.nombre}" fue removida.` });
             }
         } 
+        // Case 2: Assigning or reordering activity
         else if ((dropTargetInfo.type === 'procedimiento' || dropTargetInfo.type === 'activity-in-tree') && dropTargetInfo.parentId) {
-             const targetProcedure = procedimientos.find(p => p.id === dropTargetInfo.parentId);
-             if (!targetProcedure) return;
+            const targetProcedureId = dropTargetInfo.parentId;
+            const sourceProcedureId = draggedItem.sourceParentId;
+            const isReorder = sourceProcedureId === targetProcedureId;
 
-             // Remove from source if it's a move between different procedures
-             if (draggedItem.type === 'activityInProcedure' && draggedItem.sourceParentId !== targetProcedure.id) {
-                const sourceProc = procedimientos.find(p => p.id === draggedItem.sourceParentId);
-                if(sourceProc) {
-                   const newOrder = (sourceProc.activityOrder || []).filter(id => id !== draggedItem.id);
-                   await updateProcedimiento(draggedItem.sourceParentId, { activityOrder: newOrder });
+            const targetProcedure = procedimientos.find(p => p.id === targetProcedureId);
+            if (!targetProcedure) return;
+
+            // Start a batch write
+            const batch = writeBatch(db);
+
+            // --- Handle Target Procedure ---
+            const targetProcedureRef = doc(db, 'procedimientos', targetProcedureId);
+            let targetOrder = [...(targetProcedure.activityOrder || [])];
+
+            // If it's a reorder, first remove the item from its old position.
+            // If it's a move from another procedure, we don't need to remove from targetOrder.
+            if (isReorder && draggedItem.sourceIndex !== undefined) {
+                targetOrder.splice(draggedItem.sourceIndex, 1);
+            }
+
+            const dropIndex = dropTargetInfo.index ?? targetOrder.length;
+            targetOrder.splice(dropIndex, 0, draggedItem.id);
+
+            batch.update(targetProcedureRef, { activityOrder: Array.from(new Set(targetOrder)), updatedAt: serverTimestamp() });
+            
+            // --- Handle Source Procedure (if it's a move between different procedures) ---
+            if (!isReorder && sourceProcedureId !== 'pool') {
+                const sourceProcedure = procedimientos.find(p => p.id === sourceProcedureId);
+                if (sourceProcedure) {
+                    const sourceProcedureRef = doc(db, 'procedimientos', sourceProcedureId);
+                    const sourceOrder = (sourceProcedure.activityOrder || []).filter(id => id !== draggedItem.id);
+                    batch.update(sourceProcedureRef, { activityOrder: sourceOrder, updatedAt: serverTimestamp() });
                 }
-             }
-             
-             let currentOrder = [...(targetProcedure.activityOrder || [])];
-             // Remove instance if it's a reorder within the same procedure
-             if (draggedItem.type === 'activityInProcedure' && draggedItem.sourceParentId === targetProcedure.id && draggedItem.sourceIndex !== undefined) {
-                 currentOrder.splice(draggedItem.sourceIndex, 1);
-             }
-             
-             const dropIndex = dropTargetInfo.index ?? currentOrder.length;
-             currentOrder.splice(dropIndex, 0, draggedItem.id);
-             
-             await updateProcedimiento(targetProcedure.id, { activityOrder: Array.from(new Set(currentOrder)) });
-             toast({ title: "Flujo Actualizado", description: `Actividad "${activity.nombre}" gestionada.` });
+            }
+            
+            // Commit the batch
+            await batch.commit();
+
+            if (isReorder) {
+                addLogEntry({ action: 'update', entityType: 'Flujo de Actividades', entityName: targetProcedure.nombre, details: `Se reordenó la actividad "${activity.nombre}".` });
+            } else {
+                 const sourceProcedure = procedimientos.find(p => p.id === sourceProcedureId);
+                 addLogEntry({ action: 'update', entityType: 'Flujo de Actividades', entityName: targetProcedure.nombre, details: `Actividad "${activity.nombre}" movida desde "${sourceProcedure?.nombre || 'Pool'}" hacia "${targetProcedure.nombre}".` });
+            }
+            toast({ title: "Flujo Actualizado", description: `Actividad "${activity.nombre}" gestionada.` });
         }
     }
     
@@ -799,7 +823,7 @@ export default function PanelJerarquicoPage() {
                 id={node.id}
                 draggable={!!node.payload}
                 onDragStart={(e) => {
-                  if (node.payload) {
+                  if (node.payload && node.payload.departamentoId) {
                     handleDragStart(e, { type: 'puestoInDepto', id: node.originalId!, sourceParentId: node.payload.departamentoId! })
                   }
                 }}
@@ -1012,6 +1036,8 @@ function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto: s
 type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
+    
+
     
 
     
