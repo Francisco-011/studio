@@ -28,9 +28,6 @@ import { es } from 'date-fns/locale';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 
 
-const PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY = 'proceza-puesto-process-order';
-
-
 interface TreeNode {
   id: string;
   name: string;
@@ -104,15 +101,13 @@ export default function PanelJerarquicoPage() {
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, isLoading: isLoadingPuestos } = usePuestos();
+  const { puestos, updatePuestoProcessOrder, isLoading: isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
   const { politicas, isLoading: isLoadingPoliticas } = usePoliticas();
   const { addLogEntry } = useActivityLog();
   
-  const [puestoProcessOrders, setPuestoProcessOrders] = useState<Record<string, string[]>>({});
-
 
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
@@ -170,28 +165,7 @@ export default function PanelJerarquicoPage() {
   }, [puestos, areas, departamentos, selectedAreaFilter, selectedDeptoFilter, isLoadingPuestos]);
 
 
-  useEffect(() => {
-    try {
-      const storedPuestoOrders = localStorage.getItem(PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY);
-      if (storedPuestoOrders) {
-        setPuestoProcessOrders(JSON.parse(storedPuestoOrders));
-      }
-    } catch (error) {
-      console.error("Error loading puesto order from localStorage:", error);
-    }
-  }, []);
-  
   const isLoadingAllData = isLoadingAreas || isLoadingDepartamentos || isLoadingPuestos || isLoadingProcesos || isLoadingActividades || isLoadingProcedimientos || isLoadingPoliticas;
-
-  useEffect(() => {
-    if (!isLoadingAllData && Object.keys(puestoProcessOrders).length > 0) {
-        try {
-            localStorage.setItem(PROCESO_PUESTO_ORDER_LOCAL_STORAGE_KEY, JSON.stringify(puestoProcessOrders));
-        } catch (error) {
-            console.error("Error saving puesto-process order to localStorage:", error);
-        }
-    }
-  }, [puestoProcessOrders, isLoadingAllData]);
 
   useEffect(() => {
     if (isLoadingAllData) return;
@@ -233,7 +207,7 @@ export default function PanelJerarquicoPage() {
 
     const buildTree = (): TreeNode[] => {
         let finalTreeNodes: TreeNode[] = [];
-        let areaNodesMap: Record<string, TreeNode & { deptosMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] }> }> }> = {};
+        let areaNodesMap: Record<string, TreeNode & { deptosMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] } & { payload: any } > }> }> = {};
 
         let filteredProcesses = capturedProcesses.filter(proc => 
             treeProcessStatusFilter === 'all' || 
@@ -265,7 +239,7 @@ export default function PanelJerarquicoPage() {
 
             const puestoId = puestoObj?.id || 'unassigned-puesto';
             if (!areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId]) {
-                areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId] = { id: `puesto-${puestoId}`, name: puestoObj?.nombre || 'Sin Puesto', type: 'puesto', originalId: puestoId, processList: [] };
+                areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId] = { id: `puesto-${puestoId}`, name: puestoObj?.nombre || 'Sin Puesto', type: 'puesto', originalId: puestoId, processList: [], payload: puestoObj };
             }
             
             areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId].processList.push(proc);
@@ -359,11 +333,20 @@ export default function PanelJerarquicoPage() {
                             return hasMatchingPolicy(procNode);
                         });
                     }
+                    
+                    const puestoData = puestos.find(p => p.id === puestoNode.originalId);
+                    const orderForThisPuesto = puestoData?.procesoOrder;
 
-                    const orderForThisPuesto = puestoProcessOrders[puestoNode.originalId!];
-                    let sortedProcessNodes = orderForThisPuesto 
-                        ? processTreeNodes.sort((a,b) => orderForThisPuesto.indexOf(a.originalId!) - orderForThisPuesto.indexOf(b.originalId!))
-                        : processTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
+                    let sortedProcessNodes = orderForThisPuesto
+                      ? processTreeNodes.sort((a,b) => {
+                          const indexA = orderForThisPuesto.indexOf(a.originalId!);
+                          const indexB = orderForThisPuesto.indexOf(b.originalId!);
+                          if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name);
+                          if (indexA === -1) return 1;
+                          if (indexB === -1) return -1;
+                          return indexA - indexB;
+                        })
+                      : processTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
                     
                     if (sortedProcessNodes.length > 0) {
                         puestoNode.children = sortedProcessNodes;
@@ -405,8 +388,7 @@ export default function PanelJerarquicoPage() {
 }, [
     areas, departamentos, puestos, capturedProcesses, procedimientos, actividades, politicas,
     isLoadingAllData, 
-    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, policySearchTerm, treeProcessStatusFilter,
-    puestoProcessOrders
+    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, policySearchTerm, treeProcessStatusFilter
 ]);
 
 
@@ -531,16 +513,24 @@ export default function PanelJerarquicoPage() {
         if (!dropTargetInfo.parentId || draggedItem.sourceParentId !== dropTargetInfo.parentId) return;
 
         const parentPuestoId = draggedItem.sourceParentId;
-        const parentPuestoNode = treeData.flatMap(a => a.children || []).flatMap(d => d.children || []).find(p => p.originalId === parentPuestoId);
+        const parentPuestoData = puestos.find(p => p.id === parentPuestoId);
+        if (!parentPuestoData) return;
 
-        let currentOrder = puestoProcessOrders[parentPuestoId] || parentPuestoNode?.children?.map(c => c.originalId!) || [];
+        let currentOrder = [...(parentPuestoData.procesoOrder || [])];
+        const processExists = currentOrder.includes(draggedItem.id);
         
-        currentOrder.splice(draggedItem.sourceIndex, 1); // Remove from old position
+        if (processExists) {
+            currentOrder = currentOrder.filter(id => id !== draggedItem.id);
+        } else {
+             // This case is less likely if we are only reordering existing ones
+             // but good for robustness
+        }
+        
         const dropIndex = dropTargetInfo.index ?? currentOrder.length;
         currentOrder.splice(dropIndex, 0, draggedItem.id); // Add to new position
         
-        setPuestoProcessOrders(prev => ({ ...prev, [parentPuestoId]: currentOrder }));
-        toast({ title: "Vista Actualizada", description: "Se ha reordenado un proceso (vista local)." });
+        await updatePuestoProcessOrder(parentPuestoId, currentOrder);
+        toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
     }
     
     setDraggedItem(null);
@@ -625,7 +615,7 @@ export default function PanelJerarquicoPage() {
                 className={cn(baseClasses, "ml-4 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary", isInactiveProcedure && "opacity-60")}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, node.id, 'procedimiento', node.payload.sourceParentId, node.payload.sourceIndex)}
+                onDragEnter={(e) => handleDragEnter(e, 'procedimiento', node.payload.sourceParentId, node.payload.sourceIndex)}
                 onDragLeave={handleDragLeave}
                 id={node.id}
                 draggable={!isInactiveProcedure}
@@ -648,7 +638,7 @@ export default function PanelJerarquicoPage() {
                 onDragStart={(e) => node.activo && handleDragStart(e, { type: 'activityInProcedure', id: node.originalId!, sourceParentId: node.payload.sourceParentId, sourceIndex: node.payload.sourceIndex })}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, node.id, 'activity-in-tree', node.payload.sourceParentId, node.payload.sourceIndex)}
+                onDragEnter={(e) => handleDragEnter(e, 'activity-in-tree', node.payload.sourceParentId, node.payload.sourceIndex)}
                 onDragLeave={handleDragLeave}
                 className={cn(baseClasses, "ml-8 bg-secondary/30", node.activo ? "cursor-grab" : "cursor-not-allowed opacity-70", !node.activo && "italic text-muted-foreground", dropTargetInfo?.type === 'activity-in-tree' && dropTargetInfo.id === node.id && "ring-2 ring-primary")}
                 title={!node.activo ? "Esta actividad está inactiva" : node.name}
@@ -680,7 +670,7 @@ export default function PanelJerarquicoPage() {
                 onDragStart={(e) => node.activo && handleDragStart(e, { type: 'processInPuesto', id: node.originalId!, sourceParentId: node.payload.sourceParentId, sourceIndex: node.payload.sourceIndex })}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, node.id, 'proceso', node.payload.sourceParentId, node.payload.sourceIndex)}
+                onDragEnter={(e) => handleDragEnter(e, 'proceso', node.payload.sourceParentId, node.payload.sourceIndex)}
                 onDragLeave={handleDragLeave}
               >
                 <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground group-hover:text-foreground" : "text-transparent")}/>
@@ -704,7 +694,7 @@ export default function PanelJerarquicoPage() {
                 id={node.id}
                 onDragOver={isPuesto ? (e) => handleDragOver(e) : undefined}
                 onDrop={isPuesto ? (e) => handleDrop(e) : undefined}
-                onDragEnter={isPuesto ? (e) => handleDragEnter(e, node.id, 'puesto', node.originalId) : undefined}
+                onDragEnter={isPuesto ? (e) => handleDragEnter(e, 'puesto', node.originalId) : undefined}
                 onDragLeave={isPuesto ? handleDragLeave : undefined}
               >
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
@@ -751,7 +741,7 @@ export default function PanelJerarquicoPage() {
               <div className="grid md:grid-cols-2 gap-6 min-h-[calc(50vh+120px)]">
                 <Card><CardHeader><CardTitle className="text-lg">Árbol de Procesos, Procedimientos y Políticas</CardTitle></CardHeader><CardContent><ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">{treeData.length > 0 ? renderTree(treeData) : <div className="flex flex-col items-center justify-center h-full text-center p-4"><FolderTree className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay procesos para mostrar.</p><p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p></div>}</ScrollArea></CardContent></Card>
                 
-                <Card id="activity-pool" className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")} onDragOver={(e) => handleDragOver(e)} onDrop={(e) => handleDrop(e)} onDragEnter={(e) => handleDragEnter(e, 'activity-pool', 'pool')} onDragLeave={handleDragLeave}>
+                <Card id="activity-pool" className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")} onDragOver={(e) => handleDragOver(e)} onDrop={(e) => handleDrop(e)} onDragEnter={(e) => handleDragEnter(e, 'pool')} onDragLeave={handleDragLeave}>
                   <CardHeader><CardTitle className="text-lg">Pool de Actividades</CardTitle><CardDescription className="text-xs">Actividades disponibles para asignar. Las inactivas no se pueden arrastrar.</CardDescription>
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" /><Input type="search" placeholder="Buscar actividad..." value={activitySearchTerm} onChange={(e) => setActivitySearchTerm(e.target.value)} className="w-full pl-9"/></div>

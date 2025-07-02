@@ -25,6 +25,7 @@ export interface Puesto {
   createdAt?: any;
   costoHora?: number;
   monedaCosto?: TipoMoneda;
+  procesoOrder?: string[];
 }
 
 export type PuestoCreationData = Omit<Puesto, 'id' | 'createdAt'>;
@@ -33,6 +34,7 @@ interface PuestosContextType {
   puestos: Puesto[];
   addPuesto: (data: PuestoCreationData) => Promise<void>;
   updatePuesto: (id: string, data: Partial<PuestoCreationData>) => Promise<void>;
+  updatePuestoProcessOrder: (id: string, procesoOrder: string[]) => Promise<void>;
   deletePuesto: (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => Promise<void>;
   isLoadingPuestos: boolean;
 }
@@ -95,6 +97,16 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
       toast({ title: "Error", description: "No se pudo actualizar el puesto.", variant: "destructive"});
     }
   }, [puestos, addLogEntry]);
+  
+  const updatePuestoProcessOrder = useCallback(async (id: string, procesoOrder: string[]) => {
+    const puestoDocRef = doc(db, PUESTOS_COLLECTION, id);
+    try {
+      await updateDoc(puestoDocRef, { procesoOrder });
+    } catch (e) {
+      console.error("Error updating puesto process order: ", e);
+      toast({ title: "Error", description: "No se pudo guardar el orden de los procesos.", variant: "destructive"});
+    }
+  }, []);
 
   const deletePuesto = useCallback(async (id: string, checkUsage: (puestoId: string, puestoName: string) => { isUsed: boolean; message: string }) => {
     const puestoToDelete = puestos.find(p => p.id === id);
@@ -122,7 +134,7 @@ export function PuestosProvider({ children }: { children: ReactNode }) {
   }, [puestos, addLogEntry]);
 
   return (
-    <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, deletePuesto, isLoadingPuestos }}>
+    <PuestosContext.Provider value={{ puestos, addPuesto, updatePuesto, updatePuestoProcessOrder, deletePuesto, isLoadingPuestos }}>
       {children}
     </PuestosContext.Provider>
   );
