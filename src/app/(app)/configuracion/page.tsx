@@ -52,7 +52,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from '@/hooks/use-toast';
-import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock, CalendarCheck2 } from 'lucide-react';
+import { Settings, PlusCircle, Edit2, Trash2, Building, Users, Laptop, Loader2, Search, AlertTriangle, Building2, Lock, CalendarCheck2, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -118,6 +118,16 @@ const PlaceholderContent = ({ title, description, icon }: { title: string, descr
   </div>
 );
 
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig<T> {
+  key: T;
+  direction: SortDirection;
+}
+
+type SortableDeptoKeys = 'nombre' | 'areaNombre';
+type SortablePuestoKeys = 'nombre' | 'areaNombre' | 'deptoNombre' | 'nivelOrganizacional' | 'numeroPersonas';
+
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea, deleteArea, isLoading: isLoadingAreas } = useAreas();
@@ -152,6 +162,10 @@ export default function ConfiguracionPage() {
 
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'area' | 'departamento' | 'puesto' | 'sistema' | 'costoSistema' } | null>(null);
   
+  // Sorting states
+  const [deptoSortConfig, setDeptoSortConfig] = useState<SortConfig<SortableDeptoKeys> | null>(null);
+  const [puestoSortConfig, setPuestoSortConfig] = useState<SortConfig<SortablePuestoKeys> | null>(null);
+  
   const areaForm = useForm<AreaFormData>({ resolver: zodResolver(areaFormSchema), defaultValues: { nombre: '' } });
   const deptoForm = useForm<DepartamentoFormData>({ resolver: zodResolver(departamentoFormSchema) });
   const puestoForm = useForm<PuestoFormData>({ resolver: zodResolver(puestoFormSchema) });
@@ -167,8 +181,55 @@ export default function ConfiguracionPage() {
   useEffect(() => { if (isCostoDialogOpen) { costoForm.reset(editingCosto || { sistemaId: currentSistemaForCosto?.id || '', descripcion: '' }); } }, [isCostoDialogOpen, editingCosto, currentSistemaForCosto, costoForm]);
 
   const filteredAreas = useMemo(() => areas.filter(a => a.nombre.toLowerCase().includes(areaSearchTerm.toLowerCase())), [areas, areaSearchTerm]);
-  const filteredDeptos = useMemo(() => departamentos.map(d => ({ ...d, areaNombre: areas.find(a => a.id === d.areaId)?.nombre || 'N/A' })).filter(d => d.nombre.toLowerCase().includes(deptoSearchTerm.toLowerCase()) || d.areaNombre.toLowerCase().includes(deptoSearchTerm.toLowerCase())), [departamentos, areas, deptoSearchTerm]);
-  const filteredPuestos = useMemo(() => puestos.map(p => ({ ...p, areaNombre: areas.find(a => a.id === p.areaId)?.nombre || 'N/A', deptoNombre: departamentos.find(d => d.id === p.departamentoId)?.nombre || 'N/A' })).filter(p => p.nombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.areaNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.deptoNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase())), [puestos, areas, departamentos, puestoSearchTerm]);
+
+  const filteredDeptos = useMemo(() => {
+    let deptoData = departamentos
+      .map(d => ({ ...d, areaNombre: areas.find(a => a.id === d.areaId)?.nombre || 'N/A' }))
+      .filter(d => d.nombre.toLowerCase().includes(deptoSearchTerm.toLowerCase()) || d.areaNombre.toLowerCase().includes(deptoSearchTerm.toLowerCase()));
+    
+    if (deptoSortConfig) {
+      deptoData.sort((a, b) => {
+        const valA = a[deptoSortConfig.key];
+        const valB = b[deptoSortConfig.key];
+        if (valA < valB) return deptoSortConfig.direction === 'ascending' ? -1 : 1;
+        if (valA > valB) return deptoSortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return deptoData;
+  }, [departamentos, areas, deptoSearchTerm, deptoSortConfig]);
+
+  const filteredPuestos = useMemo(() => {
+    let puestoData = puestos
+        .map(p => ({ ...p, areaNombre: areas.find(a => a.id === p.areaId)?.nombre || 'N/A', deptoNombre: departamentos.find(d => d.id === p.departamentoId)?.nombre || 'N/A' }))
+        .filter(p => p.nombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.areaNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()) || p.deptoNombre.toLowerCase().includes(puestoSearchTerm.toLowerCase()));
+
+    if (puestoSortConfig) {
+        puestoData.sort((a,b) => {
+            const valA = a[puestoSortConfig.key];
+            const valB = b[puestoSortConfig.key];
+
+            if (puestoSortConfig.key === 'numeroPersonas') {
+                const numA = valA ?? 0;
+                const numB = valB ?? 0;
+                if (numA < numB) return puestoSortConfig.direction === 'ascending' ? -1 : 1;
+                if (numA > numB) return puestoSortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            }
+            
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                if (valA.toLowerCase() < valB.toLowerCase()) return puestoSortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA.toLowerCase() > valB.toLowerCase()) return puestoSortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            }
+            return 0;
+        });
+    }
+    return puestoData;
+  }, [puestos, areas, departamentos, puestoSearchTerm, puestoSortConfig]);
+
+
   const filteredSistemas = useMemo(() => sistemas.filter(s => s.nombre.toLowerCase().includes(sistemaSearchTerm.toLowerCase())), [sistemas, sistemaSearchTerm]);
 
   async function handleAreaSubmit(data: AreaFormData) { if (editingArea) await updateArea(editingArea.id, data.nombre); else await addArea(data.nombre); setIsAreaDialogOpen(false); }
@@ -272,6 +333,35 @@ export default function ConfiguracionPage() {
     return Array.from(totalsByCurrency.entries()).map(([currency, total]) => ({ currency, total }));
   };
 
+  const requestDeptoSort = (key: SortableDeptoKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (deptoSortConfig && deptoSortConfig.key === key && deptoSortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setDeptoSortConfig({ key, direction });
+  };
+
+  const requestPuestoSort = (key: SortablePuestoKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (puestoSortConfig && puestoSortConfig.key === key && puestoSortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setPuestoSortConfig({ key, direction });
+  };
+
+  const getDeptoSortIcon = (key: SortableDeptoKeys) => {
+    if (!deptoSortConfig || deptoSortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    }
+    return deptoSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const getPuestoSortIcon = (key: SortablePuestoKeys) => {
+    if (!puestoSortConfig || puestoSortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    }
+    return puestoSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -327,7 +417,15 @@ export default function ConfiguracionPage() {
                       </div>
                       {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
                        filteredDeptos.length > 0 ? (
-                        <Card><Table><TableHeader><TableRow><TableHead>Nombre del Depto.</TableHead><TableHead>Área</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader>
+                        <Card><Table><TableHeader><TableRow>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('nombre')}>
+                                <div className="flex items-center">Nombre del Depto. {getDeptoSortIcon('nombre')}</div>
+                            </TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestDeptoSort('areaNombre')}>
+                                <div className="flex items-center">Área {getDeptoSortIcon('areaNombre')}</div>
+                            </TableHead>
+                            <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                        </TableRow></TableHeader>
                             <TableBody>{filteredDeptos.map((depto) => (
                                 <TableRow key={depto.id}>
                                   <TableCell>{depto.nombre}</TableCell><TableCell>{depto.areaNombre}</TableCell>
@@ -351,7 +449,14 @@ export default function ConfiguracionPage() {
                       </div>
                       {isLoading ? <PlaceholderContent title="Cargando..." description="" icon={<Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />} /> :
                        filteredPuestos.length > 0 ? (
-                        <Card><Table><TableHeader><TableRow><TableHead>Puesto</TableHead><TableHead>Área</TableHead><TableHead>Depto.</TableHead><TableHead>Nivel</TableHead><TableHead># Personas</TableHead><TableHead className="text-right w-[120px]">Acciones</TableHead></TableRow></TableHeader>
+                        <Card><Table><TableHeader><TableRow>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nombre')}><div className="flex items-center">Puesto {getPuestoSortIcon('nombre')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('areaNombre')}><div className="flex items-center">Área {getPuestoSortIcon('areaNombre')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('deptoNombre')}><div className="flex items-center">Depto. {getPuestoSortIcon('deptoNombre')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('nivelOrganizacional')}><div className="flex items-center">Nivel {getPuestoSortIcon('nivelOrganizacional')}</div></TableHead>
+                            <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestPuestoSort('numeroPersonas')}><div className="flex items-center"># Personas {getPuestoSortIcon('numeroPersonas')}</div></TableHead>
+                            <TableHead className="text-right w-[120px]">Acciones</TableHead>
+                        </TableRow></TableHeader>
                             <TableBody>{filteredPuestos.map((puesto) => (
                                 <TableRow key={puesto.id}>
                                   <TableCell>{puesto.nombre}</TableCell><TableCell>{puesto.areaNombre}</TableCell><TableCell>{puesto.deptoNombre}</TableCell><TableCell>{puesto.nivelOrganizacional}</TableCell><TableCell>{puesto.numeroPersonas || '-'}</TableCell>
