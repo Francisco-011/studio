@@ -37,8 +37,8 @@ const PROCEDIMIENTO_FINALIZADOR = "__FINALIZADOR__";
 const activitySchema = z.object({
     nombre: z.string().min(1, "El nombre es requerido."),
     descripcionBreve: z.string().optional(),
-    tiempoEstimado: z.preprocess(val => val ? parseInt(String(val), 10) : undefined, z.number().int().nonnegative().optional()),
-    tiempoIdeal: z.preprocess(val => val ? parseInt(String(val), 10) : undefined, z.number().int().nonnegative().optional()),
+    tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
+    tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
     puestoId: z.string().optional(),
     frecuencia: z.enum(frecuenciaOptions).optional(),
 });
@@ -275,10 +275,12 @@ export default function CapturaPage() {
             if (procData.activities) {
                 for (const actData of procData.activities) {
                     const activityRef = doc(collection(db, 'actividades'));
+                    const { puestoId, ...restOfActData } = actData;
                     activityRefsAndData.push({
                         ref: activityRef,
                         data: {
-                            ...actData,
+                            ...restOfActData,
+                            puestoId: puestoId === 'none' ? undefined : puestoId,
                             codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
                             procedimientoId: newProcedureId,
                             activa: true,
@@ -290,10 +292,12 @@ export default function CapturaPage() {
                 }
             }
             
+            const { activities, ...restOfProcData } = procData;
+
             procedureRefsAndData.push({
                 ref: procedureRef,
                 data: {
-                    ...procData,
+                    ...restOfProcData,
                     codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
                     procesoId: newProcessId,
                     activityOrder: activityRefsAndData.map(a => a.ref.id),
@@ -316,6 +320,7 @@ export default function CapturaPage() {
             area: data.area,
             departamento: data.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : data.departamento,
             puesto: data.puesto,
+            auditFrequencyInDays: data.auditFrequencyInDays,
             codigo: `PR-${Date.now().toString().slice(-6)}`,
             capturedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -364,6 +369,7 @@ export default function CapturaPage() {
                 </div>
                 <FormField control={form.control} name="proceso" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Nombre del Proceso</FormLabel><FormControl><Input placeholder="Ej: Gestión de Pedidos de Clientes" {...field} /></FormControl>{similarProcessWarning && (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{similarProcessWarning}</FormDescription>)}<FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Objetivo del Proceso</FormLabel><FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Frecuencia de Auditoría del Proceso</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
 
               {!isDefiningFlow && (

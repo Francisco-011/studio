@@ -40,7 +40,7 @@ export const capturaFormSchema = z.object({
     linkType: z.string(), // z.enum(politicaLinkTypes) would cause circular dependency
   })).optional().default([]),
   auditFrequencyInDays: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
     z.number().int().optional()
   ),
   lastAuditedAt: z.string().optional(),
@@ -214,7 +214,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         const changes: CambioHistorial[] = [];
         const fieldsToCompare: (keyof typeof data)[] = [
             'proceso', 'area', 'puesto', 'departamento', 'descripcion', 'procedimientoOrder',
-            'tiempoEstimado', 'costoEstimado', 'monedaCosto'
+            'tiempoEstimado', 'costoEstimado', 'monedaCosto', 'auditFrequencyInDays'
         ];
 
         fieldsToCompare.forEach(key => {
