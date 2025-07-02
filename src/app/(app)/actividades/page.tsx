@@ -78,6 +78,7 @@ const actividadFormSchema = z.object({
   tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
   tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
   frecuencia: z.enum(frecuenciaOptions).optional(),
+  ejecucionesPorPeriodo: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().positive('Debe ser un número positivo.').optional()),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
@@ -200,6 +201,7 @@ export default function ActividadesPage() {
       tiempoEstimado: undefined,
       tiempoIdeal: undefined,
       frecuencia: undefined,
+      ejecucionesPorPeriodo: undefined,
       puestoId: undefined,
     },
   });
@@ -249,6 +251,7 @@ export default function ActividadesPage() {
           tiempoEstimado: undefined,
           tiempoIdeal: undefined,
           frecuencia: undefined,
+          ejecucionesPorPeriodo: undefined,
           puestoId: undefined,
         });
       }
@@ -476,7 +479,7 @@ export default function ActividadesPage() {
 
     const headers = [
       "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre", "Puesto Asignado", "Estado", "Asignaciones",
-      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Moneda", "Frecuencia",
+      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Moneda", "Frecuencia", "Ejecuciones por Periodo",
       "Fecha Creación", "Última Modificación"
     ];
 
@@ -499,6 +502,7 @@ export default function ActividadesPage() {
           escapeCsvCell(costInfo?.cost.toFixed(2)),
           escapeCsvCell(costInfo?.currency),
           escapeCsvCell(act.frecuencia),
+          escapeCsvCell(act.ejecucionesPorPeriodo),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
           escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
         ].join(',');
@@ -712,8 +716,10 @@ export default function ActividadesPage() {
                          <FormField control={actividadForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 20" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                        </div>
                        
-                        <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-
+                        <div className="grid grid-cols-2 gap-4">
+                           <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                           <FormField control={actividadForm.control} name="ejecucionesPorPeriodo" render={({ field }) => (<FormItem><FormLabel>Veces por Periodo</FormLabel><FormControl><Input type="number" placeholder="Ej: 5" {...field} value={field.value ?? ''} /></FormControl><FormDescription className="text-xs">Cuántas veces se hace en esa frecuencia.</FormDescription><FormMessage /></FormItem>)} />
+                        </div>
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
                     </form>
@@ -753,7 +759,7 @@ export default function ActividadesPage() {
                       </TableCell>
                       <TableCell className="text-right text-sm">{actividad.tiempoEstimado ? formatMinutesToHours(actividad.tiempoEstimado) : '-'}</TableCell>
                       <TableCell className="text-right text-sm">{formatCurrencyDisplay(costInfo.cost, costInfo.currency)}</TableCell>
-                      <TableCell className="text-sm">{actividad.frecuencia || '-'}</TableCell>
+                      <TableCell className="text-sm">{actividad.frecuencia ? `${actividad.frecuencia} (${actividad.ejecucionesPorPeriodo || 1})` : '-'}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={actividad.activa ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700": actividad.activa, "bg-slate-500 hover:bg-slate-600": !actividad.activa, "text-white": true})}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
@@ -770,10 +776,7 @@ export default function ActividadesPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredActividades.length} total)</span>
-              <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>Siguiente</Button></div>
-            </div>
+            <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({sortedAndFilteredActividades.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>Siguiente</Button></div></div>
             </>
           ) : (
             <div className="mt-6 p-8 border-dashed rounded-lg text-center bg-muted/20">

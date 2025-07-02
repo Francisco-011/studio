@@ -290,18 +290,36 @@ export default function ProcedimientosPage() {
 
         let totalTiempoProcedimiento = 0;
         const costosPorMoneda = new Map<Moneda, number>();
+        const getMonthlyMultiplier = (frequency?: string): number => {
+            switch (frequency) {
+                case 'Diario': return 22;
+                case 'Semanal': return 4.33;
+                case 'Quincenal': return 2;
+                case 'Mensual': return 1;
+                case 'Bimestral': return 1 / 2;
+                case 'Trimestral': return 1 / 3;
+                case 'Semestral': return 1 / 6;
+                case 'Anual': return 1 / 12;
+                case 'A demanda': return 1;
+                default: return 0;
+            }
+        }
 
         activitiesInProcedure.forEach(activity => {
-            totalTiempoProcedimiento += activity.tiempoEstimado || 0;
+            const monthlyMultiplier = getMonthlyMultiplier(activity.frecuencia);
+            const monthlyExecutions = monthlyMultiplier * (activity.ejecucionesPorPeriodo || 1);
+            
+            totalTiempoProcedimiento += (activity.tiempoEstimado || 0) * monthlyExecutions;
             
             if (activity.puestoId && activity.tiempoEstimado) {
                 const puesto = puestos.find(p => p.id === activity.puestoId);
                 if (puesto && puesto.costoHora) {
                     const costoPorMinuto = puesto.costoHora / 60;
                     const costoActividad = activity.tiempoEstimado * costoPorMinuto;
+                    const costoMensualActividad = costoActividad * monthlyExecutions;
                     const moneda = puesto.monedaCosto || 'MXN';
                     
-                    costosPorMoneda.set(moneda, (costosPorMoneda.get(moneda) || 0) + costoActividad);
+                    costosPorMoneda.set(moneda, (costosPorMoneda.get(moneda) || 0) + costoMensualActividad);
                 }
             }
         });
@@ -328,7 +346,7 @@ export default function ProcedimientosPage() {
             monedaCosto: monedaFinal,
         });
         
-        toast({ title: "Cálculo Completado", description: `Los totales para "${proc.nombre}" han sido actualizados.` });
+        toast({ title: "Cálculo Completado", description: `Los totales mensuales para "${proc.nombre}" han sido actualizados.` });
 
     } catch (error) {
        console.error("Error recalculating totals:", error);
@@ -365,8 +383,8 @@ export default function ProcedimientosPage() {
                 <TableHead className="cursor-pointer" onClick={() => requestSort('nombre')}>Nombre Procedimiento {getSortIcon('nombre')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('procesoPadre')}>Proceso Padre {getSortIcon('procesoPadre')}</TableHead>
                 <TableHead className="cursor-pointer text-center" onClick={() => requestSort('numActividades')}>Nº Act. {getSortIcon('numActividades')}</TableHead>
-                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('tiempoEstimado')}>T. Est. {getSortIcon('tiempoEstimado')}</TableHead>
-                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('costoEstimado')}>C. Est. {getSortIcon('costoEstimado')}</TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('tiempoEstimado')}>T. Est. (Mes) {getSortIcon('tiempoEstimado')}</TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => requestSort('costoEstimado')}>C. Est. (Mes) {getSortIcon('costoEstimado')}</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => requestSort('activo')}>Estado {getSortIcon('activo')}</TableHead>
                 <TableHead className="text-right w-[180px]">Acciones</TableHead>
               </TableRow></TableHeader>
@@ -383,7 +401,7 @@ export default function ProcedimientosPage() {
                     <TableCell className="text-right text-xs">{proc.costoEstimado !== undefined ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : '-'}</TableCell>
                     <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700 text-white": proc.activo, "bg-slate-500 hover:bg-slate-600 text-white": !proc.activo})}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                     <TableCell className="text-right space-x-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleRecalculateTotalsForProcedure(proc)} disabled={isRecalculating === proc.id} title="Recalcular totales">
+                      <Button variant="ghost" size="icon" onClick={() => handleRecalculateTotalsForProcedure(proc)} disabled={isRecalculating === proc.id} title="Recalcular totales mensuales">
                         {isRecalculating === proc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
                       </Button>
                       <Switch checked={proc.activo} onCheckedChange={() => toggleProcedimientoStatus(proc)} aria-label="Cambiar estado" className="mr-2"/>

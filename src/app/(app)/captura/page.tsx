@@ -41,6 +41,7 @@ const activitySchema = z.object({
     tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
     puestoId: z.string().optional(),
     frecuencia: z.enum(frecuenciaOptions).optional(),
+    ejecucionesPorPeriodo: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().positive('Debe ser un número positivo.').optional()),
 });
 
 const procedureSchema = z.object({
@@ -144,7 +145,10 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos }: { 
                            <FormField control={control} name={`procedures.${procIndex}.activities.${index}.descripcionBreve`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Descripción</FormLabel><FormControl><Textarea placeholder="Un resumen conciso..." {...field} value={field.value ?? ''} rows={2} /></FormControl><FormMessage /></FormItem>)} />
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <FormField control={control} name={`procedures.${procIndex}.activities.${index}.puestoId`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Puesto que Ejecuta</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Sin Puesto Específico</SelectItem>{allPuestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                             <FormField control={control} name={`procedures.${procIndex}.activities.${index}.frecuencia`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                             <div className="grid grid-cols-2 gap-2">
+                                <FormField control={control} name={`procedures.${procIndex}.activities.${index}.frecuencia`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={control} name={`procedures.${procIndex}.activities.${index}.ejecucionesPorPeriodo`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Veces</FormLabel><FormControl><Input type="number" placeholder="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                             </div>
                            </div>
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <FormField control={control} name={`procedures.${procIndex}.activities.${index}.tiempoEstimado`} render={({ field }) => (<FormItem><FormLabel className="text-xs">Tiempo Estimado (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 30" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
@@ -154,7 +158,7 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos }: { 
                     </div>
                 ))}
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: undefined, tiempoIdeal: undefined, puestoId: undefined, frecuencia: undefined })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ nombre: '', descripcionBreve: '', tiempoEstimado: undefined, tiempoIdeal: undefined, puestoId: undefined, frecuencia: undefined, ejecucionesPorPeriodo: undefined })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
             </Button>
         </div>
