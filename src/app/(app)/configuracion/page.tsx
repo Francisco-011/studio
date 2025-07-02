@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -462,7 +463,7 @@ export default function ConfiguracionPage() {
                             <TableBody>{filteredPuestos.map((puesto) => (
                                 <TableRow key={puesto.id}>
                                   <TableCell>{puesto.nombre}</TableCell><TableCell>{puesto.areaNombre}</TableCell><TableCell>{puesto.deptoNombre}</TableCell>
-                                  <TableCell>{puesto.costoHora ? `${puesto.costoHora.toFixed(2)} ${puesto.monedaCosto || ''}` : '-'}</TableCell>
+                                  <TableCell>{puesto.costoHora ? `${puesto.costoHora.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${puesto.monedaCosto || ''}` : '-'}</TableCell>
                                   <TableCell>{puesto.numeroPersonas || '-'}</TableCell>
                                   <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(puesto, setEditingPuesto, setIsPuestoDialogOpen)} className="mr-2"><Edit2 className="h-4 w-4" /></Button>
