@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -141,6 +142,44 @@ export default function AyudaPage() {
                       <li>La IA devolverá un resumen y listas de posibles **duplicidades, redundancias y gaps de políticas**, evitando sugerir mejoras que ya estén registradas como "Acciones".</li>
                       <li>Si los hallazgos son acertados, puedes generar **"Acciones de Mejora"** directamente desde los resultados.</li>
                     </ol>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="item-security">
+                <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
+                <AccordionContent className="space-y-4 text-sm">
+                  <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender la diferencia:</p>
+                  
+                  <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
+                    <h4 className="font-semibold text-base">Roles: ¿Qué puedes HACER?</h4>
+                    <p>Un rol define las acciones que un usuario puede realizar en el sistema. Los roles predeterminados son:</p>
+                    <ul className="list-disc pl-5 space-y-2 mt-2">
+                        <li><strong>Administrador:</strong> Tiene control total. Puede ver toda la información, configurar catálogos, gestionar usuarios y permisos.</li>
+                        <li><strong>Gerente de Proyecto:</strong> Puede crear y gestionar procesos, políticas y acciones de mejora. Tiene acceso a la mayoría de los módulos de análisis.</li>
+                        <li><strong>Consultor:</strong> Un rol analítico. Puede ver y proponer mejoras, pero no puede realizar cambios de configuración críticos ni gestionar usuarios.</li>
+                        <li><strong>Usuario Final:</strong> Es un rol de consulta. Solo puede ver los procesos y políticas a los que tiene acceso, sin capacidad de edición.</li>
+                    </ul>
+                  </div>
+
+                  <div className="pt-4 border-t border-dashed">
+                    <h4 className="font-semibold text-base">Niveles de Acceso: ¿Qué puedes VER?</h4>
+                    <p>El Nivel de Acceso de un usuario determina qué información puede visualizar, basándose en la "Clasificación de Visibilidad" de cada procedimiento.</p>
+                     <p>La jerarquía de acceso es la siguiente (de mayor a menor):</p>
+                    <p><strong>Confidencial → Ejecutivo → Jerárquico → Departamental → Público</strong></p>
+                    <p>Un usuario puede ver cualquier procedimiento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver procedimientos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-dashed">
+                    <h4 className="font-semibold text-base">Ejemplo Práctico</h4>
+                    <ul className="list-disc pl-5 space-y-2 mt-2">
+                      <li><strong>Proceso A: "Solicitud de Vacaciones"</strong>. Contiene un procedimiento clasificado como <strong>Público</strong>.</li>
+                      <li><strong>Proceso B: "Cierre Contable Mensual"</strong>. Contiene un procedimiento clasificado como <strong>Privado</strong>.</li>
+                    </ul>
+                    <ul className="list-none mt-3 space-y-2">
+                      <li>Un <strong>Usuario Final</strong> (con nivel de acceso 'Público') podrá ver el Proceso A y todo su contenido. Sin embargo, el Proceso B ni siquiera aparecerá en su lista, porque no tiene acceso a ninguno de sus procedimientos.</li>
+                      <li>Un <strong>Gerente de Proyecto</strong> (con nivel 'Jerárquico') podrá ver ambos procesos (A y B) y sus contenidos, ya que su nivel de acceso es superior a la clasificación de ambos procedimientos.</li>
+                    </ul>
                   </div>
                 </AccordionContent>
               </AccordionItem>
