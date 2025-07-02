@@ -72,7 +72,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData } from '@/contexts/ProcesosContext';
+import { useProcesos, type CapturedProcess, capturaFormSchema, type CapturaFormData, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 
@@ -277,7 +277,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         return 0;
       });
     } else {
-       dataToFilter.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+       dataToFilter.sort((a, b) => a.codigo.localeCompare(b.codigo));
     }
     return dataToFilter;
   }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig, allProcedimientos]);
@@ -613,6 +613,7 @@ export default function ProcesosYFlujosRegistradosPage() {
               </div>
               <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Objetivo</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage/></FormItem>)}/>
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
                 <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>

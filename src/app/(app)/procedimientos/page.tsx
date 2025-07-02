@@ -39,6 +39,10 @@ const procedimientoFormSchema = z.object({
   sistemasUtilizados: z.array(z.string()).optional().default([]),
   clasificacion: z.enum(clasificacionOptions).default('Privado'),
   activityOrder: z.array(z.string()).optional().default([]), 
+  informacionRecibe: z.string().optional(),
+  procedimientosEntradaIds: z.array(z.string()).optional().default([]),
+  informacionEntrega: z.string().optional(),
+  procedimientosSalidaIds: z.array(z.string()).optional().default([]),
 });
 
 type ProcedimientoFormData = z.infer<typeof procedimientoFormSchema>;
@@ -85,8 +89,9 @@ export default function ProcedimientosPage() {
     const processFromQuery = searchParams.get('proceso');
     if (processFromQuery) {
         setProcesoFilter(processFromQuery);
+        form.setValue('procesoId', processFromQuery);
     }
-  }, [searchParams]);
+  }, [searchParams, form]);
 
   useEffect(() => {
     if (isDialogOpen) {
@@ -99,12 +104,27 @@ export default function ProcedimientosPage() {
           sistemasUtilizados: editingProcedimiento.sistemasUtilizados || [],
           clasificacion: editingProcedimiento.clasificacion,
           activityOrder: editingProcedimiento.activityOrder,
+          informacionRecibe: editingProcedimiento.informacionRecibe,
+          procedimientosEntradaIds: editingProcedimiento.procedimientosEntradaIds || [],
+          informacionEntrega: editingProcedimiento.informacionEntrega,
+          procedimientosSalidaIds: editingProcedimiento.procedimientosSalidaIds || [],
         });
       } else {
-        form.reset({ nombre: '', descripcion: '', procesoId: undefined, sistemasUtilizados: [], clasificacion: 'Privado' });
+        const processFromQuery = searchParams.get('proceso');
+        form.reset({ 
+          nombre: '', 
+          descripcion: '', 
+          procesoId: processFromQuery || undefined, 
+          sistemasUtilizados: [], 
+          clasificacion: 'Privado',
+          informacionRecibe: '',
+          procedimientosEntradaIds: [],
+          informacionEntrega: '',
+          procedimientosSalidaIds: [],
+        });
       }
     }
-  }, [editingProcedimiento, isDialogOpen, form]);
+  }, [editingProcedimiento, isDialogOpen, form, searchParams]);
 
   async function handleSubmit(data: ProcedimientoFormData) {
     const { id, ...formData } = data;
@@ -172,12 +192,15 @@ export default function ProcedimientosPage() {
 
     if (sortConfig) {
       filtered.sort((a, b) => {
-        let valA = a[sortConfig.key];
-        let valB = b[sortConfig.key];
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
         
         if (sortConfig.key === 'activo') {
             valA = a.activo;
             valB = b.activo;
+        } else if (sortConfig.key === 'updatedAt') {
+            valA = a.updatedAt || 0;
+            valB = b.updatedAt || 0;
         }
 
         if (typeof valA === 'string' && typeof valB === 'string') {
@@ -190,7 +213,7 @@ export default function ProcedimientosPage() {
         return 0;
       });
     } else {
-      filtered.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+      filtered.sort((a, b) => a.codigo.localeCompare(b.codigo));
     }
     return filtered;
   }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, statusFilter, sortConfig]);
@@ -275,6 +298,11 @@ export default function ProcedimientosPage() {
             <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
             <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
           </div>
+          <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe (Entradas)</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor, Orden de compra aprobada..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+          <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (<FormItem><FormLabel>Procedimientos de Entrada (Opcional)</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+          <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega (Salidas)</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+          <FormField control={form.control} name="procedimientosSalidaIds" render={({ field }) => (<FormItem><FormLabel>Procedimientos de Salida (Opcional)</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+
           <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
         </form></Form>
       </DialogContent></Dialog>
