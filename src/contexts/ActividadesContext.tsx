@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import type { Moneda } from './AccionesContext';
-import type { frecuenciaOptions } from './ProcesosContext';
+import { frecuenciaOptions } from './ProcesosContext';
 
 export interface CambioHistorial {
   timestamp: string;
@@ -22,6 +22,7 @@ export interface Actividad {
   codigo: string;
   nombre: string;
   activa: boolean;
+  procedimientoId?: string;
   createdAt: number; 
   updatedAt?: number;
   deletedAt?: number; 
@@ -37,7 +38,7 @@ export interface Actividad {
   frecuencia?: typeof frecuenciaOptions[number];
 }
 
-export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
+export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'procedimientoId'>;
 
 interface ActividadesContextType {
   actividades: Actividad[];

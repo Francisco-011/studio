@@ -11,6 +11,9 @@ import { format, isValid, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useActividades, type Actividad, type CambioHistorial, type ActividadCreationData } from '@/contexts/ActividadesContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+import { frecuenciaOptions } from '@/contexts/ProcesosContext';
+import { monedaOptions } from '@/contexts/AccionesContext';
+import { formatMinutesToHours } from '@/lib/utils';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -61,7 +64,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow } from "lucide-react";
+import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow, Clock, DollarSign } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -71,10 +74,16 @@ const actividadFormSchema = z.object({
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   descripcionBreve: z.string().optional(),
   activa: z.boolean().default(true),
+  tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
+  tiempoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
+  costoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
+  costoIdeal: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative().optional()),
+  monedaCosto: z.enum(monedaOptions).optional(),
+  frecuencia: z.enum(frecuenciaOptions).optional(),
 });
 type ActividadFormData = z.infer<typeof actividadFormSchema>;
 
-type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones' | 'procedimientoPadre';
+type SortableActividadKeys = keyof Omit<Actividad, 'historialDeCambios' | 'descripcionBreve'> | 'asignaciones' | 'procedimientoPadre' | 'tiempoEstimado' | 'costoEstimado';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -101,6 +110,15 @@ const escapeCsvCell = (cellData: string | number | undefined | null | string[]):
   }
   return stringValue;
 };
+
+function formatCurrencyDisplay(amount?: number, currency?: string) {
+  if (amount === undefined || amount === null || currency === undefined) return "-";
+  try {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
+  } catch (e) {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
 
 export default function ActividadesPage() {
   const {
@@ -179,6 +197,12 @@ export default function ActividadesPage() {
       nombre: '',
       descripcionBreve: '',
       activa: true,
+      tiempoEstimado: undefined,
+      tiempoIdeal: undefined,
+      costoEstimado: undefined,
+      costoIdeal: undefined,
+      monedaCosto: undefined,
+      frecuencia: undefined,
     },
   });
 
@@ -215,16 +239,20 @@ export default function ActividadesPage() {
     if (isActividadDialogOpen) {
       if (editingActividad) {
         actividadForm.reset({
-          id: editingActividad.id,
-          nombre: editingActividad.nombre,
+          ...editingActividad,
           descripcionBreve: editingActividad.descripcionBreve || '',
-          activa: editingActividad.activa,
         });
       } else {
         actividadForm.reset({
           nombre: '',
           descripcionBreve: '',
           activa: true,
+          tiempoEstimado: undefined,
+          tiempoIdeal: undefined,
+          costoEstimado: undefined,
+          costoIdeal: undefined,
+          monedaCosto: undefined,
+          frecuencia: undefined,
         });
       }
     }
@@ -333,6 +361,8 @@ export default function ActividadesPage() {
       filtered.sort((a, b) => {
         let valA: any;
         let valB: any;
+        
+        const safeGet = (obj: any, key: string, defaultValue: any = null) => obj?.[key as keyof typeof obj] ?? defaultValue;
 
         if (sortConfig.key === 'asignaciones') {
             valA = assignmentCounts.get(a.id) || 0;
@@ -341,13 +371,13 @@ export default function ActividadesPage() {
             valA = a.procedimientoPadre;
             valB = b.procedimientoPadre;
         } else {
-            valA = a[sortConfig.key as keyof Actividad];
-            valB = b[sortConfig.key as keyof Actividad];
+            valA = safeGet(a, sortConfig.key);
+            valB = safeGet(b, sortConfig.key);
         }
 
-        if (sortConfig.key === 'createdAt' || sortConfig.key === 'updatedAt') {
-          valA = valA || 0;
-          valB = valB || 0;
+        if (['createdAt', 'updatedAt', 'tiempoEstimado', 'costoEstimado'].includes(sortConfig.key)) {
+            valA = valA || 0;
+            valB = valB || 0;
         } else if (sortConfig.key === 'activa') {
            valA = a.activa;
            valB = b.activa;
@@ -371,7 +401,7 @@ export default function ActividadesPage() {
         return 0;
       });
     } else {
-      filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      filtered.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return filtered;
   }, [actividades, searchTerm, statusFilter, usageFilter, sortConfig, assignmentCounts, activityToProceduresMap]);
@@ -421,8 +451,8 @@ export default function ActividadesPage() {
     }
 
     const headers = [
-      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre",
-      "Estado", "Asignaciones",
+      "ID", "Código", "Nombre Actividad", "Descripción Breve", "Procedimiento Padre", "Estado", "Asignaciones",
+      "Tiempo Estimado (min)", "Tiempo Ideal (min)", "Costo Estimado", "Costo Ideal", "Moneda", "Frecuencia",
       "Fecha Creación", "Última Modificación"
     ];
 
@@ -437,6 +467,12 @@ export default function ActividadesPage() {
           escapeCsvCell(act.procedimientoPadre),
           escapeCsvCell(act.activa ? 'Activa' : 'Inactiva'),
           escapeCsvCell(assignmentCounts.get(act.id) || 0),
+          escapeCsvCell(act.tiempoEstimado),
+          escapeCsvCell(act.tiempoIdeal),
+          escapeCsvCell(act.costoEstimado),
+          escapeCsvCell(act.costoIdeal),
+          escapeCsvCell(act.monedaCosto),
+          escapeCsvCell(act.frecuencia),
           escapeCsvCell(act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
           escapeCsvCell(act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
         ].join(',');
@@ -597,7 +633,7 @@ export default function ActividadesPage() {
                     <PlusCircle className="mr-2 h-4 w-4" /> Agregar Actividad
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
                     <DialogTitle>{editingActividad ? 'Editar Actividad' : 'Agregar Nueva Actividad'}</DialogTitle>
                     <DialogDescription>
@@ -626,6 +662,20 @@ export default function ActividadesPage() {
                         )}
                       />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField control={actividadForm.control} name="tiempoEstimado" render={({ field }) => (<FormItem><FormLabel>Tiempo Estimado (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 30" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                         <FormField control={actividadForm.control} name="tiempoIdeal" render={({ field }) => (<FormItem><FormLabel>Tiempo Ideal (min)</FormLabel><FormControl><Input type="number" placeholder="Ej: 20" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField control={actividadForm.control} name="costoEstimado" render={({ field }) => (<FormItem><FormLabel>Costo Estimado</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 15.50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                         <FormField control={actividadForm.control} name="costoIdeal" render={({ field }) => (<FormItem><FormLabel>Costo Ideal</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 10.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={actividadForm.control} name="monedaCosto" render={({ field }) => (<FormItem><FormLabel>Moneda del Costo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{monedaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <FormField control={actividadForm.control} name="frecuencia" render={({ field }) => (<FormItem><FormLabel>Frecuencia</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent>{frecuenciaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                       </div>
+
                       <FormField control={actividadForm.control} name="activa" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si la actividad está disponible para ser usada.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)} />
                       <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">{editingActividad ? 'Guardar Cambios' : 'Agregar'}</Button></DialogFooter>
                     </form>
@@ -642,10 +692,11 @@ export default function ActividadesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[100px] cursor-pointer" onClick={() => requestSort('codigo')}>Código {getSortIcon('codigo')}</TableHead>
-                    <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('nombre')}>Nombre {getSortIcon('nombre')}</TableHead>
-                    <TableHead className="min-w-[200px] cursor-pointer" onClick={() => requestSort('procedimientoPadre')}>Procedimiento Padre {getSortIcon('procedimientoPadre')}</TableHead>
-                    <TableHead className="w-[120px] cursor-pointer" onClick={() => requestSort('asignaciones')}>Asignaciones {getSortIcon('asignaciones')}</TableHead>
-                     <TableHead className="w-[140px] cursor-pointer" onClick={() => requestSort('updatedAt')}>Últ. Modif. {getSortIcon('updatedAt')}</TableHead>
+                    <TableHead className="min-w-[150px] cursor-pointer" onClick={() => requestSort('nombre')}>Nombre {getSortIcon('nombre')}</TableHead>
+                    <TableHead className="min-w-[150px] cursor-pointer" onClick={() => requestSort('procedimientoPadre')}>Procedimiento Padre {getSortIcon('procedimientoPadre')}</TableHead>
+                    <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('asignaciones')}>Asign. {getSortIcon('asignaciones')}</TableHead>
+                    <TableHead className="w-[120px] text-right cursor-pointer" onClick={() => requestSort('tiempoEstimado')}>Tiempo Est. {getSortIcon('tiempoEstimado')}</TableHead>
+                    <TableHead className="w-[120px] text-right cursor-pointer" onClick={() => requestSort('costoEstimado')}>Costo Est. {getSortIcon('costoEstimado')}</TableHead>
                     <TableHead className="w-[100px] text-center cursor-pointer" onClick={() => requestSort('activa')}>Estado {getSortIcon('activa')}</TableHead>
                     <TableHead className="text-right w-[180px]">Acciones</TableHead>
                   </TableRow>
@@ -656,17 +707,13 @@ export default function ActividadesPage() {
                       <TableCell className="font-mono text-xs">{actividad.codigo}</TableCell>
                       <TableCell className="font-medium">{actividad.nombre}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{actividad.procedimientoPadre}</TableCell>
-                      <TableCell className="text-sm text-center">
-                        <Badge variant="outline" className="cursor-default font-mono">{assignmentCounts.get(actividad.id) || 0}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{actividad.updatedAt && isValid(new Date(actividad.updatedAt)) ? format(new Date(actividad.updatedAt), 'dd/MM/yy HH:mm') : '-'}</TableCell>
                       <TableCell className="text-center">
-                        <Badge
-                          className={cn(
-                            "text-white border-transparent",
-                            actividad.activa ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-500 hover:bg-slate-600'
-                          )}
-                        >
+                        <Badge variant="outline" className="font-mono">{assignmentCounts.get(actividad.id) || 0}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm">{actividad.tiempoEstimado ? formatMinutesToHours(actividad.tiempoEstimado) : '-'}</TableCell>
+                      <TableCell className="text-right text-sm">{formatCurrencyDisplay(actividad.costoEstimado, actividad.monedaCosto)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={actividad.activa ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700": actividad.activa, "bg-slate-500 hover:bg-slate-600": !actividad.activa, "text-white": true})}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
                         </Badge>
                       </TableCell>
