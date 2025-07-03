@@ -234,7 +234,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   
   const puestosMap = useMemo(() => new Map(puestos.map(p => [p.id, p])), [puestos]);
   const politicasMap = useMemo(() => new Map(allPoliticas.map(p => [p.id, p])), [allPoliticas]);
-  const procedimientosMap = useMemo(() => new Map(allProcedimientos.map(p => [p.id, p])), [allProcedimientos]);
+  const procedimientosMap = useMemo(() => new Map(allProcedimientos.map(p => [p.id, p.nombre])), [allProcedimientos]);
 
 
   const sortedAndFilteredData = useMemo(() => {
@@ -651,8 +651,8 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                       </div>
                                                       <DetailDisplay title="Información que Recibe" value={procedure.informacionRecibe} isTextarea/>
                                                       <DetailDisplay title="Información que Entrega" value={procedure.informacionEntrega} isTextarea/>
-                                                      <DetailDisplay title="Procedimientos de Entrada" value={(procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
-                                                      <DetailDisplay title="Procedimientos de Salida" value={(procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
+                                                      <DetailDisplay title="Procedimientos de Entrada" value={(procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id) || id)} isList />
+                                                      <DetailDisplay title="Procedimientos de Salida" value={(procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id) || id)} isList />
                                                       <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === procedure.auditFrequencyInDays)?.label} />
                                                       <DetailDisplay title="Última Auditoría" value={procedure.lastAuditedAt ? format(parseISO(procedure.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
                                                       <DetailDisplay title="Tiempo Est. (Mes)" value={procedure.tiempoEstimado ? formatMinutesToHours(procedure.tiempoEstimado) : 'No calculado'} />
@@ -760,14 +760,32 @@ export default function ProcesosYFlujosRegistradosPage() {
                 <TableBody>
                   {processForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
-                    .map((cambio, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
-                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
-                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
-                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
-                    </TableRow>
-                  ))}
+                    .map((cambio, index) => {
+                      let beforeText: React.ReactNode = String(cambio.before ?? 'N/A');
+                      let afterText: React.ReactNode = String(cambio.after ?? 'N/A');
+
+                      if (cambio.field === 'procedimientoOrder') {
+                          const formatOrder = (order: any) => {
+                              if (!Array.isArray(order) || order.length === 0) return 'Ninguno';
+                              return order.map(id => procedimientosMap.get(id) || id).join(', ');
+                          };
+                          beforeText = formatOrder(cambio.before);
+                          afterText = formatOrder(cambio.after);
+                      } else if (cambio.field === 'auditFrequencyInDays') {
+                          const formatFreq = (days: any) => auditFrequencyOptions.find(o => o.value === Number(days))?.label || 'No requiere';
+                          beforeText = formatFreq(cambio.before);
+                          afterText = formatFreq(cambio.after);
+                      }
+
+                      return (
+                      <TableRow key={index}>
+                        <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                        <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                        <TableCell className="text-xs">{beforeText}</TableCell>
+                        <TableCell className="text-xs font-semibold">{afterText}</TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             ) : (
@@ -786,6 +804,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
