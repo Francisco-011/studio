@@ -7,12 +7,14 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
+import { useProcedimientos } from './ProcedimientosContext';
+
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -46,6 +48,8 @@ export interface Politica {
   referenciasLegales?: string;
   historialDeCambios?: CambioHistorial[];
   procedimientosAsociadosIds?: string[];
+  procesosAsociadosIds?: string[]; // Kept for compatibility if needed
+  actividadesAsociadasIds?: string[]; // Kept for compatibility if needed
 }
 
 export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
@@ -83,6 +87,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
   const { exceptions, isLoadingExceptions } = useExceptions();
+  const { procedimientos } = useProcedimientos();
 
   useEffect(() => {
     if (authLoading || isLoadingExceptions) {
@@ -138,6 +143,10 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
 
   const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {
+        const batch = writeBatch(db);
+        const politicaDocRef = doc(collection(db, POLITICAS_COLLECTION));
+        const politicaId = politicaDocRef.id;
+
         const codigo = `PO-${Date.now().toString().slice(-6)}`;
         const payload: { [key: string]: any } = {
           ...data,
@@ -148,15 +157,30 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
           historialDeCambios: [],
         };
         Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
-        const docRef = await addDoc(collection(db, POLITICAS_COLLECTION), payload);
+        batch.set(politicaDocRef, payload);
+
+        // Link to procedures
+        if (data.procedimientosAsociadosIds && data.procedimientosAsociadosIds.length > 0) {
+            for (const procId of data.procedimientosAsociadosIds) {
+                const procDocRef = doc(db, 'procedimientos', procId);
+                const proc = procedimientos.find(p => p.id === procId);
+                if (proc) {
+                    const updatedPolicyIds = [...(proc.politicasAsociadasIds || []), politicaId];
+                    batch.update(procDocRef, { politicasAsociadasIds: updatedPolicyIds });
+                }
+            }
+        }
+        
+        await batch.commit();
+
         addLogEntry({ action: 'create', entityType: 'Política', entityName: data.titulo, details: `Se creó la política "${data.titulo}" (${codigo}).` });
-        return docRef.id;
+        return politicaId;
     } catch(e) {
         console.error("Error adding política:", e);
         toast({ title: "Error", description: "No se pudo agregar la política.", variant: "destructive"});
         return null;
     }
-  }, [addLogEntry]);
+  }, [addLogEntry, procedimientos]);
 
   const updatePolitica = useCallback(async (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => {
     const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);
@@ -188,16 +212,56 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         }
     });
 
+    const originalProcIds = new Set(originalPolitica.procedimientosAsociadosIds || []);
+    const newProcIds = new Set(data.procedimientosAsociadosIds || []);
+    const associationsChanged = JSON.stringify([...originalProcIds].sort()) !== JSON.stringify([...newProcIds].sort());
+
+    if (associationsChanged) {
+        changes.push({
+            timestamp: new Date().toISOString(),
+            field: 'procedimientosAsociadosIds',
+            before: originalPolitica.procedimientosAsociadosIds || [],
+            after: data.procedimientosAsociadosIds || []
+        });
+    }
+
     if (changes.length > 0) {
       try {
+        const batch = writeBatch(db);
+        
+        // Update policy document
         const payload: { [key: string]: any } = {
           ...data,
           updatedAt: serverTimestamp(),
           historialDeCambios: [...(originalPolitica.historialDeCambios || []), ...changes]
         };
         Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        batch.update(politicaDocRef, payload);
 
-        await updateDoc(politicaDocRef, payload);
+        // Update associated procedures
+        const addedProcIds = [...newProcIds].filter(procId => !originalProcIds.has(procId));
+        const removedProcIds = [...originalProcIds].filter(procId => !newProcIds.has(procId));
+
+        for (const procId of addedProcIds) {
+            const procRef = doc(db, 'procedimientos', procId);
+            const proc = procedimientos.find(p => p.id === procId);
+            if (proc) {
+                const updatedPolicyIds = [...(proc.politicasAsociadasIds || []), id];
+                batch.update(procRef, { politicasAsociadasIds: updatedPolicyIds });
+            }
+        }
+
+        for (const procId of removedProcIds) {
+            const procRef = doc(db, 'procedimientos', procId);
+            const proc = procedimientos.find(p => p.id === procId);
+            if (proc) {
+                const updatedPolicyIds = (proc.politicasAsociadasIds || []).filter(policyId => policyId !== id);
+                batch.update(procRef, { politicasAsociadasIds: updatedPolicyIds });
+            }
+        }
+        
+        await batch.commit();
+
         addLogEntry({ action: 'update', entityType: 'Política', entityName: data.titulo || originalPolitica.titulo, details: `Se actualizó la política "${originalPolitica.titulo}".` });
         toast({ title: "Política Actualizada", description: `${changes.length} campo(s) fueron modificados.` });
       } catch(e) {
@@ -207,7 +271,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     } else {
       toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar.", variant: "default" });
     }
-  }, [politicas, addLogEntry]);
+  }, [politicas, addLogEntry, procedimientos]);
   
   const updatePoliticaStatus = useCallback(async (id: string, estado: PoliticaEstado) => {
     const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);
