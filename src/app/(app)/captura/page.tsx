@@ -60,7 +60,7 @@ const procedureSchema = z.object({
     procedimientosSalidaIds: z.array(z.string()).optional().default([]),
     politicasAsociadasIds: z.array(z.string()).optional().default([]),
     auditFrequencyInDays: z.preprocess(
-        (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+        (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
         z.number().int().optional()
     ),
 });
@@ -348,6 +348,8 @@ export default function CapturaPage() {
         const { procedures, ...processData } = data;
         const processPayload = {
             ...processData,
+            // Firestore does not accept 'undefined'. Ensure we send 'null' instead.
+            departamento: processData.departamento === NO_DEPARTAMENTO_SELECTED ? null : (processData.departamento || null),
             codigo: `PR-${Date.now().toString().slice(-6)}`,
             capturedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
