@@ -125,7 +125,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     procesos: allCapturedData, 
     updateProceso, 
     softDeleteProceso, 
-    restoreProceso, 
     toggleProcesoStatus, 
     isLoadingProcesos 
   } = useProcesos();
@@ -144,7 +143,6 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   const [processToDelete, setProcessToDelete] = useState<CapturedProcess | null>(null);
   const [isConfirmDeleteProcessOpen, setIsConfirmDeleteProcessOpen] = useState(false);
-  const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
@@ -324,12 +322,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const recoverableProcesses = useMemo(() => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo).sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
-  }, [allCapturedData]);
-
   const promptDeleteProcess = (proc: CapturedProcess) => {
     const proceduresForProcess = (proc.procedimientoOrder || [])
       .map(procId => allProcedimientos.find(p => p.id === procId))
@@ -354,9 +346,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     softDeleteProceso(processToDelete.id);
     setProcessToDelete(null);
     setIsConfirmDeleteProcessOpen(false);
-  };
-  const handleRestoreProcess = (id: string) => {
-    restoreProceso(id);
   };
 
   const handleToggleProcessStatus = (processId: string) => {
@@ -606,7 +595,6 @@ export default function ProcesosYFlujosRegistradosPage() {
           </div>
           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
             <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto"><FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredData.length})</Button>
-            <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}><DialogTrigger asChild><Button variant="outline" className="w-full sm:w-auto" disabled={recoverableProcesses.length === 0}><RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableProcesses.length})</Button></DialogTrigger><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Recuperar Procesos Eliminados</DialogTitle><DialogDescription>Procesos eliminados en los últimos 30 días que pueden ser restaurados.</DialogDescription></DialogHeader>{recoverableProcesses.length > 0 ? (<div className="max-h-[60vh] overflow-y-auto py-4"><Table><TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Eliminado el</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader><TableBody>{recoverableProcesses.map(proc => (<TableRow key={proc.id}><TableCell>{proc.proceso}</TableCell><TableCell>{proc.deletedAt ? format(new Date(proc.deletedAt), 'dd/MM/yyyy HH:mm', { locale: es }) : 'N/A'}</TableCell><TableCell className="text-right"><Button size="sm" onClick={() => handleRestoreProcess(proc.id)}><RotateCcw className="mr-2 h-3 w-3" /> Restaurar</Button></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="py-4 text-muted-foreground">No hay procesos para recuperar.</p>)}<DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose></DialogFooter></DialogContent></Dialog>
           </div>
           {paginatedData.length > 0 ? (
             <><div className="rounded-md border overflow-x-auto"><Table><TableHeader><TableRow>
@@ -910,6 +898,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
