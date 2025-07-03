@@ -227,6 +227,11 @@ export default function ProcesosYFlujosRegistradosPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  
+  const puestosMap = useMemo(() => new Map(puestos.map(p => [p.id, p])), [puestos]);
+  const politicasMap = useMemo(() => new Map(allPoliticas.map(p => [p.id, p])), [allPoliticas]);
+  const procedimientosMap = useMemo(() => new Map(allProcedimientos.map(p => [p.id, p])), [allProcedimientos]);
+
 
   const sortedAndFilteredData = useMemo(() => {
     let dataToFilter = allCapturedData.filter(proc => !proc.deletedAt);
@@ -520,7 +525,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     const policy = allPoliticas.find(p => p.id === link.policyId)
                     return policy ? { ...policy, linkType: link.linkType } : null
                   })
-                  .filter(Boolean);
+                  .filter((p): p is (Politica & {linkType: string}) => Boolean(p));
 
                 return (
                 <React.Fragment key={proc.id}>
@@ -551,18 +556,22 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell colSpan={11} className="p-0">
                       <div className="p-4 bg-muted/50 space-y-4">
                         <Card>
-                          <CardHeader><CardTitle className="text-lg">Detalles del Proceso</CardTitle></CardHeader>
+                          <CardHeader><CardTitle className="text-base">Detalles del Proceso</CardTitle></CardHeader>
                           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               <DetailDisplay title="Objetivo" value={proc.descripcion} isTextarea />
-                              <DetailDisplay 
-                                title="Políticas Vinculadas"
-                                value={linkedPolicies?.map(p => `${p!.titulo} (${p!.linkType})`)}
-                                isList
-                              />
+                              <div className="space-y-4">
+                                <DetailDisplay title="Políticas Vinculadas" value={linkedPolicies?.map(p => `${p.codigo} (${p.linkType})`)} isList />
+                                <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === proc.auditFrequencyInDays)?.label} />
+                                <DetailDisplay title="Última Auditoría" value={proc.lastAuditedAt ? format(parseISO(proc.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
+                              </div>
+                              <div className="space-y-4">
+                                <DetailDisplay title="Tiempo Estimado (Mensual)" value={proc.tiempoEstimado ? formatMinutesToHours(proc.tiempoEstimado) : 'No calculado'} />
+                                <DetailDisplay title="Costo Estimado (Mensual)" value={proc.costoEstimado ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : 'No calculado'} />
+                              </div>
                           </CardContent>
                         </Card>
                         <div>
-                          <h4 className="font-semibold text-lg mb-2">Procedimientos y Actividades</h4>
+                          <h4 className="font-semibold text-base mb-2">Procedimientos y Actividades</h4>
                            {proceduresForProcess.length > 0 ? (
                                 <Accordion type="multiple" className="w-full space-y-2">
                                   {proceduresForProcess.map((procedure, procIndex) => {
@@ -577,6 +586,10 @@ export default function ProcesosYFlujosRegistradosPage() {
                                             return true;
                                         });
 
+                                      const procLinkedPolicies = (procedure.politicasAsociadasIds || [])
+                                        .map(id => politicasMap.get(id)?.codigo)
+                                        .filter(Boolean);
+
                                       return (
                                           <AccordionItem value={procedure.id} key={procedure.id} className="bg-background rounded-md border">
                                               <AccordionTrigger className="p-4 hover:no-underline">
@@ -585,9 +598,24 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                       <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge> {isInactive && <Badge variant="destructive">Inactivo</Badge>}</span>
                                                   </div>
                                               </AccordionTrigger>
-                                              <AccordionContent className="p-4 pt-0 pl-16 space-y-3">
-                                                  <DetailDisplay title="Descripción del Procedimiento" value={procedure.descripcion} isTextarea />
-                                                  <DetailDisplay title="Sistemas Utilizados en Procedimiento" value={procedure.sistemasUtilizados} isList />
+                                              <AccordionContent className="p-4 pt-0 pl-16 space-y-4">
+                                                  <Card>
+                                                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                                                      <DetailDisplay title="Descripción" value={procedure.descripcion} isTextarea />
+                                                      <div className="space-y-4">
+                                                        <DetailDisplay title="Sistemas Utilizados" value={procedure.sistemasUtilizados} isList />
+                                                        <DetailDisplay title="Políticas Vinculadas" value={procLinkedPolicies} isList />
+                                                      </div>
+                                                      <DetailDisplay title="Información que Recibe" value={procedure.informacionRecibe} isTextarea/>
+                                                      <DetailDisplay title="Información que Entrega" value={procedure.informacionEntrega} isTextarea/>
+                                                      <DetailDisplay title="Procedimientos de Entrada" value={(procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
+                                                      <DetailDisplay title="Procedimientos de Salida" value={(procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
+                                                      <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === procedure.auditFrequencyInDays)?.label} />
+                                                      <DetailDisplay title="Última Auditoría" value={procedure.lastAuditedAt ? format(parseISO(procedure.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
+                                                      <DetailDisplay title="Tiempo Est. (Mes)" value={procedure.tiempoEstimado ? formatMinutesToHours(procedure.tiempoEstimado) : 'No calculado'} />
+                                                      <DetailDisplay title="Costo Est. (Mes)" value={procedure.costoEstimado ? `${procedure.costoEstimado.toFixed(2)} ${procedure.monedaCosto || ''}` : 'No calculado'} />
+                                                    </CardContent>
+                                                  </Card>
                                                    {activitiesToShow.length > 0 ? (
                                                       <div className="space-y-2">
                                                           {activitiesToShow.map((act, actIndex) => (
@@ -599,8 +627,17 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                                 </div>
                                                                 <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                               </CardHeader>
-                                                              <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3">
+                                                              <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
                                                                 <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
+                                                                <div className="space-y-2">
+                                                                    <DetailDisplay title="Puesto que Ejecuta" value={puestosMap.get(act.puestoId || '')?.nombre} />
+                                                                    <DetailDisplay title="Frecuencia" value={act.frecuencia ? `${act.frecuencia} (${act.ejecucionesPorPeriodo || 1})` : undefined} />
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <DetailDisplay title="Tiempo Estimado" value={act.tiempoEstimado ? `${act.tiempoEstimado} min` : undefined} />
+                                                                    <DetailDisplay title="Tiempo Ideal" value={act.tiempoIdeal ? `${act.tiempoIdeal} min` : undefined} />
+                                                                </div>
+                                                                <DetailDisplay title="Costo por Ejecución" value={act.puestoId && act.tiempoEstimado && puestosMap.get(act.puestoId)?.costoHora ? `${((puestosMap.get(act.puestoId)!.costoHora! / 60) * act.tiempoEstimado).toFixed(2)} ${puestosMap.get(act.puestoId)!.monedaCosto}` : undefined} />
                                                               </CardContent>
                                                             </Card>
                                                           ))}
@@ -702,5 +739,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     </div>
   );
 }
+
+    
 
     
