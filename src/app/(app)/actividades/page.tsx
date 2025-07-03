@@ -551,6 +551,8 @@ export default function ActividadesPage() {
     }
   };
 
+  const procedimientosMap = useMemo(() => new Map(procedimientos.map(p => [p.id, p.nombre])), [procedimientos]);
+  const puestosNameMap = useMemo(() => new Map(puestos.map(p => [p.id, p.nombre])), [puestos]);
 
   if (isLoadingAllData) {
     return (
@@ -836,14 +838,32 @@ export default function ActividadesPage() {
       </AlertDialog>
       
        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle><DialogDescription>Registro de las modificaciones realizadas.</DialogDescription></DialogHeader>
           <div className="py-4 max-h-[60vh] overflow-y-auto">
             {activityForHistory?.historialDeCambios && activityForHistory.historialDeCambios.length > 0 ? (
               <Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Campo Modificado</TableHead><TableHead>Valor Anterior</TableHead><TableHead>Valor Nuevo</TableHead></TableRow></TableHeader><TableBody>
-                {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).map((cambio, index) => (
-                  <TableRow key={index}><TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm')}</TableCell><TableCell>{cambio.field}</TableCell><TableCell className="text-xs">{String(cambio.before)}</TableCell><TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell></TableRow>
-                ))}
+                {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).map((cambio, index) => {
+                  let beforeText = String(cambio.before ?? 'N/A');
+                  let afterText = String(cambio.after ?? 'N/A');
+
+                  if (cambio.field === 'procedimientoId') {
+                      beforeText = procedimientosMap.get(cambio.before) || 'Sin Asignar';
+                      afterText = procedimientosMap.get(cambio.after) || 'Sin Asignar';
+                  } else if (cambio.field === 'puestoId') {
+                      beforeText = puestosNameMap.get(cambio.before) || 'Sin Asignar';
+                      afterText = puestosNameMap.get(cambio.after) || 'Sin Asignar';
+                  }
+                  
+                  return (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm')}</TableCell>
+                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                      <TableCell className="text-xs">{beforeText}</TableCell>
+                      <TableCell className="text-xs font-semibold">{afterText}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody></Table>
             ) : (<p className="text-center text-muted-foreground">No hay historial de cambios.</p>)}
           </div>
