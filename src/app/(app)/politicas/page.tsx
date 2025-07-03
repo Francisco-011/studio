@@ -17,7 +17,7 @@ import { clasificacionOptions } from '@/contexts/ProcesosContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import type { CambioHistorial } from '@/contexts/ActividadesContext';
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -242,6 +242,9 @@ export default function PoliticasPage() {
   }, [politicas, searchTerm, statusFilter, complianceFilter, areaFilter, sortConfig]);
 
   const isLoadingAll = isLoadingPoliticas || isLoadingProcedimientos || isLoadingAreas || isLoadingDepartamentos;
+  
+  const procedimientosMap = useMemo(() => new Map(procedimientos.map(p => [p.id, p.nombre])), [procedimientos]);
+
 
   if (isLoadingAll) {
     return (
@@ -461,14 +464,28 @@ export default function PoliticasPage() {
                 <TableBody>
                   {politicaForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
-                    .map((cambio, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
-                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
-                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
-                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
-                    </TableRow>
-                  ))}
+                    .map((cambio, index) => {
+                      let beforeText: React.ReactNode = String(cambio.before ?? 'N/A');
+                      let afterText: React.ReactNode = String(cambio.after ?? 'N/A');
+
+                      if (cambio.field === 'procedimientosAsociadosIds') {
+                          const formatIds = (ids: any) => {
+                              if (!Array.isArray(ids) || ids.length === 0) return 'Ninguno';
+                              return ids.map(id => procedimientosMap.get(id) || `ID:${id.slice(0,5)}..`).join(', ');
+                          };
+                          beforeText = formatIds(cambio.before);
+                          afterText = formatIds(cambio.after);
+                      }
+                      
+                      return (
+                      <TableRow key={index}>
+                        <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                        <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                        <TableCell className="text-xs">{beforeText}</TableCell>
+                        <TableCell className="text-xs font-semibold">{afterText}</TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             ) : (
