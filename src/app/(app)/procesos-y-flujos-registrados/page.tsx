@@ -135,6 +135,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [procedureCountFilter, setProcedureCountFilter] = useState<ProcedureCountFilterType>('all');
+  const [procedureStatusFilter, setProcedureStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [activityStatusFilter, setActivityStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   
@@ -567,9 +568,15 @@ export default function ProcesosYFlujosRegistradosPage() {
         <CardHeader><div className="flex items-center gap-2 mb-1"><Database className="h-6 w-6 text-primary" /><CardTitle className="text-2xl font-headline">Procesos y Flujos Registrados</CardTitle></div><CardDescription>Visualiza, busca, filtra y gestiona todos los procesos y flujos de información registrados en el sistema.</CardDescription></CardHeader>
         <CardContent>
           <div className="mb-4 p-4 border rounded-lg bg-muted/30">
-            <div className="flex items-center gap-2 mb-3"><Filter className="h-5 w-5 text-primary"/><h4 className="text-md font-semibold">Filtros de Búsqueda</h4></div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-primary"/>
+                <h4 className="text-md font-semibold">Filtros de Búsqueda</h4>
+              </div>
+              <Button onClick={clearFilters} variant="link" className="px-0 text-sm">Limpiar Todos los Filtros</Button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
-              <div className="relative xl:col-span-2 md:col-span-full sm:col-span-full"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
+              <div className="relative xl:col-span-full lg:col-span-4 md:col-span-3 sm:col-span-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="search" placeholder="Buscar palabra clave..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10"/></div>
               <div className="w-full"><Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground ml-1">Área</Label><Select value={selectedAreaFilter} onValueChange={(v) => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger id="area-filter"><SelectValue placeholder={isLoadingAreas ? "Cargando..." : "Todas"} /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => <SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full"><Label htmlFor="depto-filter" className="text-xs font-medium text-muted-foreground ml-1">Departamento</Label><Select value={selectedDeptoFilter} onValueChange={(v) => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger id="depto-filter"><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : (isLoadingDepartamentos ? "Cargando..." : "Todos")} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => <SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>)}</SelectContent></Select></div>
               <div className="w-full">
@@ -584,13 +591,11 @@ export default function ProcesosYFlujosRegistradosPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
-               <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado del Proceso</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
-                <div className="w-full"><Label htmlFor="procedure-filter" className="text-xs font-medium text-muted-foreground ml-1">Conteo Procedimientos</Label><Select value={procedureCountFilter} onValueChange={(v: ProcedureCountFilterType) => setProcedureCountFilter(v)}><SelectTrigger id="procedure-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Procedimientos</SelectItem><SelectItem value="none">Sin Procedimientos</SelectItem></SelectContent></Select></div>
-                <div className="w-full"><Label htmlFor="activity-filter" className="text-xs font-medium text-muted-foreground ml-1">Conteo Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
-                <div className="w-full"><Label htmlFor="activity-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado de Actividades</Label><Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as any)}><SelectTrigger id="activity-status-filter"><SelectValue placeholder="Todas"/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="active">Solo Activas</SelectItem><SelectItem value="inactive">Solo Inactivas</SelectItem></SelectContent></Select></div>
-                <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm self-end col-start-auto">Limpiar Todos los Filtros</Button>
+              <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado del Proceso</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="procedure-count-filter" className="text-xs font-medium text-muted-foreground ml-1">Contenido Procedimientos</Label><Select value={procedureCountFilter} onValueChange={(v: ProcedureCountFilterType) => setProcedureCountFilter(v)}><SelectTrigger id="procedure-count-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Procedimientos</SelectItem><SelectItem value="none">Sin Procedimientos</SelectItem></SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="procedure-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado Procedimientos</Label><Select value={procedureStatusFilter} onValueChange={(v) => setProcedureStatusFilter(v as any)}><SelectTrigger id="procedure-status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Solo Activos</SelectItem><SelectItem value="inactive">Solo Inactivos</SelectItem></SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="activity-count-filter" className="text-xs font-medium text-muted-foreground ml-1">Contenido Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-count-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
+              <div className="w-full"><Label htmlFor="activity-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado de Actividades</Label><Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as any)}><SelectTrigger id="activity-status-filter"><SelectValue placeholder="Todas"/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="active">Solo Activas</SelectItem><SelectItem value="inactive">Solo Inactivas</SelectItem></SelectContent></Select></div>
             </div>
           </div>
           <div className="mb-6 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
@@ -613,7 +618,13 @@ export default function ProcesosYFlujosRegistradosPage() {
                 const isExpanded = expandedRows[proc.id];
                 const proceduresForProcess = (proc.procedimientoOrder || [])
                     .map(procId => allProcedimientos.find(p => p.id === procId))
-                    .filter((p): p is Procedimiento => !!p);
+                    .filter((p): p is Procedimiento => !!p)
+                    .filter(p => {
+                        if (procedureStatusFilter === 'all') return true;
+                        if (procedureStatusFilter === 'active') return p.activo;
+                        if (procedureStatusFilter === 'inactive') return !p.activo;
+                        return true;
+                    });
                 
                 const totalActivitiesCount = proceduresForProcess.reduce((sum, currentProc) => sum + (currentProc.activityOrder?.length || 0), 0);
 
@@ -705,7 +716,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                       <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>
                                                         {procedure.nombre} 
                                                         <Badge
-                                                            className={cn("text-white border-transparent", {
+                                                          className={cn("text-white border-transparent", {
                                                               "bg-sky-600 hover:bg-sky-700": procedure.clasificacion === 'Público',
                                                               "bg-purple-600 hover:bg-purple-700": procedure.clasificacion === 'Privado',
                                                               "bg-red-600 hover:bg-red-700": procedure.clasificacion === 'Confidencial',
@@ -830,7 +841,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         </DialogContent>
       </Dialog>
       
-      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? La acción lo moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={isConfirmDeleteProcessOpen} onOpenChange={setIsConfirmDeleteProcessOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center"><AlertTriangle className="h-5 w-5 mr-2 text-destructive" />Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar el proceso "{processToDelete?.proceso}"? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setProcessToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteProcess} className={buttonVariants({variant: "destructive"})}>Eliminar Proceso</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
@@ -898,6 +909,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
