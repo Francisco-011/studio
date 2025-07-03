@@ -130,7 +130,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     if (!originalProcedimiento) return;
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds', 'monedaCosto'];
     
     fieldsToCompare.forEach(key => {
         const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';
@@ -151,6 +151,9 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
           updatedAt: serverTimestamp(),
           historialDeCambios: [...(originalProcedimiento.historialDeCambios || []), ...changes]
       };
+      
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
       await updateDoc(procedimientoDocRef, payload);
       addLogEntry({ action: 'update', entityType: 'Procedimiento', entityName: data.nombre || originalProcedimiento.nombre, details: `Se actualizó el procedimiento "${originalProcedimiento.nombre}".` });
     } catch (e) {
