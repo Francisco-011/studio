@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -424,15 +423,26 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
 
     const headers = [
-      "ID", "Proceso", "Area", "Departamento", "Puesto", "Estado", "Objetivo",
-      "Tiempo Estimado (min)", "Costo Estimado", "Moneda",
-      "Fecha Captura", "Última Modificación"
+      // Proceso
+      "ID Proceso", "Código Proceso", "Nombre Proceso", "Área", "Departamento", "Puesto Principal", "Estado Proceso", "Objetivo Proceso", "Tiempo Est. Proceso (Mes)", "Costo Est. Proceso (Mes)", "Moneda Proceso", "Frecuencia Auditoría Proceso", "Última Auditoría Proceso", "Políticas Proceso",
+      // Procedimiento
+      "ID Procedimiento", "Código Procedimiento", "Nombre Procedimiento", "Descripción Procedimiento", "Clasificación Procedimiento", "Estado Procedimiento", "Sistemas Utilizados", "Info. Recibida", "Procs. Entrada", "Info. Entregada", "Procs. Salida", "Tiempo Est. Procedimiento (Mes)", "Costo Est. Procedimiento (Mes)", "Moneda Procedimiento", "Frecuencia Auditoría Procedimiento", "Última Auditoría Procedimiento", "Políticas Procedimiento",
+      // Actividad
+      "ID Actividad", "Código Actividad", "Nombre Actividad", "Estado Actividad", "Descripción Actividad", "Puesto Ejecuta", "Tiempo Est. Actividad (min)", "Tiempo Ideal Actividad (min)", "Frecuencia Actividad", "Ejecuciones/Periodo",
     ];
-    
-    const csvRows = [
-      headers.join(','),
-      ...sortedAndFilteredData.map(proc => [
+
+    const csvRows = [headers.join(',')];
+
+    sortedAndFilteredData.forEach(proc => {
+      const freqOptProc = auditFrequencyOptions.find(o => o.value === proc.auditFrequencyInDays)?.label;
+      const politicasProc = (proc.politicasAsociadas || [])
+          .map(link => allPoliticas.find(p => p.id === link.policyId)?.codigo)
+          .filter(Boolean)
+          .join('; ');
+
+      const processRowData = [
         escapeCsvCell(proc.id),
+        escapeCsvCell(proc.codigo),
         escapeCsvCell(proc.proceso),
         escapeCsvCell(proc.area),
         escapeCsvCell(proc.departamento),
@@ -442,10 +452,76 @@ export default function ProcesosYFlujosRegistradosPage() {
         escapeCsvCell(proc.tiempoEstimado),
         escapeCsvCell(proc.costoEstimado),
         escapeCsvCell(proc.monedaCosto),
-        escapeCsvCell(proc.capturedAt ? format(new Date(proc.capturedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
-        escapeCsvCell(proc.updatedAt ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
-      ].join(','))
-    ];
+        escapeCsvCell(freqOptProc),
+        escapeCsvCell(proc.lastAuditedAt ? format(parseISO(proc.lastAuditedAt), 'yyyy-MM-dd') : ''),
+        escapeCsvCell(politicasProc),
+      ];
+
+      const proceduresForProcess = (proc.procedimientoOrder || [])
+        .map(procId => allProcedimientos.find(p => p.id === procId))
+        .filter((p): p is Procedimiento => !!p);
+
+      if (proceduresForProcess.length === 0) {
+        csvRows.push(processRowData.join(','));
+      } else {
+        proceduresForProcess.forEach(procedure => {
+          const freqOptProcedure = auditFrequencyOptions.find(o => o.value === procedure.auditFrequencyInDays)?.label;
+          const procsEntrada = (procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id)).filter(Boolean).join('; ');
+          const procsSalida = (procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id)).filter(Boolean).join('; ');
+          const politicasProcedure = (procedure.politicasAsociadasIds || [])
+            .map(id => allPoliticas.find(p => p.id === id)?.codigo)
+            .filter(Boolean)
+            .join('; ');
+
+          const procedureRowData = [
+            ...processRowData,
+            escapeCsvCell(procedure.id),
+            escapeCsvCell(procedure.codigo),
+            escapeCsvCell(procedure.nombre),
+            escapeCsvCell(procedure.descripcion),
+            escapeCsvCell(procedure.clasificacion),
+            escapeCsvCell(procedure.activo ? 'Activo' : 'Inactivo'),
+            escapeCsvCell(procedure.sistemasUtilizados?.join('; ')),
+            escapeCsvCell(procedure.informacionRecibe),
+            escapeCsvCell(procsEntrada),
+            escapeCsvCell(procedure.informacionEntrega),
+            escapeCsvCell(procsSalida),
+            escapeCsvCell(procedure.tiempoEstimado),
+            escapeCsvCell(procedure.costoEstimado),
+            escapeCsvCell(procedure.monedaCosto),
+            escapeCsvCell(freqOptProcedure),
+            escapeCsvCell(procedure.lastAuditedAt ? format(parseISO(procedure.lastAuditedAt), 'yyyy-MM-dd') : ''),
+            escapeCsvCell(politicasProcedure),
+          ];
+
+          const activitiesForProcedure = (procedure.activityOrder || [])
+            .map(actId => allActivities.find(a => a.id === actId))
+            .filter((a): a is Actividad => !!a);
+
+          if (activitiesForProcedure.length === 0) {
+            csvRows.push(procedureRowData.join(','));
+          } else {
+            activitiesForProcedure.forEach(activity => {
+              const puestoActividad = puestosMap.get(activity.puestoId || '')?.nombre;
+              const activityRowData = [
+                ...procedureRowData,
+                escapeCsvCell(activity.id),
+                escapeCsvCell(activity.codigo),
+                escapeCsvCell(activity.nombre),
+                escapeCsvCell(activity.activa ? 'Activa' : 'Inactiva'),
+                escapeCsvCell(activity.descripcionBreve),
+                escapeCsvCell(puestoActividad),
+                escapeCsvCell(activity.tiempoEstimado),
+                escapeCsvCell(activity.tiempoIdeal),
+                escapeCsvCell(activity.frecuencia),
+                escapeCsvCell(activity.ejecucionesPorPeriodo),
+              ];
+              csvRows.push(activityRowData.join(','));
+            });
+          }
+        });
+      }
+    });
 
     const csvString = csvRows.join('\n');
     const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
@@ -453,7 +529,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `procesos_registrados_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `detalle_procesos_${new Date().toISOString().split('T')[0]}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -804,6 +880,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
