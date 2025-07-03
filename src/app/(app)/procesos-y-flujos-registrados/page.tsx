@@ -622,12 +622,23 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                         {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}
                                                       </span>
                                                   </div>
-                                                  <Button variant="ghost" size="sm" className="mr-4" onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      handleEditProcedure(procedure.nombre);
-                                                  }}>
+                                                  <div
+                                                      role="button"
+                                                      tabIndex={0}
+                                                      className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mr-4")}
+                                                      onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          handleEditProcedure(procedure.nombre);
+                                                      }}
+                                                      onKeyDown={(e) => {
+                                                          if (e.key === 'Enter' || e.key === ' ') {
+                                                              e.stopPropagation();
+                                                              handleEditProcedure(procedure.nombre);
+                                                          }
+                                                      }}
+                                                  >
                                                       Editar
-                                                  </Button>
+                                                  </div>
                                                 </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-4">
@@ -775,6 +786,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
