@@ -67,6 +67,7 @@ import { toast } from '@/hooks/use-toast';
 import { ListChecks, Search, PlusCircle, Edit2, Trash2, RotateCcw, AlertTriangle, Link2, ChevronDown, Lock, Loader2, ArrowUp, ArrowDown, ChevronsUpDown, FileText, History, Workflow, Clock, DollarSign, Users } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Combobox } from '@/components/ui/combobox';
 
 
 const actividadFormSchema = z.object({
@@ -661,13 +662,18 @@ export default function ActividadesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Procedimiento Padre (Opcional)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || 'none'}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Asignar a un procedimiento..." /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    <SelectItem value="none">Sin Procedimiento</SelectItem>
-                                    {procedimientos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                                <FormControl>
+                                  <Combobox
+                                    value={field.value}
+                                    onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                                    options={[
+                                      { value: 'none', label: 'Sin Procedimiento' },
+                                      ...procedimientos.map(p => ({ value: p.id, label: p.nombre }))
+                                    ]}
+                                    placeholder="Asignar a un procedimiento..."
+                                    searchPlaceholder="Buscar procedimiento..."
+                                  />
+                                </FormControl>
                               <FormDescription>Asigna esta actividad a un procedimiento existente.</FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -680,13 +686,18 @@ export default function ActividadesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Puesto que Ejecuta (Opcional)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || 'none'}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto..." /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    <SelectItem value="none">Sin Puesto Específico</SelectItem>
-                                    {puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                               <FormControl>
+                                  <Combobox
+                                      value={field.value}
+                                      onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                                      options={[
+                                          { value: 'none', label: 'Sin Puesto Específico' },
+                                          ...puestos.map(p => ({ value: p.id, label: p.nombre }))
+                                      ]}
+                                      placeholder="Seleccione un puesto..."
+                                      searchPlaceholder="Buscar puesto..."
+                                  />
+                              </FormControl>
                               <FormDescription>Si se asigna, su costo/hr se usará para esta actividad.</FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -795,15 +806,15 @@ export default function ActividadesPage() {
             {activityForHistory?.historialDeCambios && activityForHistory.historialDeCambios.length > 0 ? (
               <Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Campo Modificado</TableHead><TableHead>Valor Anterior</TableHead><TableHead>Valor Nuevo</TableHead></TableRow></TableHeader><TableBody>
                 {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).map((cambio, index) => {
-                  let beforeText = String(cambio.before ?? 'N/A');
-                  let afterText = String(cambio.after ?? 'N/A');
+                  let beforeText: string | number | React.ReactNode = String(cambio.before ?? 'N/A');
+                  let afterText: string | number | React.ReactNode = String(cambio.after ?? 'N/A');
 
                   if (cambio.field === 'procedimientoId') {
-                      beforeText = procedimientosMap.get(cambio.before) || 'Sin Asignar';
-                      afterText = procedimientosMap.get(cambio.after) || 'Sin Asignar';
+                      beforeText = procedimientosMap.get(cambio.before as string) || 'Sin Asignar';
+                      afterText = procedimientosMap.get(cambio.after as string) || 'Sin Asignar';
                   } else if (cambio.field === 'puestoId') {
-                      beforeText = puestosNameMap.get(cambio.before) || 'Sin Asignar';
-                      afterText = puestosNameMap.get(cambio.after) || 'Sin Asignar';
+                      beforeText = puestosNameMap.get(cambio.before as string) || 'Sin Asignar';
+                      afterText = puestosNameMap.get(cambio.after as string) || 'Sin Asignar';
                   }
                   
                   return (
