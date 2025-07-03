@@ -7,13 +7,12 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
-import { useProcedimientos } from './ProcedimientosContext';
 
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
@@ -87,7 +86,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
   const { exceptions, isLoadingExceptions } = useExceptions();
-  const { procedimientos } = useProcedimientos();
 
   useEffect(() => {
     if (authLoading || isLoadingExceptions) {
@@ -163,11 +161,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         if (data.procedimientosAsociadosIds && data.procedimientosAsociadosIds.length > 0) {
             for (const procId of data.procedimientosAsociadosIds) {
                 const procDocRef = doc(db, 'procedimientos', procId);
-                const proc = procedimientos.find(p => p.id === procId);
-                if (proc) {
-                    const updatedPolicyIds = [...(proc.politicasAsociadasIds || []), politicaId];
-                    batch.update(procDocRef, { politicasAsociadasIds: updatedPolicyIds });
-                }
+                batch.update(procDocRef, { politicasAsociadasIds: arrayUnion(politicaId) });
             }
         }
         
@@ -180,7 +174,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         toast({ title: "Error", description: "No se pudo agregar la política.", variant: "destructive"});
         return null;
     }
-  }, [addLogEntry, procedimientos]);
+  }, [addLogEntry]);
 
   const updatePolitica = useCallback(async (id: string, data: Partial<Omit<PoliticaCreationData, 'estado'>>) => {
     const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);
@@ -238,26 +232,20 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
         Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
         batch.update(politicaDocRef, payload);
 
-        // Update associated procedures
-        const addedProcIds = [...newProcIds].filter(procId => !originalProcIds.has(procId));
-        const removedProcIds = [...originalProcIds].filter(procId => !newProcIds.has(procId));
+        // Update associated procedures if associations changed
+        if (associationsChanged) {
+          const addedProcIds = [...newProcIds].filter(procId => !originalProcIds.has(procId));
+          const removedProcIds = [...originalProcIds].filter(procId => !newProcIds.has(procId));
 
-        for (const procId of addedProcIds) {
-            const procRef = doc(db, 'procedimientos', procId);
-            const proc = procedimientos.find(p => p.id === procId);
-            if (proc) {
-                const updatedPolicyIds = [...(proc.politicasAsociadasIds || []), id];
-                batch.update(procRef, { politicasAsociadasIds: updatedPolicyIds });
-            }
-        }
+          for (const procId of addedProcIds) {
+              const procRef = doc(db, 'procedimientos', procId);
+              batch.update(procRef, { politicasAsociadasIds: arrayUnion(id) });
+          }
 
-        for (const procId of removedProcIds) {
-            const procRef = doc(db, 'procedimientos', procId);
-            const proc = procedimientos.find(p => p.id === procId);
-            if (proc) {
-                const updatedPolicyIds = (proc.politicasAsociadasIds || []).filter(policyId => policyId !== id);
-                batch.update(procRef, { politicasAsociadasIds: updatedPolicyIds });
-            }
+          for (const procId of removedProcIds) {
+              const procRef = doc(db, 'procedimientos', procId);
+              batch.update(procRef, { politicasAsociadasIds: arrayRemove(id) });
+          }
         }
         
         await batch.commit();
@@ -271,7 +259,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     } else {
       toast({ title: "Sin Cambios", description: "No se detectaron modificaciones para guardar.", variant: "default" });
     }
-  }, [politicas, addLogEntry, procedimientos]);
+  }, [politicas, addLogEntry]);
   
   const updatePoliticaStatus = useCallback(async (id: string, estado: PoliticaEstado) => {
     const politicaDocRef = doc(db, POLITICAS_COLLECTION, id);

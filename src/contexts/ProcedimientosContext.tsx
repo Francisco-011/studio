@@ -7,11 +7,10 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayRemove } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import type { Moneda } from './AccionesContext';
-import { usePoliticas } from './PoliticasContext';
 
 
 export interface Procedimiento {
@@ -58,7 +57,6 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
   const [isLoadingProcedimientos, setIsLoadingProcedimientos] = useState(true);
   const { addLogEntry } = useActivityLog();
-  const { politicas } = usePoliticas();
 
   useEffect(() => {
     const q = query(collection(db, PROCEDIMIENTOS_COLLECTION));
@@ -181,7 +179,19 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-        await deleteDoc(doc(db, PROCEDIMIENTOS_COLLECTION, id));
+        const batch = writeBatch(db);
+        const procedimientoDocRef = doc(db, PROCEDIMIENTOS_COLLECTION, id);
+        batch.delete(procedimientoDocRef);
+
+        if (procedimientoToDelete.politicasAsociadasIds && procedimientoToDelete.politicasAsociadasIds.length > 0) {
+            for (const policyId of procedimientoToDelete.politicasAsociadasIds) {
+                const policyRef = doc(db, 'politicas', policyId);
+                batch.update(policyRef, { procedimientosAsociadosIds: arrayRemove(id) });
+            }
+        }
+        
+        await batch.commit();
+
         addLogEntry({ action: 'delete', entityType: 'Procedimiento', entityName: procedimientoToDelete.nombre, details: `Se eliminó el procedimiento "${procedimientoToDelete.nombre}".` });
         toast({ title: "Procedimiento Eliminado", variant: "destructive"});
     } catch(e) {
