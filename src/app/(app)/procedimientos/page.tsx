@@ -527,7 +527,16 @@ export default function ProcedimientosPage() {
                     </TableCell>
                     <TableCell className="text-right text-xs">{proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'}</TableCell>
                     <TableCell className="text-right text-xs">{proc.costoEstimado !== undefined ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : '-'}</TableCell>
-                    <TableCell><Badge variant={proc.activo ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700 text-white": proc.activo, "bg-slate-500 hover:bg-slate-600 text-white": !proc.activo})}>{proc.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
+                    <TableCell>
+                       <Badge className={cn(
+                            "text-white border-transparent",
+                            proc.activo 
+                            ? "bg-green-600 hover:bg-green-700"
+                            : "bg-amber-600 hover:bg-amber-700"
+                        )}>
+                            {proc.activo ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                    </TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button variant="ghost" size="icon" onClick={() => handleRecalculateTotalsForProcedure(proc)} disabled={isRecalculating === proc.id} title="Recalcular totales mensuales">
                         {isRecalculating === proc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}

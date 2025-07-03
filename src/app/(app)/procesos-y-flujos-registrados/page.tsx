@@ -534,12 +534,20 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell className="font-medium">{proc.proceso}</TableCell>
                     <TableCell>{proc.area}</TableCell>
                     <TableCell>{proc.puesto}</TableCell>
-                    <TableCell className="text-center"><Badge variant={proc.activo !== false ? 'default' : 'outline'} className={cn(proc.activo === false && "border-destructive text-destructive", proc.activo !== false && 'bg-green-500 hover:bg-green-600')}>{proc.activo !== false ? 'Activo' : 'Inactivo'}</Badge></TableCell>
+                    <TableCell className="text-center">
+                        <Badge className={cn("text-white border-transparent",
+                            proc.activo !== false 
+                            ? "bg-green-600 hover:bg-green-700"
+                            : "bg-amber-600 hover:bg-amber-700"
+                        )}>
+                            {proc.activo !== false ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                    </TableCell>
                     <TableCell className="text-center text-xs">
                         {proc.tiempoEstimado !== undefined ? formatMinutesToHours(proc.tiempoEstimado) : '-'}
                     </TableCell>
                     <TableCell className="text-center text-xs">
-                        {proc.costoEstimado !== undefined ? proc.costoEstimado.toFixed(2) : '-'}
+                        {proc.costoEstimado !== undefined ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : '-'}
                     </TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
@@ -595,7 +603,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                               <AccordionTrigger className="p-4 hover:no-underline">
                                                   <div className="flex items-center gap-4 text-left">
                                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
-                                                      <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge> {isInactive && <Badge variant="destructive">Inactivo</Badge>}</span>
+                                                      <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge> {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}</span>
                                                   </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-4">
@@ -743,3 +751,4 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+

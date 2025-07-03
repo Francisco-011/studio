@@ -295,7 +295,7 @@ export default function PoliticasPage() {
                            className={cn("text-white border-transparent", {
                              "bg-green-600 hover:bg-green-700": politica.estado === 'Aprobada',
                              "bg-purple-600 hover:bg-purple-700": politica.estado === 'En Revisión',
-                             "bg-slate-600 hover:bg-slate-700": politica.estado === 'Archivada',
+                             "bg-sky-600 hover:bg-sky-700": politica.estado === 'Archivada',
                              "bg-amber-600 hover:bg-amber-700": politica.estado === 'Borrador',
                            })}
                          >

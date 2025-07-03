@@ -338,7 +338,6 @@ export default function ActividadesPage() {
   function executeDeleteActividad() {
     if (!activityToDelete) return;
     deleteActividad(activityToDelete.id);
-    toast({ title: 'Actividad Eliminada Permanentemente', description: `La actividad "${activityToDelete.nombre}" ha sido eliminada.`, variant: "destructive" });
     setActivityToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
@@ -753,7 +752,12 @@ export default function ActividadesPage() {
                       <TableCell className="text-right text-sm">{formatCurrencyDisplay(costInfo.cost, costInfo.currency)}</TableCell>
                       <TableCell className="text-sm">{actividad.frecuencia ? `${actividad.frecuencia} (${actividad.ejecucionesPorPeriodo || 1})` : '-'}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={actividad.activa ? 'default' : 'secondary'} className={cn({"bg-green-600 hover:bg-green-700": actividad.activa, "bg-slate-500 hover:bg-slate-600": !actividad.activa, "text-white": true})}>
+                        <Badge className={cn(
+                            "text-white border-transparent",
+                            actividad.activa
+                            ? "bg-green-600 hover:bg-green-700"
+                            : "bg-amber-600 hover:bg-amber-700"
+                        )}>
                           {actividad.activa ? 'Activa' : 'Inactiva'}
                         </Badge>
                       </TableCell>
