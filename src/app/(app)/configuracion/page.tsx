@@ -58,6 +58,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Combobox } from '@/components/ui/combobox';
 
 
 // Schemas
@@ -314,7 +315,7 @@ export default function ConfiguracionPage() {
       switch (watchedSistemaScope) {
           case 'Área': return areas.map(a => ({ id: a.id, nombre: a.nombre }));
           case 'Departamento': return departamentos.map(d => ({ id: d.id, nombre: `${d.nombre} (${areas.find(a => a.id === d.areaId)?.nombre})` }));
-          case 'Puesto': return puestos.map(p => ({ id: p.id, nombre: `${p.nombre} (${areas.find(a => a.id === p.areaId)?.nombre})` }));
+          case 'Puesto': return puestos.map(p => ({ id: d.id, nombre: `${p.nombre} (${areas.find(a => a.id === p.areaId)?.nombre})` }));
           default: return [];
       }
   }, [watchedSistemaScope, areas, departamentos, puestos]);
@@ -590,10 +591,44 @@ export default function ConfiguracionPage() {
         <DialogContent><DialogHeader><DialogTitle>{editingPuesto ? 'Editar Puesto' : 'Agregar Puesto'}</DialogTitle></DialogHeader>
           <Form {...puestoForm}><form onSubmit={puestoForm.handleSubmit(handlePuestoSubmit)} className="space-y-4 py-4">
             <FormField control={puestoForm.control} name="areaId" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área..." /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione depto..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Sin Departamento</SelectItem>{filteredDeptosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Departamento</FormLabel>
+                    <FormControl>
+                        <Combobox
+                            value={field.value}
+                            onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                            options={[
+                                { value: 'none', label: 'Sin Departamento' },
+                                ...filteredDeptosForPuestoForm.map(d => ({ value: d.id, label: d.nombre }))
+                            ]}
+                            placeholder="Seleccione depto..."
+                            searchPlaceholder='Buscar departamento...'
+                        />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
             <FormField control={puestoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre Puesto</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel Organizacional</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione nivel..." /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{availableJefes.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Jefe Inmediato</FormLabel>
+                     <FormControl>
+                        <Combobox
+                            value={field.value}
+                            onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                            options={[
+                                { value: 'none', label: 'Ninguno' },
+                                ...availableJefes.map(p => ({ value: p.id, label: p.nombre }))
+                            ]}
+                            placeholder="Seleccione jefe..."
+                            searchPlaceholder='Buscar jefe...'
+                        />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
             <FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel># Personas en el Puesto</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
                 <FormField control={puestoForm.control} name="costoHora" render={({ field }) => (<FormItem><FormLabel>Costo por Hora</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 250.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
