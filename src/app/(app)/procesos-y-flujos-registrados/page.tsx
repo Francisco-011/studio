@@ -616,7 +616,8 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="text-right w-[180px]">Acciones</TableHead>
             </TableRow></TableHeader><TableBody>{paginatedData.map((proc) => {
                 const isExpanded = expandedRows[proc.id];
-                const proceduresForProcess = (proc.procedimientoOrder || [])
+                const uniqueProcedureIds = [...new Set(proc.procedimientoOrder || [])];
+                const proceduresForProcess = uniqueProcedureIds
                     .map(procId => allProcedimientos.find(p => p.id === procId))
                     .filter((p): p is Procedimiento => !!p)
                     .filter(p => {
@@ -693,7 +694,8 @@ export default function ProcesosYFlujosRegistradosPage() {
                                 <Accordion type="multiple" className="w-full space-y-2">
                                   {proceduresForProcess.map((procedure, procIndex) => {
                                       const isInactive = procedure.activo === false;
-                                      const activitiesToShow = (procedure.activityOrder || [])
+                                      const uniqueActivityIds = [...new Set(procedure.activityOrder || [])];
+                                      const activitiesToShow = uniqueActivityIds
                                         .map(actId => allActivities.find(a => a.id === actId))
                                         .filter((act): act is Actividad => !!act)
                                         .filter(act => {
