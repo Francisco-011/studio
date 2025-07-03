@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -76,7 +75,7 @@ const puestoFormSchema = z.object({
   jefeInmediato: z.string().optional(),
   nivelOrganizacional: z.enum(nivelesOrganizacionales, { errorMap: () => ({ message: "Seleccione un nivel." }) }),
   numeroPersonas: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
-  auditFrequencyInDays: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().optional()),
+  auditFrequencyInDays: z.preprocess(val => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)), z.number().int().optional()),
   costoHora: z.preprocess(val => (String(val).trim() === '' ? undefined : parseFloat(String(val))), z.number().nonnegative("Debe ser un número positivo").optional()),
   monedaCosto: z.enum(tiposDeMonedaOptions as [string, ...string[]]).optional(),
 });
@@ -304,6 +303,11 @@ export default function ConfiguracionPage() {
 
   const watchedPuestoArea = puestoForm.watch('areaId');
   const filteredDeptosForPuestoForm = useMemo(() => departamentos.filter(d => d.areaId === watchedPuestoArea), [departamentos, watchedPuestoArea]);
+  
+  const availableJefes = useMemo(() => {
+    if (!editingPuesto) return puestos;
+    return puestos.filter(p => p.id !== editingPuesto.id);
+  }, [puestos, editingPuesto]);
 
   const watchedSistemaScope = sistemaForm.watch('scope');
   const scopeOptions = useMemo(() => {
@@ -589,7 +593,7 @@ export default function ConfiguracionPage() {
             <FormField control={puestoForm.control} name="departamentoId" render={({ field }) => (<FormItem><FormLabel>Departamento (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione depto..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Sin Departamento</SelectItem>{filteredDeptosForPuestoForm.map(d => <SelectItem key={d.id} value={d.id}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="nombre" render={({ field }) => (<FormItem><FormLabel>Nombre Puesto</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="nivelOrganizacional" render={({ field }) => (<FormItem><FormLabel>Nivel Organizacional</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione nivel..." /></SelectTrigger></FormControl><SelectContent>{nivelesOrganizacionales.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-            <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+            <FormField control={puestoForm.control} name="jefeInmediato" render={({ field }) => (<FormItem><FormLabel>Jefe Inmediato (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione jefe..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Ninguno</SelectItem>{availableJefes.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             <FormField control={puestoForm.control} name="numeroPersonas" render={({ field }) => (<FormItem><FormLabel># Personas en el Puesto</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
                 <FormField control={puestoForm.control} name="costoHora" render={({ field }) => (<FormItem><FormLabel>Costo por Hora</FormLabel><FormControl><Input type="number" step="0.01" placeholder="Ej: 250.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
