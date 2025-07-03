@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2, CalendarCheck2, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -29,6 +28,9 @@ import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { cn } from '@/lib/utils';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 const PROCESOS_COLLECTION = 'procesos';
@@ -356,7 +358,7 @@ export default function CapturaPage() {
             activo: true,
             historialDeCambios: [],
             procedimientoOrder: procedureRefsAndData.map(p => p.ref.id),
-            politicasAsociadas: data.politicasAsociadas || [],
+            politicasAsociadas: [],
         };
         batch.set(processRef, processPayload);
 
@@ -470,19 +472,83 @@ export default function CapturaPage() {
                                <FormField control={form.control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                               </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
-                                    <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Aprobadas</DropdownMenuLabel><DropdownMenuSeparator/><ScrollArea className="h-48">{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect selected={field.value ? field.value.map(v => ({value: v, label: v})) : []} onChange={(newSelected) => field.onChange(newSelected.map(s => s.value))} options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
                                </div>
                                
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <FormField control={form.control} name={`procedures.${index}.procedimientosEntradaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Entrada</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...' } <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}>(Es un procedimiento iniciador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => ( <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => { const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                    <FormField
+                                        control={form.control}
+                                        name={`procedures.${index}.procedimientosEntradaIds`}
+                                        render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Procedimientos de Entrada</FormLabel>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-grow">
+                                                <MultiSelect
+                                                    value={field.value ? field.value.filter(v => v !== PROCEDIMIENTO_INICIADOR).map(v => ({value: v, label: allProcedimientos.find(p=>p.id===v)?.nombre || v})) : []}
+                                                    onChange={(newSelected) => {
+                                                        const currentIsInitiator = field.value?.includes(PROCEDIMIENTO_INICIADOR);
+                                                        const newValue = newSelected.map(s => s.value);
+                                                        field.onChange(currentIsInitiator ? [PROCEDIMIENTO_INICIADOR, ...newValue] : newValue);
+                                                    }}
+                                                    options={allProcedimientos.filter(p => p.id !== field.name).map(p => ({ value: p.id, label: p.nombre }))}
+                                                    placeholder="Seleccione..."
+                                                    />
+                                                </div>
+                                                <div className="flex items-center space-x-2 pt-6">
+                                                    <Checkbox
+                                                    id={`iniciador-${index}`}
+                                                    checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                                    onCheckedChange={checked => {
+                                                        field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
+                                                    }}
+                                                    />
+                                                    <label htmlFor={`iniciador-${index}`} className="text-sm font-medium leading-none">Iniciador</label>
+                                                </div>
+                                            </div>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
                                   <FormField control={form.control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.procedimientosSalidaIds`} render={({ field }) => (<FormItem><FormLabel>Procedimientos de Salida</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{ field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' : field.value?.length ? `${field.value.length} seleccionado(s)` : 'Seleccione...'}<ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuCheckboxItem checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)} onCheckedChange={(checked) => { field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);}} disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}>(Es un procedimiento finalizador)</DropdownMenuCheckboxItem><DropdownMenuSeparator/>{allProcedimientos.filter(p => p.id !== field.name).map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => {const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || []; field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))}} disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}>{p.nombre}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                                  
+                                    <FormField
+                                        control={form.control}
+                                        name={`procedures.${index}.procedimientosSalidaIds`}
+                                        render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Procedimientos de Salida</FormLabel>
+                                             <div className="flex items-center gap-2">
+                                                <div className="flex-grow">
+                                                <MultiSelect
+                                                    value={field.value ? field.value.filter(v => v !== PROCEDIMIENTO_FINALIZADOR).map(v => ({value: v, label: allProcedimientos.find(p=>p.id===v)?.nombre || v})) : []}
+                                                    onChange={(newSelected) => {
+                                                        const currentIsFinalizer = field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
+                                                        const newValue = newSelected.map(s => s.value);
+                                                        field.onChange(currentIsFinalizer ? [PROCEDIMIENTO_FINALIZADOR, ...newValue] : newValue);
+                                                    }}
+                                                    options={allProcedimientos.filter(p => p.id !== field.name).map(p => ({ value: p.id, label: p.nombre }))}
+                                                    placeholder="Seleccione..."
+                                                    />
+                                                </div>
+                                                <div className="flex items-center space-x-2 pt-6">
+                                                    <Checkbox
+                                                    id={`finalizador-${index}`}
+                                                    checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                                    onCheckedChange={checked => {
+                                                        field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
+                                                    }}
+                                                    />
+                                                    <label htmlFor={`finalizador-${index}`} className="text-sm font-medium leading-none">Finalizador</label>
+                                                </div>
+                                            </div>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
                                   <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                </div>
+                               <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value || []} onChange={(newValue) => field.onChange(newValue)} options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} placeholder="Vincular políticas..."/><FormMessage /></FormItem>)}/>
                               <ActivitiesSection 
                                 control={form.control} 
                                 procIndex={index} 
@@ -513,3 +579,4 @@ export default function CapturaPage() {
     </div>
   );
 }
+
