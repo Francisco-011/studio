@@ -68,6 +68,18 @@ interface SortConfig {
   direction: SortDirection;
 }
 
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+
 export default function PoliticasPage() {
   const { politicas, addPolitica, updatePolitica, deletePolitica, updatePoliticaStatus, isLoadingPoliticas } = usePoliticas();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
@@ -168,12 +180,17 @@ export default function PoliticasPage() {
       if (!politica) return { isUsed: false, message: '' };
 
       const isUsedInProcedimientos = (politica.procedimientosAsociadosIds?.length ?? 0) > 0;
-      const isUsed = isUsedInProcedimientos;
+      const isUsedInProcesos = (politica.procesosAsociadosIds?.length ?? 0) > 0;
+      const isUsedInActividades = (politica.actividadesAsociadasIds?.length ?? 0) > 0;
+      
+      const isUsed = isUsedInProcedimientos || isUsedInProcesos || isUsedInActividades;
       
       let message = '';
       if (isUsed) {
         const usedBy = [
-          isUsedInProcedimientos && 'Procedimientos'
+          isUsedInProcedimientos && 'Procedimientos',
+          isUsedInProcesos && 'Procesos',
+          isUsedInActividades && 'Actividades'
         ].filter(Boolean).join(', ');
         message = `La política "${politica.titulo}" está vinculada a ${usedBy} y no puede ser eliminada.`;
       }
@@ -245,6 +262,66 @@ export default function PoliticasPage() {
   
   const procedimientosMap = useMemo(() => new Map(procedimientos.map(p => [p.id, p.nombre])), [procedimientos]);
 
+  const handleExport = () => {
+    if (filteredPoliticas.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay políticas que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Código", "Título", "Descripción", "Estado", "Área Responsable", "Departamento Responsable",
+      "Clasificación", "Nivel de Cumplimiento", "Fecha Vigencia", "Fecha Revisión",
+      "Procedimientos Vinculados (Códigos)", "Consecuencias Incumplimiento", "Referencias Legales",
+      "Fecha Creación", "Última Modificación"
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...filteredPoliticas.map(pol => {
+        const procCodigos = (pol.procedimientosAsociadosIds || [])
+          .map(id => procedimientos.find(p => p.id === id)?.codigo)
+          .filter(Boolean)
+          .join('; ');
+        
+        return [
+          escapeCsvCell(pol.id),
+          escapeCsvCell(pol.codigo),
+          escapeCsvCell(pol.titulo),
+          escapeCsvCell(pol.descripcion),
+          escapeCsvCell(pol.estado),
+          escapeCsvCell(pol.areaResponsable),
+          escapeCsvCell(pol.departamentoResponsable),
+          escapeCsvCell(pol.clasificacion),
+          escapeCsvCell(pol.nivelCompliance),
+          escapeCsvCell(pol.fechaVigencia ? format(parseISO(pol.fechaVigencia), 'yyyy-MM-dd') : ''),
+          escapeCsvCell(pol.fechaRevision ? format(parseISO(pol.fechaRevision), 'yyyy-MM-dd') : ''),
+          escapeCsvCell(procCodigos),
+          escapeCsvCell(pol.consecuenciasIncumplimiento),
+          escapeCsvCell(pol.referenciasLegales),
+          escapeCsvCell(pol.createdAt ? format(new Date(pol.createdAt), 'yyyy-MM-dd HH:mm:ss') : ''),
+          escapeCsvCell(pol.updatedAt ? format(new Date(pol.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
+        ].join(',');
+      })
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `politicas_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoadingAll) {
     return (
@@ -298,58 +375,61 @@ export default function PoliticasPage() {
                     </Select>
                 </div>
              </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingPolitica(null); setIsDialogOpen(true); }} className="mt-4 md:mt-0 md:ml-4">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Agregar Política
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>{editingPolitica ? 'Editar Política' : 'Crear Nueva Política'}</DialogTitle>
-                </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
-                    <FormField control={form.control} name="titulo" render={({ field }) => (<FormItem><FormLabel>Título</FormLabel><FormControl><Input placeholder="Ej: Política de Seguridad de la Información" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describa el objetivo y alcance de la política." {...field} rows={5} /></FormControl><FormMessage /></FormItem>)} />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={form.control} name="areaResponsable" render={({ field }) => (<FormItem><FormLabel>Área Responsable</FormLabel><Select onValueChange={(v) => { field.onChange(v); form.setValue('departamentoResponsable', undefined);}} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="departamentoResponsable" render={({ field }) => (<FormItem><FormLabel>Departamento Responsable (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!watchedArea}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un departamento" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_SELECTED}>N/A</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="nivelCompliance" render={({ field }) => (<FormItem><FormLabel>Nivel de Cumplimiento</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{nivelesCompliance.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={form.control} name="fechaVigencia" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Fecha de Vigencia</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className="w-full pl-3 text-left font-normal">{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="fechaRevision" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Próxima Revisión</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className="w-full pl-3 text-left font-normal">{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-                    </div>
-                    
-                     <FormField control={form.control} name="consecuenciasIncumplimiento" render={({ field }) => (<FormItem><FormLabel>Consecuencias por Incumplimiento</FormLabel><FormControl><Textarea placeholder="Describa las consecuencias..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                     <FormField control={form.control} name="referenciasLegales" render={({ field }) => (<FormItem><FormLabel>Referencias Legales/Regulatorias</FormLabel><FormControl><Textarea placeholder="Ej: Ley Federal de Protección de Datos, ISO 27001..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+            <div className="flex items-center gap-2 mt-4 md:mt-0 md:ml-4">
+              <Button onClick={handleExport} variant="outline"><FileText className="mr-2 h-4 w-4" />Exportar</Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => { setEditingPolitica(null); setIsDialogOpen(true); }}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Agregar Política
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>{editingPolitica ? 'Editar Política' : 'Crear Nueva Política'}</DialogTitle>
+                  </DialogHeader>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
+                      <FormField control={form.control} name="titulo" render={({ field }) => (<FormItem><FormLabel>Título</FormLabel><FormControl><Input placeholder="Ej: Política de Seguridad de la Información" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describa el objetivo y alcance de la política." {...field} rows={5} /></FormControl><FormMessage /></FormItem>)} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="areaResponsable" render={({ field }) => (<FormItem><FormLabel>Área Responsable</FormLabel><Select onValueChange={(v) => { field.onChange(v); form.setValue('departamentoResponsable', undefined);}} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="departamentoResponsable" render={({ field }) => (<FormItem><FormLabel>Departamento Responsable (Opcional)</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!watchedArea}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un departamento" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_SELECTED}>N/A</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="nivelCompliance" render={({ field }) => (<FormItem><FormLabel>Nivel de Cumplimiento</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{nivelesCompliance.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="fechaVigencia" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Fecha de Vigencia</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className="w-full pl-3 text-left font-normal">{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="fechaRevision" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Próxima Revisión</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className="w-full pl-3 text-left font-normal">{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      </div>
+                      
+                       <FormField control={form.control} name="consecuenciasIncumplimiento" render={({ field }) => (<FormItem><FormLabel>Consecuencias por Incumplimiento</FormLabel><FormControl><Textarea placeholder="Describa las consecuencias..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                       <FormField control={form.control} name="referenciasLegales" render={({ field }) => (<FormItem><FormLabel>Referencias Legales/Regulatorias</FormLabel><FormControl><Textarea placeholder="Ej: Ley Federal de Protección de Datos, ISO 27001..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
 
-                    <FormField
-                        control={form.control}
-                        name="procedimientosAsociadosIds"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Vincular a Procedimientos</FormLabel>
-                            <MultiSelect
-                              options={procedimientos.filter(p => p.activo).map(p => ({ value: p.id, label: `${p.codigo} - ${p.nombre}` }))}
-                              value={field.value}
-                              onChange={(newSelected) => field.onChange(newSelected)}
-                              placeholder="Buscar y seleccionar procedimientos..."
-                            />
-                            <FormDescription>Asocie esta política con uno o más procedimientos existentes.</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+                      <FormField
+                          control={form.control}
+                          name="procedimientosAsociadosIds"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vincular a Procedimientos</FormLabel>
+                              <MultiSelect
+                                options={procedimientos.filter(p => p.activo).map(p => ({ value: p.id, label: `${p.codigo} - ${p.nombre}` }))}
+                                value={field.value}
+                                onChange={(newSelected) => field.onChange(newSelected)}
+                                placeholder="Buscar y seleccionar procedimientos..."
+                              />
+                              <FormDescription>Asocie esta política con uno o más procedimientos existentes.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           {filteredPoliticas.length > 0 ? (
             <div className="rounded-md border">
