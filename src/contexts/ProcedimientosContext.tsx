@@ -133,7 +133,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     if (!originalProcedimiento) return;
 
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds', 'monedaCosto'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds', 'monedaCosto', 'procesoId'];
     
     const politicasMap = new Map(politicas.map(p => [p.id, p.codigo]));
 

@@ -40,7 +40,7 @@ export interface Actividad {
   ejecucionesPorPeriodo?: number; // How many times it's executed in the given frequency
 }
 
-export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'procedimientoId' | 'costoEstimado' | 'costoIdeal'>;
+export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'costoEstimado' | 'costoIdeal'>;
 
 interface ActividadesContextType {
   actividades: Actividad[];
@@ -138,7 +138,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia', 'puestoId', 'ejecucionesPorPeriodo'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia', 'puestoId', 'ejecucionesPorPeriodo', 'procedimientoId'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

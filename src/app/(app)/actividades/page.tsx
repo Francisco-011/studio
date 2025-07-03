@@ -73,6 +73,7 @@ const actividadFormSchema = z.object({
   id: z.string().optional(),
   nombre: z.string().min(1, 'El nombre de la actividad es requerido.'),
   descripcionBreve: z.string().optional(),
+  procedimientoId: z.string().optional(),
   puestoId: z.string().optional(),
   activa: z.boolean().default(true),
   tiempoEstimado: z.preprocess(val => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)), z.number().int().nonnegative().optional()),
@@ -203,6 +204,7 @@ export default function ActividadesPage() {
       frecuencia: undefined,
       ejecucionesPorPeriodo: undefined,
       puestoId: undefined,
+      procedimientoId: undefined,
     },
   });
 
@@ -242,6 +244,7 @@ export default function ActividadesPage() {
           ...editingActividad,
           puestoId: editingActividad.puestoId || undefined,
           descripcionBreve: editingActividad.descripcionBreve || '',
+          procedimientoId: editingActividad.procedimientoId || undefined,
         });
       } else {
         actividadForm.reset({
@@ -253,34 +256,55 @@ export default function ActividadesPage() {
           frecuencia: undefined,
           ejecucionesPorPeriodo: undefined,
           puestoId: undefined,
+          procedimientoId: procedimientoIdFromQuery || undefined,
         });
       }
     }
-  }, [editingActividad, isActividadDialogOpen, actividadForm]);
+  }, [editingActividad, isActividadDialogOpen, actividadForm, procedimientoIdFromQuery]);
 
   async function handleActividadSubmit(data: ActividadFormData) {
     const { id, ...activityDataFromForm } = data;
     const activityDataForStorage: ActividadCreationData = {
         ...activityDataFromForm,
         puestoId: data.puestoId === 'none' ? undefined : data.puestoId,
+        procedimientoId: data.procedimientoId === 'none' ? undefined : data.procedimientoId,
     };
 
     if (editingActividad && id) {
-      await updateActividad(id, activityDataForStorage);
-      toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
+        // Handle moving activity between procedures
+        if (activityDataForStorage.procedimientoId !== editingActividad.procedimientoId) {
+            // Remove from old parent
+            if (editingActividad.procedimientoId) {
+                const oldParent = procedimientos.find(p => p.id === editingActividad.procedimientoId);
+                if (oldParent) {
+                    const newOrder = (oldParent.activityOrder || []).filter(actId => actId !== id);
+                    await updateProcedimiento(oldParent.id, { activityOrder: newOrder });
+                }
+            }
+            // Add to new parent
+            if (activityDataForStorage.procedimientoId) {
+                const newParent = procedimientos.find(p => p.id === activityDataForStorage.procedimientoId);
+                if (newParent) {
+                    const newOrder = [...(newParent.activityOrder || []), id];
+                    await updateProcedimiento(newParent.id, { activityOrder: newOrder });
+                }
+            }
+        }
+        await updateActividad(id, activityDataForStorage);
+        toast({ title: 'Actividad Actualizada', description: 'La actividad ha sido actualizada exitosamente.' });
     } else {
       const newActivity = await addActividad(activityDataForStorage);
-      if (newActivity && procedimientoIdFromQuery) {
-          const targetProcedure = procedimientos.find(p => p.id === procedimientoIdFromQuery);
+      if (newActivity && activityDataForStorage.procedimientoId) {
+          const targetProcedure = procedimientos.find(p => p.id === activityDataForStorage.procedimientoId);
           if (targetProcedure) {
               const updatedActivityOrder = [...(targetProcedure.activityOrder || []), newActivity.id];
               await updateProcedimiento(targetProcedure.id, { activityOrder: updatedActivityOrder });
-              toast({ title: 'Actividad Agregada y Asignada', description: `La actividad "${newActivity.nombre}" fue creada y asignada al procedimiento.` });
+              toast({ title: 'Actividad Agregada y Asignada', description: `La actividad "${newActivity.nombre}" fue creada y asignada.` });
           } else {
-             toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" fue creada, pero no se encontró el procedimiento para asignarla.` });
+             toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" fue creada, pero no se encontró el procedimiento.` });
           }
       } else if (newActivity) {
-         toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" ha sido agregada exitosamente.` });
+         toast({ title: 'Actividad Agregada', description: `La actividad "${newActivity.nombre}" ha sido agregada.` });
       }
     }
     setEditingActividad(null);
@@ -692,6 +716,25 @@ export default function ActividadesPage() {
                         )}
                       />
                        <FormField control={actividadForm.control} name="descripcionBreve" render={({ field }) => (<FormItem><FormLabel>Descripción Breve (Opcional)</FormLabel><FormControl><Textarea placeholder="Un resumen conciso de la actividad." {...field} value={field.value ?? ''} className="min-h-[80px]" /></FormControl><FormMessage /></FormItem>)} />
+                       
+                       <FormField
+                          control={actividadForm.control}
+                          name="procedimientoId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Procedimiento Padre (Opcional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || 'none'}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Asignar a un procedimiento..." /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="none">Sin Procedimiento</SelectItem>
+                                    {procedimientos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>Asigna esta actividad a un procedimiento existente.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                        
                        <FormField
                           control={actividadForm.control}
