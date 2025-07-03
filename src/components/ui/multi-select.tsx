@@ -16,14 +16,14 @@ import { cn } from "@/lib/utils";
 export type Option = Record<"value" | "label", string>;
 
 interface MultiSelectProps {
-  value: string[];
+  value?: string[];
   onChange: (value: string[]) => void;
   placeholder?: string;
   options: Option[];
 }
 
 export function MultiSelect({
-  value,
+  value = [],
   onChange,
   placeholder = "Seleccione opciones...",
   options,
