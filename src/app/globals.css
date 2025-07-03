@@ -4,45 +4,45 @@
 
 @layer base {
   :root {
-    --background: 220 20% 96%; /* Very light cool gray */
-    --foreground: 220 10% 10%; /* Dark gray for text */
-    --card: 0 0% 100%; /* White */
+    --background: 220 20% 96%;
+    --foreground: 220 10% 10%;
+    --card: 0 0% 100%;
     --card-foreground: 220 10% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 10% 10%;
-    --primary: 210 70% 53%; /* Professional Blue */
-    --primary-foreground: 0 0% 100%; /* White */
-    --secondary: 220 15% 92%; /* Lighter gray */
+    --primary: 158 64% 42%; /* Professional Green */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 92%;
     --secondary-foreground: 220 10% 20%;
-    --muted: 220 15% 88%; /* Light gray for muted elements */
+    --muted: 220 15% 88%;
     --muted-foreground: 220 5% 45%;
-    --accent: 30 85% 55%; /* Vibrant Orange */
-    --accent-foreground: 0 0% 100%; /* White */
+    --accent: 45 90% 55%; /* Gold/Amber */
+    --accent-foreground: 24 9.8% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 15% 88%; /* Slightly darker than muted for borders */
+    --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 210 70% 53%; /* Matches primary */
+    --ring: 158 64% 42%; /* Matches primary */
     --radius: 0.5rem;
 
-    --chart-1: 210 70% 55%; /* Matches primary */
-    --chart-2: 160 60% 45%; /* Contrasting teal/green */
-    --chart-3: 30 85% 60%; /* Matches accent */
-    --chart-4: 260 60% 65%; /* Purple */
-    --chart-5: 0 70% 60%;   /* Red/Coral */
-    --chart-6: 280 60% 60%; /* Vibrant Purple/Magenta */
-    --chart-7: 45 70% 55%;  /* Gold/Yellow */
-    --chart-8: 200 70% 60%; /* Sky Blue */
-    --chart-9: 330 65% 60%; /* Pink */
-    --chart-10: 190 60% 50%; /* Cyan */
-    --chart-11: 270 50% 55%; /* Indigo */
-    --chart-12: 60 70% 50%; /* Yellow/Ochre */
+    --chart-1: 158 64% 42%; /* Primary */
+    --chart-2: 45 90% 55%; /* Accent */
+    --chart-3: 210 70% 55%; /* Original Blue */
+    --chart-4: 260 60% 65%;
+    --chart-5: 0 70% 60%;
+    --chart-6: 280 60% 60%;
+    --chart-7: 45 70% 55%;
+    --chart-8: 200 70% 60%;
+    --chart-9: 330 65% 60%;
+    --chart-10: 190 60% 50%;
+    --chart-11: 270 50% 55%;
+    --chart-12: 60 70% 50%;
 
 
     /* Sidebar specific colors for light theme */
     --sidebar-background: 220 15% 18%; /* Darker sidebar for contrast */
     --sidebar-foreground: 0 0% 98%; /* White text */
-    --sidebar-primary: 210 70% 65%; /* Slightly lighter blue */
+    --sidebar-primary: 158 80% 75%; /* Lighter green for sidebar logo */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: var(--primary); /* Use main primary for active nav */
     --sidebar-accent-foreground: var(--primary-foreground);
@@ -57,37 +57,37 @@
     --card-foreground: 0 0% 98%;
     --popover: 220 15% 18%;
     --popover-foreground: 0 0% 98%;
-    --primary: 210 70% 60%; /* Slightly brighter blue for dark mode */
+    --primary: 158 50% 55%; /* Brighter green for dark mode */
     --primary-foreground: 0 0% 100%;
     --secondary: 220 15% 22%; /* Darker gray */
     --secondary-foreground: 0 0% 98%;
     --muted: 220 15% 22%;
     --muted-foreground: 0 0% 63.9%;
-    --accent: 30 85% 60%; /* Vibrant Orange */
-    --accent-foreground: 0 0% 100%;
+    --accent: 45 85% 60%; /* Brighter gold */
+    --accent-foreground: 24 9.8% 10%;
     --destructive: 0 70% 50%; /* Adjusted destructive for dark */
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 25%;
     --input: 220 15% 25%;
-    --ring: 210 70% 60%; /* Matches dark primary */
+    --ring: 158 50% 55%; /* Matches dark primary */
 
-    --chart-1: 210 70% 60%; /* Matches dark primary */
-    --chart-2: 160 65% 55%; /* Brighter teal/green */
-    --chart-3: 30 85% 65%; /* Matches dark accent */
-    --chart-4: 260 65% 70%; /* Lighter purple */
-    --chart-5: 0 75% 65%;   /* Lighter red/coral */
-    --chart-6: 280 65% 65%; /* Lighter Vibrant Purple/Magenta */
-    --chart-7: 45 75% 60%;  /* Lighter Gold/Yellow */
-    --chart-8: 200 75% 65%; /* Lighter Sky Blue */
-    --chart-9: 330 70% 65%; /* Lighter Pink */
-    --chart-10: 190 65% 55%; /* Lighter Cyan */
-    --chart-11: 270 55% 60%; /* Lighter Indigo */
-    --chart-12: 60 75% 55%;  /* Lighter Yellow/Ochre */
+    --chart-1: 158 50% 55%; /* Primary */
+    --chart-2: 45 85% 60%; /* Accent */
+    --chart-3: 210 70% 60%; /* Original Blue */
+    --chart-4: 260 65% 70%;
+    --chart-5: 0 75% 65%;
+    --chart-6: 280 65% 65%;
+    --chart-7: 45 75% 60%;
+    --chart-8: 200 75% 65%;
+    --chart-9: 330 70% 65%;
+    --chart-10: 190 65% 55%;
+    --chart-11: 270 55% 60%;
+    --chart-12: 60 75% 55%;
 
     /* Sidebar specific colors for dark theme */
     --sidebar-background: 220 15% 10%; /* Even darker for depth */
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 210 70% 65%;
+    --sidebar-primary: 158 60% 75%; /* Lighter green for dark mode sidebar logo */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: var(--primary); /* Use main dark primary for active nav */
     --sidebar-accent-foreground: var(--primary-foreground);

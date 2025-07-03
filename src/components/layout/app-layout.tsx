@@ -49,7 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            <h1 className="text-3xl font-bold text-sidebar-primary group-data-[collapsible=icon]:hidden">
               STUFFACTORY
             </h1>
           </div>
@@ -77,7 +77,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10">
-                    <AvatarFallback>{getInitials(user?.nombreCompleto)}</AvatarFallback>
+                    <AvatarFallback className="bg-primary/10 text-primary dark:bg-primary/20">
+                      {getInitials(user?.nombreCompleto)}
+                    </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
