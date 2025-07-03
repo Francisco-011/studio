@@ -315,7 +315,7 @@ export default function ConfiguracionPage() {
       switch (watchedSistemaScope) {
           case 'Área': return areas.map(a => ({ id: a.id, nombre: a.nombre }));
           case 'Departamento': return departamentos.map(d => ({ id: d.id, nombre: `${d.nombre} (${areas.find(a => a.id === d.areaId)?.nombre})` }));
-          case 'Puesto': return puestos.map(p => ({ id: d.id, nombre: `${p.nombre} (${areas.find(a => a.id === p.areaId)?.nombre})` }));
+          case 'Puesto': return puestos.map(p => ({ id: p.id, nombre: `${p.nombre} (${areas.find(a => a.id === p.areaId)?.nombre})` }));
           default: return [];
       }
   }, [watchedSistemaScope, areas, departamentos, puestos]);
