@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -229,6 +230,16 @@ export default function ProcedimientosPage() {
   }
 
   function promptDelete(procedimiento: Procedimiento) {
+    const hasActivities = procedimiento.activityOrder && procedimiento.activityOrder.length > 0;
+    if (hasActivities) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `El procedimiento "${procedimiento.nombre}" tiene ${procedimiento.activityOrder.length} actividad(es) asignada(s). Por favor, remuévalas primero desde el Panel Jerárquico.`,
+            variant: "destructive",
+            duration: 7000
+        });
+        return;
+    }
     setProcedimientoToDelete(procedimiento);
     setIsConfirmDeleteDialogOpen(true);
   }
@@ -428,7 +439,7 @@ export default function ProcedimientosPage() {
               <Select value={procesoFilter} onValueChange={setProcesoFilter}><SelectTrigger className="flex-1 min-w-[150px]"><SelectValue placeholder="Filtrar por proceso..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Procesos</SelectItem>{procesos.filter(p => !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select>
               <Select value={clasificacionFilter} onValueChange={setClasificacionFilter}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Clasificación..."/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
               <Select value={statusFilter} onValueChange={setStatusFilter as any}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Estado..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select>
-              <Button onClick={() => setIsDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar</Button>
+              <Button onClick={() => { setEditingProcedimiento(null); setIsDialogOpen(true); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar</Button>
             </div>
           </div>
           <div className="rounded-md border">
@@ -473,135 +484,138 @@ export default function ProcedimientosPage() {
         </CardContent>
       </Card>
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>{editingProcedimiento ? 'Editar' : 'Agregar'} Procedimiento</DialogTitle></DialogHeader>
-        <Form {...form}><form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
-          <FormField control={form.control} name="procesoId" render={({ field }) => (<FormItem><FormLabel>Proceso Padre</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso..."/></SelectTrigger></FormControl><SelectContent>{procesos.filter(p => p.activo !== false && !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-          <FormField
-            control={form.control}
-            name="nombre"
-            render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                        <Input {...field} placeholder="Ej: Revisión de Facturas de Proveedores"/>
-                    </FormControl>
-                    {similarProcedimientoWarning && (
-                        <FormDescription className="text-amber-600 flex items-start gap-1.5 pt-1">
-                            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                            <span>{similarProcedimientoWarning}</span>
-                        </FormDescription>
-                    )}
-                    <FormMessage />
-                </FormItem>
-            )}
-          />
-          <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-            <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere auditoría periódica</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
-            <FormField control={form.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
-          </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Procedimientos de Entrada</FormLabel>
-                      <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button variant="outline" className="w-full justify-between font-normal">
-                                  {
-                                      field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' :
-                                      field.value?.length ? `${field.value.length} seleccionado(s)` :
-                                      'Seleccione...'
-                                  } 
-                                  <ChevronDown className="ml-2 h-4"/>
-                              </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                              <DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel>
-                              <DropdownMenuSeparator/>
-                              <DropdownMenuCheckboxItem
-                                  checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
-                                  onCheckedChange={(checked) => {
-                                      field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
-                                  }}
-                                  disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
-                              >
-                                  (Es un procedimiento iniciador)
-                              </DropdownMenuCheckboxItem>
-                              <DropdownMenuSeparator/>
-                              {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
-                                  <DropdownMenuCheckboxItem 
-                                      key={p.id} 
-                                      checked={field.value?.includes(p.id)} 
-                                      onCheckedChange={checked => {
-                                          const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || [];
-                                          field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+      <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { setIsDialogOpen(isOpen); if (!isOpen) setEditingProcedimiento(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+            <DialogHeader><DialogTitle>{editingProcedimiento ? 'Editar' : 'Agregar'} Procedimiento</DialogTitle></DialogHeader>
+            <Form {...form}><form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto pr-4">
+              <FormField control={form.control} name="procesoId" render={({ field }) => (<FormItem><FormLabel>Proceso Padre</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso..."/></SelectTrigger></FormControl><SelectContent>{procesos.filter(p => p.activo !== false && !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+              <FormField
+                control={form.control}
+                name="nombre"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Nombre</FormLabel>
+                        <FormControl>
+                            <Input {...field} placeholder="Ej: Revisión de Facturas de Proveedores"/>
+                        </FormControl>
+                        {similarProcedimientoWarning && (
+                            <FormDescription className="text-amber-600 flex items-start gap-1.5 pt-1">
+                                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                <span>{similarProcedimientoWarning}</span>
+                            </FormDescription>
+                        )}
+                        <FormMessage />
+                    </FormItem>
+                )}
+              />
+              <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="clasificacion" render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+                <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..."/></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere auditoría periódica</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
+                <FormField control={form.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField control={form.control} name="procedimientosEntradaIds" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Procedimientos de Entrada</FormLabel>
+                          <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-between font-normal">
+                                      {
+                                          field.value?.includes(PROCEDIMIENTO_INICIADOR) ? 'Procedimiento Iniciador' :
+                                          field.value?.length ? `${field.value.length} seleccionado(s)` :
+                                          'Seleccione...'
+                                      } 
+                                      <ChevronDown className="ml-2 h-4"/>
+                                  </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                  <DropdownMenuLabel>Procedimientos de Entrada</DropdownMenuLabel>
+                                  <DropdownMenuSeparator/>
+                                  <DropdownMenuCheckboxItem
+                                      checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                      onCheckedChange={(checked) => {
+                                          field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
                                       }}
-                                      disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                      disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
                                   >
-                                      {p.nombre}
+                                      (Es un procedimiento iniciador)
                                   </DropdownMenuCheckboxItem>
-                              ))}
-                          </DropdownMenuContent>
-                      </DropdownMenu>
-                      <FormMessage/>
-                  </FormItem>
-              )}/>
-               <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor, Orden de compra aprobada..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-                
-              <FormField control={form.control} name="procedimientosSalidaIds" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Procedimientos de Salida</FormLabel>
-                      <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button variant="outline" className="w-full justify-between font-normal">
-                                  {
-                                      field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' :
-                                      field.value?.length ? `${field.value.length} seleccionado(s)` :
-                                      'Seleccione...'
-                                  }
-                                  <ChevronDown className="ml-2 h-4"/>
-                              </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                              <DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel>
-                              <DropdownMenuSeparator/>
-                              <DropdownMenuCheckboxItem
-                                  checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
-                                  onCheckedChange={(checked) => {
-                                      field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
-                                  }}
-                                  disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
-                              >
-                                  (Es un procedimiento finalizador)
-                              </DropdownMenuCheckboxItem>
-                              <DropdownMenuSeparator/>
-                              {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
-                                  <DropdownMenuCheckboxItem 
-                                      key={p.id} 
-                                      checked={field.value?.includes(p.id)} 
-                                      onCheckedChange={checked => {
-                                          const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || [];
-                                          field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                  <DropdownMenuSeparator/>
+                                  {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
+                                      <DropdownMenuCheckboxItem 
+                                          key={p.id} 
+                                          checked={field.value?.includes(p.id)} 
+                                          onCheckedChange={checked => {
+                                              const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_INICIADOR) || [];
+                                              field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                          }}
+                                          disabled={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
+                                      >
+                                          {p.nombre}
+                                      </DropdownMenuCheckboxItem>
+                                  ))}
+                              </DropdownMenuContent>
+                          </DropdownMenu>
+                          <FormMessage/>
+                      </FormItem>
+                  )}/>
+                   <FormField control={form.control} name="informacionRecibe" render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor, Orden de compra aprobada..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                    
+                  <FormField control={form.control} name="procedimientosSalidaIds" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Procedimientos de Salida</FormLabel>
+                          <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-between font-normal">
+                                      {
+                                          field.value?.includes(PROCEDIMIENTO_FINALIZADOR) ? 'Procedimiento Finalizador' :
+                                          field.value?.length ? `${field.value.length} seleccionado(s)` :
+                                          'Seleccione...'
+                                      }
+                                      <ChevronDown className="ml-2 h-4"/>
+                                  </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                  <DropdownMenuLabel>Procedimientos de Salida</DropdownMenuLabel>
+                                  <DropdownMenuSeparator/>
+                                  <DropdownMenuCheckboxItem
+                                      checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                      onCheckedChange={(checked) => {
+                                          field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
                                       }}
-                                      disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                      disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
                                   >
-                                      {p.nombre}
+                                      (Es un procedimiento finalizador)
                                   </DropdownMenuCheckboxItem>
-                              ))}
-                          </DropdownMenuContent>
-                      </DropdownMenu>
-                      <FormMessage/>
-                  </FormItem>
-              )}/>
-               <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-            </div>
-          <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
-        </form></Form>
-      </DialogContent></Dialog>
+                                  <DropdownMenuSeparator/>
+                                  {procedimientos.filter(p => p.id !== editingProcedimiento?.id).map(p => (
+                                      <DropdownMenuCheckboxItem 
+                                          key={p.id} 
+                                          checked={field.value?.includes(p.id)} 
+                                          onCheckedChange={checked => {
+                                              const currentValues = field.value?.filter(v => v !== PROCEDIMIENTO_FINALIZADOR) || [];
+                                              field.onChange(checked ? [...currentValues, p.id] : currentValues.filter(id => id !== p.id))
+                                          }}
+                                          disabled={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
+                                      >
+                                          {p.nombre}
+                                      </DropdownMenuCheckboxItem>
+                                  ))}
+                              </DropdownMenuContent>
+                          </DropdownMenu>
+                          <FormMessage/>
+                      </FormItem>
+                  )}/>
+                   <FormField control={form.control} name="informacionEntrega" render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                </div>
+              <DialogFooter><DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
+            </form></Form>
+      </DialogContent>
+      </Dialog>
       
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle><AlertTriangle className="inline-block mr-2 text-destructive"/>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Seguro que desea eliminar el procedimiento "{procedimientoToDelete?.nombre}"? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={()=>setProcedimientoToDelete(null)}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDelete} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     
