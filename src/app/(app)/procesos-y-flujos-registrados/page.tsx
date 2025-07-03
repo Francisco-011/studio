@@ -603,7 +603,19 @@ export default function ProcesosYFlujosRegistradosPage() {
                                               <AccordionTrigger className="p-4 hover:no-underline">
                                                   <div className="flex items-center gap-4 text-left">
                                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
-                                                      <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>{procedure.nombre} <Badge variant="outline">{procedure.clasificacion}</Badge> {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}</span>
+                                                      <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>
+                                                        {procedure.nombre} 
+                                                        <Badge
+                                                          className={cn("text-white border-transparent", {
+                                                            "bg-sky-600 hover:bg-sky-700": procedure.clasificacion === 'Público',
+                                                            "bg-purple-600 hover:bg-purple-700": procedure.clasificacion === 'Privado',
+                                                            "bg-red-600 hover:bg-red-700": procedure.clasificacion === 'Confidencial',
+                                                          })}
+                                                        >
+                                                            {procedure.clasificacion}
+                                                        </Badge>
+                                                        {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}
+                                                      </span>
                                                   </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-4">
@@ -751,5 +763,6 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
