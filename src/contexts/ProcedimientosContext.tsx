@@ -11,6 +11,8 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import type { Moneda } from './AccionesContext';
+import { usePoliticas } from './PoliticasContext';
+
 
 export interface Procedimiento {
   id: string;
@@ -56,6 +58,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
   const [isLoadingProcedimientos, setIsLoadingProcedimientos] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const { politicas } = usePoliticas();
 
   useEffect(() => {
     const q = query(collection(db, PROCEDIMIENTOS_COLLECTION));
@@ -132,16 +135,32 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     const changes: CambioHistorial[] = [];
     const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds', 'monedaCosto'];
     
+    const politicasMap = new Map(politicas.map(p => [p.id, p.codigo]));
+
     fieldsToCompare.forEach(key => {
         const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';
         const newValue = data[key as keyof ProcedimientoCreationData] ?? '';
+        
         if (JSON.stringify(originalValue) !== JSON.stringify(newValue)) {
-             changes.push({
-                timestamp: new Date().toISOString(),
-                field: key,
-                before: Array.isArray(originalValue) ? originalValue.join(', ') : String(originalValue),
-                after: Array.isArray(newValue) ? newValue.join(', ') : String(newValue)
-             });
+            let beforeValue: string;
+            let afterValue: string;
+
+            if (key === 'politicasAsociadasIds') {
+                beforeValue = (originalValue as string[] || []).map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+                afterValue = (newValue as string[] || []).map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+            } else {
+                beforeValue = Array.isArray(originalValue) ? originalValue.join(', ') : String(originalValue);
+                afterValue = Array.isArray(newValue) ? newValue.join(', ') : String(newValue);
+            }
+
+            if (beforeValue !== afterValue) {
+                changes.push({
+                    timestamp: new Date().toISOString(),
+                    field: key,
+                    before: beforeValue || 'N/A',
+                    after: afterValue || 'N/A'
+                });
+            }
         }
     });
 
@@ -160,7 +179,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
       console.error("Error updating procedimiento: ", e);
       toast({ title: "Error", description: "No se pudo actualizar el procedimiento.", variant: "destructive"});
     }
-  }, [procedimientos, addLogEntry]);
+  }, [procedimientos, addLogEntry, politicas]);
   
   const deleteProcedimiento = useCallback(async (id: string) => {
     const procedimientoToDelete = procedimientos.find(p => p.id === id);
