@@ -29,7 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ListOrdered, History, CalendarCheck2, Calculator } from "lucide-react";
+import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ListOrdered, History, CalendarCheck2, Calculator, FileText } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { Moneda } from '@/contexts/AccionesContext';
@@ -70,6 +70,24 @@ interface SortConfig {
 const ITEMS_PER_PAGE = 10;
 const PROCEDIMIENTO_INICIADOR = "__INICIADOR__";
 const PROCEDIMIENTO_FINALIZADOR = "__FINALIZADOR__";
+
+const escapeCsvCell = (cellData: string | number | undefined | null | string[]): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  if (Array.isArray(cellData)) {
+    const joinedString = cellData.join('; ');
+    if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
+      return `"${joinedString.replace(/"/g, '""')}"`;
+    }
+    return joinedString;
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
 
 export default function ProcedimientosPage() {
@@ -415,6 +433,56 @@ export default function ProcedimientosPage() {
     }
   }
 
+  const handleExport = () => {
+    if (sortedAndFilteredData.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay procedimientos que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = [
+      "ID", "Código", "Nombre del Procedimiento", "Proceso Padre", "Clasificación", "Estado", "Nº Actividades",
+      "Tiempo Estimado (Mes)", "Costo Estimado (Mes)", "Moneda", "Sistemas Utilizados", "Fecha Creación", "Última Modificación"
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...sortedAndFilteredData.map(proc => {
+        return [
+          escapeCsvCell(proc.id),
+          escapeCsvCell(proc.codigo),
+          escapeCsvCell(proc.nombre),
+          escapeCsvCell(proc.procesoPadre),
+          escapeCsvCell(proc.clasificacion),
+          escapeCsvCell(proc.activo ? 'Activo' : 'Inactivo'),
+          escapeCsvCell(proc.activityOrder?.length || 0),
+          escapeCsvCell(proc.tiempoEstimado),
+          escapeCsvCell(proc.costoEstimado),
+          escapeCsvCell(proc.monedaCosto),
+          escapeCsvCell(proc.sistemasUtilizados),
+          escapeCsvCell(proc.createdAt && isValid(new Date(proc.createdAt)) ? format(new Date(proc.createdAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A'),
+          escapeCsvCell(proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A')
+        ].join(',');
+      })
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `procedimientos_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoadingAll) return <div className="container mx-auto py-8 flex justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
 
@@ -432,6 +500,7 @@ export default function ProcedimientosPage() {
               <Select value={procesoFilter} onValueChange={setProcesoFilter}><SelectTrigger className="flex-1 min-w-[150px]"><SelectValue placeholder="Filtrar por proceso..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Procesos</SelectItem>{procesos.filter(p => !p.deletedAt).map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)}</SelectContent></Select>
               <Select value={clasificacionFilter} onValueChange={setClasificacionFilter}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Clasificación..."/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
               <Select value={statusFilter} onValueChange={setStatusFilter as any}><SelectTrigger className="flex-1 min-w-[120px]"><SelectValue placeholder="Estado..."/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select>
+              <Button onClick={handleExport} variant="outline"><FileText className="mr-2 h-4 w-4"/>Exportar</Button>
               <Button onClick={() => { setEditingProcedimiento(null); setIsDialogOpen(true); }}><PlusCircle className="mr-2 h-4 w-4" /> Agregar</Button>
             </div>
           </div>
@@ -614,8 +683,8 @@ export default function ProcedimientosPage() {
                   {procedimientoForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
                     .map((cambio, index) => {
-                        let beforeText = String(cambio.before ?? 'N/A');
-                        let afterText = String(cambio.after ?? 'N/A');
+                        let beforeText: string | number | React.ReactNode = String(cambio.before ?? 'N/A');
+                        let afterText: string | number | React.ReactNode = String(cambio.after ?? 'N/A');
 
                         if (cambio.field === 'procesoId') {
                             beforeText = procesosMap.get(cambio.before) || beforeText;
@@ -623,8 +692,8 @@ export default function ProcedimientosPage() {
                         } else if (cambio.field === 'politicasAsociadasIds') {
                             const beforeIds = Array.isArray(cambio.before) ? cambio.before : [];
                             const afterIds = Array.isArray(cambio.after) ? cambio.after : [];
-                            beforeText = beforeIds.map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
-                            afterText = afterIds.map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+                            beforeText = beforeIds.map((id: string) => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+                            afterText = afterIds.map((id: string) => politicasMap.get(id) || id).join(', ') || 'Ninguna';
                         }
                         
                         return (
