@@ -115,7 +115,7 @@ export function MultiSelect({
                   return (
                     <CommandItem
                       key={option.value}
-                      value={option.value}
+                      value={option.label}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

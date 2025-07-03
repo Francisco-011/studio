@@ -198,7 +198,6 @@ export default function CapturaPage() {
       puesto: undefined,
       departamento: undefined,
       procedures: [],
-      politicasAsociadas: [],
     },
   });
 
@@ -417,7 +416,18 @@ export default function CapturaPage() {
                   </div>
                   
                   <div className="space-y-3">
-                    {procedureFields.map((field, index) => (
+                    {procedureFields.map((field, index) => {
+                      const procedimientosDisponibles = allProcedimientos.filter(p => p.id !== field.id);
+                      const opcionesEntrada = [
+                          { value: PROCEDIMIENTO_INICIADOR, label: '(Es un procedimiento iniciador)' },
+                          ...procedimientosDisponibles.map(p => ({ value: p.id, label: p.nombre }))
+                      ];
+                      const opcionesSalida = [
+                          { value: PROCEDIMIENTO_FINALIZADOR, label: '(Es un procedimiento finalizador)' },
+                          ...procedimientosDisponibles.map(p => ({ value: p.id, label: p.nombre }))
+                      ];
+
+                      return (
                       <div 
                         key={field.id}
                         draggable
@@ -478,34 +488,19 @@ export default function CapturaPage() {
                                         render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Procedimientos de Entrada</FormLabel>
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex-grow">
-                                                <MultiSelect
-                                                    value={field.value?.filter((v) => v !== PROCEDIMIENTO_INICIADOR)}
-                                                    onChange={(newSelected) => {
-                                                        const currentIsInitiator = field.value?.includes(PROCEDIMIENTO_INICIADOR);
-                                                        field.onChange(
-                                                            currentIsInitiator
-                                                                ? [PROCEDIMIENTO_INICIADOR, ...newSelected]
-                                                                : newSelected
-                                                        );
-                                                    }}
-                                                    options={allProcedimientos.map((p) => ({ value: p.id, label: p.nombre }))}
-                                                    placeholder="Seleccione..."
-                                                    />
-                                                </div>
-                                                <div className="flex items-center space-x-2 pt-6">
-                                                    <Checkbox
-                                                    id={`iniciador-${index}`}
-                                                    checked={field.value?.includes(PROCEDIMIENTO_INICIADOR)}
-                                                    onCheckedChange={checked => {
-                                                        field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
-                                                    }}
-                                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
-                                                    />
-                                                    <label htmlFor={`iniciador-${index}`} className="text-sm font-medium leading-none">Iniciador</label>
-                                                </div>
-                                            </div>
+                                            <MultiSelect
+                                                value={field.value}
+                                                onChange={(newValues) => {
+                                                    const justSelectedInitiator = newValues.includes(PROCEDIMIENTO_INICIADOR) && !field.value?.includes(PROCEDIMIENTO_INICIADOR);
+                                                    if (justSelectedInitiator) {
+                                                        field.onChange([PROCEDIMIENTO_INICIADOR]);
+                                                    } else {
+                                                        field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_INICIADOR));
+                                                    }
+                                                }}
+                                                options={opcionesEntrada}
+                                                placeholder="Seleccione..."
+                                            />
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -518,34 +513,19 @@ export default function CapturaPage() {
                                         render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Procedimientos de Salida</FormLabel>
-                                             <div className="flex items-center gap-2">
-                                                <div className="flex-grow">
-                                                <MultiSelect
-                                                    value={field.value?.filter((v) => v !== PROCEDIMIENTO_FINALIZADOR)}
-                                                    onChange={(newSelected) => {
-                                                        const currentIsFinalizer = field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
-                                                        field.onChange(
-                                                            currentIsFinalizer
-                                                                ? [PROCEDIMIENTO_FINALIZADOR, ...newSelected]
-                                                                : newSelected
-                                                        );
-                                                    }}
-                                                    options={allProcedimientos.map((p) => ({ value: p.id, label: p.nombre }))}
-                                                    placeholder="Seleccione..."
-                                                    />
-                                                </div>
-                                                <div className="flex items-center space-x-2 pt-6">
-                                                    <Checkbox
-                                                    id={`finalizador-${index}`}
-                                                    checked={field.value?.includes(PROCEDIMIENTO_FINALIZADOR)}
-                                                    onCheckedChange={checked => {
-                                                        field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
-                                                    }}
-                                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
-                                                    />
-                                                    <label htmlFor={`finalizador-${index}`} className="text-sm font-medium leading-none">Finalizador</label>
-                                                </div>
-                                            </div>
+                                            <MultiSelect
+                                                value={field.value}
+                                                onChange={(newValues) => {
+                                                    const justSelectedFinalizer = newValues.includes(PROCEDIMIENTO_FINALIZADOR) && !field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
+                                                    if (justSelectedFinalizer) {
+                                                        field.onChange([PROCEDIMIENTO_FINALIZADOR]);
+                                                    } else {
+                                                        field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_FINALIZADOR));
+                                                    }
+                                                }}
+                                                options={opcionesSalida}
+                                                placeholder="Seleccione..."
+                                            />
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -564,7 +544,7 @@ export default function CapturaPage() {
                           </AccordionItem>
                         </Accordion>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
 
@@ -583,4 +563,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-
