@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,7 +24,7 @@ interface MultiSelectProps {
 }
 
 export function MultiSelect({
-  value = [],
+  value,
   onChange,
   placeholder = "Seleccione opciones...",
   options,
@@ -31,16 +32,18 @@ export function MultiSelect({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
+  
+  const internalValue = value || [];
 
   const selectedOptions = React.useMemo(() => {
-    return options.filter((option) => (value || []).includes(option.value));
-  }, [options, value]);
+    return options.filter((option) => internalValue.includes(option.value));
+  }, [options, internalValue]);
 
   const handleUnselect = React.useCallback(
     (optionValue: string) => {
-      onChange(value.filter((v) => v !== optionValue));
+      onChange(internalValue.filter((v) => v !== optionValue));
     },
-    [onChange, value]
+    [onChange, internalValue]
   );
 
   const handleKeyDown = React.useCallback(
@@ -49,7 +52,7 @@ export function MultiSelect({
       if (input) {
         if (e.key === "Delete" || e.key === "Backspace") {
           if (input.value === "") {
-            const newSelected = [...value];
+            const newSelected = [...internalValue];
             newSelected.pop();
             onChange(newSelected);
           }
@@ -59,11 +62,11 @@ export function MultiSelect({
         }
       }
     },
-    [onChange, value]
+    [onChange, internalValue]
   );
 
   const selectables = options.filter(
-    (option) => !(value || []).includes(option.value)
+    (option) => !internalValue.includes(option.value)
   );
 
   return (
@@ -122,7 +125,7 @@ export function MultiSelect({
                       }}
                       onSelect={() => {
                         setInputValue("");
-                        onChange([...value, option.value]);
+                        onChange([...internalValue, option.value]);
                       }}
                       className={"cursor-pointer"}
                     >
