@@ -631,7 +631,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                               <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
                                                                 <div className="flex-grow">
                                                                   <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
-                                                                  {!act.activa && <Badge variant="outline" className="text-xs w-fit mt-1">Inactiva</Badge>}
+                                                                  {!act.activa && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                                 </div>
                                                                 <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                               </CardHeader>
@@ -751,4 +751,5 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
