@@ -58,10 +58,6 @@ const procedureSchema = z.object({
     procedimientosEntradaIds: z.array(z.string()).optional().default([]),
     informacionEntrega: z.string().optional(),
     procedimientosSalidaIds: z.array(z.string()).optional().default([]),
-    auditFrequencyInDays: z.preprocess(
-      (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
-      z.number().int().optional()
-    ),
     politicasAsociadasIds: z.array(z.string()).optional().default([]),
 });
 
@@ -345,7 +341,7 @@ export default function CapturaPage() {
         procedureRefsAndData.forEach(p => batch.set(p.ref, p.data));
         
         // 3. Prepare Process payload
-        const { ...processData } = data;
+        const { procedures, ...processData } = data;
         const processPayload = {
             ...processData,
             codigo: `PR-${Date.now().toString().slice(-6)}`,
@@ -403,23 +399,22 @@ export default function CapturaPage() {
                       <FormItem className="mt-6">
                         <FormLabel>Frecuencia de Auditoría</FormLabel>
                         <Select
-                          onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))}
-                          value={field.value?.toString() || 'none'}
+                          onValueChange={(value) => field.onChange(value ? Number(value) : undefined)}
+                          value={field.value?.toString()}
                         >
                           <FormControl>
                             <SelectTrigger>
                               <CalendarCheck2 className="mr-2 h-4 w-4" />
-                              <SelectValue placeholder="Seleccione..." />
+                              <SelectValue placeholder="Opcional: Seleccione frecuencia" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="none">No requiere auditoría periódica</SelectItem>
                             {auditFrequencyOptions.map((opt) => (
                               <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormDescription>Define cada cuánto debe auditarse este proceso.</FormDescription>
+                        <FormDescription>Define cada cuánto debe auditarse este proceso. Si se deja en blanco, no requerirá auditoría periódica.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -497,7 +492,6 @@ export default function CapturaPage() {
                                <FormField control={form.control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                                </div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect value={field.value} onChange={(newSelected) => field.onChange(newSelected)} options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
