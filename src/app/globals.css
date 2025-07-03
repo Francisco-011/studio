@@ -10,24 +10,24 @@
     --card-foreground: 220 10% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 10% 10%;
-    --primary: 158 64% 42%; /* Professional Green */
+    --primary: 210 70% 55%; /* Professional Blue */
     --primary-foreground: 0 0% 100%;
     --secondary: 220 15% 92%;
     --secondary-foreground: 220 10% 20%;
     --muted: 220 15% 88%;
     --muted-foreground: 220 5% 45%;
-    --accent: 45 90% 55%; /* Gold/Amber */
+    --accent: 24 90% 55%; /* Vibrant Orange */
     --accent-foreground: 24 9.8% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 158 64% 42%; /* Matches primary */
+    --ring: 210 70% 55%; /* Matches primary */
     --radius: 0.5rem;
 
-    --chart-1: 158 64% 42%; /* Primary */
-    --chart-2: 45 90% 55%; /* Accent */
-    --chart-3: 210 70% 55%; /* Original Blue */
+    --chart-1: 210 70% 55%; /* Primary */
+    --chart-2: 24 90% 55%; /* Accent */
+    --chart-3: 158 64% 42%;
     --chart-4: 260 60% 65%;
     --chart-5: 0 70% 60%;
     --chart-6: 280 60% 60%;
@@ -42,7 +42,7 @@
     /* Sidebar specific colors for light theme */
     --sidebar-background: 220 15% 18%; /* Darker sidebar for contrast */
     --sidebar-foreground: 0 0% 98%; /* White text */
-    --sidebar-primary: 158 80% 75%; /* Lighter green for sidebar logo */
+    --sidebar-primary: 210 80% 75%; /* Lighter blue for sidebar logo */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: var(--primary); /* Use main primary for active nav */
     --sidebar-accent-foreground: var(--primary-foreground);
@@ -57,23 +57,23 @@
     --card-foreground: 0 0% 98%;
     --popover: 220 15% 18%;
     --popover-foreground: 0 0% 98%;
-    --primary: 158 50% 55%; /* Brighter green for dark mode */
+    --primary: 210 60% 60%; /* Brighter blue for dark mode */
     --primary-foreground: 0 0% 100%;
     --secondary: 220 15% 22%; /* Darker gray */
     --secondary-foreground: 0 0% 98%;
     --muted: 220 15% 22%;
     --muted-foreground: 0 0% 63.9%;
-    --accent: 45 85% 60%; /* Brighter gold */
+    --accent: 24 85% 60%; /* Brighter orange */
     --accent-foreground: 24 9.8% 10%;
     --destructive: 0 70% 50%; /* Adjusted destructive for dark */
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 25%;
     --input: 220 15% 25%;
-    --ring: 158 50% 55%; /* Matches dark primary */
+    --ring: 210 60% 60%; /* Matches dark primary */
 
-    --chart-1: 158 50% 55%; /* Primary */
-    --chart-2: 45 85% 60%; /* Accent */
-    --chart-3: 210 70% 60%; /* Original Blue */
+    --chart-1: 210 60% 60%; /* Primary */
+    --chart-2: 24 85% 60%; /* Accent */
+    --chart-3: 158 50% 55%;
     --chart-4: 260 65% 70%;
     --chart-5: 0 75% 65%;
     --chart-6: 280 65% 65%;
@@ -87,7 +87,7 @@
     /* Sidebar specific colors for dark theme */
     --sidebar-background: 220 15% 10%; /* Even darker for depth */
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 158 60% 75%; /* Lighter green for dark mode sidebar logo */
+    --sidebar-primary: 210 70% 75%; /* Lighter blue for dark mode sidebar logo */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: var(--primary); /* Use main dark primary for active nav */
     --sidebar-accent-foreground: var(--primary-foreground);
