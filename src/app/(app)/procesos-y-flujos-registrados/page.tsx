@@ -156,6 +156,10 @@ export default function ProcesosYFlujosRegistradosPage() {
     router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
   };
 
+  const handleEditProcedure = (procedureName: string) => {
+    router.push(`/procedimientos?search=${encodeURIComponent(procedureName)}`);
+  };
+
   const editForm = useForm<CapturaFormData>({
     resolver: zodResolver(capturaFormSchema),
   });
@@ -601,7 +605,8 @@ export default function ProcesosYFlujosRegistradosPage() {
                                       return (
                                           <AccordionItem value={procedure.id} key={procedure.id} className="bg-background rounded-md border">
                                               <AccordionTrigger className="p-4 hover:no-underline">
-                                                  <div className="flex items-center gap-4 text-left">
+                                                <div className="flex items-center justify-between w-full">
+                                                  <div className="flex items-center gap-4 text-left flex-grow">
                                                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-bold">{procIndex + 1}</span>
                                                       <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>
                                                         {procedure.nombre} 
@@ -617,6 +622,13 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                         {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}
                                                       </span>
                                                   </div>
+                                                  <Button variant="ghost" size="sm" className="mr-4" onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleEditProcedure(procedure.nombre);
+                                                  }}>
+                                                      Editar
+                                                  </Button>
+                                                </div>
                                               </AccordionTrigger>
                                               <AccordionContent className="p-4 pt-0 pl-16 space-y-4">
                                                   <Card>
@@ -763,6 +775,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
