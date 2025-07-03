@@ -35,15 +35,15 @@ export const capturaFormSchema = z.object({
   proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
   descripcion: z.string().min(1, "La descripción del proceso es requerida."),
   procedimientoOrder: z.array(z.string()).optional().default([]),
-  politicasAsociadas: z.array(z.object({
-    policyId: z.string(),
-    linkType: z.string(), // z.enum(politicaLinkTypes) would cause circular dependency
-  })).optional().default([]),
   auditFrequencyInDays: z.preprocess(
     (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
     z.number().int().optional()
   ),
   lastAuditedAt: z.string().optional(),
+  politicasAsociadas: z.array(z.object({
+    policyId: z.string(),
+    linkType: z.string(),
+  })).optional().default([]),
 });
 export type CapturaFormData = z.infer<typeof capturaFormSchema>;
 
