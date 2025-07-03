@@ -33,7 +33,7 @@ export function MultiSelect({
   const [inputValue, setInputValue] = React.useState("");
 
   const selectedOptions = React.useMemo(() => {
-    return options.filter((option) => value.includes(option.value));
+    return options.filter((option) => (value || []).includes(option.value));
   }, [options, value]);
 
   const handleUnselect = React.useCallback(
@@ -63,7 +63,7 @@ export function MultiSelect({
   );
 
   const selectables = options.filter(
-    (option) => !value.includes(option.value)
+    (option) => !(value || []).includes(option.value)
   );
 
   return (
@@ -115,6 +115,7 @@ export function MultiSelect({
                   return (
                     <CommandItem
                       key={option.value}
+                      value={option.value}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

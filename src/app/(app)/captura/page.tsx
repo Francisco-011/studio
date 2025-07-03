@@ -198,6 +198,7 @@ export default function CapturaPage() {
       puesto: undefined,
       departamento: undefined,
       procedures: [],
+      politicasAsociadas: [],
     },
   });
 
@@ -345,20 +346,16 @@ export default function CapturaPage() {
         procedureRefsAndData.forEach(p => batch.set(p.ref, p.data));
         
         // 3. Prepare Process payload
+        const { politicasAsociadas, ...processDataWithoutPolicies } = data;
         const processPayload = {
-            proceso: data.proceso,
-            descripcion: data.descripcion,
-            area: data.area,
-            departamento: data.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : data.departamento,
-            puesto: data.puesto,
-            auditFrequencyInDays: data.auditFrequencyInDays,
+            ...processDataWithoutPolicies,
             codigo: `PR-${Date.now().toString().slice(-6)}`,
             capturedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             activo: true,
             historialDeCambios: [],
             procedimientoOrder: procedureRefsAndData.map(p => p.ref.id),
-            politicasAsociadas: [],
+            politicasAsociadas: data.politicasAsociadas || [],
         };
         batch.set(processRef, processPayload);
 
@@ -401,7 +398,6 @@ export default function CapturaPage() {
                 </div>
                 <FormField control={form.control} name="proceso" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Nombre del Proceso</FormLabel><FormControl><Input placeholder="Ej: Gestión de Pedidos de Clientes" {...field} /></FormControl>{similarProcessWarning && (<FormDescription className="text-amber-600 flex items-center gap-1 pt-1"><AlertTriangle className="h-4 w-4" />{similarProcessWarning}</FormDescription>)}<FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="descripcion" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Objetivo del Proceso</FormLabel><FormControl><Textarea placeholder="Describa el propósito principal y el resultado esperado." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem className="mt-6"><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
 
               {!isDefiningFlow && (
@@ -472,9 +468,9 @@ export default function CapturaPage() {
                                <FormField control={form.control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect selected={field.value ? field.value.map(v => ({value: v, label: v})) : []} onChange={(newSelected) => field.onChange(newSelected.map(s => s.value))} options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect value={field.value} onChange={(newSelected) => field.onChange(newSelected)} options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
                                </div>
-                               
+                                <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} value={field.value?.toString() || 'none'}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No requiere</SelectItem>{auditFrequencyOptions.map((opt) => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
@@ -485,13 +481,16 @@ export default function CapturaPage() {
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-grow">
                                                 <MultiSelect
-                                                    value={field.value ? field.value.filter(v => v !== PROCEDIMIENTO_INICIADOR).map(v => ({value: v, label: allProcedimientos.find(p=>p.id===v)?.nombre || v})) : []}
+                                                    value={field.value?.filter((v) => v !== PROCEDIMIENTO_INICIADOR)}
                                                     onChange={(newSelected) => {
                                                         const currentIsInitiator = field.value?.includes(PROCEDIMIENTO_INICIADOR);
-                                                        const newValue = newSelected.map(s => s.value);
-                                                        field.onChange(currentIsInitiator ? [PROCEDIMIENTO_INICIADOR, ...newValue] : newValue);
+                                                        field.onChange(
+                                                            currentIsInitiator
+                                                                ? [PROCEDIMIENTO_INICIADOR, ...newSelected]
+                                                                : newSelected
+                                                        );
                                                     }}
-                                                    options={allProcedimientos.filter(p => p.id !== field.name).map(p => ({ value: p.id, label: p.nombre }))}
+                                                    options={allProcedimientos.map((p) => ({ value: p.id, label: p.nombre }))}
                                                     placeholder="Seleccione..."
                                                     />
                                                 </div>
@@ -502,6 +501,7 @@ export default function CapturaPage() {
                                                     onCheckedChange={checked => {
                                                         field.onChange(checked ? [PROCEDIMIENTO_INICIADOR] : []);
                                                     }}
+                                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_INICIADOR)}
                                                     />
                                                     <label htmlFor={`iniciador-${index}`} className="text-sm font-medium leading-none">Iniciador</label>
                                                 </div>
@@ -521,13 +521,16 @@ export default function CapturaPage() {
                                              <div className="flex items-center gap-2">
                                                 <div className="flex-grow">
                                                 <MultiSelect
-                                                    value={field.value ? field.value.filter(v => v !== PROCEDIMIENTO_FINALIZADOR).map(v => ({value: v, label: allProcedimientos.find(p=>p.id===v)?.nombre || v})) : []}
+                                                    value={field.value?.filter((v) => v !== PROCEDIMIENTO_FINALIZADOR)}
                                                     onChange={(newSelected) => {
                                                         const currentIsFinalizer = field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
-                                                        const newValue = newSelected.map(s => s.value);
-                                                        field.onChange(currentIsFinalizer ? [PROCEDIMIENTO_FINALIZADOR, ...newValue] : newValue);
+                                                        field.onChange(
+                                                            currentIsFinalizer
+                                                                ? [PROCEDIMIENTO_FINALIZADOR, ...newSelected]
+                                                                : newSelected
+                                                        );
                                                     }}
-                                                    options={allProcedimientos.filter(p => p.id !== field.name).map(p => ({ value: p.id, label: p.nombre }))}
+                                                    options={allProcedimientos.map((p) => ({ value: p.id, label: p.nombre }))}
                                                     placeholder="Seleccione..."
                                                     />
                                                 </div>
@@ -538,6 +541,7 @@ export default function CapturaPage() {
                                                     onCheckedChange={checked => {
                                                         field.onChange(checked ? [PROCEDIMIENTO_FINALIZADOR] : []);
                                                     }}
+                                                    disabled={field.value?.length > 0 && !field.value.includes(PROCEDIMIENTO_FINALIZADOR)}
                                                     />
                                                     <label htmlFor={`finalizador-${index}`} className="text-sm font-medium leading-none">Finalizador</label>
                                                 </div>
@@ -546,9 +550,9 @@ export default function CapturaPage() {
                                         </FormItem>
                                     )}
                                     />
-                                  <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
                                </div>
-                               <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value || []} onChange={(newValue) => field.onChange(newValue)} options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} placeholder="Vincular políticas..."/><FormMessage /></FormItem>)}/>
+                               <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value} onChange={(newValue) => field.onChange(newValue)} options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} placeholder="Vincular políticas..."/><FormMessage /></FormItem>)}/>
                               <ActivitiesSection 
                                 control={form.control} 
                                 procIndex={index} 
