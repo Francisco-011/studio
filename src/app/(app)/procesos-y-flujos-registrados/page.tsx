@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -320,7 +321,24 @@ export default function ProcesosYFlujosRegistradosPage() {
     return allCapturedData.filter(proc => proc.deletedAt && new Date(proc.deletedAt) > thirtyDaysAgo).sort((a,b) => new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime());
   }, [allCapturedData]);
 
-  const promptDeleteProcess = (proc: CapturedProcess) => { setProcessToDelete(proc); setIsConfirmDeleteProcessOpen(true); };
+  const promptDeleteProcess = (proc: CapturedProcess) => {
+    const proceduresForProcess = (proc.procedimientoOrder || [])
+      .map(procId => allProcedimientos.find(p => p.id === procId))
+      .filter((p): p is Procedimiento => !!p);
+
+    if (proceduresForProcess.length > 0) {
+      toast({
+        title: "Eliminación Bloqueada",
+        description: `El proceso "${proc.proceso}" tiene ${proceduresForProcess.length} procedimiento(s) asignado(s). Debe eliminarlos primero desde el módulo de Procedimientos.`,
+        variant: "destructive",
+        duration: 7000
+      });
+      return;
+    }
+
+    setProcessToDelete(proc);
+    setIsConfirmDeleteProcessOpen(true);
+  };
   
   const executeDeleteProcess = () => {
     if (!processToDelete) return;
@@ -880,6 +898,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
