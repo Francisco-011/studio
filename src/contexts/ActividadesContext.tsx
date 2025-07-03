@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import type { Moneda } from './AccionesContext';
 import { frecuenciaOptions } from './ProcesosContext';
@@ -26,7 +26,6 @@ export interface Actividad {
   puestoId?: string;
   createdAt: number; 
   updatedAt?: number;
-  deletedAt?: number; 
   descripcionBreve?: string;
   historialDeCambios?: CambioHistorial[];
   
@@ -44,11 +43,9 @@ export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt
 
 interface ActividadesContextType {
   actividades: Actividad[];
-  deletedActividades: Actividad[];
   addActividad: (data: ActividadCreationData) => Promise<Actividad | null>;
   updateActividad: (id: string, data: Partial<ActividadCreationData>) => Promise<void>;
-  softDeleteActividad: (id: string) => Promise<void>;
-  restoreActividad: (id: string) => Promise<void>;
+  deleteActividad: (id: string) => Promise<void>;
   toggleActividadStatus: (actividadToToggle: Actividad) => Promise<void>;
   isLoadingActividades: boolean;
 }
@@ -59,7 +56,6 @@ const ACTIVIDADES_COLLECTION = 'actividades';
 
 export function ActividadesProvider({ children }: { children: ReactNode }) {
   const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [deletedActividades, setDeletedActividades] = useState<Actividad[]>([]);
   const [isLoadingActividades, setIsLoadingActividades] = useState(true);
   const { addLogEntry } = useActivityLog();
 
@@ -70,19 +66,16 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
             const data = doc.data();
             const docCreatedAt = data.createdAt;
             const docUpdatedAt = data.updatedAt;
-            const docDeletedAt = data.deletedAt;
 
             return {
                 id: doc.id,
                 ...data,
                 createdAt: docCreatedAt?.toMillis ? docCreatedAt.toMillis() : (typeof docCreatedAt === 'number' ? docCreatedAt : 0),
                 updatedAt: docUpdatedAt?.toMillis ? docUpdatedAt.toMillis() : (typeof docUpdatedAt === 'number' ? docUpdatedAt : undefined),
-                deletedAt: docDeletedAt?.toMillis ? docDeletedAt.toMillis() : (typeof docDeletedAt === 'number' ? docDeletedAt : undefined),
             } as Actividad;
         });
         
-        setActividades(allData.filter(act => !act.deletedAt).sort((a,b) => b.createdAt - a.createdAt));
-        setDeletedActividades(allData.filter(act => !!act.deletedAt).sort((a,b) => (b.deletedAt || 0) - (a.deletedAt || 0)));
+        setActividades(allData.sort((a,b) => b.createdAt - a.createdAt));
         setIsLoadingActividades(false);
     }, (error) => {
         console.error("Error fetching actividades: ", error);
@@ -103,7 +96,6 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
         updatedAt: serverTimestamp(),
         activa: data.activa === undefined ? true : data.activa,
         historialDeCambios: [],
-        deletedAt: null,
       };
 
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
@@ -131,8 +123,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   }, [addLogEntry]);
 
   const updateActividad = useCallback(async (id: string, data: Partial<ActividadCreationData>) => {
-    const allKnownActivities = [...actividades, ...deletedActividades];
-    const originalActividad = allKnownActivities.find(a => a.id === id);
+    const originalActividad = actividades.find(a => a.id === id);
     if (!originalActividad) return;
     
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
@@ -166,42 +157,21 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
       console.error("Error updating actividad: ", e);
       toast({ title: "Error", description: "No se pudo actualizar la actividad.", variant: "destructive"});
     }
-  }, [actividades, deletedActividades, addLogEntry]);
+  }, [actividades, addLogEntry]);
 
-  const softDeleteActividad = useCallback(async (id: string) => {
-    const activityToMove = actividades.find(act => act.id === id);
-    if (activityToMove) {
+  const deleteActividad = useCallback(async (id: string) => {
+    const activityToDelete = actividades.find(act => act.id === id);
+    if (activityToDelete) {
       try {
         const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
-        await updateDoc(docRef, {
-          deletedAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        addLogEntry({ action: 'delete', entityType: 'Actividad', entityName: activityToMove.nombre, details: `Se eliminó la actividad "${activityToMove.nombre}".` });
+        await deleteDoc(docRef);
+        addLogEntry({ action: 'delete', entityType: 'Actividad', entityName: activityToDelete.nombre, details: `Se eliminó permanentemente la actividad "${activityToDelete.nombre}".` });
       } catch (e) {
         console.error("Error deleting actividad: ", e);
         toast({ title: "Error", description: "No se pudo eliminar la actividad.", variant: "destructive"});
       }
     }
   }, [actividades, addLogEntry]);
-
-  const restoreActividad = useCallback(async (id: string) => {
-    const activityToRestore = deletedActividades.find(act => act.id === id);
-    if (activityToRestore) {
-      try {
-        const docRef = doc(db, ACTIVIDADES_COLLECTION, id);
-        await updateDoc(docRef, {
-            deletedAt: null,
-            activa: true,
-            updatedAt: serverTimestamp(),
-        });
-        addLogEntry({ action: 'restore', entityType: 'Actividad', entityName: activityToRestore.nombre, details: `Se restauró la actividad "${activityToRestore.nombre}".` });
-      } catch(e) {
-        console.error("Error restoring actividad: ", e);
-        toast({ title: "Error", description: "No se pudo restaurar la actividad.", variant: "destructive"});
-      }
-    }
-  }, [deletedActividades, addLogEntry]);
 
   const toggleActividadStatus = useCallback(async (actividadToToggle: Actividad) => {
     const change: CambioHistorial = {
@@ -228,11 +198,9 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
   return (
     <ActividadesContext.Provider value={{ 
       actividades, 
-      deletedActividades, 
       addActividad, 
       updateActividad, 
-      softDeleteActividad, 
-      restoreActividad, 
+      deleteActividad, 
       toggleActividadStatus, 
       isLoadingActividades 
     }}>

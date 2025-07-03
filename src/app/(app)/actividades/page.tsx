@@ -123,11 +123,9 @@ function formatCurrencyDisplay(amount?: number, currency?: string) {
 export default function ActividadesPage() {
   const {
     actividades,
-    deletedActividades,
     addActividad,
     updateActividad,
-    softDeleteActividad,
-    restoreActividad,
+    deleteActividad,
     toggleActividadStatus,
     isLoadingActividades
   } = useActividades();
@@ -148,7 +146,6 @@ export default function ActividadesPage() {
 
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
-  const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -339,18 +336,10 @@ export default function ActividadesPage() {
 
   function executeDeleteActividad() {
     if (!activityToDelete) return;
-    softDeleteActividad(activityToDelete.id);
-    toast({ title: 'Actividad Eliminada', description: `"${activityToDelete.nombre}" ha sido eliminada. Puede recuperarla en los próximos 30 días.`, variant: "destructive" });
+    deleteActividad(activityToDelete.id);
+    toast({ title: 'Actividad Eliminada Permanentemente', description: `La actividad "${activityToDelete.nombre}" ha sido eliminada.`, variant: "destructive" });
     setActivityToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
-  }
-
-  function handleRestoreActividad(actividadId: string) {
-    const activityToRestore = deletedActividades.find(act => act.id === actividadId);
-    if (activityToRestore) {
-        restoreActividad(actividadId);
-        toast({ title: 'Actividad Restaurada', description: `"${activityToRestore.nombre}" ha sido restaurada y activada.`});
-    }
   }
 
   function handleToggleActividadStatus(actividad: Actividad) {
@@ -490,11 +479,6 @@ export default function ActividadesPage() {
   };
 
 
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const recoverableActividades = deletedActividades.filter(act => act.deletedAt && act.deletedAt > thirtyDaysAgo)
-                                  .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
-
-
   const handleExport = () => {
     if (sortedAndFilteredActividades.length === 0) {
       toast({ title: "Nada que exportar", description: "No hay actividades que coincidan con los filtros actuales.", variant: "default" });
@@ -629,54 +613,6 @@ export default function ActividadesPage() {
               <Button onClick={handleExport} variant="outline" className="w-full sm:w-auto">
                   <FileText className="mr-2 h-4 w-4" /> Exportar CSV ({sortedAndFilteredActividades.length})
               </Button>
-              <Dialog open={isRecoveryDialogOpen} onOpenChange={setIsRecoveryDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" disabled={recoverableActividades.length === 0} className="w-full sm:w-auto">
-                    <RotateCcw className="mr-2 h-4 w-4" /> Recuperar ({recoverableActividades.length})
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Recuperar Actividades Eliminadas</DialogTitle>
-                    <DialogDescription>
-                      Actividades eliminadas en los últimos 30 días que pueden ser restauradas.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {recoverableActividades.length > 0 ? (
-                    <div className="max-h-[60vh] overflow-y-auto py-4">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Eliminada el</TableHead>
-                            <TableHead className="text-right">Acción</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {recoverableActividades.map((act) => (
-                            <TableRow key={act.id}>
-                              <TableCell>{act.nombre}</TableCell>
-                              <TableCell>{act.deletedAt && isValid(new Date(act.deletedAt)) ? format(new Date(act.deletedAt), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
-                              <TableCell className="text-right">
-                                <Button size="sm" onClick={() => handleRestoreActividad(act.id)}>
-                                  <RotateCcw className="mr-2 h-3 w-3" /> Restaurar
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <p className="py-4 text-muted-foreground">No hay actividades para recuperar.</p>
-                  )}
-                   <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">Cerrar</Button>
-                      </DialogClose>
-                    </DialogFooter>
-                </DialogContent>
-              </Dialog>
               <Dialog open={isActividadDialogOpen} onOpenChange={(isOpen) => {
                 setIsActividadDialogOpen(isOpen);
                 if (!isOpen) {
@@ -834,7 +770,22 @@ export default function ActividadesPage() {
       </Card>
 
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle><div className="flex items-center gap-2"><AlertTriangle className="text-destructive"/>Confirmar Eliminación</div></AlertDialogTitle><AlertDialogDescription>¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción la moverá a la papelera.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteActividad} className={buttonVariants({variant: "destructive"})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>
+                    <div className="flex items-center gap-2"><AlertTriangle className="text-destructive"/>Confirmar Eliminación Permanente</div>
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    ¿Está seguro de que desea eliminar la actividad "{activityToDelete?.nombre}"? Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={executeDeleteActividad} className={buttonVariants({variant: "destructive"})}>
+                    Eliminar Permanentemente
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
       
        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
