@@ -10,13 +10,12 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { usePoliticas, type Politica, type NivelCompliance, nivelesCompliance, type PoliticaCreationData, politicaEstados, type PoliticaEstado } from '@/contexts/PoliticasContext';
-import { useProcesos } from '@/contexts/ProcesosContext';
 import { useProcedimientos } from '@/contexts/ProcedimientosContext';
-import { useActividades, type CambioHistorial } from '@/contexts/ActividadesContext';
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { clasificacionOptions } from '@/contexts/ProcesosContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import type { CambioHistorial } from '@/contexts/ActividadesContext';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,12 +29,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
-import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, ChevronDown, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion } from "lucide-react";
+import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion } from "lucide-react";
 import { cn } from '@/lib/utils';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
@@ -185,7 +184,6 @@ export default function PoliticasPage() {
       (areaFilter === 'all' || p.areaResponsable === areaFilter)
     );
     
-    // De-duplicate based on policy ID to prevent React key errors
     return Array.from(new Map(filtered.map(item => [item.id, item])).values());
 
   }, [politicas, searchTerm, statusFilter, complianceFilter, areaFilter]);
@@ -274,41 +272,23 @@ export default function PoliticasPage() {
                      <FormField control={form.control} name="consecuenciasIncumplimiento" render={({ field }) => (<FormItem><FormLabel>Consecuencias por Incumplimiento</FormLabel><FormControl><Textarea placeholder="Describa las consecuencias..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                      <FormField control={form.control} name="referenciasLegales" render={({ field }) => (<FormItem><FormLabel>Referencias Legales/Regulatorias</FormLabel><FormControl><Textarea placeholder="Ej: Ley Federal de Protección de Datos, ISO 27001..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
 
-                    <div className="space-y-2">
-                        <Label>Vincular a Elementos</Label>
-                        <div className="grid grid-cols-1">
-                          <FormField
-                            control={form.control}
-                            name="procedimientosAsociadosIds"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs text-muted-foreground">Procedimientos</FormLabel>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4 w-4" /></Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                    <DropdownMenuLabel>Procedimientos</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <ScrollArea className="h-48">
-                                      {procedimientos.map(p => (
-                                        <DropdownMenuCheckboxItem
-                                          key={p.id}
-                                          checked={field.value?.includes(p.id)}
-                                          onCheckedChange={checked => field.onChange(checked ? [...field.value || [], p.id] : field.value?.filter(id => id !== p.id))}
-                                        >
-                                          {p.codigo} - {p.nombre}
-                                        </DropdownMenuCheckboxItem>
-                                      ))}
-                                    </ScrollArea>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                    </div>
+                    <FormField
+                        control={form.control}
+                        name="procedimientosAsociadosIds"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Vincular a Procedimientos</FormLabel>
+                            <MultiSelect
+                              options={procedimientos.filter(p => p.activo).map(p => ({ value: p.id, label: `${p.codigo} - ${p.nombre}` }))}
+                              value={field.value}
+                              onChange={(newSelected) => field.onChange(newSelected)}
+                              placeholder="Buscar y seleccionar procedimientos..."
+                            />
+                            <FormDescription>Asocie esta política con uno o más procedimientos existentes.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
                   </form>
                 </Form>
