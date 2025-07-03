@@ -51,9 +51,7 @@ const politicaFormSchema = z.object({
   nivelCompliance: z.enum(nivelesCompliance),
   fechaVigencia: z.date({ required_error: 'La fecha de vigencia es requerida.' }),
   fechaRevision: z.date({ required_error: 'La fecha de revisión es requerida.' }),
-  procesosAsociadosIds: z.array(z.string()).optional().default([]),
   procedimientosAsociadosIds: z.array(z.string()).optional().default([]),
-  actividadesAsociadasIds: z.array(z.string()).optional().default([]),
   consecuenciasIncumplimiento: z.string().optional(),
   referenciasLegales: z.string().optional(),
 }).refine(data => data.fechaRevision > data.fechaVigencia, {
@@ -113,9 +111,7 @@ export default function PoliticasPage() {
           departamentoResponsable: undefined,
           clasificacion: 'Privado',
           nivelCompliance: 'Recomendado',
-          procesosAsociadosIds: [],
           procedimientosAsociadosIds: [],
-          actividadesAsociadasIds: [],
           consecuenciasIncumplimiento: '',
           referenciasLegales: '',
         });
@@ -165,18 +161,13 @@ export default function PoliticasPage() {
       const politica = politicas.find(p => p.id === politicaId);
       if (!politica) return { isUsed: false, message: '' };
 
-      const isUsedInProcesos = (politica.procesosAsociadosIds?.length ?? 0) > 0;
       const isUsedInProcedimientos = (politica.procedimientosAsociadosIds?.length ?? 0) > 0;
-      const isUsedInActividades = (politica.actividadesAsociadasIds?.length ?? 0) > 0;
-
-      const isUsed = isUsedInProcesos || isUsedInProcedimientos || isUsedInActividades;
+      const isUsed = isUsedInProcedimientos;
       
       let message = '';
       if (isUsed) {
         const usedBy = [
-          isUsedInProcesos && 'Procesos',
-          isUsedInProcedimientos && 'Procedimientos',
-          isUsedInActividades && 'Actividades'
+          isUsedInProcedimientos && 'Procedimientos'
         ].filter(Boolean).join(', ');
         message = `La política "${politica.titulo}" está vinculada a ${usedBy} y no puede ser eliminada.`;
       }
@@ -283,10 +274,37 @@ export default function PoliticasPage() {
 
                     <div className="space-y-2">
                         <Label>Vincular a Elementos</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <FormField control={form.control} name="procesosAsociadosIds" render={({ field }) => (<FormItem><FormLabel className="text-xs text-muted-foreground">Procesos</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procesos</DropdownMenuLabel><DropdownMenuSeparator /><ScrollArea className="h-48">{procesos.map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...field.value || [], p.id] : field.value?.filter(id => id !== p.id))}>{p.codigo} - {p.proceso}</DropdownMenuCheckboxItem>))}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
-                          <FormField control={form.control} name="procedimientosAsociadosIds" render={({ field }) => (<FormItem><FormLabel className="text-xs text-muted-foreground">Procedimientos</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4" /></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Procedimientos</DropdownMenuLabel><DropdownMenuSeparator /><ScrollArea className="h-48">{procedimientos.map(p => (<DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...field.value || [], p.id] : field.value?.filter(id => id !== p.id))}>{p.codigo} - {p.nombre}</DropdownMenuCheckboxItem>))}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
-                          <FormField control={form.control} name="actividadesAsociadasIds" render={({ field }) => (<FormItem><FormLabel className="text-xs text-muted-foreground">Actividades</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Actividades</DropdownMenuLabel><DropdownMenuSeparator /><ScrollArea className="h-48">{actividades.map(a => (<DropdownMenuCheckboxItem key={a.id} checked={field.value?.includes(a.id)} onCheckedChange={checked => field.onChange(checked ? [...field.value || [], a.id] : field.value?.filter(id => id !== a.id))}>{a.codigo} - {a.nombre}</DropdownMenuCheckboxItem>))}</ScrollArea></DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+                        <div className="grid grid-cols-1">
+                          <FormField
+                            control={form.control}
+                            name="procedimientosAsociadosIds"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs text-muted-foreground">Procedimientos</FormLabel>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                    <DropdownMenuLabel>Procedimientos</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <ScrollArea className="h-48">
+                                      {procedimientos.map(p => (
+                                        <DropdownMenuCheckboxItem
+                                          key={p.id}
+                                          checked={field.value?.includes(p.id)}
+                                          onCheckedChange={checked => field.onChange(checked ? [...field.value || [], p.id] : field.value?.filter(id => id !== p.id))}
+                                        >
+                                          {p.codigo} - {p.nombre}
+                                        </DropdownMenuCheckboxItem>
+                                      ))}
+                                    </ScrollArea>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         </div>
                     </div>
                     <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar</Button></DialogFooter>
