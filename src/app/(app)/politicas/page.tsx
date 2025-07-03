@@ -160,7 +160,30 @@ export default function PoliticasPage() {
 
   async function executeDelete() {
     if (!politicaToDelete) return;
-    await deletePolitica(politicaToDelete.id);
+    
+    const checkUsage = (politicaId: string): { isUsed: boolean; message: string } => {
+      const politica = politicas.find(p => p.id === politicaId);
+      if (!politica) return { isUsed: false, message: '' };
+
+      const isUsedInProcesos = (politica.procesosAsociadosIds?.length ?? 0) > 0;
+      const isUsedInProcedimientos = (politica.procedimientosAsociadosIds?.length ?? 0) > 0;
+      const isUsedInActividades = (politica.actividadesAsociadasIds?.length ?? 0) > 0;
+
+      const isUsed = isUsedInProcesos || isUsedInProcedimientos || isUsedInActividades;
+      
+      let message = '';
+      if (isUsed) {
+        const usedBy = [
+          isUsedInProcesos && 'Procesos',
+          isUsedInProcedimientos && 'Procedimientos',
+          isUsedInActividades && 'Actividades'
+        ].filter(Boolean).join(', ');
+        message = `La política "${politica.titulo}" está vinculada a ${usedBy} y no puede ser eliminada.`;
+      }
+      return { isUsed, message };
+    };
+
+    await deletePolitica(politicaToDelete.id, checkUsage);
     setIsConfirmDeleteDialogOpen(false);
     setPoliticaToDelete(null);
   }

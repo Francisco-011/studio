@@ -45,6 +45,8 @@ export interface Politica {
   referenciasLegales?: string;
   historialDeCambios?: CambioHistorial[];
   procesosAsociadosIds?: string[];
+  procedimientosAsociadosIds?: string[];
+  actividadesAsociadasIds?: string[];
 }
 
 export type PoliticaCreationData = Omit<Politica, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios'>;
