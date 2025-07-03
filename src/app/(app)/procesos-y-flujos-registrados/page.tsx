@@ -45,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, Info, ChevronRight, Save, History, Workflow, Ban, Calculator, CalendarCheck2, ListOrdered } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, Info, ChevronRight, Save, History, Workflow, Ban, Calculator, CalendarCheck2, ListOrdered, Loader2 } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -717,33 +717,33 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                       <span className={cn("text-base font-medium flex items-center gap-2", isInactive && "italic text-muted-foreground")}>
                                                         {procedure.nombre} 
                                                         <Badge
-                                                          className={cn("text-white border-transparent", {
-                                                            "bg-sky-600 hover:bg-sky-700": procedure.clasificacion === 'Público',
-                                                            "bg-purple-600 hover:bg-purple-700": procedure.clasificacion === 'Privado',
-                                                            "bg-red-600 hover:bg-red-700": procedure.clasificacion === 'Confidencial',
-                                                          })}
-                                                        >
-                                                            {procedure.clasificacion}
+                                                            className={cn("text-white border-transparent", {
+                                                              "bg-sky-600 hover:bg-sky-700": procedure.clasificacion === 'Público',
+                                                              "bg-purple-600 hover:bg-purple-700": procedure.clasificacion === 'Privado',
+                                                              "bg-red-600 hover:bg-red-700": procedure.clasificacion === 'Confidencial',
+                                                            })}
+                                                          >
+                                                              {procedure.clasificacion}
                                                         </Badge>
                                                         {isInactive && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent">Inactivo</Badge>}
                                                       </span>
                                                   </div>
                                                   <div
-                                                      role="button"
-                                                      tabIndex={0}
-                                                      className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mr-4")}
-                                                      onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          handleEditProcedure(procedure.nombre);
-                                                      }}
-                                                      onKeyDown={(e) => {
-                                                          if (e.key === 'Enter' || e.key === ' ') {
-                                                              e.stopPropagation();
-                                                              handleEditProcedure(procedure.nombre);
-                                                          }
-                                                      }}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mr-4")}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditProcedure(procedure.nombre);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.stopPropagation();
+                                                            handleEditProcedure(procedure.nombre);
+                                                        }
+                                                    }}
                                                   >
-                                                      Editar
+                                                    Editar
                                                   </div>
                                                 </div>
                                               </AccordionTrigger>
@@ -910,6 +910,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
