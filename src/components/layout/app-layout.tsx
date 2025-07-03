@@ -49,7 +49,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-sidebar-primary group-data-[collapsible=icon]:hidden">
+            <h1 className="text-3xl font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
               STUFFACTORY
             </h1>
           </div>
