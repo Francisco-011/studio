@@ -45,7 +45,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, Info, ChevronRight, Save, History, Workflow, Ban, Calculator, CalendarCheck2 } from "lucide-react";
+import { Database, Search, Trash2, AlertTriangle, FileText, FileX, Edit2, RotateCcw, Filter, ChevronsUpDown, ArrowUp, ArrowDown, Info, ChevronRight, Save, History, Workflow, Ban, Calculator, CalendarCheck2, ListOrdered } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -80,7 +80,8 @@ import type { Moneda } from '@/contexts/AccionesContext';
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 type ActivityCountFilterType = 'all' | 'none' | 'some';
-type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'updatedAt' | 'activo' | 'numActividades' | 'tiempoEstimado' | 'costoEstimado';
+type ProcedureCountFilterType = 'all' | 'none' | 'some';
+type SortableProcessKeys = 'proceso' | 'area' | 'departamento' | 'puesto' | 'updatedAt' | 'activo' | 'numProcedimientos' | 'numActividades' | 'tiempoEstimado' | 'costoEstimado';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -134,6 +135,7 @@ export default function ProcesosYFlujosRegistradosPage() {
   const [selectedDeptoFilter, setSelectedDeptoFilter] = useState('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState('all');
   const [processStatusFilter, setProcessStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [procedureCountFilter, setProcedureCountFilter] = useState<ProcedureCountFilterType>('all');
   const [activityCountFilter, setActivityCountFilter] = useState<ActivityCountFilterType>('all');
   const [activityStatusFilter, setActivityStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   
@@ -230,7 +232,7 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig]);
+  }, [searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, procedureCountFilter, activityCountFilter, sortConfig]);
   
   const puestosMap = useMemo(() => new Map(puestos.map(p => [p.id, p])), [puestos]);
   const politicasMap = useMemo(() => new Map(allPoliticas.map(p => [p.id, p])), [allPoliticas]);
@@ -255,6 +257,12 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (selectedDeptoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.departamento === selectedDeptoFilter);
     if (selectedPuestoFilter !== 'all') dataToFilter = dataToFilter.filter(proc => proc.puesto === selectedPuestoFilter);
     if (processStatusFilter !== 'all') dataToFilter = dataToFilter.filter(proc => (processStatusFilter === 'active' ? proc.activo !== false : proc.activo === false));
+    if (procedureCountFilter !== 'all') {
+        dataToFilter = dataToFilter.filter(proc => {
+            const hasProcedures = proc.procedimientoOrder && proc.procedimientoOrder.length > 0;
+            return procedureCountFilter === 'some' ? hasProcedures : !hasProcedures;
+        });
+    }
     if (activityCountFilter !== 'all') {
         dataToFilter = dataToFilter.filter(proc => {
             const procedureIds = proc.procedimientoOrder || [];
@@ -278,6 +286,7 @@ export default function ProcesosYFlujosRegistradosPage() {
         }
 
         if (sortConfig.key === 'numActividades') { valA = getTotalActivities(a); valB = getTotalActivities(b); }
+        else if (sortConfig.key === 'numProcedimientos') { valA = a.procedimientoOrder?.length || 0; valB = b.procedimientoOrder?.length || 0; }
         else if (sortConfig.key === 'updatedAt') { valA = a.updatedAt || 0; valB = b.updatedAt || 0; }
         else if (sortConfig.key === 'activo') { valA = a.activo !== false; valB = b.activo !== false; }
         else if (sortConfig.key === 'tiempoEstimado') { valA = a.tiempoEstimado || 0; valB = b.tiempoEstimado || 0;}
@@ -295,7 +304,7 @@ export default function ProcesosYFlujosRegistradosPage() {
        dataToFilter.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return dataToFilter;
-  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, activityCountFilter, sortConfig, allProcedimientos]);
+  }, [allCapturedData, searchTerm, selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, processStatusFilter, procedureCountFilter, activityCountFilter, sortConfig, allProcedimientos]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -559,7 +568,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     }
   };
 
-  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); };
+  const clearFilters = () => { setSearchTerm(''); setSelectedAreaFilter('all'); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); setProcessStatusFilter('all'); setActivityCountFilter('all'); setProcedureCountFilter('all'); };
 
   if (isLoadingProcesos || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos) return <div className="container mx-auto py-8"><div className="flex items-center justify-center min-h-[400px]"><Database className="h-16 w-16 text-muted-foreground animate-pulse" /><p className="ml-4 text-lg text-muted-foreground">Cargando...</p></div></div>;
 
@@ -587,8 +596,9 @@ export default function ProcesosYFlujosRegistradosPage() {
                 </Select>
               </div>
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mt-4 items-end">
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
                <div className="w-full"><Label htmlFor="status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado del Proceso</Label><Select value={processStatusFilter} onValueChange={(v: 'all' | 'active' | 'inactive') => setProcessStatusFilter(v)}><SelectTrigger id="status-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Activos</SelectItem><SelectItem value="inactive">Inactivos</SelectItem></SelectContent></Select></div>
+                <div className="w-full"><Label htmlFor="procedure-filter" className="text-xs font-medium text-muted-foreground ml-1">Conteo Procedimientos</Label><Select value={procedureCountFilter} onValueChange={(v: ProcedureCountFilterType) => setProcedureCountFilter(v)}><SelectTrigger id="procedure-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Procedimientos</SelectItem><SelectItem value="none">Sin Procedimientos</SelectItem></SelectContent></Select></div>
                 <div className="w-full"><Label htmlFor="activity-filter" className="text-xs font-medium text-muted-foreground ml-1">Conteo Actividades</Label><Select value={activityCountFilter} onValueChange={(v: ActivityCountFilterType) => setActivityCountFilter(v)}><SelectTrigger id="activity-filter"><SelectValue placeholder="Todos"/></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="some">Con Actividades</SelectItem><SelectItem value="none">Sin Actividades</SelectItem></SelectContent></Select></div>
                 <div className="w-full"><Label htmlFor="activity-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado de Actividades</Label><Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as any)}><SelectTrigger id="activity-status-filter"><SelectValue placeholder="Todas"/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="active">Solo Activas</SelectItem><SelectItem value="inactive">Solo Inactivas</SelectItem></SelectContent></Select></div>
                 <Button onClick={clearFilters} variant="link" className="mt-3 px-0 text-sm self-end col-start-auto">Limpiar Todos los Filtros</Button>
@@ -607,6 +617,7 @@ export default function ProcesosYFlujosRegistradosPage() {
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('activo')}><div className="flex items-center justify-center">Estado {getSortIcon('activo')}</div></TableHead>
               <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('tiempoEstimado')}><div className="flex items-center justify-center">Tiempo Est. {getSortIcon('tiempoEstimado')}</div></TableHead>
               <TableHead className="text-center w-[120px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('costoEstimado')}><div className="flex items-center justify-center">Costo Est. {getSortIcon('costoEstimado')}</div></TableHead>
+              <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numProcedimientos')}><div className="flex items-center justify-center">Proced. {getSortIcon('numProcedimientos')}</div></TableHead>
               <TableHead className="text-center w-[80px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('numActividades')}><div className="flex items-center justify-center">Activ. {getSortIcon('numActividades')}</div></TableHead>
               <TableHead className="w-[140px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('updatedAt')}><div className="flex items-center">Últ. Modif. {getSortIcon('updatedAt')}</div></TableHead>
               <TableHead className="text-right w-[180px]">Acciones</TableHead>
@@ -647,6 +658,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                     <TableCell className="text-center text-xs">
                         {proc.costoEstimado !== undefined ? `${proc.costoEstimado.toFixed(2)} ${proc.monedaCosto || ''}` : '-'}
                     </TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{proc.procedimientoOrder?.length || 0}</Badge></TableCell>
                     <TableCell className="text-center"><Badge variant="outline" className="cursor-default">{totalActivitiesCount}</Badge></TableCell>
                     <TableCell className="text-xs">{proc.updatedAt && isValid(new Date(proc.updatedAt)) ? format(new Date(proc.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}</TableCell>
                     <TableCell className="text-right space-x-1">
@@ -898,6 +910,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     
 
     
+
 
 
 
