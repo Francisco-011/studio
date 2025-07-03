@@ -63,9 +63,7 @@ type PoliticaFormData = z.infer<typeof politicaFormSchema>;
 
 export default function PoliticasPage() {
   const { politicas, addPolitica, updatePolitica, deletePolitica, updatePoliticaStatus, isLoadingPoliticas } = usePoliticas();
-  const { procesos, isLoadingProcesos } = useProcesos();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
-  const { actividades, isLoadingActividades } = useActividades();
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { hasPermission } = usePermissions();
@@ -179,16 +177,20 @@ export default function PoliticasPage() {
     setPoliticaToDelete(null);
   }
 
-  const filteredPoliticas = useMemo(() => 
-    politicas.filter(p => 
+  const filteredPoliticas = useMemo(() => {
+    const filtered = politicas.filter(p => 
       (p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (statusFilter === 'all' || p.estado === statusFilter) &&
       (complianceFilter === 'all' || p.nivelCompliance === complianceFilter) &&
       (areaFilter === 'all' || p.areaResponsable === areaFilter)
-    )
-  , [politicas, searchTerm, statusFilter, complianceFilter, areaFilter]);
+    );
+    
+    // De-duplicate based on policy ID to prevent React key errors
+    return Array.from(new Map(filtered.map(item => [item.id, item])).values());
 
-  const isLoadingAll = isLoadingPoliticas || isLoadingProcesos || isLoadingProcedimientos || isLoadingActividades || isLoadingAreas || isLoadingDepartamentos;
+  }, [politicas, searchTerm, statusFilter, complianceFilter, areaFilter]);
+
+  const isLoadingAll = isLoadingPoliticas || isLoadingProcedimientos || isLoadingAreas || isLoadingDepartamentos;
 
   if (isLoadingAll) {
     return (
