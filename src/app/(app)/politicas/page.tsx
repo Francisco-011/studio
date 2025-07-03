@@ -32,7 +32,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion } from "lucide-react";
+import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '@/components/ui/multi-select';
 
@@ -60,6 +60,14 @@ const politicaFormSchema = z.object({
 
 type PoliticaFormData = z.infer<typeof politicaFormSchema>;
 
+type SortableKeys = 'codigo' | 'titulo' | 'estado' | 'nivelCompliance' | 'fechaRevision' | 'numProcedimientos';
+type SortDirection = 'ascending' | 'descending';
+
+interface SortConfig {
+  key: SortableKeys;
+  direction: SortDirection;
+}
+
 export default function PoliticasPage() {
   const { politicas, addPolitica, updatePolitica, deletePolitica, updatePoliticaStatus, isLoadingPoliticas } = usePoliticas();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
@@ -78,6 +86,7 @@ export default function PoliticasPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | PoliticaEstado>('all');
   const [complianceFilter, setComplianceFilter] = useState<'all' | NivelCompliance>('all');
   const [areaFilter, setAreaFilter] = useState<'all' | string>('all');
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
 
   const form = useForm<PoliticaFormData>({
@@ -176,17 +185,61 @@ export default function PoliticasPage() {
     setPoliticaToDelete(null);
   }
 
+  const requestSort = (key: SortableKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortableKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    }
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
   const filteredPoliticas = useMemo(() => {
-    const filtered = politicas.filter(p => 
+    let filtered = politicas.filter(p => 
       (p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (statusFilter === 'all' || p.estado === statusFilter) &&
       (complianceFilter === 'all' || p.nivelCompliance === complianceFilter) &&
       (areaFilter === 'all' || p.areaResponsable === areaFilter)
     );
     
+    if (sortConfig) {
+        filtered.sort((a, b) => {
+            let valA: any;
+            let valB: any;
+
+            if (sortConfig.key === 'numProcedimientos') {
+                valA = a.procedimientosAsociadosIds?.length || 0;
+                valB = b.procedimientosAsociadosIds?.length || 0;
+            } else if (sortConfig.key === 'fechaRevision') {
+                valA = a.fechaRevision ? parseISO(a.fechaRevision).getTime() : 0;
+                valB = b.fechaRevision ? parseISO(b.fechaRevision).getTime() : 0;
+            } else {
+                valA = a[sortConfig.key as keyof Politica];
+                valB = b[sortConfig.key as keyof Politica];
+            }
+            
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                valA = valA.toLowerCase();
+                valB = valB.toLowerCase();
+            }
+
+            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
+    } else {
+        filtered.sort((a,b) => (a.codigo || '').localeCompare(b.codigo || ''));
+    }
+    
     return Array.from(new Map(filtered.map(item => [item.id, item])).values());
 
-  }, [politicas, searchTerm, statusFilter, complianceFilter, areaFilter]);
+  }, [politicas, searchTerm, statusFilter, complianceFilter, areaFilter, sortConfig]);
 
   const isLoadingAll = isLoadingPoliticas || isLoadingProcedimientos || isLoadingAreas || isLoadingDepartamentos;
 
@@ -300,11 +353,12 @@ export default function PoliticasPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Nivel Cumplimiento</TableHead>
-                    <TableHead>Próx. Revisión</TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('codigo')}><div className="flex items-center">Código{getSortIcon('codigo')}</div></TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('titulo')}><div className="flex items-center">Título{getSortIcon('titulo')}</div></TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('estado')}><div className="flex items-center">Estado{getSortIcon('estado')}</div></TableHead>
+                    <TableHead className="cursor-pointer text-center hover:bg-muted/50 group" onClick={() => requestSort('numProcedimientos')}><div className="flex items-center justify-center">Procedimientos{getSortIcon('numProcedimientos')}</div></TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nivelCompliance')}><div className="flex items-center">Nivel Cumplimiento{getSortIcon('nivelCompliance')}</div></TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('fechaRevision')}><div className="flex items-center">Próx. Revisión{getSortIcon('fechaRevision')}</div></TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -325,6 +379,9 @@ export default function PoliticasPage() {
                           {politica.estado}
                          </Badge>
                       </TableCell>
+                       <TableCell className="text-center">
+                        <Badge variant="secondary">{politica.procedimientosAsociadosIds?.length || 0}</Badge>
+                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
