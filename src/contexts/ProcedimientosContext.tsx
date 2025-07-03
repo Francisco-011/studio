@@ -135,32 +135,17 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
     const changes: CambioHistorial[] = [];
     const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcion', 'clasificacion', 'sistemasUtilizados', 'auditFrequencyInDays', 'tiempoEstimado', 'costoEstimado', 'politicasAsociadasIds', 'monedaCosto', 'procesoId'];
     
-    const politicasMap = new Map(politicas.map(p => [p.id, p.codigo]));
-
     fieldsToCompare.forEach(key => {
-        const originalValue = originalProcedimiento[key as keyof Procedimiento] ?? '';
-        const newValue = data[key as keyof ProcedimientoCreationData] ?? '';
+        const originalValue = originalProcedimiento[key as keyof Procedimiento];
+        const newValue = data[key as keyof ProcedimientoCreationData];
         
         if (JSON.stringify(originalValue) !== JSON.stringify(newValue)) {
-            let beforeValue: string;
-            let afterValue: string;
-
-            if (key === 'politicasAsociadasIds') {
-                beforeValue = (originalValue as string[] || []).map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
-                afterValue = (newValue as string[] || []).map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
-            } else {
-                beforeValue = Array.isArray(originalValue) ? originalValue.join(', ') : String(originalValue);
-                afterValue = Array.isArray(newValue) ? newValue.join(', ') : String(newValue);
-            }
-
-            if (beforeValue !== afterValue) {
-                changes.push({
-                    timestamp: new Date().toISOString(),
-                    field: key,
-                    before: beforeValue || 'N/A',
-                    after: afterValue || 'N/A'
-                });
-            }
+             changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: originalValue ?? 'N/A',
+                after: newValue ?? 'N/A'
+             });
         }
     });
 
@@ -179,11 +164,21 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
       console.error("Error updating procedimiento: ", e);
       toast({ title: "Error", description: "No se pudo actualizar el procedimiento.", variant: "destructive"});
     }
-  }, [procedimientos, addLogEntry, politicas]);
+  }, [procedimientos, addLogEntry]);
   
   const deleteProcedimiento = useCallback(async (id: string) => {
     const procedimientoToDelete = procedimientos.find(p => p.id === id);
     if (!procedimientoToDelete) return;
+
+    if (procedimientoToDelete.activityOrder && procedimientoToDelete.activityOrder.length > 0) {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: `El procedimiento "${procedimientoToDelete.nombre}" tiene ${procedimientoToDelete.activityOrder.length} actividad(es) asignada(s). Por favor, remuévalas primero desde el Panel Jerárquico.`,
+            variant: "destructive",
+            duration: 7000
+        });
+        return;
+    }
 
     try {
         await deleteDoc(doc(db, PROCEDIMIENTOS_COLLECTION, id));

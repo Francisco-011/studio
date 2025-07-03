@@ -28,9 +28,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
-import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ChevronDown, ListOrdered, History, CalendarCheck2, Calculator } from "lucide-react";
+import { Workflow, Search, PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, ChevronsUpDown, ArrowUp, ArrowDown, ListOrdered, History, CalendarCheck2, Calculator } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import type { Moneda } from '@/contexts/AccionesContext';
@@ -101,6 +100,10 @@ export default function ProcedimientosPage() {
   const [isRecalculating, setIsRecalculating] = useState<string | null>(null);
 
   const [similarProcedimientoWarning, setSimilarProcedimientoWarning] = useState<string | null>(null);
+  
+  const procesosMap = useMemo(() => new Map(procesos.map(p => [p.id, p.proceso])), [procesos]);
+  const politicasMap = useMemo(() => new Map(politicas.map(p => [p.id, p.codigo])), [politicas]);
+
 
   const form = useForm<ProcedimientoFormData>({
     resolver: zodResolver(procedimientoFormSchema),
@@ -248,19 +251,9 @@ export default function ProcedimientosPage() {
 
   async function executeDelete() {
     if (!procedimientoToDelete) return;
-
-    if (procedimientoToDelete.activityOrder && procedimientoToDelete.activityOrder.length > 0) {
-      toast({
-        title: "Eliminación Bloqueada",
-        description: `El procedimiento "${procedimientoToDelete.nombre}" tiene ${procedimientoToDelete.activityOrder.length} actividad(es) asignada(s) y no puede ser eliminado.`,
-        variant: "destructive",
-        duration: 7000
-      });
-      setIsConfirmDeleteDialogOpen(false);
-      setProcedimientoToDelete(null);
-      return;
-    }
-
+    
+    await deleteProcedimiento(procedimientoToDelete.id);
+    
     const parentProcess = procesos.find(p => p.id === procedimientoToDelete.procesoId);
     if (parentProcess) {
         const updatedOrder = (parentProcess.procedimientoOrder || []).filter(id => id !== procedimientoToDelete.id);
@@ -277,14 +270,12 @@ export default function ProcedimientosPage() {
       }
     }
 
-    await deleteProcedimiento(procedimientoToDelete.id);
     setProcedimientoToDelete(null);
     setIsConfirmDeleteDialogOpen(false);
   }
 
   const sortedAndFilteredData = useMemo(() => {
     setCurrentPage(1);
-    const procesosMap = new Map(procesos.map(p => [p.id, p.proceso]));
     
     let filtered = procedimientos
       .map(p => ({ ...p, procesoPadre: procesosMap.get(p.procesoId) || 'N/A' }))
@@ -330,7 +321,7 @@ export default function ProcedimientosPage() {
       filtered.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
     }
     return filtered;
-  }, [procedimientos, procesos, searchTerm, procesoFilter, clasificacionFilter, statusFilter, sortConfig]);
+  }, [procedimientos, procesosMap, searchTerm, procesoFilter, clasificacionFilter, statusFilter, sortConfig]);
 
   const totalPages = Math.ceil(sortedAndFilteredData.length / ITEMS_PER_PAGE);
   const paginatedData = useMemo(() => sortedAndFilteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [sortedAndFilteredData, currentPage]);
@@ -534,8 +525,8 @@ export default function ProcedimientosPage() {
                 <FormField control={form.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione..."/></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionados <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Sistemas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{sistemas.map(s => <DropdownMenuCheckboxItem key={s.id} checked={field.value?.includes(s.nombre)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), s.nombre] : (field.value || []).filter(name => name !== s.nombre))}>{s.nombre}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage/></FormItem>)}/>
-                <FormField control={form.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-between font-normal">{field.value?.length || 0} seleccionadas <ChevronDown className="ml-2 h-4"/></Button></DropdownMenuTrigger><DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]"><DropdownMenuLabel>Políticas Disponibles</DropdownMenuLabel><DropdownMenuSeparator/>{politicas.filter(p => p.estado === 'Aprobada').map(p => <DropdownMenuCheckboxItem key={p.id} checked={field.value?.includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), p.id] : (field.value || []).filter(id => id !== p.id))}>{p.codigo} - {p.titulo}</DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="sistemasUtilizados" render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} value={field.value} onChange={field.onChange} placeholder='Seleccione sistemas...'/><FormMessage/></FormItem>)}/>
+                <FormField control={form.control} name="politicasAsociadasIds" render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} value={field.value} onChange={field.onChange} placeholder='Vincular políticas...'/><FormMessage /></FormItem>)} />
               </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <FormField
@@ -622,14 +613,29 @@ export default function ProcedimientosPage() {
                 <TableBody>
                   {procedimientoForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
-                    .map((cambio, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
-                      <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
-                      <TableCell className="text-xs">{String(cambio.before)}</TableCell>
-                      <TableCell className="text-xs font-semibold">{String(cambio.after)}</TableCell>
-                    </TableRow>
-                  ))}
+                    .map((cambio, index) => {
+                        let beforeText = String(cambio.before ?? 'N/A');
+                        let afterText = String(cambio.after ?? 'N/A');
+
+                        if (cambio.field === 'procesoId') {
+                            beforeText = procesosMap.get(cambio.before) || beforeText;
+                            afterText = procesosMap.get(cambio.after) || afterText;
+                        } else if (cambio.field === 'politicasAsociadasIds') {
+                            const beforeIds = Array.isArray(cambio.before) ? cambio.before : [];
+                            const afterIds = Array.isArray(cambio.after) ? cambio.after : [];
+                            beforeText = beforeIds.map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+                            afterText = afterIds.map(id => politicasMap.get(id) || id).join(', ') || 'Ninguna';
+                        }
+                        
+                        return (
+                        <TableRow key={index}>
+                          <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
+                          <TableCell className="text-sm capitalize">{cambio.field.replace(/([A-Z])/g, ' $1').trim()}</TableCell>
+                          <TableCell className="text-xs">{beforeText}</TableCell>
+                          <TableCell className="text-xs font-semibold">{afterText}</TableCell>
+                        </TableRow>
+                        )
+                    })}
                 </TableBody>
               </Table>
             ) : (
