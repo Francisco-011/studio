@@ -159,6 +159,11 @@ export default function ProcedimientosPage() {
         setProcesoFilter(processFromQuery);
         form.setValue('procesoId', processFromQuery);
     }
+
+    const searchFromQuery = searchParams.get('search');
+    if (searchFromQuery) {
+        setSearchTerm(searchFromQuery);
+    }
   }, [searchParams, form]);
 
   useEffect(() => {
