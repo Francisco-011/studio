@@ -223,6 +223,42 @@ export default function PanelJerarquicoPage() {
         let finalTreeNodes: TreeNode[] = [];
         let areaNodesMap: Record<string, TreeNode & { deptosMap: Record<string, TreeNode & { puestosMap: Record<string, TreeNode & { processList: CapturedProcess[] } & { payload: any } > }> }> = {};
 
+        // 1. PRE-POPULATE the map with all Areas, Deptos, and Puestos that match the filters.
+        const activeAreas = areas.filter(a => selectedAreaFilter === 'all' || a.nombre === selectedAreaFilter);
+        activeAreas.forEach(area => {
+            if (!areaNodesMap[area.id]) {
+                areaNodesMap[area.id] = { id: `area-${area.id}`, name: area.nombre, type: 'area', originalId: area.id, deptosMap: {} };
+            }
+
+            const deptsInArea = departamentos.filter(d => d.areaId === area.id && (selectedDeptoFilter === 'all' || d.nombre === selectedDeptoFilter));
+            deptsInArea.forEach(depto => {
+                if (!areaNodesMap[area.id].deptosMap[depto.id]) {
+                    areaNodesMap[area.id].deptosMap[depto.id] = { id: `depto-${depto.id}`, name: depto.nombre, type: 'departamento', originalId: depto.id, puestosMap: {}, payload: depto };
+                }
+
+                const puestosInDepto = puestos.filter(p => p.departamentoId === depto.id && (selectedPuestoFilter === 'all' || p.nombre === selectedPuestoFilter));
+                puestosInDepto.forEach(puesto => {
+                     if (!areaNodesMap[area.id].deptosMap[depto.id].puestosMap[puesto.id]) {
+                        areaNodesMap[area.id].deptosMap[depto.id].puestosMap[puesto.id] = { id: `puesto-${puesto.id}`, name: puesto.nombre, type: 'puesto', originalId: puesto.id, processList: [], payload: puesto };
+                    }
+                });
+            });
+            
+            const puestosWithoutDepto = puestos.filter(p => p.areaId === area.id && !p.departamentoId && (selectedPuestoFilter === 'all' || p.nombre === selectedPuestoFilter) && (selectedDeptoFilter === 'all'));
+            if(puestosWithoutDepto.length > 0) {
+                const unassignedDeptoId = `unassigned-depto-${area.id}`;
+                if (!areaNodesMap[area.id].deptosMap[unassignedDeptoId]) {
+                    areaNodesMap[area.id].deptosMap[unassignedDeptoId] = { id: `depto-${unassignedDeptoId}`, name: 'Sin Departamento', type: 'departamento', originalId: unassignedDeptoId, puestosMap: {}, payload: {} };
+                }
+                puestosWithoutDepto.forEach(puesto => {
+                     if (!areaNodesMap[area.id].deptosMap[unassignedDeptoId].puestosMap[puesto.id]) {
+                        areaNodesMap[area.id].deptosMap[unassignedDeptoId].puestosMap[puesto.id] = { id: `puesto-${puesto.id}`, name: puesto.nombre, type: 'puesto', originalId: puesto.id, processList: [], payload: puesto };
+                    }
+                });
+            }
+        });
+
+        // 2. NOW, add processes to the pre-populated structure
         let filteredProcesses = capturedProcesses.filter(proc => 
             treeProcessStatusFilter === 'all' || 
             (treeProcessStatusFilter === 'active' && proc.activo !== false) || 
@@ -230,33 +266,25 @@ export default function PanelJerarquicoPage() {
         );
         
         filteredProcesses.forEach(proc => {
-            const areaObj = areas.find(a => a.nombre === proc.area);
-            if (selectedAreaFilter !== 'all' && proc.area !== selectedAreaFilter) return;
+            const puestoObj = puestos.find(p => p.id === proc.puestoId);
+            if (!puestoObj) return;
 
-            const deptoObj = departamentos.find(d => d.nombre === proc.departamento && d.areaId === areaObj?.id);
-            if (selectedDeptoFilter !== 'all' && proc.departamento !== selectedDeptoFilter) return;
+            const areaObj = areas.find(a => a.id === puestoObj.areaId);
+            if (!areaObj || !areaNodesMap[areaObj.id]) return;
 
-            const puestoObj = puestos.find(p => p.nombre === proc.puesto && p.areaId === areaObj?.id);
-            if (selectedPuestoFilter !== 'all' && proc.puesto !== selectedPuestoFilter) return;
+            const deptoObj = puestoObj.departamentoId ? departamentos.find(d => d.id === puestoObj.departamentoId) : null;
             
-            const areaId = areaObj?.id || 'unassigned-area';
-            if (!areaNodesMap[areaId]) {
-                areaNodesMap[areaId] = { id: `area-${areaId}`, name: areaObj?.nombre || 'Sin Área', type: 'area', originalId: areaId, deptosMap: {} };
-            }
+            const deptoId = deptoObj ? deptoObj.id : `unassigned-depto-${areaObj.id}`;
+            const deptoNode = areaNodesMap[areaObj.id].deptosMap[deptoId];
+            if (!deptoNode) return;
 
-            const deptoId = deptoObj?.id || 'unassigned-depto';
-            if (!areaNodesMap[areaId].deptosMap[deptoId]) {
-                areaNodesMap[areaId].deptosMap[deptoId] = { id: `depto-${deptoId}`, name: deptoObj?.nombre || 'Sin Departamento', type: 'departamento', originalId: deptoId, puestosMap: {}, payload: deptoObj };
+            const puestoNode = deptoNode.puestosMap[puestoObj.id];
+            if (puestoNode) {
+                puestoNode.processList.push(proc);
             }
-
-            const puestoId = puestoObj?.id || 'unassigned-puesto';
-            if (!areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId]) {
-                areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId] = { id: `puesto-${puestoId}`, name: puestoObj?.nombre || 'Sin Puesto', type: 'puesto', originalId: puestoId, processList: [], payload: puestoObj };
-            }
-            
-            areaNodesMap[areaId].deptosMap[deptoId].puestosMap[puestoId].processList.push(proc);
         });
-
+        
+        // 3. FINALLY, build the tree from the map. Crucially, we no longer filter out empty children here.
         Object.values(areaNodesMap).forEach(areaNode => {
             let deptoChildren: TreeNode[] = [];
             Object.values(areaNode.deptosMap).forEach(deptoNode => {
@@ -271,7 +299,6 @@ export default function PanelJerarquicoPage() {
                     }
                     
                     const orderForThisPuesto = puestoData?.procesoOrder || [];
-                    
                     const orderedProcesses = [...puestoNode.processList].sort((a, b) => {
                         const indexA = orderForThisPuesto.indexOf(a.id);
                         const indexB = orderForThisPuesto.indexOf(b.id);
@@ -284,7 +311,7 @@ export default function PanelJerarquicoPage() {
                     const processWithIndices = orderedProcesses.map((proc, index) => ({...proc, sourceIndex: index}));
                      
                     const processTreeNodes = processWithIndices.map((proc) => {
-                        const processPolicies = (proc.politicasAsociadas || [])
+                         const processPolicies = (proc.politicasAsociadas || [])
                             .map(link => {
                                 const pol = politicas.find(p => p.id === link.policyId);
                                 return pol ? { ...pol, linkType: link.linkType } : null;
@@ -299,8 +326,8 @@ export default function PanelJerarquicoPage() {
                         const procedureNodes = (proc.procedimientoOrder || [])
                             .map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p)
                             .map((procedure, procIdx) => {
-                                const procedurePolicies = (procedure.politicasAsociadas || [])
-                                  .map(pol => politicas.find(p => p.id === pol.policyId)).filter((p): p is Politica => !!p)
+                                const procedurePolicies = (procedure.politicasAsociadasIds || [])
+                                  .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
                                   .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
                                 
                                 const activityNodes = (procedure.activityOrder || [])
@@ -333,24 +360,20 @@ export default function PanelJerarquicoPage() {
                         return {
                             id: `proceso-${proc.id}`,
                             name: proc.proceso, type: 'proceso' as const, originalId: proc.id, activo: proc.activo,
-                            children: [...processPolicies, ...procedureNodes], payload: { ...proc, sourceParentId: puestoNode.originalId }
+                            children: [...processPolicies, ...procedureNodes], payload: { ...proc, sourceParentId: puestoNode.originalId, sourceIndex: proc.sourceIndex }
                         };
                     });
                     
-                    if (processTreeNodes.length > 0) {
-                        puestoNode.children = processTreeNodes;
-                        puestoChildren.push(puestoNode);
-                    }
+                    puestoNode.children = processTreeNodes;
+                    puestoChildren.push(puestoNode);
                 });
-                if (puestoChildren.length > 0) {
-                    deptoNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
-                    deptoChildren.push(deptoNode);
-                }
+                
+                deptoNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
+                deptoChildren.push(deptoNode);
             });
-            if (deptoChildren.length > 0) {
-                areaNode.children = deptoChildren.sort((a,b) => a.name.localeCompare(b.name));
-                finalTreeNodes.push(areaNode);
-            }
+            
+            areaNode.children = deptoChildren.sort((a,b) => a.name.localeCompare(b.name));
+            finalTreeNodes.push(areaNode);
         });
 
         return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
@@ -366,17 +389,14 @@ export default function PanelJerarquicoPage() {
                 const selfMatches = node.name.toLowerCase().includes(lowerTerm) || 
                                     (node.type === 'politica' && node.payload?.codigo && node.payload.codigo.toLowerCase().includes(lowerTerm));
 
-                if (selfMatches) {
-                    return node; 
-                }
-
                 if (node.children) {
                     const filteredChildren = recursiveFilter(node.children);
-                    if (filteredChildren.length > 0) {
+                    if (filteredChildren.length > 0 || selfMatches) {
                         return { ...node, children: filteredChildren };
                     }
                 }
                 
+                if (selfMatches) return { ...node, children: [] }; // Return node without children if only it matches
                 return null;
             }).filter((node): node is TreeNode => node !== null);
         };
@@ -948,7 +968,7 @@ export default function PanelJerarquicoPage() {
                       <div className="sm:col-span-2"> <Select value={assignmentCountFilter} onValueChange={(v) => setAssignmentCountFilter(v as AssignmentCountFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas (Asignación)</SelectItem><SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem><SelectItem value="assigned">Asignadas ({assignedCount})</SelectItem></SelectContent></Select></div>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act) => (<div key={act.id} draggable={act.activa} onDragStart={(e) => act.activa && handleDragStart(e, {type: 'activityFromPool', id: act.id, sourceParentId: 'pool' })} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : `${assignmentCounts.get(act.id) || 0} asignaciones`}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span><Badge variant="outline" className="ml-2 font-mono">{assignmentCounts.get(act.id) || 0}</Badge> {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
+                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act) => (<div key={act.id} draggable={act.activa} onDragStart={(e) => act.activa && handleDragStart(e, {type: 'activityFromPool', id: act.id, sourceParentId: 'pool' })} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : `${assignmentCounts.get(act.id) || 0} asignaciones`}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span><Badge variant="secondary" className="ml-2 font-mono">{assignmentCounts.get(act.id) || 0}</Badge> {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
                 </Card>
               </div>
         </CardContent>
@@ -1024,4 +1044,5 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
