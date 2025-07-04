@@ -426,7 +426,7 @@ export default function ProcesosYFlujosRegistradosPage() {
     if (Array.isArray(cellData)) {
       const joinedString = cellData.join('; ');
       if (joinedString.includes(',') || joinedString.includes('"') || joinedString.includes('\n')) {
-        return `"${joinedString.replace(/"/g, '""')}"`;
+        return `"${stringValue.replace(/"/g, '""')}"`;
       }
       return joinedString;
     }
@@ -682,7 +682,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               <DetailDisplay title="Objetivo" value={proc.descripcion} isTextarea />
                               <div className="space-y-4">
-                                <DetailDisplay title="Políticas Vinculadas" value={linkedPolicies?.map(p => `${p.codigo} (${p.linkType})`)} isList />
+                                <DetailDisplay title="Políticas Vinculadas" value={linkedPolicies?.map(p => `${p.titulo} (${p.linkType})`)} isList />
                                 <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === proc.auditFrequencyInDays)?.label} />
                                 <DetailDisplay title="Última Auditoría" value={proc.lastAuditedAt ? format(parseISO(proc.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
                               </div>
@@ -710,7 +710,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                                         });
 
                                       const procLinkedPolicies = (procedure.politicasAsociadasIds || [])
-                                        .map(id => politicasMap.get(id)?.codigo)
+                                        .map(id => politicasMap.get(id)?.titulo)
                                         .filter(Boolean);
 
                                       return (

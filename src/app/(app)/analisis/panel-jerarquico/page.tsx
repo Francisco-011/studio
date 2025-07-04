@@ -367,7 +367,7 @@ export default function PanelJerarquicoPage() {
                             .filter((p): p is Politica & { linkType: string } => !!p)
                             .map(p => ({
                                 id: `politica-${p.id}-proc-${proc.id}`,
-                                name: `${p.codigo} (${p.linkType})`,
+                                name: `${p.titulo} (${p.linkType})`,
                                 type: 'politica' as const, originalId: p.id, payload: p,
                             }));
 
@@ -376,7 +376,7 @@ export default function PanelJerarquicoPage() {
                             .map((procedure, procIdx) => {
                                 const procedurePolicies = (procedure.politicasAsociadasIds || [])
                                   .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
-                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.codigo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
+                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
                                 
                                 const activityNodes = (procedure.activityOrder || [])
                                   .map((actId, index) => {
@@ -391,7 +391,7 @@ export default function PanelJerarquicoPage() {
                                             return pol ? { ...pol, linkType: link.linkType } : null;
                                         })
                                         .filter((p): p is Politica & { linkType: string } => !!p)
-                                        .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.codigo} (${p.linkType})`, type: 'politica' as const, originalId: p.id, payload: p }));
+                                        .map(p => ({ id: `politica-${p.id}-ac-${activity.id}`, name: `${p.titulo} (${p.linkType})`, type: 'politica' as const, originalId: p.id, payload: p }));
                                       return {
                                         id: `activity-${activity.id}-proc-${procedure.id}-idx-${index}`,
                                         name: activity.nombre, type: 'actividad' as const, originalId: activity.id, activo: activity.activa,
@@ -762,12 +762,18 @@ export default function PanelJerarquicoPage() {
 
   const handleEditItem = (item: any, type: 'process' | 'activity' | 'procedure' | 'policy') => {
     if (type === 'process') {
-        const process = capturedProcesses.find(p => p.id === item.payload?.id);
-        if (process) handleOpenEditDialog(process);
+        handleOpenEditDialog(item);
     }
     if (type === 'activity') router.push(`/actividades?search=${encodeURIComponent(item.nombre)}`);
-    if (type === 'procedure') router.push(`/procedimientos?search=${encodeURIComponent(item.nombre)}`);
+    if (type === 'procedure') {
+      router.push(`/procedimientos?search=${encodeURIComponent(item.nombre)}`);
+    }
     if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
+  };
+
+  const handleOpenEditDialog = (proc: CapturedProcess) => {
+    setEditingProcess(proc);
+    setIsEditDialogOpen(true);
   };
 
   const assignmentCounts = useMemo(() => {
@@ -905,7 +911,7 @@ export default function PanelJerarquicoPage() {
                 <Workflow className="h-4 w-4 mr-2 text-blue-600" />
                 <span className={cn("font-semibold text-sm flex-grow", node.activo === false && "italic text-muted-foreground")}>{node.name}{node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleEditItem(node, 'process')}} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleEditItem(node.payload, 'process')}} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); openDetailDialog(node.payload, 'process')}} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
@@ -1141,7 +1147,6 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
 
     
 
-    
 
 
 
