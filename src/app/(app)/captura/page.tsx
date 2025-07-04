@@ -280,6 +280,8 @@ export default function CapturaPage() {
     try {
         const batch = writeBatch(db);
 
+        const puestoSeleccionado = puestos.find(p => p.nombre === data.puesto);
+
         // 1. Create Process reference and get its ID
         const processRef = doc(collection(db, PROCESOS_COLLECTION));
         const newProcessId = processRef.id;
@@ -348,7 +350,7 @@ export default function CapturaPage() {
         const { procedures, ...processData } = data;
         const processPayload = {
             ...processData,
-            // Firestore does not accept 'undefined'. Ensure we send 'null' instead.
+            puestoId: puestoSeleccionado?.id || null,
             departamento: processData.departamento === NO_DEPARTAMENTO_SELECTED ? null : (processData.departamento || null),
             codigo: `PR-${Date.now().toString().slice(-6)}`,
             capturedAt: serverTimestamp(),
@@ -501,7 +503,7 @@ export default function CapturaPage() {
                                   <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione..."/></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                                </div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect value={field.value} onChange={(newSelected) => field.onChange(newSelected)} options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
+                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} value={field.value} onChange={(newSelected) => field.onChange(newSelected)} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
                                   <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value} onChange={(newValue) => field.onChange(newValue)} options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} placeholder="Vincular políticas..."/><FormMessage /></FormItem>)}/>
                                </div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

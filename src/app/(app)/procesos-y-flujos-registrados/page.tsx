@@ -365,8 +365,12 @@ export default function ProcesosYFlujosRegistradosPage() {
 
   function handleEditSubmit(values: CapturaFormData) {
     if (!editingProcess) return;
+    
+    const puestoSeleccionado = puestos.find(p => p.nombre === values.puesto);
+
     const dataToUpdate: Partial<Omit<CapturedProcess, 'id'>> = {
       ...values,
+      puestoId: puestoSeleccionado?.id || undefined,
       departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
     };
     updateProceso(editingProcess.id, dataToUpdate);
