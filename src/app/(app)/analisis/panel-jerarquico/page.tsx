@@ -880,16 +880,24 @@ useEffect(() => {
       return;
     }
 
-    const headers = ['Nombre del Elemento', 'Tipo', 'Estado'];
+    const headers = ['Nombre del Elemento', 'Tipo', 'Puesto Asignado', 'Estado'];
     const csvRows = [headers.join(',')];
 
     const flattenTreeForExport = (nodes: TreeNode[], level: number) => {
       nodes.forEach(node => {
         const indentation = '  '.repeat(level);
         const estado = node.activo === undefined ? 'N/A' : (node.activo ? 'Activo' : 'Inactivo');
+        
+        let puestoAsignado = '';
+        if (node.type === 'actividad' && node.payload?.puestoId) {
+            const puesto = puestos.find(p => p.id === node.payload.puestoId);
+            puestoAsignado = puesto ? puesto.nombre : 'No encontrado';
+        }
+
         const row = [
           escapeCsvCell(`${indentation}${node.name}`),
           escapeCsvCell(node.type),
+          escapeCsvCell(puestoAsignado),
           escapeCsvCell(estado)
         ];
         csvRows.push(row.join(','));
@@ -1314,6 +1322,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
