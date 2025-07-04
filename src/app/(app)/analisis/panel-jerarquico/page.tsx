@@ -160,6 +160,7 @@ export default function PanelJerarquicoPage() {
   const [assignmentCountFilter, setAssignmentCountFilter] = useState<AssignmentCountFilterType>('all');
   const [activityStatusFilter, setActivityStatusFilter] = useState<ActivityStatusFilterType>('active');
   const [filteredActivityId, setFilteredActivityId] = useState<string | null>(null);
+  const [poolLimit, setPoolLimit] = useState(20);
 
 
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all');
@@ -874,6 +875,14 @@ useEffect(() => {
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter, assignmentCounts]);
   
+  useEffect(() => {
+    setPoolLimit(20);
+  }, [activitySearchTerm, assignmentCountFilter, activityStatusFilter]);
+
+  const visiblePoolActivities = useMemo(() => {
+      return availableActivities.slice(0, poolLimit);
+  }, [availableActivities, poolLimit]);
+
   const handleExport = () => {
     if (treeData.length === 0) {
       toast({ title: "Nada que exportar", description: "El árbol está vacío o no hay datos que coincidan con los filtros.", variant: "default" });
@@ -1162,25 +1171,29 @@ useEffect(() => {
                       <div className="sm:col-span-2"> <Select value={assignmentCountFilter} onValueChange={(v) => setAssignmentCountFilter(v as AssignmentCountFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas (Asignación)</SelectItem><SelectItem value="unassigned">No asignadas ({unassignedCount})</SelectItem><SelectItem value="assigned">Asignadas ({assignedCount})</SelectItem></SelectContent></Select></div>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{availableActivities.length > 0 ? (<div className="space-y-2">{availableActivities.map((act) => (<div key={act.id} draggable={act.activa} onDragStart={(e) => act.activa && handleDragStart(e, {type: 'activityFromPool', id: act.id, sourceParentId: 'pool' })} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : `${assignmentCounts.get(act.id) || 0} asignaciones`}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span>
+                  <CardContent className="flex-grow flex flex-col"><ScrollArea className="flex-grow h-[calc(55vh-110px)] p-1 border rounded-md">{visiblePoolActivities.length > 0 ? (<div className="space-y-2">{visiblePoolActivities.map((act) => (<div key={act.id} draggable={act.activa} onDragStart={(e) => act.activa && handleDragStart(e, {type: 'activityFromPool', id: act.id, sourceParentId: 'pool' })} className={cn("flex items-center p-2 bg-card border rounded shadow-sm text-sm hover:shadow-md group", act.activa ? "cursor-grab" : "cursor-not-allowed opacity-60", !act.activa && "italic text-muted-foreground")} title={!act.activa ? "Actividad inactiva" : `${assignmentCounts.get(act.id) || 0} asignaciones`}><GripVertical className={cn("h-4 w-4 mr-2", act.activa ? "text-muted-foreground" : "text-transparent")}/><span className="flex-grow">{act.nombre}</span>
+                    <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openDetailDialog(act, 'activity') }} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                    </div>
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button 
-                                    size="sm"
-                                    variant={filteredActivityId === act.id ? "default" : "secondary"}
-                                    className="ml-2 font-mono h-6 px-2"
-                                    onClick={() => setFilteredActivityId(prev => prev === act.id ? null : act.id)}
-                                >
+                                <Button size="sm" variant={filteredActivityId === act.id ? "default" : "secondary"} className="ml-2 font-mono h-6 px-2" onClick={() => setFilteredActivityId(prev => prev === act.id ? null : act.id)}>
                                     {assignmentCounts.get(act.id) || 0}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Filtrar árbol por esta actividad</p>
-                            </TooltipContent>
+                            <TooltipContent><p>Filtrar árbol por esta actividad</p></TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                    {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea></CardContent>
+                    {!act.activa && <Ban className="h-3 w-3 ml-1" />}</div>))}</div>) : (<div className="flex flex-col items-center justify-center h-full text-center p-4"><ListChecks className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay actividades que coincidan con los filtros.</p></div>)}</ScrollArea>
+                    {availableActivities.length > poolLimit && (
+                        <div className="pt-2 text-center">
+                            <Button variant="link" onClick={() => setPoolLimit(prev => prev + 20)}>
+                                Mostrar más ({availableActivities.length - poolLimit} restantes)
+                            </Button>
+                        </div>
+                    )}
+                  </CardContent>
                 </Card>
               </div>
         </CardContent>
@@ -1322,6 +1335,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
