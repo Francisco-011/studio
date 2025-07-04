@@ -146,7 +146,6 @@ export default function PanelJerarquicoPage() {
   const [selectedDeptoFilter, setSelectedDeptoFilter] = useState<string>('all');
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
   const [treeGeneralSearchTerm, setTreeGeneralSearchTerm] = useState('');
-  const [policySearchTerm, setPolicySearchTerm] = useState('');
   const [treeProcessStatusFilter, setTreeProcessStatusFilter] = useState<ProcessStatusFilterType>('active');
 
 
@@ -230,8 +229,6 @@ export default function PanelJerarquicoPage() {
             (treeProcessStatusFilter === 'inactive' && proc.activo === false)
         );
         
-        let areasToDisplay = selectedAreaFilter === 'all' ? areas : areas.filter(a => a.nombre === selectedAreaFilter);
-        
         filteredProcesses.forEach(proc => {
             const areaObj = areas.find(a => a.nombre === proc.area);
             if (selectedAreaFilter !== 'all' && proc.area !== selectedAreaFilter) return;
@@ -286,7 +283,7 @@ export default function PanelJerarquicoPage() {
                     
                     const processWithIndices = orderedProcesses.map((proc, index) => ({...proc, sourceIndex: index}));
                      
-                    let processTreeNodes = processWithIndices.map((proc) => {
+                    const processTreeNodes = processWithIndices.map((proc) => {
                         const processPolicies = (proc.politicasAsociadas || [])
                             .map(link => {
                                 const pol = politicas.find(p => p.id === link.policyId);
@@ -340,35 +337,6 @@ export default function PanelJerarquicoPage() {
                         };
                     });
                     
-                    if (treeGeneralSearchTerm) {
-                        const lowerTerm = treeGeneralSearchTerm.toLowerCase();
-                        processTreeNodes = processTreeNodes.filter(procNode => {
-                            if (procNode.name.toLowerCase().includes(lowerTerm)) return true;
-                            procNode.children = (procNode.children || []).filter(procedureNode => {
-                                if (procedureNode.name.toLowerCase().includes(lowerTerm)) return true;
-                                if (procedureNode.type === 'procedimiento') {
-                                    procedureNode.children = (procedureNode.children || []).filter(activityNode => {
-                                        return activityNode.name.toLowerCase().includes(lowerTerm);
-                                    });
-                                    return procedureNode.children.length > 0;
-                                }
-                                return false;
-                            });
-                            return procNode.children.length > 0;
-                        });
-                    }
-
-                    if (policySearchTerm) {
-                        const lowerTerm = policySearchTerm.toLowerCase();
-                        processTreeNodes = processTreeNodes.filter(procNode => {
-                            const hasMatchingPolicy = (node: TreeNode) => {
-                                if (node.type === 'politica' && (node.name.toLowerCase().includes(lowerTerm) || node.payload.codigo.toLowerCase().includes(lowerTerm))) return true;
-                                return (node.children || []).some(hasMatchingPolicy);
-                            };
-                            return hasMatchingPolicy(procNode);
-                        });
-                    }
-                    
                     if (processTreeNodes.length > 0) {
                         puestoNode.children = processTreeNodes;
                         puestoChildren.push(puestoNode);
@@ -388,25 +356,40 @@ export default function PanelJerarquicoPage() {
         return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
     };
 
-    const newTreeData = buildTree();
-    setTreeData(newTreeData);
+    let finalTree = buildTree();
+    
+    if (treeGeneralSearchTerm) {
+        const lowerTerm = treeGeneralSearchTerm.toLowerCase();
+    
+        const recursiveFilter = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map(node => {
+                const selfMatches = node.name.toLowerCase().includes(lowerTerm) || 
+                                    (node.type === 'politica' && node.payload?.codigo && node.payload.codigo.toLowerCase().includes(lowerTerm));
 
-    if (policySearchTerm && newTreeData.length > 0) {
-        const allNodeIds: Record<string, boolean> = {};
-        const expand = (nodes: TreeNode[]) => {
-            nodes.forEach(node => {
-                allNodeIds[node.id] = true;
-                if (node.children) expand(node.children);
-            });
+                if (selfMatches) {
+                    return node; 
+                }
+
+                if (node.children) {
+                    const filteredChildren = recursiveFilter(node.children);
+                    if (filteredChildren.length > 0) {
+                        return { ...node, children: filteredChildren };
+                    }
+                }
+                
+                return null;
+            }).filter((node): node is TreeNode => node !== null);
         };
-        expand(newTreeData);
-        setExpandedNodes(allNodeIds);
+        
+        finalTree = recursiveFilter(finalTree);
     }
+    
+    setTreeData(finalTree);
 
 }, [
     areas, departamentos, puestos, capturedProcesses, procedimientos, actividades, politicas,
     isLoadingAllData, 
-    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, policySearchTerm, treeProcessStatusFilter
+    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, treeProcessStatusFilter
 ]);
 
 
@@ -942,15 +925,15 @@ export default function PanelJerarquicoPage() {
         <CardContent>
               <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
                 <div className="flex justify-between items-center"><CardTitle className="text-lg">Filtros del Árbol</CardTitle></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Filtrar por Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent></Select>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Estado del proceso" /></SelectTrigger><SelectContent><SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 text-green-500" />Procesos Activos</SelectItem><SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 text-red-500" />Procesos Inactivos</SelectItem><SelectItem value="all">Todos los Estados</SelectItem></SelectContent></Select>
-                  <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar en árbol..." value={treeGeneralSearchTerm} onChange={(e) => setTreeGeneralSearchTerm(e.target.value)} className="w-full pl-9"/></div>
-                  <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar por política..." value={policySearchTerm} onChange={(e) => setPolicySearchTerm(e.target.value)} className="w-full pl-9"/></div>
+                  <div className="relative lg:col-span-4">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input type="search" placeholder="Buscar en árbol (proceso, política, etc.)..." value={treeGeneralSearchTerm} onChange={(e) => setTreeGeneralSearchTerm(e.target.value)} className="w-full pl-9"/>
+                  </div>
                 </div>
               </div>
               <Legend />
@@ -1041,3 +1024,4 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
