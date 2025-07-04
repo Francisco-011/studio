@@ -932,7 +932,8 @@ export default function PanelJerarquicoPage() {
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
                 <ListOrdered className="h-4 w-4 mr-2 text-green-600" />
                 <span className={cn("font-medium text-sm flex-grow", isInactiveProcedure && "italic text-muted-foreground")}>{node.name}{isInactiveProcedure && <Badge variant="destructive" className="ml-2 bg-slate-500 hover:bg-slate-600 text-white border-transparent">Inactivo</Badge>}</span>
-                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'procedure')} title="Editar procedimiento"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'procedure')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
@@ -1019,10 +1020,7 @@ export default function PanelJerarquicoPage() {
                 
                 <Card id="activity-pool" className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")} onDragOver={(e) => handleDragOver(e)} onDrop={(e) => handleDrop(e)} onDragEnter={(e) => handleDragEnter(e, 'pool')} onDragLeave={handleDragLeave}>
                   <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <CardTitle className="text-lg">Pool de Actividades</CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => router.push('/procedimientos')}>Gestionar Procedimientos</Button>
-                    </div>
+                    <CardTitle className="text-lg">Pool de Actividades</CardTitle>
                     <CardDescription className="text-xs">Actividades disponibles para asignar. Las inactivas no se pueden arrastrar.</CardDescription>
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" /><Input type="search" placeholder="Buscar actividad..." value={activitySearchTerm} onChange={(e) => setActivitySearchTerm(e.target.value)} className="w-full pl-9"/></div>
@@ -1148,6 +1146,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
