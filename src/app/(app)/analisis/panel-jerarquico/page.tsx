@@ -495,15 +495,15 @@ export default function PanelJerarquicoPage() {
                     }).filter((node): node is TreeNode => node !== null);
                     
                     puestoNode.children = processTreeNodes;
-                    if(processTreeNodes.length > 0) puestoChildren.push(puestoNode);
+                    puestoChildren.push(puestoNode);
                 });
                 
                 deptoNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
-                if(puestoChildren.length > 0) deptoChildren.push(deptoNode);
+                deptoChildren.push(deptoNode);
             });
             
             areaNode.children = deptoChildren.sort((a,b) => a.name.localeCompare(b.name));
-            if(deptoChildren.length > 0) finalTreeNodes.push(areaNode);
+            finalTreeNodes.push(areaNode);
         });
 
         return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
@@ -1367,7 +1367,6 @@ type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
-    
 
 
 
