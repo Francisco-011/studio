@@ -443,7 +443,7 @@ export default function PanelJerarquicoPage() {
                             .map((procedure, procIdx) => {
                                 const procedurePolicies = (procedure.politicasAsociadasIds || [])
                                   .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
-                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: `${p.titulo}`, type: 'politica' as const, originalId: p.id, payload: p, }));
+                                  .map(p => ({ id: `politica-${p.id}-pc-${procedure.id}`, name: p.titulo, type: 'politica' as const, originalId: p.id, payload: p, }));
                                 
                                 const activityNodes = (procedure.activityOrder || [])
                                   .map((actId, index) => {
@@ -874,6 +874,52 @@ useEffect(() => {
       .sort((a,b) => a.nombre.localeCompare(b.nombre));
   }, [actividades, activitySearchTerm, assignmentCountFilter, activityStatusFilter, assignmentCounts]);
   
+  const handleExport = () => {
+    if (treeData.length === 0) {
+      toast({ title: "Nada que exportar", description: "El árbol está vacío o no hay datos que coincidan con los filtros.", variant: "default" });
+      return;
+    }
+
+    const headers = ['Nombre del Elemento', 'Tipo', 'Estado'];
+    const csvRows = [headers.join(',')];
+
+    const flattenTreeForExport = (nodes: TreeNode[], level: number) => {
+      nodes.forEach(node => {
+        const indentation = '  '.repeat(level);
+        const estado = node.activo === undefined ? 'N/A' : (node.activo ? 'Activo' : 'Inactivo');
+        const row = [
+          escapeCsvCell(`${indentation}${node.name}`),
+          escapeCsvCell(node.type),
+          escapeCsvCell(estado)
+        ];
+        csvRows.push(row.join(','));
+
+        if (node.children && node.children.length > 0) {
+          flattenTreeForExport(node.children, level + 1);
+        }
+      });
+    };
+
+    flattenTreeForExport(treeData, 0);
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `panel_jerarquico_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+      toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
   if (isLoadingAllData) {
     return (
         <div className="container mx-auto py-8">
@@ -1068,7 +1114,7 @@ useEffect(() => {
         </CardHeader>
         <CardContent>
               <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
-                <div className="flex justify-between items-center"><CardTitle className="text-lg">Filtros del Árbol</CardTitle></div>
+                <div className="flex justify-between items-center"><CardTitle className="text-lg">Filtros del Árbol</CardTitle> <Button variant="outline" onClick={handleExport}><FileText className="mr-2 h-4 w-4"/>Exportar Vista a CSV</Button></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Filtrar por Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent></Select>
@@ -1268,6 +1314,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
