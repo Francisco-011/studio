@@ -168,6 +168,8 @@ export default function PanelJerarquicoPage() {
   const [selectedPuestoFilter, setSelectedPuestoFilter] = useState<string>('all');
   const [treeGeneralSearchTerm, setTreeGeneralSearchTerm] = useState('');
   const [treeProcessStatusFilter, setTreeProcessStatusFilter] = useState<ProcessStatusFilterType>('active');
+  const [procedureStatusFilter, setProcedureStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [activityTreeStatusFilter, setActivityTreeStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
 
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
@@ -431,12 +433,16 @@ export default function PanelJerarquicoPage() {
                             .filter((p): p is Politica & { linkType: string } => !!p)
                             .map(p => ({
                                 id: `politica-${p.id}-proc-${proc.id}`,
-                                name: `${p.titulo} (${p.linkType})`,
+                                name: p.titulo,
                                 type: 'politica' as const, originalId: p.id, payload: p,
                             }));
 
                         const procedureNodes = (proc.procedimientoOrder || [])
                             .map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p)
+                            .filter(p => {
+                                if (procedureStatusFilter === 'all') return true;
+                                return procedureStatusFilter === 'active' ? p.activo !== false : p.activo === false;
+                            })
                             .filter(procedure => {
                                 if (!filteredActivityId) return true;
                                 return procedure.activityOrder?.includes(filteredActivityId);
@@ -452,6 +458,10 @@ export default function PanelJerarquicoPage() {
                                       return activity ? { activity, index } : null;
                                   })
                                   .filter((a): a is { activity: Actividad, index: number } => !!a)
+                                  .filter(({ activity }) => {
+                                      if (activityTreeStatusFilter === 'all') return true;
+                                      return activityTreeStatusFilter === 'active' ? activity.activa : !activity.activa;
+                                  })
                                   .map(({ activity, index }) => {
                                       const activityPolicies = (activity.politicasAsociadas || [])
                                         .map(link => {
@@ -529,7 +539,7 @@ export default function PanelJerarquicoPage() {
 }, [
     areas, departamentos, puestos, capturedProcesses, procedimientos, actividades, politicas,
     isLoadingAllData, 
-    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, treeProcessStatusFilter, filteredActivityId
+    selectedAreaFilter, selectedDeptoFilter, selectedPuestoFilter, treeGeneralSearchTerm, treeProcessStatusFilter, filteredActivityId, procedureStatusFilter, activityTreeStatusFilter
 ]);
 
 useEffect(() => {
@@ -884,7 +894,8 @@ useEffect(() => {
   }, [availableActivities, poolLimit]);
 
   const handleExport = () => {
-    if (treeData.length === 0) {
+    const dataToExport = treeData;
+    if (dataToExport.length === 0) {
       toast({ title: "Nada que exportar", description: "El árbol está vacío o no hay datos que coincidan con los filtros.", variant: "default" });
       return;
     }
@@ -917,7 +928,7 @@ useEffect(() => {
       });
     };
 
-    flattenTreeForExport(treeData, 0);
+    flattenTreeForExport(dataToExport, 0);
 
     const csvString = csvRows.join('\n');
     const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
@@ -1132,12 +1143,34 @@ useEffect(() => {
         <CardContent>
               <div className="space-y-3 mb-6 p-4 border rounded-lg bg-muted/30">
                 <div className="flex justify-between items-center"><CardTitle className="text-lg">Filtros del Árbol</CardTitle> <Button variant="outline" onClick={handleExport}><FileText className="mr-2 h-4 w-4"/>Exportar Vista a CSV</Button></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                   <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Filtrar por Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Estado del proceso" /></SelectTrigger><SelectContent><SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 text-green-500" />Procesos Activos</SelectItem><SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 text-red-500" />Procesos Inactivos</SelectItem><SelectItem value="all">Todos los Estados</SelectItem></SelectContent></Select>
-                  <div className="relative lg:col-span-4">
+                  <div className="w-full">
+                    <Label htmlFor="procedure-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado Procedimientos</Label>
+                    <Select value={procedureStatusFilter} onValueChange={(v) => setProcedureStatusFilter(v as any)}>
+                        <SelectTrigger id="procedure-status-filter"><SelectValue placeholder="Todos"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            <SelectItem value="active">Solo Activos</SelectItem>
+                            <SelectItem value="inactive">Solo Inactivos</SelectItem>
+                        </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-full">
+                      <Label htmlFor="activity-status-filter" className="text-xs font-medium text-muted-foreground ml-1">Estado de Actividades</Label>
+                      <Select value={activityTreeStatusFilter} onValueChange={(v) => setActivityTreeStatusFilter(v as any)}>
+                          <SelectTrigger id="activity-status-filter"><SelectValue placeholder="Todas"/></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="all">Todas</SelectItem>
+                              <SelectItem value="active">Solo Activas</SelectItem>
+                              <SelectItem value="inactive">Solo Inactivas</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="relative lg:col-span-6 xl:col-span-full">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input type="search" placeholder="Buscar en árbol (proceso, política, etc.)..." value={treeGeneralSearchTerm} onChange={(e) => setTreeGeneralSearchTerm(e.target.value)} className="w-full pl-9"/>
                   </div>
@@ -1335,6 +1368,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
