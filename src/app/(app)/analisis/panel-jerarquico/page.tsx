@@ -12,17 +12,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Combobox } from '@/components/ui/combobox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered, Building2 } from "lucide-react";
+import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered, Building2, Save, CalendarCheck2 } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
-import { useProcesos, type CapturedProcess, type CambioHistorial } from '@/contexts/ProcesosContext';
+import { useProcesos, type CapturedProcess, type CambioHistorial, capturaFormSchema, type CapturaFormData, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
 
@@ -59,6 +60,8 @@ const reassignFormSchema = z.object({
   puestoId: z.string().optional(),
 });
 type ReassignFormData = z.infer<typeof reassignFormSchema>;
+
+const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 
 const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -167,9 +170,66 @@ export default function PanelJerarquicoPage() {
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [activityToReassign, setActivityToReassign] = useState<Actividad | null>(null);
 
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<CapturedProcess | null>(null);
+
   const reassignForm = useForm<ReassignFormData>({
     resolver: zodResolver(reassignFormSchema),
   });
+
+  const editForm = useForm<CapturaFormData>({
+    resolver: zodResolver(capturaFormSchema),
+  });
+  const { watch: watchEditForm, setValue: setEditValue } = editForm;
+  const watchedEditAreaName = watchEditForm('area');
+  const watchedEditDepartamentoName = watchEditForm('departamento');
+
+  const filteredEditDepartamentos = useMemo(() => {
+    if (!watchedEditAreaName || isLoadingDepartamentos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedEditAreaName)?.id;
+    if (!areaId) return [];
+    return departamentos.filter(d => d.areaId === areaId);
+  }, [watchedEditAreaName, areas, departamentos, isLoadingDepartamentos, isLoadingAreas]);
+
+  const filteredEditPuestos = useMemo(() => {
+    if (!watchedEditAreaName || isLoadingPuestos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedEditAreaName)?.id;
+    if (!areaId) return [];
+    const puestosInArea = puestos.filter(p => p.areaId === areaId);
+    if (watchedEditDepartamentoName && watchedEditDepartamentoName !== NO_DEPARTAMENTO_SELECTED) {
+      const deptoId = departamentos.find(d => d.nombre === watchedEditDepartamentoName && d.areaId === areaId)?.id;
+      if (deptoId) return puestosInArea.filter(p => p.departamentoId === deptoId);
+    }
+    if (watchedEditDepartamentoName === NO_DEPARTAMENTO_SELECTED) {
+       return puestosInArea.filter(p => !p.departamentoId);
+    }
+    return puestosInArea;
+  }, [watchedEditAreaName, watchedEditDepartamentoName, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas, isLoadingDepartamentos]);
+
+  useEffect(() => {
+    if (editingProcess) {
+      editForm.reset({
+        ...editingProcess,
+        departamento: editingProcess.departamento || NO_DEPARTAMENTO_SELECTED
+      });
+    }
+  }, [editingProcess, editForm]);
+
+  function handleEditSubmit(values: CapturaFormData) {
+    if (!editingProcess) return;
+    
+    const puestoSeleccionado = puestos.find(p => p.nombre === values.puesto);
+
+    const dataToUpdate: Partial<Omit<CapturedProcess, 'id'>> = {
+      ...values,
+      puestoId: puestoSeleccionado?.id || undefined,
+      departamento: values.departamento === NO_DEPARTAMENTO_SELECTED ? undefined : values.departamento,
+    };
+    updateProceso(editingProcess.id, dataToUpdate);
+    setIsEditDialogOpen(false);
+    setEditingProcess(null);
+  }
+
 
   useEffect(() => {
     if (activityToReassign) {
@@ -249,7 +309,7 @@ export default function PanelJerarquicoPage() {
             if (targetProcess) {
                 const areaNode = areas.find(a => a.nombre === targetProcess.area);
                 const deptoNode = departamentos.find(d => d.nombre === targetProcess.departamento && d.areaId === areaNode?.id);
-                const puestoNode = puestos.find(p => p.nombre === targetProcess.puesto && p.areaId === areaNode?.id);
+                const puestoNode = puestos.find(p => p.id === targetProcess.puestoId);
 
                 const nodesToExpand: Record<string, boolean> = {};
                 if (areaNode) nodesToExpand[`area-${areaNode.id}`] = true;
@@ -284,7 +344,7 @@ export default function PanelJerarquicoPage() {
                     areaNodesMap[area.id].deptosMap[depto.id] = { id: `depto-${depto.id}`, name: depto.nombre, type: 'departamento', originalId: depto.id, puestosMap: {}, payload: depto };
                 }
 
-                const puestosInDepto = puestos.filter(p => p.departamentoId === depto.id && (selectedPuestoFilter === 'all' || p.nombre === selectedPuestoFilter));
+                const puestosInDepto = puestos.filter(p => p.departamentoId === depto.id && (selectedPuestoFilter === 'all' || p.id === selectedPuestoFilter));
                 puestosInDepto.forEach(puesto => {
                      if (!areaNodesMap[area.id].deptosMap[depto.id].puestosMap[puesto.id]) {
                         areaNodesMap[area.id].deptosMap[depto.id].puestosMap[puesto.id] = { id: `puesto-${puesto.id}`, name: puesto.nombre, type: 'puesto', originalId: puesto.id, processList: [], payload: puesto };
@@ -292,7 +352,7 @@ export default function PanelJerarquicoPage() {
                 });
             });
             
-            const puestosWithoutDepto = puestos.filter(p => p.areaId === area.id && !p.departamentoId && (selectedPuestoFilter === 'all' || p.nombre === selectedPuestoFilter) && (selectedDeptoFilter === 'all'));
+            const puestosWithoutDepto = puestos.filter(p => p.areaId === area.id && !p.departamentoId && (selectedPuestoFilter === 'all' || p.id === selectedPuestoFilter) && (selectedDeptoFilter === 'all'));
             if(puestosWithoutDepto.length > 0) {
                 const unassignedDeptoId = `unassigned-depto-${area.id}`;
                 if (!areaNodesMap[area.id].deptosMap[unassignedDeptoId]) {
@@ -978,7 +1038,7 @@ export default function PanelJerarquicoPage() {
              nodeContent = (
               <div className={cn(baseClasses, "ml-12 text-xs text-muted-foreground cursor-pointer")} onClick={() => openDetailDialog(node.payload, 'policy')}>
                 <FileText className="h-3 w-3 mr-1.5 shrink-0 text-orange-500" />
-                <span className="flex-grow truncate">{node.name}</span>
+                <span className="flex-grow truncate">{node.payload.titulo} ({node.payload.linkType})</span>
               </div>
             );
             break;
@@ -1008,7 +1068,7 @@ export default function PanelJerarquicoPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Select value={selectedAreaFilter} onValueChange={v => { setSelectedAreaFilter(v); setSelectedDeptoFilter('all'); setSelectedPuestoFilter('all'); }} disabled={isLoadingAreas}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Filtrar por Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(area => (<SelectItem key={area.id} value={area.nombre}>{area.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={selectedDeptoFilter} onValueChange={v => { setSelectedDeptoFilter(v); setSelectedPuestoFilter('all'); }} disabled={isLoadingDepartamentos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Depto."} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}</SelectContent></Select>
-                  <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}</SelectContent></Select>
+                  <Select value={selectedPuestoFilter} onValueChange={setSelectedPuestoFilter} disabled={isLoadingPuestos || selectedAreaFilter === 'all'}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder={selectedAreaFilter === 'all' ? "Seleccione un área" : "Filtrar por Puesto"} /></SelectTrigger><SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>))}</SelectContent></Select>
                   <Select value={treeProcessStatusFilter} onValueChange={(value) => setTreeProcessStatusFilter(value as ProcessStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue placeholder="Estado del proceso" /></SelectTrigger><SelectContent><SelectItem value="active"><CheckSquare className="h-4 w-4 mr-2 text-green-500" />Procesos Activos</SelectItem><SelectItem value="inactive"><Ban className="h-4 w-4 mr-2 text-red-500" />Procesos Inactivos</SelectItem><SelectItem value="all">Todos los Estados</SelectItem></SelectContent></Select>
                   <div className="relative lg:col-span-4">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1126,6 +1186,32 @@ export default function PanelJerarquicoPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editar Proceso: {editingProcess?.proceso}</DialogTitle>
+            <DialogDescription>
+              Modifique los detalles del proceso. Los cambios se guardarán directamente.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-6 py-4 max-h-[75vh] overflow-y-auto pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField control={editForm.control} name="area" render={({ field }) => (<FormItem><FormLabel>Área</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('departamento', undefined); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="departamento" render={({ field }) => (<FormItem><FormLabel>Departamento</FormLabel><Select onValueChange={(v) => { field.onChange(v); setEditValue('puesto', undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Opcional"/></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DEPARTAMENTO_SELECTED}>Sin Departamento</SelectItem>{filteredEditDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={editForm.control} name="puesto" render={({ field }) => (<FormItem><FormLabel>Puesto</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{filteredEditPuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+              <FormField control={editForm.control} name="proceso" render={({ field }) => (<FormItem><FormLabel>Nombre Proceso</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="descripcion" render={({ field }) => (<FormItem><FormLabel>Objetivo</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={editForm.control} name="auditFrequencyInDays" render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione frecuencia"/></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage/></FormItem>)}/>
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1146,6 +1232,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
