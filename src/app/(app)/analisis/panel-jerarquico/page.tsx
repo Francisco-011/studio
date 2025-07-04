@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
@@ -1038,7 +1039,7 @@ export default function PanelJerarquicoPage() {
              nodeContent = (
               <div className={cn(baseClasses, "ml-12 text-xs text-muted-foreground cursor-pointer")} onClick={() => openDetailDialog(node.payload, 'policy')}>
                 <FileText className="h-3 w-3 mr-1.5 shrink-0 text-orange-500" />
-                <span className="flex-grow truncate">{node.payload.titulo} ({node.payload.linkType})</span>
+                <span className="flex-grow truncate">{node.payload.titulo}</span>
               </div>
             );
             break;
@@ -1232,6 +1233,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
