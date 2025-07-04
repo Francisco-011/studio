@@ -126,8 +126,8 @@ export default function PanelJerarquicoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { areas, isLoading: isLoadingAreas } = useAreas();
-  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
-  const { puestos, updatePuesto, updatePuestoProcessOrder, isLoading: isLoadingPuestos } = usePuestos();
+  const { departamentos, updateDepartamento, isLoading: isLoadingDepartamentos } = useDepartamentos();
+  const { puestos, updatePuesto, isLoading: isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades, updateActividad } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
@@ -545,6 +545,7 @@ export default function PanelJerarquicoPage() {
             }
         } else if (dropTargetInfo.type === 'area' && dropTargetInfo.parentId) {
             newAreaId = dropTargetInfo.parentId;
+            newDepartamentoId = null;
         }
         
         if (newAreaId) {
@@ -730,8 +731,7 @@ export default function PanelJerarquicoPage() {
             const parentPuestoData = puestos.find(p => p.id === parentPuestoId);
             if (!parentPuestoData) return;
     
-            const originalProcesos = [...(parentPuestoData.procesoOrder || [])];
-            let currentOrder = [...originalProcesos];
+            let currentOrder = [...(parentPuestoData.procesoOrder || [])];
             
             const fromIndex = draggedItem.sourceIndex;
             if (fromIndex !== undefined && fromIndex >= 0 && currentOrder.length > fromIndex) {
@@ -744,7 +744,7 @@ export default function PanelJerarquicoPage() {
                 
                 currentOrder.splice(toIndex, 0, removedItem);
 
-                await updatePuestoProcessOrder(parentPuestoId, currentOrder);
+                await updatePuesto(parentPuestoId, { procesoOrder: currentOrder });
                 toast({ title: "Orden de Procesos Guardado", description: "Se ha actualizado el orden de los procesos para este puesto." });
             }
         }
@@ -761,7 +761,10 @@ export default function PanelJerarquicoPage() {
   };
 
   const handleEditItem = (item: any, type: 'process' | 'activity' | 'procedure' | 'policy') => {
-    if (type === 'process') router.push(`/procesos-y-flujos-registrados?search=${encodeURIComponent(item.proceso)}`);
+    if (type === 'process') {
+        const process = capturedProcesses.find(p => p.id === item.payload?.id);
+        if (process) handleOpenEditDialog(process);
+    }
     if (type === 'activity') router.push(`/actividades?search=${encodeURIComponent(item.nombre)}`);
     if (type === 'procedure') router.push(`/procedimientos?search=${encodeURIComponent(item.nombre)}`);
     if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
@@ -847,18 +850,11 @@ export default function PanelJerarquicoPage() {
               <div 
                 className={cn(baseClasses, "ml-4 font-medium", dropTargetInfo?.type === 'departamento' && dropTargetInfo.id === node.id && "bg-primary/20")} 
                 id={node.id}
-                draggable={!!node.payload}
-                onDragStart={(e) => {
-                  if (node.payload) {
-                    handleDragStart(e, { type: 'departamentoInArea', id: node.originalId!, sourceParentId: node.payload.areaId })
-                  }
-                }}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
                 onDragEnter={(e) => handleDragEnter(e, 'departamento', node.originalId)}
                 onDragLeave={handleDragLeave}
               >
-                <GripVertical className="h-3 w-3 mr-1.5 shrink-0 text-muted-foreground group-hover:text-foreground"/>
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1">
                   {node.children && node.children.length > 0 ? <ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /> : <span className="w-4 inline-block"></span>}
                 </Button>
@@ -909,8 +905,8 @@ export default function PanelJerarquicoPage() {
                 <Workflow className="h-4 w-4 mr-2 text-blue-600" />
                 <span className={cn("font-semibold text-sm flex-grow", node.activo === false && "italic text-muted-foreground")}>{node.name}{node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'process')} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'process')} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleEditItem(node, 'process')}} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); openDetailDialog(node.payload, 'process')}} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
             );
@@ -922,7 +918,7 @@ export default function PanelJerarquicoPage() {
                 className={cn(baseClasses, "ml-12 border-l-2", dropTargetInfo?.type === 'procedimiento' && dropTargetInfo.id === node.id && "bg-primary/20 border-primary", isInactiveProcedure && "opacity-60")}
                 onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e)}
-                onDragEnter={(e) => handleDragEnter(e, 'procedimiento', node.payload.sourceParentId, node.payload.sourceIndex)}
+                onDragEnter={(e) => handleDragEnter(e, 'procedimiento', node.originalId, undefined)}
                 onDragLeave={handleDragLeave}
                 id={node.id}
                 draggable={!isInactiveProcedure}
@@ -933,8 +929,8 @@ export default function PanelJerarquicoPage() {
                 <ListOrdered className="h-4 w-4 mr-2 text-green-600" />
                 <span className={cn("font-medium text-sm flex-grow", isInactiveProcedure && "italic text-muted-foreground")}>{node.name}{isInactiveProcedure && <Badge variant="destructive" className="ml-2 bg-slate-500 hover:bg-slate-600 text-white border-transparent">Inactivo</Badge>}</span>
                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'procedure')} title="Editar procedimiento"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'procedure')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleEditItem(node.payload, 'procedure') }} title="Editar procedimiento"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openDetailDialog(node.payload, 'procedure') }} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
             );
@@ -963,11 +959,11 @@ export default function PanelJerarquicoPage() {
                  {!node.activo && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                     {actividadCompleta && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenReassignDialog(actividadCompleta)} title="Reasignar Puesto Responsable">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleOpenReassignDialog(actividadCompleta) }} title="Reasignar Puesto Responsable">
                         <Users className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'activity')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openDetailDialog(node.payload, 'activity') }} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
             );
@@ -1072,8 +1068,8 @@ export default function PanelJerarquicoPage() {
                         <DetailSectionDisplay title="Descripción" value={(selectedItemForDetail as Politica).descripcion} isTextarea />
                         <DetailSectionDisplay title="Nivel de Cumplimiento" value={(selectedItemForDetail as Politica).nivelCompliance} />
                         <DetailSectionDisplay title="Clasificación" value={(selectedItemForDetail as Politica).clasificacion} />
-                        <DetailSectionDisplay title="Fecha de Vigencia" value={format(parseISO((selectedItemForDetail as Politica).fechaVigencia), "PPP", { locale: es })} />
-                        <DetailSectionDisplay title="Fecha de Revisión" value={format(parseISO((selectedItemForDetail as Politica).fechaRevision), "PPP", { locale: es })} />
+                        <DetailSectionDisplay title="Fecha de Vigencia" value={(selectedItemForDetail as Politica).fechaVigencia ? format(parseISO((selectedItemForDetail as Politica).fechaVigencia), "PPP", { locale: es }) : 'N/A'} />
+                        <DetailSectionDisplay title="Fecha de Revisión" value={(selectedItemForDetail as Politica).fechaRevision ? format(parseISO((selectedItemForDetail as Politica).fechaRevision), "PPP", { locale: es }) : 'N/A'} />
                     </div>
                 )}
             </div>
@@ -1128,7 +1124,7 @@ export default function PanelJerarquicoPage() {
   );
 }
 
-function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto: string | undefined): React.ReactNode {
+function formatMejorasCurrency(costoEstimado: number | undefined, monedaCosto?: string): React.ReactNode {
     if (costoEstimado === undefined || isNaN(costoEstimado)) return "-";
     try {
         return new Intl.NumberFormat('es-MX', { style: 'currency', currency: monedaCosto || 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(costoEstimado);
@@ -1146,6 +1142,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 
