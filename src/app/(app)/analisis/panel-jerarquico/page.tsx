@@ -3,6 +3,10 @@
 
 import { useState, useEffect, useMemo, type DragEvent, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -10,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Combobox } from '@/components/ui/combobox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronRight, GripVertical, FolderTree, ListChecks, Loader2, Search as SearchIcon, Filter as FilterIcon, Ban, CheckSquare, Share2, FileText, Edit2, Building, Eye, Users, Workflow, ListOrdered, Building2 } from "lucide-react";
 import { useAreas } from '@/contexts/AreasContext';
@@ -48,6 +54,11 @@ interface DraggedItem {
     sourceParentId: string; // originalId of the direct parent (procedure, process, or puesto)
     sourceIndex?: number;
 }
+
+const reassignFormSchema = z.object({
+  puestoId: z.string().optional(),
+});
+type ReassignFormData = z.infer<typeof reassignFormSchema>;
 
 
 const DetailSectionDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -117,7 +128,7 @@ export default function PanelJerarquicoPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, updatePuesto, updatePuestoProcessOrder, isLoading: isLoadingPuestos } = usePuestos();
-  const { actividades, isLoadingActividades } = useActividades();
+  const { actividades, isLoadingActividades, updateActividad } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
   const { politicas, isLoading: isLoadingPoliticas } = usePoliticas();
@@ -152,6 +163,43 @@ export default function PanelJerarquicoPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<CapturedProcess | Actividad | Procedimiento | Politica | null>(null);
   const [detailItemType, setDetailItemType] = useState<'process' | 'activity' | 'procedure' | 'policy' | null>(null);
+  
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [activityToReassign, setActivityToReassign] = useState<Actividad | null>(null);
+
+  const reassignForm = useForm<ReassignFormData>({
+    resolver: zodResolver(reassignFormSchema),
+  });
+
+  useEffect(() => {
+    if (activityToReassign) {
+        reassignForm.reset({
+            puestoId: activityToReassign.puestoId || undefined,
+        });
+    }
+  }, [activityToReassign, reassignForm]);
+
+  const handleOpenReassignDialog = (activity: Actividad) => {
+    setActivityToReassign(activity);
+    setIsReassignDialogOpen(true);
+  };
+
+  const handleReassignPuestoSubmit = async (data: ReassignFormData) => {
+    if (!activityToReassign) return;
+    
+    await updateActividad(activityToReassign.id, {
+        puestoId: data.puestoId === 'none' ? undefined : data.puestoId
+    });
+
+    toast({
+        title: "Puesto Reasignado",
+        description: `Se ha actualizado el puesto para la actividad "${activityToReassign.nombre}".`,
+    });
+
+    setIsReassignDialogOpen(false);
+    setActivityToReassign(null);
+  };
+
 
   const availableDepartamentos = useMemo(() => {
     if (isLoadingDepartamentos || selectedAreaFilter === 'all') return departamentos;
@@ -891,6 +939,8 @@ export default function PanelJerarquicoPage() {
             );
             break;
           case 'actividad':
+            const actividadCompleta = actividades.find(a => a.id === node.originalId);
+            const puestoActual = actividadCompleta?.puestoId ? puestos.find(p => p.id === actividadCompleta.puestoId) : null;
             nodeContent = (
               <div 
                 id={node.id}
@@ -906,9 +956,16 @@ export default function PanelJerarquicoPage() {
                 <GripVertical className={cn("h-3 w-3 mr-1.5", node.activo ? "text-muted-foreground" : "text-transparent")}/>
                 <ListChecks className="h-3 w-3 mr-1.5 shrink-0 text-amber-600" />
                 <span className="flex-grow text-xs">{node.name}</span>
+                {puestoActual && (
+                  <Badge variant="outline" className="ml-2 text-xs font-normal border-dashed">{puestoActual.nombre}</Badge>
+                )}
                  {!node.activo && <Ban className="h-3 w-3 ml-auto text-destructive" />}
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditItem(node.payload, 'activity')} title="Editar"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
+                    {actividadCompleta && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenReassignDialog(actividadCompleta)} title="Reasignar Puesto Responsable">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openDetailDialog(node.payload, 'activity')} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               </div>
@@ -961,7 +1018,12 @@ export default function PanelJerarquicoPage() {
                 <Card><CardHeader><CardTitle className="text-lg">Árbol de Procesos, Procedimientos y Políticas</CardTitle></CardHeader><CardContent><ScrollArea className="h-[calc(50vh-30px)] p-1 border rounded-md">{treeData.length > 0 ? renderTree(treeData) : <div className="flex flex-col items-center justify-center h-full text-center p-4"><FolderTree className="h-12 w-12 text-muted-foreground mb-2"/><p className="text-muted-foreground">No hay procesos para mostrar.</p><p className="text-xs text-muted-foreground">Verifique filtros o la configuración.</p></div>}</ScrollArea></CardContent></Card>
                 
                 <Card id="activity-pool" className={cn("flex flex-col", dropTargetInfo?.type === 'pool' && dropTargetInfo.id === 'activity-pool' && "bg-destructive/20 border-destructive")} onDragOver={(e) => handleDragOver(e)} onDrop={(e) => handleDrop(e)} onDragEnter={(e) => handleDragEnter(e, 'pool')} onDragLeave={handleDragLeave}>
-                  <CardHeader><CardTitle className="text-lg">Pool de Actividades</CardTitle><CardDescription className="text-xs">Actividades disponibles para asignar. Las inactivas no se pueden arrastrar.</CardDescription>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg">Pool de Actividades</CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => router.push('/procedimientos')}>Gestionar Procedimientos</Button>
+                    </div>
+                    <CardDescription className="text-xs">Actividades disponibles para asignar. Las inactivas no se pueden arrastrar.</CardDescription>
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="relative"><SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" /><Input type="search" placeholder="Buscar actividad..." value={activitySearchTerm} onChange={(e) => setActivitySearchTerm(e.target.value)} className="w-full pl-9"/></div>
                       <Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as ActivityStatusFilterType)}><SelectTrigger><FilterIcon className="h-4 w-4 mr-2" /><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas ({actividades.length})</SelectItem><SelectItem value="active">Activas ({activeActivitiesCount})</SelectItem><SelectItem value="inactive">Inactivas ({inactiveActivitiesCount})</SelectItem></SelectContent></Select>
@@ -1022,6 +1084,48 @@ export default function PanelJerarquicoPage() {
             </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reasignar Puesto Responsable</DialogTitle>
+                <DialogDescription>
+                    Seleccione el nuevo puesto que ejecutará la actividad: <span className="font-semibold">{activityToReassign?.nombre}</span>.
+                </DialogDescription>
+            </DialogHeader>
+            <Form {...reassignForm}>
+                <form onSubmit={reassignForm.handleSubmit(handleReassignPuestoSubmit)} className="space-y-4 py-4">
+                    <FormField
+                        control={reassignForm.control}
+                        name="puestoId"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Puesto Responsable</FormLabel>
+                                <FormControl>
+                                    <Combobox
+                                        value={field.value}
+                                        onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                                        options={[
+                                            { value: 'none', label: 'Sin Puesto Específico' },
+                                            ...puestos.map(p => ({ value: p.id, label: p.nombre }))
+                                        ]}
+                                        placeholder="Seleccione un puesto..."
+                                        searchPlaceholder="Buscar puesto..."
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                        <Button type="submit">Guardar Cambio</Button>
+                    </DialogFooter>
+                </form>
+            </Form>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
@@ -1044,5 +1148,6 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
