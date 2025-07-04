@@ -766,7 +766,7 @@ export default function PanelJerarquicoPage() {
     }
     if (type === 'activity') router.push(`/actividades?search=${encodeURIComponent(item.nombre)}`);
     if (type === 'procedure') {
-      router.push(`/procedimientos?search=${encodeURIComponent(item.nombre)}`);
+      router.push(`/procedimientos?search=${encodeURIComponent(item.codigo)}`);
     }
     if (type === 'policy') router.push(`/politicas?search=${encodeURIComponent(item.codigo)}`);
   };
@@ -1146,6 +1146,7 @@ type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
 
     
+
 
 
 

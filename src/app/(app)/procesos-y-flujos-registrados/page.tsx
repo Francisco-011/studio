@@ -157,8 +157,8 @@ export default function ProcesosYFlujosRegistradosPage() {
     router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
   };
 
-  const handleEditProcedure = (procedureName: string) => {
-    router.push(`/procedimientos?search=${encodeURIComponent(procedureName)}`);
+  const handleEditProcedure = (procedure: Procedimiento) => {
+    router.push(`/procedimientos?search=${encodeURIComponent(procedure.codigo)}`);
   };
 
   const editForm = useForm<CapturaFormData>({
@@ -633,7 +633,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 
                 const totalActivitiesCount = proceduresForProcess.reduce((sum, currentProc) => sum + (currentProc.activityOrder?.length || 0), 0);
 
-                const linkedPolicies = proc.politicasAsociadas
+                const linkedPolicies = (proc.politicasAsociadas || [])
                   ?.map(link => {
                     const policy = allPoliticas.find(p => p.id === link.policyId)
                     return policy ? { ...policy, linkType: link.linkType } : null
@@ -739,12 +739,12 @@ export default function ProcesosYFlujosRegistradosPage() {
                                                     className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mr-4")}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleEditProcedure(procedure.nombre);
+                                                        handleEditProcedure(procedure);
                                                     }}
                                                     onKeyDown={(e) => {
                                                         if (e.key === 'Enter' || e.key === ' ') {
                                                             e.stopPropagation();
-                                                            handleEditProcedure(procedure.nombre);
+                                                            handleEditProcedure(procedure);
                                                         }
                                                     }}
                                                   >
