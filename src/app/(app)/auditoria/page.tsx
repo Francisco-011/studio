@@ -198,6 +198,10 @@ export default function AuditoriaPage() {
   const [pendingActionsFilter, setPendingActionsFilter] = useState<'all' | 'with_pending' | 'no_pending'>('all');
   const [auditSortConfig, setAuditSortConfig] = useState<SortConfig<SortableAuditKeys> | null>(null);
   const [auditCurrentPage, setAuditCurrentPage] = useState(1);
+  
+  const [auditAlertSearchTerm, setAuditAlertSearchTerm] = useState('');
+  const [auditAlertTypeFilter, setAuditAlertTypeFilter] = useState<'all' | AuditType>('all');
+  const [auditAlertDaysFilter, setAuditAlertDaysFilter] = useState<'all' | '30' | '90' | '180'>('all');
 
   const [logSearchTerm, setLogSearchTerm] = useState('');
   const [logActionFilter, setLogActionFilter] = useState<'all' | LogAction>('all');
@@ -766,6 +770,23 @@ export default function AuditoriaPage() {
     return alerts.sort((a,b) => b.daysOverdue - a.daysOverdue);
 
   }, [allProcesses, puestos, allProcedimientos, isLoadingAllData]);
+
+  const filteredAuditAlerts = useMemo(() => {
+    return auditAlerts.filter(alert => {
+        const nameMatch = alert.name.toLowerCase().includes(auditAlertSearchTerm.toLowerCase());
+        const typeMatch = auditAlertTypeFilter === 'all' || alert.type === auditAlertTypeFilter;
+        
+        let daysOverdue = alert.daysOverdue;
+        if (daysOverdue > 9000) daysOverdue = Infinity; 
+
+        const daysMatch = auditAlertDaysFilter === 'all' ||
+                          (auditAlertDaysFilter === '30' && daysOverdue > 30) ||
+                          (auditAlertDaysFilter === '90' && daysOverdue > 90) ||
+                          (auditAlertDaysFilter === '180' && daysOverdue > 180);
+
+        return nameMatch && typeMatch && daysMatch;
+    });
+  }, [auditAlerts, auditAlertSearchTerm, auditAlertTypeFilter, auditAlertDaysFilter]);
 
 
   if (isLoadingAllData) {
@@ -1370,14 +1391,51 @@ export default function AuditoriaPage() {
 
              <TabsContent value="alertas" className="mt-4">
                <CardDescription className="mb-4">
-                  Esta tabla muestra los procesos y puestos que requieren una auditoría basada en la frecuencia programada.
+                  Esta tabla muestra los procesos, puestos y procedimientos que requieren una auditoría basada en la frecuencia programada.
                 </CardDescription>
-                {auditAlerts.length > 0 ? (
+
+                <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
+                    <div>
+                        <Label htmlFor="alert-search">Buscar por Nombre</Label>
+                        <Input 
+                            id="alert-search"
+                            placeholder="Filtrar por nombre..."
+                            value={auditAlertSearchTerm}
+                            onChange={e => setAuditAlertSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="alert-type-filter">Filtrar por Tipo</Label>
+                        <Select value={auditAlertTypeFilter} onValueChange={v => setAuditAlertTypeFilter(v as any)}>
+                            <SelectTrigger id="alert-type-filter"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos los Tipos</SelectItem>
+                                <SelectItem value="proceso">Proceso</SelectItem>
+                                <SelectItem value="puesto">Puesto</SelectItem>
+                                <SelectItem value="procedimiento">Procedimiento</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label htmlFor="alert-days-filter">Filtrar por Atraso</Label>
+                        <Select value={auditAlertDaysFilter} onValueChange={v => setAuditAlertDaysFilter(v as any)}>
+                            <SelectTrigger id="alert-days-filter"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Cualquier Atraso</SelectItem>
+                                <SelectItem value="30">Más de 30 días</SelectItem>
+                                <SelectItem value="90">Más de 90 días</SelectItem>
+                                <SelectItem value="180">Más de 180 días</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                {filteredAuditAlerts.length > 0 ? (
                   <div className="rounded-md border">
                     <Table>
                       <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Última Auditoría</TableHead><TableHead>Días de Atraso</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
                       <TableBody>
-                        {auditAlerts.map(alert => (
+                        {filteredAuditAlerts.map(alert => (
                           <TableRow key={`${alert.type}-${alert.id}`}>
                             <TableCell className="font-medium">{alert.name}</TableCell>
                             <TableCell className="capitalize">{alert.type}</TableCell>
@@ -1394,9 +1452,18 @@ export default function AuditoriaPage() {
                     </Table>
                   </div>
                 ) : (
-                  <div className="text-center p-8 bg-green-50 text-green-800 rounded-lg border border-green-200">
-                    <CheckCircle className="h-8 w-8 mx-auto mb-2" />
-                    <p className="font-semibold">¡Excelente! No hay auditorías pendientes.</p>
+                  <div className="text-center p-8 bg-muted/30 rounded-lg border">
+                    {auditAlerts.length === 0 ? (
+                      <>
+                        <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-600" />
+                        <p className="font-semibold">¡Excelente! No hay auditorías pendientes.</p>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="font-semibold">No se encontraron alertas que coincidan con los filtros.</p>
+                      </>
+                    )}
                   </div>
                 )}
              </TabsContent>
