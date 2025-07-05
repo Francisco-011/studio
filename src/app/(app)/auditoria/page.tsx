@@ -488,33 +488,49 @@ export default function AuditoriaPage() {
     setIsConfirmDeleteFindingOpen(false);
   }
 
-  const handleCreateActionPlan = (finding: AuditFinding, auditContext: Audit) => {
+  const handleCreateActionPlan = async (finding: AuditFinding, auditContext: Audit) => {
     if (!auditContext) return;
-    
-    let actionData: any = {
-      nombre: `Hallazgo en ${auditContext.auditType}: ${auditContext.targetName}`,
-      descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
-      responsable: 'Por Asignar',
-      estado: 'En Revisión',
-      origenMejora: `Auditoría - ${auditContext.auditorName}`,
-    };
 
-    if (auditContext.auditType === 'proceso') {
-      const target = procesosMap.get(auditContext.targetId);
-      if (target) {
-          actionData.procesoId = target.id;
-          actionData.area = target.area;
-          actionData.puesto = target.puesto;
+    try {
+      let actionData: any = {
+        nombre: `Hallazgo en ${auditContext.auditType}: ${auditContext.targetName}`,
+        descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
+        responsable: 'Por Asignar',
+        estado: 'En Revisión',
+        origenMejora: `Auditoría - ${auditContext.auditorName}`,
+      };
+
+      if (auditContext.auditType === 'proceso') {
+        const target = procesosMap.get(auditContext.targetId);
+        if (target) {
+            actionData.procesoId = target.id;
+            actionData.area = target.area;
+            actionData.puesto = target.puesto;
+        }
+      } else if (auditContext.auditType === 'puesto') {
+        const target = puestosMap.get(auditContext.targetId);
+        if (target) {
+          actionData.puesto = target.nombre;
+          actionData.area = areasMap.get(target.areaId)?.nombre;
+        }
       }
-    } else if (auditContext.auditType === 'puesto') {
-      const target = puestosMap.get(auditContext.targetId);
-      if (target) {
-        actionData.puesto = target.nombre;
-        actionData.area = areasMap.get(target.areaId)?.nombre;
-      }
+
+      await addAccion(actionData);
+      
+      const updatedFindings = auditContext.findings.map(f =>
+        f.id === finding.id ? { ...f, isActionCreated: true } : f
+      );
+      
+      const updatedAudit = { ...auditContext, findings: updatedFindings };
+      
+      setCurrentAuditSession(updatedAudit);
+      setPastAudits(prev => prev.map(audit => audit.id === updatedAudit.id ? updatedAudit : audit));
+      
+      toast({ title: "Plan de Acción Creado", description: "Se ha registrado la acción en el módulo de 'Acciones de Mejora'."});
+    } catch (e) {
+      console.error("Error creating action plan: ", e);
+      toast({ title: "Error", description: "No se pudo crear el plan de acción.", variant: "destructive" });
     }
-
-    addAccion(actionData);
   };
   
   const executeFinalization = async (auditToSave: Audit) => {
@@ -1805,6 +1821,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
