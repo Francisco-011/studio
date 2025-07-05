@@ -34,7 +34,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Lock } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
@@ -365,6 +367,15 @@ export default function AccionesPage() {
 
 
   function promptDeleteAccion(accion: Accion) {
+    if (accion.origenMejora?.includes('Auditoría')) {
+      toast({
+        title: "Eliminación Bloqueada",
+        description: "Las acciones originadas en una auditoría no se pueden eliminar. Si es necesario, puede cambiar su estado a 'Cancelada'.",
+        variant: "default",
+        duration: 7000,
+      });
+      return;
+    }
     setAccionToDelete(accion);
     setIsConfirmDeleteDialogOpen(true);
   }
@@ -958,6 +969,7 @@ export default function AccionesPage() {
                         accion.fechaObjetivo &&
                         isValid(parseISO(accion.fechaObjetivo)) &&
                         parseISO(accion.fechaObjetivo) < new Date(new Date().setHours(0, 0, 0, 0));
+                    const isFromAudit = accion.origenMejora?.includes('Auditoría');
                     
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
@@ -1009,9 +1021,28 @@ export default function AccionesPage() {
                         <Button variant="ghost" size="icon" onClick={() => handleEditAccion(accion)} className="mr-1">
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => promptDeleteAccion(accion)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span tabIndex={0}> {/* Span wrapper for disabled button tooltip */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => promptDeleteAccion(accion)}
+                                  className="text-destructive hover:text-destructive"
+                                  disabled={isFromAudit}
+                                >
+                                  {isFromAudit ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {isFromAudit && (
+                              <TooltipContent>
+                                <p>Esta acción viene de una auditoría y no puede ser eliminada.</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                     </TableRow>
                   )})}
