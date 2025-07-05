@@ -158,13 +158,6 @@ export default function AccionesPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [actionForHistory, setActionForHistory] = useState<Accion | null>(null);
 
-  const [isCompleteConfirmDialogOpen, setIsCompleteConfirmDialogOpen] = useState(false);
-  const [actionToComplete, setActionToComplete] = useState<{ id: string; data: AccionFormData } | null>(null);
-  const [completionOptions, setCompletionOptions] = useState({
-    applyTimeSaving: true,
-    applyCostSaving: true,
-  });
-
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const [isClient, setIsClient] = useState(false);
@@ -326,17 +319,6 @@ export default function AccionesPage() {
   }, [editingAccion, isAccionDialogOpen, accionForm]);
 
   async function handleAccionSubmit(data: AccionFormData) {
-    const isCompleting = editingAccion && data.estado === 'Completada' && editingAccion.estado !== 'Completada';
-    const hasSavings = data.ahorroEstimado || data.ahorroTiempoEstimado;
-
-    if (isCompleting && hasSavings) {
-      setActionToComplete({ id: editingAccion.id, data });
-      setCompletionOptions({ applyTimeSaving: true, applyCostSaving: true });
-      setIsAccionDialogOpen(false);
-      setIsCompleteConfirmDialogOpen(true);
-      return;
-    }
-
     const dataToSave = {
         ...data,
         area: data.area || undefined,
@@ -357,60 +339,6 @@ export default function AccionesPage() {
     }
     setEditingAccion(null);
     setIsAccionDialogOpen(false);
-    accionForm.reset();
-  }
-
-  async function handleConfirmCompletion() {
-    if (!actionToComplete) return;
-
-    const { id, data } = actionToComplete;
-    const { applyTimeSaving, applyCostSaving } = completionOptions;
-    
-    const cambios: CambioHistorial[] = [];
-    if (data.procesoId && (applyCostSaving || applyTimeSaving)) {
-        const targetProcess = capturedProcesses.find(p => p.id === data.procesoId);
-        if (targetProcess) {
-            const updatesForProcess: Partial<CapturedProcess> = {};
-            
-            if (applyTimeSaving && data.ahorroTiempoEstimado && data.unidadTiempoAhorro === 'Minutos/Instancia') {
-                if (targetProcess.tiempoEstimado !== undefined) {
-                    updatesForProcess.tiempoEstimado = Math.max(0, targetProcess.tiempoEstimado - data.ahorroTiempoEstimado);
-                    cambios.push({ timestamp: new Date().toISOString(), field: 'Tiempo Estimado Proceso', before: targetProcess.tiempoEstimado, after: updatesForProcess.tiempoEstimado });
-                }
-            }
-            
-            if (applyCostSaving && data.ahorroEstimado) {
-                 if (targetProcess.costoEstimado !== undefined) {
-                    updatesForProcess.costoEstimado = Math.max(0, targetProcess.costoEstimado - data.ahorroEstimado);
-                    cambios.push({ timestamp: new Date().toISOString(), field: 'Costo Estimado Proceso', before: targetProcess.costoEstimado, after: updatesForProcess.costoEstimado });
-                }
-            }
-
-            if (Object.keys(updatesForProcess).length > 0) {
-                 await updateProceso(data.procesoId, updatesForProcess);
-                 toast({ title: "Mejora Aplicada", description: `Se aplicaron ${cambios.length} cambio(s) al proceso asociado.`});
-            }
-        }
-    }
-    
-    const dataToSave = {
-        ...data,
-        area: data.area || undefined,
-        puesto: data.puesto || undefined,
-        procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
-        procedimientoId: data.procedimientoId === NO_ELEMENTO_SELECTED ? undefined : data.procedimientoId,
-        actividadId: data.actividadId === NO_ELEMENTO_SELECTED ? undefined : data.actividadId,
-        fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
-        fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
-    };
-    
-    await updateAccion(id, dataToSave, cambios);
-
-    toast({ title: 'Acción Completada', description: 'La acción y sus mejoras asociadas han sido aplicadas.' });
-
-    setIsCompleteConfirmDialogOpen(false);
-    setActionToComplete(null);
-    setEditingAccion(null);
     accionForm.reset();
   }
 
@@ -754,15 +682,15 @@ export default function AccionesPage() {
                               <FormItem>
                                 <FormLabel>Proceso Asociado</FormLabel>
                                 <Combobox
-                                  value={field.value}
-                                  onChange={field.onChange}
                                   options={[
                                     { value: NO_ELEMENTO_SELECTED, label: "Ninguno" },
                                     ...capturedProcesses.filter(p => p.activo !== false).map(proc => ({ value: proc.id, label: proc.proceso }))
                                   ]}
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   placeholder="Seleccione un proceso"
                                   searchPlaceholder="Buscar proceso..."
-                                  disabled={!!watchedProcedimientoId || !!watchedActividadId}
+                                  disabled={!!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -775,15 +703,15 @@ export default function AccionesPage() {
                               <FormItem>
                                 <FormLabel>Procedimiento Asociado</FormLabel>
                                 <Combobox
-                                  value={field.value}
-                                  onChange={field.onChange}
                                   options={[
                                     { value: NO_ELEMENTO_SELECTED, label: "Ninguno" },
                                     ...procedimientos.filter(p => p.activo).map(proc => ({ value: proc.id, label: `${proc.codigo} - ${proc.nombre}` }))
                                   ]}
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   placeholder="Seleccione un procedimiento"
                                   searchPlaceholder="Buscar procedimiento..."
-                                  disabled={!!watchedProcesoId || !!watchedActividadId}
+                                  disabled={!!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -796,22 +724,22 @@ export default function AccionesPage() {
                               <FormItem>
                                 <FormLabel>Actividad Asociada</FormLabel>
                                 <Combobox
-                                  value={field.value}
-                                  onChange={field.onChange}
                                   options={[
                                     { value: NO_ELEMENTO_SELECTED, label: "Ninguna" },
                                     ...actividades.filter(a => a.activa).map(act => ({ value: act.id, label: act.nombre }))
                                   ]}
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   placeholder="Seleccione una actividad"
                                   searchPlaceholder="Buscar actividad..."
-                                  disabled={!!watchedProcesoId || !!watchedProcedimientoId}
+                                  disabled={!!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center">
+                        <FormDescription className="text-xs text-center !mt-2">
                           Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
                         </FormDescription>
 
@@ -1255,50 +1183,6 @@ export default function AccionesPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCompleteConfirmDialogOpen} onOpenChange={setIsCompleteConfirmDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckSquare className="h-5 w-5 text-primary"/>
-              Confirmar Finalización de Acción
-            </DialogTitle>
-            <DialogDescription>
-              La acción "{actionToComplete?.data.nombre}" se marcará como 'Completada'. Seleccione qué mejoras automáticas desea aplicar al elemento asociado.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            {actionToComplete?.data.ahorroTiempoEstimado && (
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="applyTimeSaving" 
-                  checked={completionOptions.applyTimeSaving}
-                  onCheckedChange={(checked) => setCompletionOptions(prev => ({...prev, applyTimeSaving: !!checked}))}
-                />
-                <Label htmlFor="applyTimeSaving" className="text-sm font-normal cursor-pointer">
-                  Aplicar ahorro de tiempo de {actionToComplete.data.ahorroTiempoEstimado} {actionToComplete.data.unidadTiempoAhorro?.split('/')[0]}
-                </Label>
-              </div>
-            )}
-             {actionToComplete?.data.ahorroEstimado && (
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="applyCostSaving" 
-                  checked={completionOptions.applyCostSaving}
-                  onCheckedChange={(checked) => setCompletionOptions(prev => ({...prev, applyCostSaving: !!checked}))}
-                />
-                <Label htmlFor="applyCostSaving" className="text-sm font-normal cursor-pointer">
-                  Aplicar ahorro de costo de {formatCurrencyDisplay(actionToComplete.data.ahorroEstimado, actionToComplete.data.monedaAhorro)}
-                </Label>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsCompleteConfirmDialogOpen(false); setActionToComplete(null);}}>Cancelar</Button>
-            <Button onClick={handleConfirmCompletion}>Confirmar y Completar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
