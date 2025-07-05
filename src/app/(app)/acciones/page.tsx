@@ -811,7 +811,7 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center !-mt-2">
+                        <FormDescription className="text-xs text-center">
                           Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
                         </FormDescription>
 
