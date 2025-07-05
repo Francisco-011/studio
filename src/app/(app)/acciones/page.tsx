@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -110,7 +110,7 @@ interface SortConfig {
 
 
 function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
-  if (amount === undefined || amount === null || currency === undefined) return "-";
+  if (amount === undefined || amount === null || !currency || isNaN(amount)) return "-";
   try {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
   } catch (e) {
@@ -172,16 +172,46 @@ export default function AccionesPage() {
     setIsClient(true);
   }, []);
 
-  function formatHistoryValue(field: string, value: any, moneda?: Moneda): string {
-    if (value === undefined || value === null) return "-";
-    if (String(field).toLowerCase().includes('costo')) {
-      return formatCurrencyDisplay(Number(value), moneda);
+  const formatHistoryValue = useCallback((field: string, value: any, accion?: Accion | null): string => {
+    if (value === undefined || value === null || value === 'No definido') return "-";
+
+    const fieldLower = String(field).toLowerCase();
+
+    // Handle dates
+    if (fieldLower.includes('fecha')) {
+        if (value instanceof Date && isValid(value)) {
+            return format(value, 'PPP', { locale: es });
+        }
+        const date = parseISO(String(value));
+        if (isValid(date)) {
+            return format(date, 'PPP', { locale: es });
+        }
+        return String(value);
     }
-    if (String(field).toLowerCase().includes('tiempo')) {
-      return `${value} min`;
+
+    // Handle currency
+    if (fieldLower.includes('costo') || fieldLower.includes('ahorroestimado')) {
+        return formatCurrencyDisplay(Number(value), accion?.monedaAhorro);
     }
+    
+    // Handle time savings
+    if (fieldLower.includes('tiempo')) {
+        return formatTimeSavingDisplay(Number(value), accion?.unidadTiempoAhorro);
+    }
+    
+    // Handle ID lookups
+    if (fieldLower === 'procesoid') {
+        return capturedProcesses.find(p => p.id === value)?.proceso || String(value).slice(0, 8) + '...';
+    }
+    if (fieldLower === 'procedimientoid') {
+        return procedimientos.find(p => p.id === value)?.nombre || String(value).slice(0, 8) + '...';
+    }
+    if (fieldLower === 'actividadid') {
+        return actividades.find(a => a.id === value)?.nombre || String(value).slice(0, 8) + '...';
+    }
+
     return String(value);
-  }
+  }, [capturedProcesses, procedimientos, actividades]);
 
 
   const accionForm = useForm<AccionFormData>({
@@ -1210,8 +1240,8 @@ export default function AccionesPage() {
                     <TableRow key={index}>
                       <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
                       <TableCell>{cambio.field}</TableCell>
-                      <TableCell className="text-right">{formatHistoryValue(cambio.field, cambio.before, actionForHistory?.monedaAhorro)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatHistoryValue(cambio.field, cambio.after, actionForHistory?.monedaAhorro)}</TableCell>
+                      <TableCell className="text-right">{formatHistoryValue(cambio.field, cambio.before, actionForHistory)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatHistoryValue(cambio.field, cambio.after, actionForHistory)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1221,9 +1251,7 @@ export default function AccionesPage() {
             )}
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cerrar</Button>
-            </DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
