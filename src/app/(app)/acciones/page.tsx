@@ -68,8 +68,8 @@ const accionFormSchema = z.object({
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
   unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
-  origenMejora: z.string().optional(),
   historialDeCambios: z.array(z.any()).optional(),
+  origenMejora: z.string().optional(),
 }).refine(data => {
   if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && !data.monedaAhorro) {
     return false;
@@ -647,7 +647,7 @@ export default function AccionesPage() {
                   }
                 }}>
                   <DialogTrigger asChild>
-                    <Button onClick={() => { setEditingAccion(null); accionForm.reset(); setIsAccionDialogOpen(true); }} className="w-full">
+                    <Button onClick={() => { setEditingAccion(null); setIsAccionDialogOpen(true); }} className="w-full">
                       <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                     </Button>
                   </DialogTrigger>
@@ -747,7 +747,7 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center !mt-2">
+                        <FormDescription className="text-xs text-center pt-1">
                           Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
                         </FormDescription>
 
@@ -1217,4 +1217,5 @@ export default function AccionesPage() {
     </div>
   );
 }
+
 
