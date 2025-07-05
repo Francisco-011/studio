@@ -154,6 +154,18 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
   );
 };
 
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+
 export default function AuditoriaPage() {
   const router = useRouter();
   const { actividades, isLoadingActividades } = useActividades();
@@ -523,8 +535,12 @@ export default function AuditoriaPage() {
       
       const updatedAudit = { ...auditContext, findings: updatedFindings };
       
-      setCurrentAuditSession(updatedAudit);
-      setPastAudits(prev => prev.map(audit => audit.id === updatedAudit.id ? updatedAudit : audit));
+      const updatedPastAudits = pastAudits.map(audit => audit.id === updatedAudit.id ? updatedAudit : audit);
+      setPastAudits(updatedPastAudits);
+
+      if (currentAuditSession?.id === updatedAudit.id) {
+          setCurrentAuditSession(updatedAudit);
+      }
       
       toast({ title: "Plan de Acción Creado", description: "Se ha registrado la acción en el módulo de 'Acciones de Mejora'."});
     } catch (e) {
@@ -938,6 +954,56 @@ export default function AuditoriaPage() {
       .map(proc => ({ value: proc.id, label: proc.proceso }));
   }, [newAuditType, newAuditTargetId, allProcesses, puestosMap]);
 
+  const handleAuditExport = () => {
+    if (filteredAndSortedAudits.length === 0) {
+        toast({ title: "Nada que exportar", description: "No hay auditorías que coincidan con los filtros actuales.", variant: "default" });
+        return;
+    }
+
+    const headers = ["ID Auditoría", "Fecha", "Tipo", "Objetivo Auditado", "Auditor", "Estado", "Total Hallazgos", "Hallazgos No Conformes", "Oportunidades de Mejora", "Acciones Pendientes"];
+    
+    const csvRows = [
+        headers.join(','),
+        ...filteredAndSortedAudits.map(audit => {
+            const totalFindings = audit.findings.length;
+            const nonConform = audit.findings.filter(f => f.type === 'No Conforme').length;
+            const opportunity = audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length;
+            const pendingActions = audit.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+
+            return [
+                escapeCsvCell(audit.id),
+                escapeCsvCell(format(parseISO(audit.auditDate), 'yyyy-MM-dd')),
+                escapeCsvCell(audit.auditType),
+                escapeCsvCell(audit.targetName),
+                escapeCsvCell(audit.auditorName),
+                escapeCsvCell(audit.status),
+                escapeCsvCell(totalFindings),
+                escapeCsvCell(nonConform),
+                escapeCsvCell(opportunity),
+                escapeCsvCell(pendingActions)
+            ].join(',');
+        })
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `historial_auditorias_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Exportación Iniciada", description: "El archivo CSV se está descargando." });
+    } else {
+        toast({ title: "Exportación Fallida", description: "Su navegador no soporta la descarga directa.", variant: "destructive" });
+    }
+  };
+
+
   if (isLoadingAllData) {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
@@ -1343,7 +1409,8 @@ export default function AuditoriaPage() {
                         <Button 
                           size="lg" 
                           onClick={handleFinalizeAudit} 
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || (currentAuditSession.findings.length === 0)}
+                          title={currentAuditSession.findings.length === 0 ? "Debe registrar al menos un hallazgo." : "Finalizar y guardar la auditoría"}
                         > 
                           <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría
                         </Button>
@@ -1651,6 +1718,9 @@ export default function AuditoriaPage() {
                             <SelectItem value="no_pending">Sin Pendientes</SelectItem>
                         </SelectContent>
                     </Select>
+                    <Button onClick={handleAuditExport} variant="outline" disabled={filteredAndSortedAudits.length === 0}>
+                        <FileText className="mr-2 h-4 w-4" /> Exportar a CSV ({filteredAndSortedAudits.length})
+                    </Button>
                   </div>
                 </div>
                 {paginatedAudits.length > 0 ? (
@@ -1821,6 +1891,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
