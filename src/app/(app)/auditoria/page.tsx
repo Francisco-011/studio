@@ -635,10 +635,6 @@ export default function AuditoriaPage() {
     setCurrentAuditSession(auditToOpen);
   };
 
-  const handleEditActivity = (activityName: string) => {
-    router.push(`/actividades?search=${encodeURIComponent(activityName)}`);
-  };
-
   const promptDeleteAudit = (audit: Audit) => {
     if (audit.status !== 'En Progreso') {
       toast({
@@ -1027,7 +1023,6 @@ export default function AuditoriaPage() {
                                                                             <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
                                                                             {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                                         </div>
-                                                                        <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                     </CardHeader>
                                                                     <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
@@ -1106,7 +1101,6 @@ export default function AuditoriaPage() {
                                                                                                             <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{procIndex + 1}.{actIndex + 1}</span>{act.nombre}</p>
                                                                                                             {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                                                                         </div>
-                                                                                                        <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                                                                     </CardHeader>
                                                                                                     <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
                                                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
@@ -1162,7 +1156,6 @@ export default function AuditoriaPage() {
                                                             <p className="font-medium text-sm flex items-start gap-3"><span className="font-semibold text-sm w-8 shrink-0 text-center pt-px">{actIndex + 1}</span>{act.nombre}</p>
                                                             {!act.activa && <Badge variant="destructive" className="bg-slate-500 hover:bg-slate-600 text-white border-transparent text-xs w-fit mt-1">Inactiva</Badge>}
                                                         </div>
-                                                        <Button variant="ghost" size="sm" onClick={() => handleEditActivity(act.nombre)}>Editar</Button>
                                                     </CardHeader>
                                                     <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
@@ -1812,6 +1805,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
