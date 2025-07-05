@@ -132,7 +132,7 @@ interface SortConfig<T> {
 }
 
 const AUDIT_ITEMS_PER_PAGE = 10;
-const LOG_ITEMS_PER_PAGE = 15;
+const LOG_ITEMS_PER_PAGE = 20;
 
 
 const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -1591,7 +1591,13 @@ export default function AuditoriaPage() {
                   </TableBody>
                 </Table>
                 </div>
-                 <div className="flex items-center justify-between space-x-2 py-4"><span className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages} ({filteredAndSortedLogs.length} total)</span><div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.max(1, p - 1))} disabled={logCurrentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.min(totalLogPages, p + 1))} disabled={logCurrentPage === totalLogPages || totalLogPages === 0}>Siguiente</Button></div></div>
+                 <div className="flex items-center justify-between space-x-2 py-4">
+                    <span className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages} ({filteredAndSortedLogs.length} total)</span>
+                    <div className="space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.max(1, p - 1))} disabled={logCurrentPage === 1}>Anterior</Button>
+                        <Button variant="outline" size="sm" onClick={() => setLogCurrentPage(p => Math.min(totalLogPages, p + 1))} disabled={logCurrentPage === totalLogPages || totalLogPages === 0}>Siguiente</Button>
+                    </div>
+                 </div>
                 </>
               ) : (
                 <div className="mt-6 p-8 border border-dashed border-border rounded-lg flex flex-col items-center justify-center min-h-[300px] bg-muted/20">
