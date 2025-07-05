@@ -69,7 +69,7 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
 import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/contexts/ActivityLogContext';
-import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
+import { useProcesos, type CapturedProcess, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -388,7 +388,7 @@ export default function AuditoriaPage() {
             .filter((act): act is Actividad => !!act)
             .filter(activityFilterFunc);
         
-        const relatedPolicies = (procedimiento.politicasAsociadas || []).map(link => politicasMap.get(link.policyId)).filter((p): p is Politica => !!p);
+        const relatedPolicies = (procedimiento.politicasAsociadasIds || []).map(id => politicasMap.get(id)).filter((p): p is Politica => !!p);
 
         return {
             ...nullDetails, name: procedimiento.nombre, procedimiento, process: parentProcess,
@@ -830,11 +830,12 @@ export default function AuditoriaPage() {
             if (valA.toLowerCase() < valB.toLowerCase()) return auditAlertSortConfig.direction === 'ascending' ? -1 : 1;
             if (valA.toLowerCase() > valB.toLowerCase()) return auditAlertSortConfig.direction === 'ascending' ? 1 : -1;
             return 0;
-        } else {
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
             if (valA < valB) return auditAlertSortConfig.direction === 'ascending' ? -1 : 1;
             if (valA > valB) return auditAlertSortConfig.direction === 'ascending' ? 1 : -1;
             return 0;
         }
+        return 0;
       });
     }
 
@@ -928,6 +929,8 @@ export default function AuditoriaPage() {
                                         <DetailDisplay title="Departamento" value={auditTargetDetails.departamento?.nombre} />
                                         <DetailDisplay title="Puesto que Ejecuta" value={auditTargetDetails.process.puesto} />
                                         <DetailDisplay title="Jefe Inmediato del Puesto" value={auditTargetDetails.jefeInmediato?.nombre} />
+                                        <DetailDisplay title="Frecuencia de Auditoría" value={auditFrequencyOptions.find(o => o.value === auditTargetDetails.process?.auditFrequencyInDays)?.label || 'No definida'}/>
+                                        <DetailDisplay title="Última Auditoría" value={auditTargetDetails.process.lastAuditedAt ? format(parseISO(auditTargetDetails.process.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
                                     </CardContent>
                                 </Card>
                                 
@@ -946,10 +949,15 @@ export default function AuditoriaPage() {
                                                 <AccordionContent className="p-4 pt-0 pl-16 space-y-3">
                                                     <DetailDisplay title="Descripción del Procedimiento" value={procedimiento.descripcion} isTextarea />
                                                     <DetailDisplay title="Sistemas Utilizados en Procedimiento" value={procedimiento.sistemasUtilizados} isList />
+                                                    <DetailDisplay title="Políticas Vinculadas" value={(procedimiento.politicasAsociadasIds || []).map(id => politicasMap.get(id)?.titulo).filter(Boolean) as string[]} isList />
                                                     {activitiesToShow.length > 0 ? (
                                                         <div className="space-y-2">
                                                             <h5 className="font-semibold text-sm mt-2">Actividades:</h5>
-                                                            {activitiesToShow.map((act, actIndex) => (
+                                                            {activitiesToShow.map((act, actIndex) => {
+                                                              const puestoActividad = act.puestoId ? puestosMap.get(act.puestoId) : null;
+                                                              const costoActividad = puestoActividad?.costoHora && act.tiempoEstimado ? (puestoActividad.costoHora / 60) * act.tiempoEstimado : null;
+
+                                                              return (
                                                                 <Card key={act.id} className="bg-background/50">
                                                                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 p-3">
                                                                         <div className="flex-grow">
@@ -961,15 +969,14 @@ export default function AuditoriaPage() {
                                                                     <CardContent className="px-3 pt-0 pb-3 ml-11 border-t mt-2 pt-3 space-y-2">
                                                                         <DetailDisplay title="Descripción" value={act.descripcionBreve} isTextarea />
                                                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                                                            <DetailDisplay title="Código" value={act.codigo} />
-                                                                            <DetailDisplay title="Sistema" value={act.sistemaUtilizado} />
-                                                                            <div className="col-span-2">
-                                                                                <DetailDisplay title="Últ. Modif." value={act.updatedAt && isValid(new Date(act.updatedAt)) ? format(new Date(act.updatedAt), 'dd MMM yyyy, HH:mm', { locale: es }) : (act.createdAt && isValid(new Date(act.createdAt)) ? format(new Date(act.createdAt), 'dd MMM yyyy, HH:mm', { locale: es }) : 'N/A')} />
-                                                                            </div>
+                                                                            <DetailDisplay title="Puesto que Ejecuta" value={puestoActividad?.nombre} />
+                                                                            <DetailDisplay title="Frecuencia" value={act.frecuencia ? `${act.frecuencia} (${act.ejecucionesPorPeriodo || 1})` : 'N/A'} />
+                                                                            <DetailDisplay title="Tiempo Estimado/Ideal" value={`${formatMinutesToHours(act.tiempoEstimado || 0)} / ${formatMinutesToHours(act.tiempoIdeal || 0)}`} />
+                                                                            <DetailDisplay title="Costo por Ejecución" value={costoActividad !== null ? `${costoActividad.toFixed(2)} ${puestoActividad?.monedaCosto || 'N/A'}` : 'N/A'} />
                                                                         </div>
                                                                     </CardContent>
                                                                 </Card>
-                                                            ))}
+                                                            )})}
                                                         </div>
                                                     ) : (
                                                         <p className="text-sm text-muted-foreground italic">Este procedimiento no tiene actividades definidas o no coinciden con el filtro.</p>
@@ -1008,8 +1015,8 @@ export default function AuditoriaPage() {
                                                                     <CardHeader className="pb-2"><CardTitle className="text-base">Detalles del Proceso</CardTitle></CardHeader>
                                                                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                                                                         <DetailDisplay title="Objetivo" value={process.descripcion} isTextarea />
-                                                                        <DetailDisplay title="Tiempo Est./Ideal" value={`${process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : '-'} / ${process.tiempoIdeal !== undefined ? formatMinutesToHours(process.tiempoIdeal) : '-'}`} />
-                                                                        <DetailDisplay title="Costo Est./Ideal" value={`${process.costoEstimado ?? '-'} / ${process.costoIdeal ?? '-'} ${process.monedaCosto || ''}`} />
+                                                                        <DetailDisplay title="Tiempo Est. (Mes)" value={process.tiempoEstimado !== undefined ? formatMinutesToHours(process.tiempoEstimado) : 'No calculado'} />
+                                                                        <DetailDisplay title="Costo Est. (Mes)" value={process.costoEstimado !== undefined ? `${process.costoEstimado.toFixed(2)} ${process.monedaCosto || ''}` : 'No calculado'} />
                                                                     </CardContent>
                                                                 </Card>
                                                                 
@@ -1026,7 +1033,7 @@ export default function AuditoriaPage() {
                                                                                     </div>
                                                                                 </AccordionTrigger>
                                                                                 <AccordionContent className="p-4 pt-0 pl-12 space-y-2">
-                                                                                    <DetailDisplay title="Sistemas Utilizados en Procedimiento" value={procedimiento.sistemasUtilizados} isList />
+                                                                                    <DetailDisplay title="Sistemas Utilizados" value={procedimiento.sistemasUtilizados} isList />
                                                                                     {activitiesToShow.length > 0 ? (
                                                                                         <div className="space-y-2 mt-2">
                                                                                             {activitiesToShow.map((act, actIndex) => (
@@ -1191,11 +1198,10 @@ export default function AuditoriaPage() {
                                 </Card>
                                 </>
                             )}
-                             {auditTargetDetails && auditTargetDetails.relatedPolicies && (
+                             {auditTargetDetails && auditTargetDetails.relatedPolicies && auditTargetDetails.relatedPolicies.length > 0 && (
                                 <Card>
                                     <CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" />Políticas Aplicables</CardTitle></CardHeader>
                                     <CardContent>
-                                        {auditTargetDetails.relatedPolicies.length > 0 ? (
                                         <div className="space-y-2">
                                             {auditTargetDetails.relatedPolicies.map((pol: Politica) => (
                                             <div key={pol.id} className="text-sm p-2 border rounded-md bg-background">
@@ -1204,9 +1210,6 @@ export default function AuditoriaPage() {
                                             </div>
                                             ))}
                                         </div>
-                                        ) : (
-                                        <p className="text-sm text-muted-foreground italic">No hay políticas asociadas directamente al objetivo auditado.</p>
-                                        )}
                                     </CardContent>
                                 </Card>
                              )}
@@ -1746,5 +1749,6 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
