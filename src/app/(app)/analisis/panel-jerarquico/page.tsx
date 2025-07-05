@@ -433,7 +433,7 @@ export default function PanelJerarquicoPage() {
                             .filter((p): p is Politica & { linkType: string } => !!p)
                             .map(p => ({
                                 id: `politica-${p.id}-proc-${proc.id}`,
-                                name: p.titulo,
+                                name: `${p.titulo} (${p.linkType})`,
                                 type: 'politica' as const, originalId: p.id, payload: p,
                             }));
 
@@ -1366,6 +1366,7 @@ type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
+
 
 
 
