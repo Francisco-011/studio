@@ -529,6 +529,15 @@ export default function AuditoriaPage() {
   const handleFinalizeAudit = async () => {
     if (!currentAuditSession) return;
 
+    if (!currentAuditSession.findings || currentAuditSession.findings.length === 0) {
+      toast({
+        title: "Acción no permitida",
+        description: "Debe registrar al menos un hallazgo (ej. 'Conforme') para poder finalizar la auditoría.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const now = new Date().toISOString();
     try {
         if (currentAuditSession.auditType === 'proceso') {
@@ -1268,7 +1277,14 @@ export default function AuditoriaPage() {
                     </div>
                     <div className="flex justify-end pt-4 space-x-2">
                         <Button variant="destructive" onClick={promptCancelAudit} disabled={isReadOnly}> <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría</Button>
-                        <Button size="lg" onClick={handleFinalizeAudit} disabled={isReadOnly}> <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría</Button>
+                        <Button 
+                          size="lg" 
+                          onClick={handleFinalizeAudit} 
+                          disabled={isReadOnly || !currentAuditSession.findings || currentAuditSession.findings.length === 0}
+                          title={(!currentAuditSession.findings || currentAuditSession.findings.length === 0) ? "Debe registrar al menos un hallazgo para finalizar." : ""}
+                        > 
+                          <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -1531,7 +1547,7 @@ export default function AuditoriaPage() {
                             <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy') : 'Nunca auditado'}</TableCell>
                             <TableCell><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
                             <TableCell className="text-right">
-                              <Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type, alert.id)}>
+                              <Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type as any, alert.id)}>
                                 <PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría
                               </Button>
                             </TableCell>
@@ -1749,6 +1765,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
