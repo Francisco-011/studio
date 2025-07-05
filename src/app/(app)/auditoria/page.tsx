@@ -594,6 +594,14 @@ export default function AuditoriaPage() {
   };
 
   const promptDeleteAudit = (audit: Audit) => {
+    if (audit.status !== 'En Progreso') {
+      toast({
+        title: 'Acción no permitida',
+        description: 'Solo se pueden eliminar auditorías con estado "En Progreso".',
+        variant: 'default',
+      });
+      return;
+    }
     setAuditToDelete(audit);
     setIsConfirmDeleteAuditOpen(true);
   };
@@ -1620,7 +1628,14 @@ export default function AuditoriaPage() {
                                       {audit.status === 'Completada' || audit.status === 'Cancelada' ? <Eye className="mr-2 h-4 w-4" /> : <Edit className="mr-2 h-4 w-4" />}
                                       {audit.status === 'Completada' || audit.status === 'Cancelada' ? 'Ver Detalles' : 'Ver / Editar'}
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} className="text-destructive hover:text-destructive">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      onClick={() => promptDeleteAudit(audit)} 
+                                      className="text-destructive hover:text-destructive"
+                                      disabled={audit.status !== 'En Progreso'}
+                                      title={audit.status !== 'En Progreso' ? 'Solo se pueden eliminar auditorías "En Progreso"' : 'Eliminar Auditoría'}
+                                    >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </TableCell>
@@ -1731,4 +1746,5 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
