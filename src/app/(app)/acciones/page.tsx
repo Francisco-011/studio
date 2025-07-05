@@ -12,6 +12,7 @@ import { useAreas } from '@/contexts/AreasContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -36,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
 import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Combobox } from '@/components/ui/combobox';
 
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
@@ -49,6 +51,7 @@ const accionFormSchema = z.object({
   descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
   responsable: z.string().min(1, 'El responsable es requerido.'),
   procesoId: z.string().optional(),
+  procedimientoId: z.string().optional(),
   actividadId: z.string().optional(),
   area: z.string().optional(),
   puesto: z.string().optional(),
@@ -138,6 +141,7 @@ export default function AccionesPage() {
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
+  const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccionEstado | 'all'>('all');
@@ -189,6 +193,7 @@ export default function AccionesPage() {
       area: undefined,
       puesto: undefined,
       procesoId: undefined,
+      procedimientoId: undefined,
       actividadId: undefined,
       estado: 'Pendiente',
       fechaObjetivo: undefined,
@@ -213,10 +218,12 @@ export default function AccionesPage() {
   }, [watchedArea, areas, puestos, isLoadingPuestos, isLoadingAreas]);
 
   const watchedProcesoId = accionForm.watch('procesoId');
+  const watchedProcedimientoId = accionForm.watch('procedimientoId');
   const watchedActividadId = accionForm.watch('actividadId');
 
   useEffect(() => {
     if (watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) {
+        accionForm.setValue('procedimientoId', undefined);
         accionForm.setValue('actividadId', undefined);
         const process = capturedProcesses.find(p => p.id === watchedProcesoId);
         if (process) {
@@ -227,8 +234,24 @@ export default function AccionesPage() {
   }, [watchedProcesoId, accionForm, capturedProcesses]);
   
   useEffect(() => {
+    if (watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) {
+      accionForm.setValue('procesoId', undefined);
+      accionForm.setValue('actividadId', undefined);
+      const procedure = procedimientos.find(p => p.id === watchedProcedimientoId);
+      if (procedure) {
+        const parentProcess = capturedProcesses.find(p => p.id === procedure.procesoId);
+        if (parentProcess) {
+          accionForm.setValue('area', parentProcess.area);
+          accionForm.setValue('puesto', parentProcess.puesto);
+        }
+      }
+    }
+  }, [watchedProcedimientoId, accionForm, procedimientos, capturedProcesses]);
+
+  useEffect(() => {
      if (watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED) {
         accionForm.setValue('procesoId', undefined);
+        accionForm.setValue('procedimientoId', undefined);
      }
   }, [watchedActividadId, accionForm]);
 
@@ -241,6 +264,7 @@ export default function AccionesPage() {
           area: editingAccion.area || undefined,
           puesto: editingAccion.puesto || undefined,
           procesoId: editingAccion.procesoId || undefined,
+          procedimientoId: editingAccion.procedimientoId || undefined,
           actividadId: editingAccion.actividadId || undefined,
           fechaObjetivo: editingAccion.fechaObjetivo ? parseISO(editingAccion.fechaObjetivo) : undefined,
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
@@ -253,6 +277,7 @@ export default function AccionesPage() {
           area: undefined,
           puesto: undefined,
           procesoId: undefined,
+          procedimientoId: undefined,
           actividadId: undefined,
           estado: 'Pendiente',
           fechaObjetivo: undefined,
@@ -275,7 +300,6 @@ export default function AccionesPage() {
     if (isCompleting && hasSavings) {
       setActionToComplete({ id: editingAccion.id, data });
       setCompletionOptions({ applyTimeSaving: true, applyCostSaving: true });
-      setIsCompleteConfirmDialogOpen(true);
       setIsAccionDialogOpen(false);
       return;
     }
@@ -285,6 +309,7 @@ export default function AccionesPage() {
         area: data.area || undefined,
         puesto: data.puesto || undefined,
         procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
+        procedimientoId: data.procedimientoId === NO_ELEMENTO_SELECTED ? undefined : data.procedimientoId,
         actividadId: data.actividadId === NO_ELEMENTO_SELECTED ? undefined : data.actividadId,
         fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
@@ -340,6 +365,7 @@ export default function AccionesPage() {
         area: data.area || undefined,
         puesto: data.puesto || undefined,
         procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
+        procedimientoId: data.procedimientoId === NO_ELEMENTO_SELECTED ? undefined : data.procedimientoId,
         actividadId: data.actividadId === NO_ELEMENTO_SELECTED ? undefined : data.actividadId,
         fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
@@ -419,6 +445,7 @@ export default function AccionesPage() {
         if (sortConfig.key === 'elementoAsociado') {
             const getElementName = (acc: Accion) => {
                 if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
+                if (acc.procedimientoId) return `PC: ${procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || ''}`;
                 if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === acc.actividadId)?.nombre || ''}`;
                 return '';
             };
@@ -456,7 +483,7 @@ export default function AccionesPage() {
     }
     return filtered;
 
-  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, actividades, areaFilter, puestoFilter]);
+  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, procedimientos, actividades, areaFilter, puestoFilter]);
 
   const requestSort = (key: SortableAccionKeys) => {
     let direction: SortDirection = 'ascending';
@@ -505,7 +532,7 @@ export default function AccionesPage() {
 
     const headers = [
       "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", 
-      "Proceso Asociado", "Actividad Asociada",
+      "Proceso Asociado", "Procedimiento Asociado", "Actividad Asociada",
       "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Anual Estimado", "Moneda Ahorro", 
       "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
@@ -515,6 +542,7 @@ export default function AccionesPage() {
       headers.join(','),
       ...sortedAndFilteredAcciones.map(acc => {
         const procName = acc.procesoId ? capturedProcesses.find(p => p.id === acc.procesoId)?.proceso : '';
+        const procManualName = acc.procedimientoId ? procedimientos.find(p => p.id === acc.procedimientoId)?.nombre : '';
         const actName = acc.actividadId ? actividades.find(a => a.id === acc.actividadId)?.nombre : '';
         return [
           escapeCsvCell(acc.id),
@@ -524,6 +552,7 @@ export default function AccionesPage() {
           escapeCsvCell(acc.area),
           escapeCsvCell(acc.puesto),
           escapeCsvCell(procName),
+          escapeCsvCell(procManualName),
           escapeCsvCell(actName),
           escapeCsvCell(acc.estado),
           escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
@@ -558,7 +587,7 @@ export default function AccionesPage() {
   };
 
 
-  if (isLoadingAcciones || isLoadingProcesos || isLoadingActividades) {
+  if (isLoadingAcciones || isLoadingProcesos || isLoadingActividades || isLoadingProcedimientos) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -653,7 +682,7 @@ export default function AccionesPage() {
                       <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-2xl">
+                  <DialogContent className="sm:max-w-3xl">
                     <DialogHeader>
                       <DialogTitle>{editingAccion ? 'Editar Acción de Mejora' : 'Agregar Nueva Acción de Mejora'}</DialogTitle>
                       <DialogDescription>
@@ -684,41 +713,70 @@ export default function AccionesPage() {
                             </FormItem>
                           )}
                         />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              control={accionForm.control}
-                              name="procesoId"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Proceso Asociado (Opcional)</FormLabel>
-                                  <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un proceso" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                      <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguno</SelectItem>
-                                      {capturedProcesses.filter(p => p.activo !== false).map(proc => (<SelectItem key={proc.id} value={proc.id}>{proc.proceso}</SelectItem>))}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={accionForm.control}
-                              name="actividadId"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Actividad Asociada (Opcional)</FormLabel>
-                                  <Select onValueChange={field.onChange} value={field.value || NO_ELEMENTO_SELECTED} disabled={!!watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una actividad" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                      <SelectItem value={NO_ELEMENTO_SELECTED}>Ninguna</SelectItem>
-                                      {actividades.filter(a => a.activa).map(act => (<SelectItem key={act.id} value={act.id}>{act.nombre}</SelectItem>))}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <FormField
+                            control={accionForm.control}
+                            name="procesoId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Proceso Asociado</FormLabel>
+                                <Combobox
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  options={[
+                                    { value: NO_ELEMENTO_SELECTED, label: "Ninguno" },
+                                    ...capturedProcesses.filter(p => p.activo !== false).map(proc => ({ value: proc.id, label: proc.proceso }))
+                                  ]}
+                                  placeholder="Seleccione un proceso"
+                                  searchPlaceholder="Buscar proceso..."
+                                  disabled={!!watchedProcedimientoId || !!watchedActividadId}
+                                />
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="procedimientoId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Procedimiento Asociado</FormLabel>
+                                <Combobox
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  options={[
+                                    { value: NO_ELEMENTO_SELECTED, label: "Ninguno" },
+                                    ...procedimientos.filter(p => p.activo).map(proc => ({ value: proc.id, label: `${proc.codigo} - ${proc.nombre}` }))
+                                  ]}
+                                  placeholder="Seleccione un procedimiento"
+                                  searchPlaceholder="Buscar procedimiento..."
+                                  disabled={!!watchedProcesoId || !!watchedActividadId}
+                                />
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
+                            name="actividadId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Actividad Asociada</FormLabel>
+                                <Combobox
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  options={[
+                                    { value: NO_ELEMENTO_SELECTED, label: "Ninguna" },
+                                    ...actividades.filter(a => a.activa).map(act => ({ value: act.id, label: act.nombre }))
+                                  ]}
+                                  placeholder="Seleccione una actividad"
+                                  searchPlaceholder="Buscar actividad..."
+                                  disabled={!!watchedProcesoId || !!watchedProcedimientoId}
+                                />
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -971,6 +1029,7 @@ export default function AccionesPage() {
                 <TableBody>
                   {paginatedAcciones.map((accion, index) => {
                     const linkedProcess = accion.procesoId ? capturedProcesses.find(p => p.id === accion.procesoId) : null;
+                    const linkedProcedimiento = accion.procedimientoId ? procedimientos.find(p => p.id === accion.procedimientoId) : null;
                     const linkedActivity = accion.actividadId ? actividades.find(a => a.id === accion.actividadId) : null;
                     const isOverdue = 
                         isClient &&
@@ -988,6 +1047,8 @@ export default function AccionesPage() {
                        <TableCell className="text-xs">
                           {linkedProcess ? (
                               <Badge variant="outline">P: {linkedProcess.proceso}</Badge>
+                          ) : linkedProcedimiento ? (
+                            <Badge variant="secondary">PC: {linkedProcedimiento.nombre}</Badge>
                           ) : linkedActivity ? (
                               <Badge variant="secondary">A: {linkedActivity.nombre}</Badge>
                           ) : (
