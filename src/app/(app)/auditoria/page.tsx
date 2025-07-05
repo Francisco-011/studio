@@ -124,6 +124,7 @@ export interface Audit {
 
 type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings' | 'pendingActions';
 type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
+type SortableAuditAlertKeys = 'name' | 'type' | 'daysOverdue';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig<T> {
@@ -133,6 +134,7 @@ interface SortConfig<T> {
 
 const AUDIT_ITEMS_PER_PAGE = 10;
 const LOG_ITEMS_PER_PAGE = 20;
+const AUDIT_ALERT_ITEMS_PER_PAGE = 10;
 
 
 const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { title: string, value?: string | string[] | number | null, isList?: boolean, isTextarea?: boolean }) => {
@@ -202,6 +204,8 @@ export default function AuditoriaPage() {
   const [auditAlertSearchTerm, setAuditAlertSearchTerm] = useState('');
   const [auditAlertTypeFilter, setAuditAlertTypeFilter] = useState<'all' | AuditType>('all');
   const [auditAlertDaysFilter, setAuditAlertDaysFilter] = useState<'all' | '30' | '90' | '180'>('all');
+  const [auditAlertSortConfig, setAuditAlertSortConfig] = useState<SortConfig<SortableAuditAlertKeys> | null>(null);
+  const [auditAlertCurrentPage, setAuditAlertCurrentPage] = useState(1);
 
   const [logSearchTerm, setLogSearchTerm] = useState('');
   const [logActionFilter, setLogActionFilter] = useState<'all' | LogAction>('all');
@@ -772,7 +776,8 @@ export default function AuditoriaPage() {
   }, [allProcesses, puestos, allProcedimientos, isLoadingAllData]);
 
   const filteredAuditAlerts = useMemo(() => {
-    return auditAlerts.filter(alert => {
+    setAuditAlertCurrentPage(1);
+    let filtered = auditAlerts.filter(alert => {
         const nameMatch = alert.name.toLowerCase().includes(auditAlertSearchTerm.toLowerCase());
         const typeMatch = auditAlertTypeFilter === 'all' || alert.type === auditAlertTypeFilter;
         
@@ -786,7 +791,45 @@ export default function AuditoriaPage() {
 
         return nameMatch && typeMatch && daysMatch;
     });
-  }, [auditAlerts, auditAlertSearchTerm, auditAlertTypeFilter, auditAlertDaysFilter]);
+
+    if (auditAlertSortConfig !== null) {
+      filtered.sort((a, b) => {
+        const valA = a[auditAlertSortConfig.key];
+        const valB = b[auditAlertSortConfig.key];
+        if (typeof valA === 'string' && typeof valB === 'string') {
+            if (valA.toLowerCase() < valB.toLowerCase()) return auditAlertSortConfig.direction === 'ascending' ? -1 : 1;
+            if (valA.toLowerCase() > valB.toLowerCase()) return auditAlertSortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        } else {
+            if (valA < valB) return auditAlertSortConfig.direction === 'ascending' ? -1 : 1;
+            if (valA > valB) return auditAlertSortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        }
+      });
+    }
+
+    return filtered;
+  }, [auditAlerts, auditAlertSearchTerm, auditAlertTypeFilter, auditAlertDaysFilter, auditAlertSortConfig]);
+
+  const requestAuditAlertSort = (key: SortableAuditAlertKeys) => {
+    let direction: SortDirection = 'ascending';
+    if (auditAlertSortConfig?.key === key && auditAlertSortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setAuditAlertSortConfig({ key, direction });
+  };
+  const getAuditAlertSortIcon = (key: SortableAuditAlertKeys) => {
+    if (!auditAlertSortConfig || auditAlertSortConfig.key !== key) return <ChevronsUpDown className="ml-1 h-3 w-3 opacity-40 group-hover:opacity-100" />;
+    return auditAlertSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const totalAuditAlertPages = Math.ceil(filteredAuditAlerts.length / AUDIT_ALERT_ITEMS_PER_PAGE);
+  const paginatedAuditAlerts = useMemo(() => {
+    return filteredAuditAlerts.slice(
+        (auditAlertCurrentPage - 1) * AUDIT_ALERT_ITEMS_PER_PAGE,
+        auditAlertCurrentPage * AUDIT_ALERT_ITEMS_PER_PAGE
+    );
+  }, [filteredAuditAlerts, auditAlertCurrentPage]);
 
 
   if (isLoadingAllData) {
@@ -1431,11 +1474,24 @@ export default function AuditoriaPage() {
                 </div>
 
                 {filteredAuditAlerts.length > 0 ? (
+                  <>
                   <div className="rounded-md border">
                     <Table>
-                      <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Última Auditoría</TableHead><TableHead>Días de Atraso</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow>
+                        <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAuditAlertSort('name')}>
+                          <div className="flex items-center">Nombre{getAuditAlertSortIcon('name')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAuditAlertSort('type')}>
+                          <div className="flex items-center">Tipo{getAuditAlertSortIcon('type')}</div>
+                        </TableHead>
+                        <TableHead>Última Auditoría</TableHead>
+                        <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestAuditAlertSort('daysOverdue')}>
+                           <div className="flex items-center">Días de Atraso{getAuditAlertSortIcon('daysOverdue')}</div>
+                        </TableHead>
+                        <TableHead className="text-right">Acción</TableHead>
+                      </TableRow></TableHeader>
                       <TableBody>
-                        {filteredAuditAlerts.map(alert => (
+                        {paginatedAuditAlerts.map(alert => (
                           <TableRow key={`${alert.type}-${alert.id}`}>
                             <TableCell className="font-medium">{alert.name}</TableCell>
                             <TableCell className="capitalize">{alert.type}</TableCell>
@@ -1451,6 +1507,14 @@ export default function AuditoriaPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  <div className="flex items-center justify-between space-x-2 py-4">
+                    <span className="text-sm text-muted-foreground">Página {auditAlertCurrentPage} de {totalAuditAlertPages} ({filteredAuditAlerts.length} total)</span>
+                    <div className="space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.max(1, p - 1))} disabled={auditAlertCurrentPage === 1}>Anterior</Button>
+                        <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.min(totalAuditAlertPages, p + 1))} disabled={auditAlertCurrentPage >= totalAuditAlertPages}>Siguiente</Button>
+                    </div>
+                 </div>
+                 </>
                 ) : (
                   <div className="text-center p-8 bg-muted/30 rounded-lg border">
                     {auditAlerts.length === 0 ? (
