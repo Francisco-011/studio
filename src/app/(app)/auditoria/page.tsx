@@ -45,14 +45,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -78,6 +70,7 @@ import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { CheckCircle } from 'lucide-react';
 import { Combobox } from "@/components/ui/combobox";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare } from "lucide-react";
@@ -915,6 +908,23 @@ export default function AuditoriaPage() {
     );
   }, [filteredAuditAlerts, auditAlertCurrentPage]);
 
+  const auditTargetOptions = useMemo(() => {
+    switch (newAuditType) {
+      case 'proceso': return allProcesses.map(p => ({ value: p.id, label: p.proceso }));
+      case 'puesto': return puestos.map(p => ({ value: p.id, label: p.nombre }));
+      case 'sistema': return sistemas.map(s => ({ value: s.id, label: s.nombre }));
+      case 'politica': return allPoliticas.map(p => ({ value: p.id, label: `${p.codigo} - ${p.titulo}` }));
+      case 'procedimiento': return allProcedimientos.map(p => ({ value: p.id, label: p.nombre }));
+      default: return [];
+    }
+  }, [newAuditType, allProcesses, puestos, sistemas, allPoliticas, allProcedimientos]);
+
+  const procesosDelPuestoOptions = useMemo(() => {
+    if (newAuditType !== 'puesto' || !newAuditTargetId) return [];
+    return allProcesses
+      .filter(p => p.puesto === puestosMap.get(newAuditTargetId)?.nombre)
+      .map(proc => ({ value: proc.id, label: proc.proceso }));
+  }, [newAuditType, newAuditTargetId, allProcesses, puestosMap]);
 
   if (isLoadingAllData) {
     return (
@@ -1480,57 +1490,25 @@ export default function AuditoriaPage() {
                         </div>
                         {newAuditType && (
                         <div>
-                            <Label htmlFor="auditTargetSelect">Objetivo Específico</Label>
-                            <Select value={newAuditTargetId} onValueChange={setNewAuditTargetId}>
-                                <SelectTrigger id="auditTargetSelect"><SelectValue placeholder="Seleccione un objetivo..." /></SelectTrigger>
-                                <SelectContent>
-                                    {newAuditType === 'proceso' ? (
-                                        allProcesses.map(p => <SelectItem key={p.id} value={p.id}>{p.proceso}</SelectItem>)
-                                    ) : newAuditType === 'puesto' ? (
-                                        puestos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
-                                    ) : newAuditType === 'sistema' ? (
-                                        sistemas.map(s => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)
-                                    ) : newAuditType === 'politica' ? (
-                                        allPoliticas.map(p => <SelectItem key={p.id} value={p.id}>{p.codigo} - {p.titulo}</SelectItem>)
-                                    ) : newAuditType === 'procedimiento' ? (
-                                        allProcedimientos.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)
-                                    ) : null}
-                                </SelectContent>
-                            </Select>
+                            <Label>Objetivo Específico</Label>
+                             <Combobox
+                                options={auditTargetOptions}
+                                value={newAuditTargetId}
+                                onChange={setNewAuditTargetId}
+                                placeholder="Seleccione un objetivo..."
+                                searchPlaceholder="Buscar objetivo..."
+                              />
                         </div>
                         )}
                         {newAuditType === 'puesto' && newAuditTargetId && (
                            <div>
                             <Label>Procesos a Auditar (Opcional)</Label>
-                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="w-full justify-between font-normal">
-                                  <span className="truncate">
-                                    {newAuditProcessIds.length > 0 ? `${newAuditProcessIds.length} proceso(s) seleccionado(s)` : "Todos los procesos del puesto"}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-                                <DropdownMenuLabel>Seleccione los procesos a auditar</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {allProcesses
-                                  .filter(p => p.puesto === puestosMap.get(newAuditTargetId)?.nombre)
-                                  .map(proc => (
-                                    <DropdownMenuCheckboxItem
-                                        key={proc.id}
-                                        checked={newAuditProcessIds.includes(proc.id)}
-                                        onCheckedChange={(checked) => {
-                                            setNewAuditProcessIds(prev =>
-                                                checked ? [...prev, proc.id] : prev.filter(id => id !== proc.id)
-                                            )
-                                        }}
-                                    >
-                                        {proc.proceso}
-                                    </DropdownMenuCheckboxItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                             <MultiSelect
+                                options={procesosDelPuestoOptions}
+                                value={newAuditProcessIds}
+                                onChange={setNewAuditProcessIds}
+                                placeholder="Seleccione procesos..."
+                              />
                             <p className="text-xs text-muted-foreground mt-1">Si no selecciona ninguno, se auditarán todos los procesos del puesto.</p>
                            </div>
                         )}
@@ -1834,6 +1812,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
