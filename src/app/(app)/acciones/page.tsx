@@ -35,7 +35,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Lock } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Lock, XCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
 
@@ -343,6 +343,14 @@ export default function AccionesPage() {
   }
 
   function handleEditAccion(accion: Accion) {
+    if (accion.estado === 'Completada' || accion.estado === 'Cancelada') {
+      toast({
+        title: 'Acción Bloqueada',
+        description: 'Las acciones completadas o canceladas no pueden ser editadas.',
+        variant: 'default',
+      });
+      return;
+    }
     setEditingAccion(accion);
     setIsAccionDialogOpen(true);
   }
@@ -1004,6 +1012,7 @@ export default function AccionesPage() {
                     
                     const isFromAudit = accion.origenMejora?.includes('Auditoría');
                     const canBeDeleted = !isFromAudit && accion.estado === 'En Revisión';
+                    const isLockedForEditing = accion.estado === 'Completada' || accion.estado === 'Cancelada';
 
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
@@ -1054,9 +1063,28 @@ export default function AccionesPage() {
                         <Button variant="ghost" size="icon" onClick={() => handleViewHistory(accion)} className="mr-1" disabled={!accion.historialDeCambios || accion.historialDeCambios.length === 0}>
                           <History className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditAccion(accion)} className="mr-1">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                        <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditAccion(accion)}
+                                    className="mr-1"
+                                    disabled={isLockedForEditing}
+                                  >
+                                    {isLockedForEditing ? <Lock className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {isLockedForEditing && (
+                                <TooltipContent>
+                                  <p>Las acciones completadas o canceladas no pueden ser editadas.</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                        </TooltipProvider>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1189,3 +1217,4 @@ export default function AccionesPage() {
     </div>
   );
 }
+
