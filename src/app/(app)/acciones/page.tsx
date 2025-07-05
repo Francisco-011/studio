@@ -376,6 +376,15 @@ export default function AccionesPage() {
       });
       return;
     }
+     if (accion.estado !== 'En Revisión') {
+        toast({
+            title: "Eliminación Bloqueada",
+            description: "Solo se pueden eliminar las acciones que se encuentran en estado 'En Revisión'.",
+            variant: "default",
+            duration: 7000,
+        });
+        return;
+    }
     setAccionToDelete(accion);
     setIsConfirmDeleteDialogOpen(true);
   }
@@ -969,8 +978,10 @@ export default function AccionesPage() {
                         accion.fechaObjetivo &&
                         isValid(parseISO(accion.fechaObjetivo)) &&
                         parseISO(accion.fechaObjetivo) < new Date(new Date().setHours(0, 0, 0, 0));
-                    const isFromAudit = accion.origenMejora?.includes('Auditoría');
                     
+                    const isFromAudit = accion.origenMejora?.includes('Auditoría');
+                    const canBeDeleted = !isFromAudit && accion.estado === 'En Revisión';
+
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
@@ -1024,21 +1035,26 @@ export default function AccionesPage() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span tabIndex={0}> {/* Span wrapper for disabled button tooltip */}
+                              <span tabIndex={0}>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => promptDeleteAccion(accion)}
                                   className="text-destructive hover:text-destructive"
-                                  disabled={isFromAudit}
+                                  disabled={!canBeDeleted}
                                 >
-                                  {isFromAudit ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                  {!canBeDeleted ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                                 </Button>
                               </span>
                             </TooltipTrigger>
-                            {isFromAudit && (
+                            {!canBeDeleted && (
                               <TooltipContent>
-                                <p>Esta acción viene de una auditoría y no puede ser eliminada.</p>
+                                <p>
+                                  {isFromAudit 
+                                    ? "Esta acción viene de una auditoría y no puede ser eliminada."
+                                    : "Solo se pueden eliminar acciones en estado 'En Revisión'."
+                                  }
+                                </p>
                               </TooltipContent>
                             )}
                           </Tooltip>
@@ -1194,3 +1210,4 @@ export default function AccionesPage() {
     </div>
   );
 }
+
