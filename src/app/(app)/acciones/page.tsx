@@ -764,7 +764,6 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar proceso..."
                                   disabled={!!watchedProcedimientoId || !!watchedActividadId}
                                 />
-                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -786,7 +785,6 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar procedimiento..."
                                   disabled={!!watchedProcesoId || !!watchedActividadId}
                                 />
-                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -808,12 +806,14 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar actividad..."
                                   disabled={!!watchedProcesoId || !!watchedProcedimientoId}
                                 />
-                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
+                        <FormDescription className="text-xs text-center !-mt-2">
+                          Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
+                        </FormDescription>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <FormField
