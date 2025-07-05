@@ -80,7 +80,8 @@ import { CheckCircle } from 'lucide-react';
 import { Combobox } from "@/components/ui/combobox";
 
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare } from "lucide-react";
+import { Checkbox } from '@/components/ui/checkbox';
 
 const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
@@ -214,6 +215,10 @@ export default function AuditoriaPage() {
   const [logEntityTypeFilter, setLogEntityTypeFilter] = useState<'all' | string>('all');
   const [logSortConfig, setLogSortConfig] = useState<SortConfig<SortableLogKeys> | null>(null);
   const [logCurrentPage, setLogCurrentPage] = useState(1);
+
+  const [isFinalizeConfirmDialogOpen, setIsFinalizeConfirmDialogOpen] = useState(false);
+  const [auditToFinalize, setAuditToFinalize] = useState<Audit | null>(null);
+  const [finalizeOptions, setFinalizeOptions] = useState({ autoCreateActions: true });
   
   // Memoized maps for performance optimization
   const procesosMap = useMemo(() => new Map(allProcesses.map(p => [p.id, p])), [allProcesses]);
@@ -490,26 +495,26 @@ export default function AuditoriaPage() {
     setIsConfirmDeleteFindingOpen(false);
   }
 
-  const handleCreateActionPlan = (finding: AuditFinding) => {
-    if (!currentAuditSession) return;
+  const handleCreateActionPlan = (finding: AuditFinding, auditContext: Audit) => {
+    if (!auditContext) return;
     
     let actionData: any = {
-      nombre: `Hallazgo en ${currentAuditSession.auditType}: ${currentAuditSession.targetName}`,
+      nombre: `Hallazgo en ${auditContext.auditType}: ${auditContext.targetName}`,
       descripcion: `Descripción del Hallazgo: ${finding.description}\n\nPlan de Acción Propuesto: ${finding.proposedAction}`,
       responsable: 'Por Asignar',
       estado: 'En Revisión',
-      origenMejora: `Auditoría - ${currentAuditSession.auditorName}`,
+      origenMejora: `Auditoría - ${auditContext.auditorName}`,
     };
 
-    if (currentAuditSession.auditType === 'proceso') {
-      const target = procesosMap.get(currentAuditSession.targetId);
+    if (auditContext.auditType === 'proceso') {
+      const target = procesosMap.get(auditContext.targetId);
       if (target) {
           actionData.procesoId = target.id;
           actionData.area = target.area;
           actionData.puesto = target.puesto;
       }
-    } else if (currentAuditSession.auditType === 'puesto') {
-      const target = puestosMap.get(currentAuditSession.targetId);
+    } else if (auditContext.auditType === 'puesto') {
+      const target = puestosMap.get(auditContext.targetId);
       if (target) {
         actionData.puesto = target.nombre;
         actionData.area = areasMap.get(target.areaId)?.nombre;
@@ -517,38 +522,20 @@ export default function AuditoriaPage() {
     }
 
     addAccion(actionData);
-    
-    if (currentAuditSession) {
-      const updatedFindings = currentAuditSession.findings.map(f => f.id === finding.id ? {...f, isActionCreated: true} : f);
-      setCurrentAuditSession({ ...currentAuditSession, findings: updatedFindings });
-    }
-    
-    toast({ title: "Plan de Acción Registrado", description: "La acción ha sido creada en el módulo de 'Acciones'." });
   };
   
-  const handleFinalizeAudit = async () => {
-    if (!currentAuditSession) return;
-
-    if (!currentAuditSession.findings || currentAuditSession.findings.length === 0) {
-      toast({
-        title: "Acción no permitida",
-        description: "Debe registrar al menos un hallazgo (ej. 'Conforme') para poder finalizar la auditoría.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const executeFinalization = async (auditToSave: Audit) => {
     const now = new Date().toISOString();
     try {
-        if (currentAuditSession.auditType === 'proceso') {
-            await updateProceso(currentAuditSession.targetId, { lastAuditedAt: now });
-        } else if (currentAuditSession.auditType === 'puesto') {
-            await updatePuesto(currentAuditSession.targetId, { lastAuditedAt: now });
-        } else if (currentAuditSession.auditType === 'procedimiento') {
-            await updateProcedimiento(currentAuditSession.targetId, { lastAuditedAt: now });
+        if (auditToSave.auditType === 'proceso') {
+            await updateProceso(auditToSave.targetId, { lastAuditedAt: now });
+        } else if (auditToSave.auditType === 'puesto') {
+            await updatePuesto(auditToSave.targetId, { lastAuditedAt: now });
+        } else if (auditToSave.auditType === 'procedimiento') {
+            await updateProcedimiento(auditToSave.targetId, { lastAuditedAt: now });
         }
 
-        const finalAudit = { ...currentAuditSession, status: 'Completada' as const };
+        const finalAudit = { ...auditToSave, status: 'Completada' as const };
         setPastAudits(prev => {
             const existingIndex = prev.findIndex(a => a.id === finalAudit.id);
             if (existingIndex > -1) {
@@ -567,6 +554,63 @@ export default function AuditoriaPage() {
         toast({ title: "Error al Finalizar", description: "No se pudo actualizar la fecha de auditoría del elemento.", variant: "destructive" });
     }
   };
+
+  const handleFinalizeAudit = () => {
+    if (!currentAuditSession) return;
+
+    if (!currentAuditSession.findings || currentAuditSession.findings.length === 0) {
+      toast({
+        title: "Acción no permitida",
+        description: "Debe registrar al menos un hallazgo (ej. 'Conforme') para poder finalizar la auditoría.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const pendingFindings = currentAuditSession.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated);
+    
+    if (pendingFindings.length > 0) {
+        setAuditToFinalize(currentAuditSession);
+        setFinalizeOptions({ autoCreateActions: true });
+        setIsFinalizeConfirmDialogOpen(true);
+    } else {
+        executeFinalization(currentAuditSession);
+    }
+  };
+
+  const handleConfirmFinalization = async () => {
+    if (!auditToFinalize) return;
+
+    let updatedAudit = { ...auditToFinalize };
+    let newActionsCreated = false;
+
+    if (finalizeOptions.autoCreateActions) {
+        const pendingFindings = updatedAudit.findings.filter(
+            f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated
+        );
+
+        for (const finding of pendingFindings) {
+            handleCreateActionPlan(finding, updatedAudit);
+            newActionsCreated = true;
+        }
+
+        if (newActionsCreated) {
+            updatedAudit = {
+                ...updatedAudit,
+                findings: updatedAudit.findings.map(f => 
+                    ((f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated) 
+                    ? { ...f, isActionCreated: true } 
+                    : f
+                )
+            };
+        }
+    }
+    
+    await executeFinalization(updatedAudit);
+    
+    setIsFinalizeConfirmDialogOpen(false);
+    setAuditToFinalize(null);
+  }
 
   const promptCancelAudit = () => {
     setIsConfirmCancelDialogOpen(true);
@@ -1264,7 +1308,7 @@ export default function AuditoriaPage() {
                                             <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white border-transparent">Acción Creada</Badge> : 
                                             <Badge className="bg-amber-600 text-white hover:bg-amber-700 border-transparent">Acción Pendiente</Badge>
                                         }
-                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding)} disabled={finding.isActionCreated}>
+                                        <Button size="sm" onClick={() => handleCreateActionPlan(finding, currentAuditSession!)} disabled={finding.isActionCreated}>
                                             <Send className="mr-2 h-4 w-4" /> {finding.isActionCreated ? 'Acción ya Creada' : 'Registrar Plan de Acción'}
                                         </Button>
                                         </div>
@@ -1280,8 +1324,7 @@ export default function AuditoriaPage() {
                         <Button 
                           size="lg" 
                           onClick={handleFinalizeAudit} 
-                          disabled={isReadOnly || !currentAuditSession.findings || currentAuditSession.findings.length === 0}
-                          title={(!currentAuditSession.findings || currentAuditSession.findings.length === 0) ? "Debe registrar al menos un hallazgo para finalizar." : ""}
+                          disabled={isReadOnly}
                         > 
                           <Save className="mr-2 h-4 w-4"/> Finalizar y Guardar Auditoría
                         </Button>
@@ -1364,6 +1407,32 @@ export default function AuditoriaPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+             <Dialog open={isFinalizeConfirmDialogOpen} onOpenChange={setIsFinalizeConfirmDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2"><CheckSquare className="h-5 w-5 text-primary"/>Confirmar Finalización de Auditoría</DialogTitle>
+                        <DialogDescription>
+                            Esta auditoría tiene hallazgos que requieren un plan de acción. ¿Desea crearlos automáticamente en el módulo de "Acciones de Mejora"?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox 
+                                id="autoCreateActions" 
+                                checked={finalizeOptions.autoCreateActions}
+                                onCheckedChange={(checked) => setFinalizeOptions(prev => ({...prev, autoCreateActions: !!checked}))}
+                            />
+                            <Label htmlFor="autoCreateActions" className="text-sm font-normal cursor-pointer">
+                                Sí, crear planes de acción automáticamente para todos los hallazgos pendientes.
+                            </Label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsFinalizeConfirmDialogOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleConfirmFinalization}>Confirmar y Finalizar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
   }
@@ -1765,6 +1834,7 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
 
 
 
