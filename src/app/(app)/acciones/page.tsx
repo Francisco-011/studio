@@ -714,7 +714,7 @@ export default function AccionesPage() {
                           )}
                         />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <FormField
+                           <FormField
                             control={accionForm.control}
                             name="procesoId"
                             render={({ field }) => (
@@ -731,6 +731,7 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar proceso..."
                                   disabled={!!watchedProcedimientoId || !!watchedActividadId}
                                 />
+                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -752,6 +753,7 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar procedimiento..."
                                   disabled={!!watchedProcesoId || !!watchedActividadId}
                                 />
+                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -773,6 +775,7 @@ export default function AccionesPage() {
                                   searchPlaceholder="Buscar actividad..."
                                   disabled={!!watchedProcesoId || !!watchedProcedimientoId}
                                 />
+                                <FormDescription className="text-xs">Vincular un elemento deshabilitará los otros dos.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -1271,4 +1274,3 @@ export default function AccionesPage() {
     </div>
   );
 }
-
