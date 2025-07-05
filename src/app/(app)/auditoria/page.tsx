@@ -77,6 +77,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { CheckCircle } from 'lucide-react';
+import { Combobox } from "@/components/ui/combobox";
+
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow } from "lucide-react";
 
@@ -668,8 +670,28 @@ export default function AuditoriaPage() {
     return auditSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const uniqueLogActions = useMemo(() => ['all', ...Array.from(new Set(logEntries.map(log => log.action)))], [logEntries]);
-  const uniqueLogEntityTypes = useMemo(() => ['all', ...Array.from(new Set(logEntries.map(log => log.entityType)))], [logEntries]);
+  const actionTranslations: Record<LogAction, string> = {
+    create: 'Creación',
+    update: 'Actualización',
+    delete: 'Eliminación',
+    status_change: 'Cambio de Estado',
+    restore: 'Restauración',
+    analysis: 'Análisis IA',
+    login: 'Inicio de Sesión',
+    logout: 'Cierre de Sesión',
+  };
+
+  const uniqueLogEntityTypes = useMemo(() => Array.from(new Set(logEntries.map(log => log.entityType))), [logEntries]);
+  const logEntityTypeOptions = useMemo(() => [
+    { value: 'all', label: 'Todas las Entidades' },
+    ...uniqueLogEntityTypes.map(type => ({ value: type, label: type }))
+  ], [uniqueLogEntityTypes]);
+  const uniqueLogActions = useMemo(() => Array.from(new Set(logEntries.map(log => log.action))), [logEntries]);
+  const logActionOptions = useMemo(() => [
+    { value: 'all', label: 'Todas las Acciones' },
+    ...uniqueLogActions.map(action => ({ value: action, label: actionTranslations[action] || action }))
+  ], [uniqueLogActions, actionTranslations]);
+
 
   const filteredAndSortedLogs = useMemo(() => {
     setLogCurrentPage(1);
@@ -1623,8 +1645,17 @@ export default function AuditoriaPage() {
                 <div className="space-y-2 mb-4 p-2 border rounded-lg bg-muted/20">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <Input placeholder="Buscar en registro..." value={logSearchTerm} onChange={(e) => setLogSearchTerm(e.target.value)} />
-                    <Select value={logActionFilter} onValueChange={(v) => setLogActionFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas las Acciones</SelectItem>{uniqueLogActions.slice(1).map(a=><SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>)}</SelectContent></Select>
-                    <Select value={logEntityTypeFilter} onValueChange={(v) => setLogEntityTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas las Entidades</SelectItem>{uniqueLogEntityTypes.slice(1).map(e=><SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select>
+                    <Select value={logActionFilter} onValueChange={(v) => setLogActionFilter(v as any)}>
+                        <SelectTrigger><SelectValue placeholder="Todas las Acciones" /></SelectTrigger>
+                        <SelectContent>{logActionOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Combobox
+                      value={logEntityTypeFilter}
+                      onChange={setLogEntityTypeFilter}
+                      options={logEntityTypeOptions}
+                      placeholder="Filtrar por entidad..."
+                      searchPlaceholder="Buscar entidad..."
+                    />
                   </div>
                 </div>
                 <div className="rounded-md border">
@@ -1647,7 +1678,7 @@ export default function AuditoriaPage() {
                         <TableCell>{log.entityType}</TableCell>
                         <TableCell>{log.entityName}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="capitalize">{log.action.replace('_', ' ')}</Badge>
+                          <Badge variant="secondary">{actionTranslations[log.action] || log.action}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{log.details}</TableCell>
                       </TableRow>
@@ -1700,3 +1731,4 @@ export default function AuditoriaPage() {
     </div>
   );
 }
+
