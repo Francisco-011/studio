@@ -7,7 +7,7 @@ import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
-import type { CapturedProcess } from '@/app/(app)/procesos-y-flujos-registrados/page';
+import { format, parseISO } from 'date-fns';
 
 
 export const accionEstados = ["Pendiente", "En Progreso", "Completada", "Cancelada", "En Revisión"] as const;
@@ -45,6 +45,7 @@ export interface Accion {
   puesto?: string;
   procesoId?: string;
   actividadId?: string;
+  procedimientoId?: string;
   updatedAt: number; // timestamp
   historialDeCambios?: CambioHistorial[];
 }
@@ -115,18 +116,50 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
       toast({ title: "Error", description: "No se pudo encontrar la acción a actualizar.", variant: "destructive" });
       return;
     }
+    
+    const changes: CambioHistorial[] = [];
+    const fieldsToCompare: (keyof typeof data)[] = [
+        'nombre', 'descripcion', 'responsable', 'estado', 'fechaObjetivo', 'fechaFinalizacion',
+        'ahorroEstimado', 'monedaAhorro', 'ahorroTiempoEstimado', 'unidadTiempoAhorro',
+        'origenMejora', 'area', 'puesto', 'procesoId', 'actividadId', 'procedimientoId'
+    ];
+
+    fieldsToCompare.forEach(key => {
+        const originalValue = originalAccion[key as keyof Accion];
+        const newValue = data[key as keyof Partial<Accion>];
+        
+        const normalizedOriginal = originalValue ?? null;
+        const normalizedNew = newValue ?? null;
+        
+        if (normalizedOriginal !== normalizedNew) {
+            changes.push({
+                timestamp: new Date().toISOString(),
+                field: key,
+                before: originalValue || 'No definido',
+                after: newValue || 'No definido'
+            });
+        }
+    });
 
     const accionDocRef = doc(db, ACCIONES_COLLECTION, id);
     const dataToUpdate: any = { ...data, updatedAt: serverTimestamp() };
 
-    if (historial.length > 0) {
-        dataToUpdate.historialDeCambios = [...(originalAccion.historialDeCambios || []), ...historial];
+    const combinedHistory = [...(originalAccion.historialDeCambios || []), ...changes, ...historial];
+    
+    if (changes.length > 0 || historial.length > 0) {
+        dataToUpdate.historialDeCambios = combinedHistory;
     }
     
     try {
-      Object.keys(dataToUpdate).forEach(key => dataToUpdate[key] === undefined && delete dataToUpdate[key]);
+      Object.keys(dataToUpdate).forEach(key => {
+        if (dataToUpdate[key] === undefined) {
+          delete dataToUpdate[key];
+        }
+      });
       await updateDoc(accionDocRef, dataToUpdate);
-      addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: data.nombre || originalAccion.nombre, details: `Se actualizó la acción "${originalAccion.nombre}".` });
+      if (changes.length > 0) {
+        addLogEntry({ action: 'update', entityType: 'Acción de Mejora', entityName: data.nombre || originalAccion.nombre, details: `Se actualizó la acción "${originalAccion.nombre}".` });
+      }
     } catch(e) {
       console.error("Error updating accion:", e);
       toast({ title: "Error", description: "No se pudo actualizar la acción de mejora.", variant: "destructive" });
