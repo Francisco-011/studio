@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -377,7 +378,7 @@ export default function MejorasPage() {
     }
     addAccion({
         nombre: title,
-        descripcion,
+        descripcion: description,
         responsable: 'Por definir',
         estado: 'En Revisión',
         origenMejora: 'Análisis IA - Mejoras',
