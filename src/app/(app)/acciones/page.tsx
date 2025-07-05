@@ -182,9 +182,11 @@ export default function AccionesPage() {
         if (value instanceof Date && isValid(value)) {
             return format(value, 'PPP', { locale: es });
         }
-        const date = parseISO(String(value));
-        if (isValid(date)) {
-            return format(date, 'PPP', { locale: es });
+        if (typeof value === 'string') {
+           const date = parseISO(value);
+           if (isValid(date)) {
+               return format(date, 'PPP', { locale: es });
+           }
         }
         return String(value);
     }
@@ -331,6 +333,7 @@ export default function AccionesPage() {
       setActionToComplete({ id: editingAccion.id, data });
       setCompletionOptions({ applyTimeSaving: true, applyCostSaving: true });
       setIsAccionDialogOpen(false);
+      setIsCompleteConfirmDialogOpen(true);
       return;
     }
 
@@ -487,8 +490,8 @@ export default function AccionesPage() {
         }
 
         if (['fechaObjetivo', 'updatedAt'].includes(sortConfig.key)) {
-            valA = valA ? (isValid(parseISO(valA)) ? parseISO(valA).getTime() : (typeof valA === 'number' ? valA : 0)) : 0;
-            valB = valB ? (isValid(parseISO(valB)) ? parseISO(valB).getTime() : (typeof valB === 'number' ? valB : 0)) : 0;
+            valA = valA ? (isValid(parseISO(String(valA))) ? parseISO(String(valA)).getTime() : (typeof valA === 'number' ? valA : 0)) : 0;
+            valB = valB ? (isValid(parseISO(String(valB))) ? parseISO(String(valB)).getTime() : (typeof valB === 'number' ? valB : 0)) : 0;
         }
 
         if (typeof valA === 'string' && typeof valB === 'string') {
@@ -509,7 +512,7 @@ export default function AccionesPage() {
         return 0;
       });
     } else {
-        filtered.sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
+        filtered.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
     return filtered;
 
