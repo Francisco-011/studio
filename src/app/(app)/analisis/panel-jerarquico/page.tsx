@@ -986,6 +986,7 @@ useEffect(() => {
                 </Button>
                 <Building className="h-4 w-4 mr-2 text-purple-600" />
                 <span className="flex-grow">{node.name}</span>
+                <Badge variant="outline" className="ml-auto mr-2 font-mono text-xs group-data-[collapsible=icon]:hidden">{node.children?.length || 0}</Badge>
               </div>
             );
             break;
@@ -1004,6 +1005,7 @@ useEffect(() => {
                 </Button>
                 <Building2 className="h-4 w-4 mr-2 text-teal-600" />
                 <span className="flex-grow">{node.name}</span>
+                <Badge variant="outline" className="ml-auto mr-2 font-mono text-xs group-data-[collapsible=icon]:hidden">{node.children?.length || 0}</Badge>
               </div>
             );
             break;
@@ -1029,6 +1031,7 @@ useEffect(() => {
                 </Button>
                 <Users className="h-4 w-4 mr-2 text-purple-400" />
                 <span className="flex-grow">{node.name}</span>
+                <Badge variant="outline" className="ml-auto mr-2 font-mono text-xs group-data-[collapsible=icon]:hidden">{node.children?.length || 0}</Badge>
               </div>
             );
             break;
@@ -1048,6 +1051,9 @@ useEffect(() => {
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
                 <Workflow className="h-4 w-4 mr-2 text-blue-600" />
                 <span className={cn("font-semibold text-sm flex-grow", node.activo === false && "italic text-muted-foreground")}>{node.name}{node.activo === false && <Ban className="h-3 w-3 ml-1.5 inline-block text-destructive" />}</span>
+                 <Badge variant="outline" className="ml-2 font-mono text-xs group-data-[collapsible=icon]:hidden">
+                    {(node.children?.filter(c => c.type === 'procedimiento').length) || 0}
+                 </Badge>
                  <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleEditItem(node.payload, 'process')}} title="Editar proceso"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); openDetailDialog(node.payload, 'process')}} title="Ver detalles del proceso"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
@@ -1072,6 +1078,9 @@ useEffect(() => {
                 <Button variant="ghost" size="sm" onClick={() => toggleNode(node.id)} className="p-1 h-auto mr-1"><ChevronRight className={cn("h-4 w-4 transition-transform", expandedNodes[node.id] && "rotate-90")} /></Button>
                 <ListOrdered className="h-4 w-4 mr-2 text-green-600" />
                 <span className={cn("font-medium text-sm flex-grow", isInactiveProcedure && "italic text-muted-foreground")}>{node.name}{isInactiveProcedure && <Badge variant="destructive" className="ml-2 bg-slate-500 hover:bg-slate-600 text-white border-transparent">Inactivo</Badge>}</span>
+                <Badge variant="outline" className="ml-2 font-mono text-xs group-data-[collapsible=icon]:hidden">
+                    {(node.children?.filter(c => c.type === 'actividad').length) || 0}
+                </Badge>
                 <div className="flex items-center ml-auto opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleEditItem(node.payload, 'procedure') }} title="Editar procedimiento"><Edit2 className="h-4 w-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openDetailDialog(node.payload, 'procedure') }} title="Ver detalles"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
@@ -1366,6 +1375,7 @@ type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
+
 
 
 
