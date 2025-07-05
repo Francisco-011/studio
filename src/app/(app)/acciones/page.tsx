@@ -35,7 +35,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
 
@@ -169,37 +169,27 @@ export default function AccionesPage() {
     if (value === undefined || value === null || value === 'No definido') return "-";
 
     const fieldLower = String(field).toLowerCase();
-
+    
     if (fieldLower.includes('fecha')) {
-        if (value instanceof Date && isValid(value)) {
-            return format(value, 'PPP', { locale: es });
-        }
-        if (typeof value === 'string') {
-           const date = parseISO(value);
-           if (isValid(date)) {
-               return format(date, 'PPP', { locale: es });
-           }
-        }
-        return String(value);
+        const dateString = String(value);
+        if (!dateString) return "-";
+        const date = parseISO(dateString);
+        return isValid(date) ? format(date, 'PPP', { locale: es }) : dateString;
     }
 
     if (fieldLower.includes('costo') || fieldLower.includes('ahorroestimado')) {
-        return formatCurrencyDisplay(Number(value), accion?.monedaAhorro);
+        const numValue = Number(value);
+        return isNaN(numValue) ? String(value) : formatCurrencyDisplay(numValue, accion?.monedaAhorro);
     }
     
-    if (fieldLower.includes('tiempo')) {
-        return formatTimeSavingDisplay(Number(value), accion?.unidadTiempoAhorro);
+    if (fieldLower.includes('ahorrotiempo')) {
+        const numValue = Number(value);
+        return isNaN(numValue) ? String(value) : formatTimeSavingDisplay(numValue, accion?.unidadTiempoAhorro);
     }
     
-    if (fieldLower === 'procesoid') {
-        return capturedProcesses.find(p => p.id === value)?.proceso || String(value).slice(0, 8) + '...';
-    }
-    if (fieldLower === 'procedimientoid') {
-        return procedimientos.find(p => p.id === value)?.nombre || String(value).slice(0, 8) + '...';
-    }
-    if (fieldLower === 'actividadid') {
-        return actividades.find(a => a.id === value)?.nombre || String(value).slice(0, 8) + '...';
-    }
+    if (fieldLower === 'procesoid') return capturedProcesses.find(p => p.id === value)?.proceso || String(value).slice(0, 8) + '...';
+    if (fieldLower === 'procedimientoid') return procedimientos.find(p => p.id === value)?.nombre || String(value).slice(0, 8) + '...';
+    if (fieldLower === 'actividadid') return actividades.find(a => a.id === value)?.nombre || String(value).slice(0, 8) + '...';
 
     return String(value);
   }, [capturedProcesses, procedimientos, actividades]);
@@ -296,25 +286,7 @@ export default function AccionesPage() {
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
         });
       } else {
-        accionForm.reset({
-          nombre: '',
-          descripcion: '',
-          responsable: '',
-          area: undefined,
-          puesto: undefined,
-          procesoId: undefined,
-          procedimientoId: undefined,
-          actividadId: undefined,
-          estado: 'Pendiente',
-          fechaObjetivo: undefined,
-          fechaFinalizacion: undefined,
-          ahorroEstimado: undefined,
-          monedaAhorro: undefined,
-          ahorroTiempoEstimado: undefined,
-          unidadTiempoAhorro: undefined,
-          origenMejora: '',
-          historialDeCambios: [],
-        });
+        accionForm.reset();
       }
     }
   }, [editingAccion, isAccionDialogOpen, accionForm]);
@@ -334,6 +306,13 @@ export default function AccionesPage() {
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
+      if (data.estado === 'Completada') {
+        toast({
+          title: 'Acción Completada',
+          description: 'Recuerde ajustar manualmente los tiempos/costos de las actividades afectadas y recalcular los totales del proceso si es necesario.',
+          duration: 8000
+        });
+      }
     } else {
       await addAccion(dataToSave);
       toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
@@ -345,7 +324,7 @@ export default function AccionesPage() {
 
   function handleEditAccion(accion: Accion) {
     if(accion.estado === 'Completada' || accion.estado === 'Cancelada'){
-        toast({ title: 'Acción Bloqueada', description: 'Las acciones completadas o canceladas no se pueden editar.', variant: 'default' });
+        toast({ title: 'Visualizando Acción', description: 'Las acciones completadas o canceladas solo se pueden visualizar.', variant: 'default' });
     }
     setEditingAccion(accion);
     setIsAccionDialogOpen(true);
@@ -643,7 +622,7 @@ export default function AccionesPage() {
                   }
                 }}>
                   <DialogTrigger asChild>
-                    <Button onClick={() => { setEditingAccion(null); setIsAccionDialogOpen(true); }} className="w-full">
+                    <Button onClick={() => { setIsAccionDialogOpen(true); }} className="w-full">
                       <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                     </Button>
                   </DialogTrigger>
@@ -743,8 +722,8 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center pt-1">
-                          Vincular un elemento deshabilitará los otros dos.
+                        <FormDescription className="text-xs text-center !mt-2 pt-1">
+                          Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
                         </FormDescription>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -768,7 +747,7 @@ export default function AccionesPage() {
                                 <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
                                   <SelectContent>
-                                    {accionEstados.map(estado => (<SelectItem key={estado} value={estado}>{estado}</SelectItem>))}
+                                    {accionEstados.map(estado => (<SelectItem key={estado} value={estado} disabled={isReadOnly}>{estado}</SelectItem>))}
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -1174,7 +1153,7 @@ export default function AccionesPage() {
               Registro de las mejoras aplicadas al completar esta acción. Mostrando los últimos 20 cambios.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
             {actionForHistory?.historialDeCambios && actionForHistory.historialDeCambios.length > 0 ? (
               <Table>
                 <TableHeader>
@@ -1211,7 +1190,4 @@ export default function AccionesPage() {
     </div>
   );
 }
-
-
-
 
