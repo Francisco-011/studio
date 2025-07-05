@@ -35,7 +35,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Lock, XCircle } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
 
@@ -170,7 +170,6 @@ export default function AccionesPage() {
 
     const fieldLower = String(field).toLowerCase();
 
-    // Handle dates
     if (fieldLower.includes('fecha')) {
         if (value instanceof Date && isValid(value)) {
             return format(value, 'PPP', { locale: es });
@@ -184,17 +183,14 @@ export default function AccionesPage() {
         return String(value);
     }
 
-    // Handle currency
     if (fieldLower.includes('costo') || fieldLower.includes('ahorroestimado')) {
         return formatCurrencyDisplay(Number(value), accion?.monedaAhorro);
     }
     
-    // Handle time savings
     if (fieldLower.includes('tiempo')) {
         return formatTimeSavingDisplay(Number(value), accion?.unidadTiempoAhorro);
     }
     
-    // Handle ID lookups
     if (fieldLower === 'procesoid') {
         return capturedProcesses.find(p => p.id === value)?.proceso || String(value).slice(0, 8) + '...';
     }
@@ -232,6 +228,11 @@ export default function AccionesPage() {
     },
   });
   
+  const isReadOnly = useMemo(() => {
+    if (!editingAccion) return false;
+    return editingAccion.estado === 'Completada' || editingAccion.estado === 'Cancelada';
+  }, [editingAccion]);
+
   const watchedArea = accionForm.watch('area');
   const availablePuestos = useMemo(() => {
     if (!watchedArea || isLoadingPuestos || isLoadingAreas) {
@@ -343,14 +344,6 @@ export default function AccionesPage() {
   }
 
   function handleEditAccion(accion: Accion) {
-    if (accion.estado === 'Completada' || accion.estado === 'Cancelada') {
-      toast({
-        title: 'Acción Bloqueada',
-        description: 'Las acciones completadas o canceladas no pueden ser editadas.',
-        variant: 'default',
-      });
-      return;
-    }
     setEditingAccion(accion);
     setIsAccionDialogOpen(true);
   }
@@ -653,9 +646,9 @@ export default function AccionesPage() {
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-3xl">
                     <DialogHeader>
-                      <DialogTitle>{editingAccion ? 'Editar Acción de Mejora' : 'Agregar Nueva Acción de Mejora'}</DialogTitle>
+                      <DialogTitle>{isReadOnly ? 'Detalles de la Acción' : (editingAccion ? 'Editar Acción de Mejora' : 'Agregar Nueva Acción de Mejora')}</DialogTitle>
                       <DialogDescription>
-                        {editingAccion ? 'Modifica los detalles de la acción.' : 'Completa la información para registrar una nueva acción.'}
+                        {isReadOnly ? 'Visualizando los detalles de una acción finalizada.' : (editingAccion ? 'Modifica los detalles de la acción.' : 'Completa la información para registrar una nueva acción.')}
                       </DialogDescription>
                     </DialogHeader>
                     <Form {...accionForm}>
@@ -666,7 +659,7 @@ export default function AccionesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Nombre de la Acción</FormLabel>
-                              <FormControl><Input placeholder="Ej: Implementar nuevo CRM" {...field} /></FormControl>
+                              <FormControl><Input placeholder="Ej: Implementar nuevo CRM" {...field} disabled={isReadOnly} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -677,7 +670,7 @@ export default function AccionesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Descripción Detallada</FormLabel>
-                              <FormControl><Textarea placeholder="Describe el objetivo, alcance y pasos clave de la acción." {...field} className="min-h-[100px]" /></FormControl>
+                              <FormControl><Textarea placeholder="Describe el objetivo, alcance y pasos clave de la acción." {...field} className="min-h-[100px]" disabled={isReadOnly} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -698,7 +691,7 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione un proceso"
                                   searchPlaceholder="Buscar proceso..."
-                                  disabled={!!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -719,7 +712,7 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione un procedimiento"
                                   searchPlaceholder="Buscar procedimiento..."
-                                  disabled={!!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -740,15 +733,15 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione una actividad"
                                   searchPlaceholder="Buscar actividad..."
-                                  disabled={!!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED)}
                                 />
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center pt-1">
-                          Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
+                        <FormDescription className="text-xs text-center pt-1 !-mt-2">
+                          Vincular un elemento deshabilitará los otros dos.
                         </FormDescription>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -758,7 +751,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Responsable</FormLabel>
-                                <FormControl><Input placeholder="Ej: Equipo de TI, Ana Pérez" {...field} /></FormControl>
+                                <FormControl><Input placeholder="Ej: Equipo de TI, Ana Pérez" {...field} disabled={isReadOnly} /></FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -769,7 +762,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Estado</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     {accionEstados.map(estado => (<SelectItem key={estado} value={estado}>{estado}</SelectItem>))}
@@ -790,7 +783,7 @@ export default function AccionesPage() {
                                 <Select
                                   onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
                                   value={field.value || NO_AREA_SELECTED}
-                                  disabled={isLoadingAreas}
+                                  disabled={isLoadingAreas || isReadOnly}
                                 >
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
                                   <SelectContent>
@@ -811,7 +804,7 @@ export default function AccionesPage() {
                                 <Select
                                   onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
                                   value={field.value || NO_PUESTO_SELECTED}
-                                  disabled={isLoadingPuestos}
+                                  disabled={isLoadingPuestos || isReadOnly}
                                 >
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
                                   <SelectContent>
@@ -835,7 +828,7 @@ export default function AccionesPage() {
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <FormControl>
-                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isReadOnly}>
                                         {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                       </Button>
@@ -859,7 +852,7 @@ export default function AccionesPage() {
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <FormControl>
-                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isReadOnly}>
                                         {field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                       </Button>
@@ -884,7 +877,7 @@ export default function AccionesPage() {
                                 <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
                                 <div className="relative">
                                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" /></FormControl>
+                                  <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" disabled={isReadOnly} /></FormControl>
                                 </div>
                                 <FormMessage />
                               </FormItem>
@@ -896,7 +889,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Moneda del Ahorro</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione moneda" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     {monedaOptions.map(moneda => (<SelectItem key={moneda} value={moneda}>{moneda}</SelectItem>))}
@@ -916,7 +909,7 @@ export default function AccionesPage() {
                                 <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
                                 <div className="relative">
                                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" /></FormControl>
+                                  <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" disabled={isReadOnly} /></FormControl>
                                 </div>
                                 <FormMessage />
                               </FormItem>
@@ -928,7 +921,7 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Unidad de Tiempo</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} disabled={!accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
                                   <SelectContent>
                                     {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
@@ -945,7 +938,7 @@ export default function AccionesPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Origen de la Mejora (Opcional)</FormLabel>
-                              <FormControl><Input placeholder="Ej: Análisis IA Q2, Sugerencia Cliente X" {...field} value={field.value ?? ''} /></FormControl>
+                              <FormControl><Input placeholder="Ej: Análisis IA Q2, Sugerencia Cliente X" {...field} value={field.value ?? ''} disabled={isReadOnly} /></FormControl>
                               <FormDescription>Indique de dónde surgió esta acción de mejora.</FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -953,9 +946,9 @@ export default function AccionesPage() {
                         />
                         <DialogFooter>
                           <DialogClose asChild>
-                            <Button type="button" variant="outline">Cancelar</Button>
+                            <Button type="button" variant="outline">{isReadOnly ? 'Cerrar' : 'Cancelar'}</Button>
                           </DialogClose>
-                          <Button type="submit">{editingAccion ? 'Guardar Cambios' : 'Agregar Acción'}</Button>
+                          {!isReadOnly && <Button type="submit">{editingAccion ? 'Guardar Cambios' : 'Agregar Acción'}</Button>}
                         </DialogFooter>
                       </form>
                     </Form>
@@ -1066,23 +1059,18 @@ export default function AccionesPage() {
                         <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span tabIndex={0}>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleEditAccion(accion)}
                                     className="mr-1"
-                                    disabled={isLockedForEditing}
                                   >
-                                    {isLockedForEditing ? <Lock className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+                                    {isLockedForEditing ? <Eye className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
                                   </Button>
-                                </span>
                               </TooltipTrigger>
-                              {isLockedForEditing && (
-                                <TooltipContent>
-                                  <p>Las acciones completadas o canceladas no pueden ser editadas.</p>
-                                </TooltipContent>
-                              )}
+                              <TooltipContent>
+                                  <p>{isLockedForEditing ? 'Ver Detalles (Solo Lectura)' : 'Editar Acción'}</p>
+                              </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
@@ -1096,7 +1084,7 @@ export default function AccionesPage() {
                                   className="text-destructive hover:text-destructive"
                                   disabled={!canBeDeleted}
                                 >
-                                  {!canBeDeleted ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                  {canBeDeleted ? <Trash2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                                 </Button>
                               </span>
                             </TooltipTrigger>
@@ -1217,5 +1205,6 @@ export default function AccionesPage() {
     </div>
   );
 }
+
 
 
