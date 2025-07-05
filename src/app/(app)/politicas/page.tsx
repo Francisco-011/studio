@@ -529,6 +529,7 @@ export default function PoliticasPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Historial de Cambios para: {politicaForHistory?.titulo}</DialogTitle>
+             <DialogDescription>Mostrando los últimos 20 cambios.</DialogDescription>
           </DialogHeader>
           <div className="py-4 max-h-[60vh] overflow-y-auto">
             {politicaForHistory?.historialDeCambios && politicaForHistory.historialDeCambios.length > 0 ? (
@@ -544,6 +545,7 @@ export default function PoliticasPage() {
                 <TableBody>
                   {politicaForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .slice(0, 20)
                     .map((cambio, index) => {
                       let beforeText: React.ReactNode = String(cambio.before ?? 'N/A');
                       let afterText: React.ReactNode = String(cambio.after ?? 'N/A');

@@ -344,6 +344,9 @@ export default function AccionesPage() {
   }
 
   function handleEditAccion(accion: Accion) {
+    if(accion.estado === 'Completada' || accion.estado === 'Cancelada'){
+        toast({ title: 'Acción Bloqueada', description: 'Las acciones completadas o canceladas no se pueden editar.', variant: 'default' });
+    }
     setEditingAccion(accion);
     setIsAccionDialogOpen(true);
   }
@@ -740,7 +743,7 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <FormDescription className="text-xs text-center pt-1 !-mt-2">
+                        <FormDescription className="text-xs text-center pt-1">
                           Vincular un elemento deshabilitará los otros dos.
                         </FormDescription>
 
@@ -1168,7 +1171,7 @@ export default function AccionesPage() {
           <DialogHeader>
             <DialogTitle>Historial de Cambios para: {actionForHistory?.nombre}</DialogTitle>
             <DialogDescription>
-              Registro de las mejoras aplicadas al completar esta acción.
+              Registro de las mejoras aplicadas al completar esta acción. Mostrando los últimos 20 cambios.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1183,7 +1186,10 @@ export default function AccionesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {actionForHistory.historialDeCambios.map((cambio, index) => (
+                  {actionForHistory.historialDeCambios
+                    .sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .slice(0, 20)
+                    .map((cambio, index) => (
                     <TableRow key={index}>
                       <TableCell className="text-xs">{format(parseISO(cambio.timestamp), 'dd/MM/yy HH:mm', { locale: es })}</TableCell>
                       <TableCell>{cambio.field}</TableCell>
@@ -1205,6 +1211,7 @@ export default function AccionesPage() {
     </div>
   );
 }
+
 
 
 

@@ -805,11 +805,11 @@ export default function ActividadesPage() {
       
        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle><DialogDescription>Registro de las modificaciones realizadas.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Historial de Cambios para: {activityForHistory?.nombre}</DialogTitle><DialogDescription>Mostrando los últimos 20 cambios.</DialogDescription></DialogHeader>
           <div className="py-4 max-h-[60vh] overflow-y-auto">
             {activityForHistory?.historialDeCambios && activityForHistory.historialDeCambios.length > 0 ? (
               <Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Campo Modificado</TableHead><TableHead>Valor Anterior</TableHead><TableHead>Valor Nuevo</TableHead></TableRow></TableHeader><TableBody>
-                {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).map((cambio, index) => {
+                {activityForHistory.historialDeCambios.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()).slice(0, 20).map((cambio, index) => {
                   let beforeText: string | number | React.ReactNode = String(cambio.before ?? 'N/A');
                   let afterText: string | number | React.ReactNode = String(cambio.after ?? 'N/A');
 

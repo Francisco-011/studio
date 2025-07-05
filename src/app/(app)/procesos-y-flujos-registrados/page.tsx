@@ -870,7 +870,7 @@ export default function ProcesosYFlujosRegistradosPage() {
           <DialogHeader>
             <DialogTitle>Historial de Cambios para: {processForHistory?.proceso}</DialogTitle>
             <DialogDescription>
-              Registro de las modificaciones realizadas a este proceso.
+              Registro de las modificaciones realizadas a este proceso. Mostrando los últimos 20 cambios.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 max-h-[60vh] overflow-y-auto">
@@ -887,6 +887,7 @@ export default function ProcesosYFlujosRegistradosPage() {
                 <TableBody>
                   {processForHistory.historialDeCambios
                     .sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime())
+                    .slice(0, 20)
                     .map((cambio, index) => {
                       let beforeText: React.ReactNode = String(cambio.before ?? 'N/A');
                       let afterText: React.ReactNode = String(cambio.after ?? 'N/A');
