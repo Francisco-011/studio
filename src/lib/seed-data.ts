@@ -58,8 +58,13 @@ export async function seedDatabase() {
   ];
   const deptoRefs: { [key: string]: string } = {};
   for (const depto of seedDepartamentos) {
+    const areaId = areaRefs[depto.area];
+    if (!areaId) {
+        console.warn(`Skipping depto "${depto.nombre}" because area "${depto.area}" was not found.`);
+        continue;
+    }
     const deptoRef = doc(collection(db, 'departamentos'));
-    batch.set(deptoRef, { nombre: depto.nombre, areaId: areaRefs[depto.area], createdAt: serverTimestamp() });
+    batch.set(deptoRef, { nombre: depto.nombre, areaId: areaId, createdAt: serverTimestamp() });
     deptoRefs[depto.nombre] = deptoRef.id;
   }
 
@@ -75,13 +80,19 @@ export async function seedDatabase() {
   ];
   const puestoRefs: { [key: string]: string } = {};
   for (const puesto of seedPuestos) {
+    const areaId = areaRefs[puesto.area];
+    if (!areaId) {
+        console.warn(`Skipping puesto "${puesto.nombre}" due to missing area: "${puesto.area}"`);
+        continue;
+    }
+
     const puestoRef = doc(collection(db, 'puestos'));
     
     const jefeId = puesto.jefeInmediato ? puestoRefs[puesto.jefeInmediato] : undefined;
 
     const data: any = {
       nombre: puesto.nombre,
-      areaId: areaRefs[puesto.area],
+      areaId: areaId,
       nivelOrganizacional: puesto.nivelOrganizacional,
       costoHora: puesto.costoHora,
       monedaCosto: puesto.monedaCosto,
@@ -89,7 +100,10 @@ export async function seedDatabase() {
     };
     
     if (puesto.departamento) {
-      data.departamentoId = deptoRefs[puesto.departamento];
+      const deptoId = deptoRefs[puesto.departamento];
+      if (deptoId) {
+        data.departamentoId = deptoId;
+      }
     }
     if (jefeId) {
       data.jefeInmediato = jefeId;
@@ -114,14 +128,20 @@ export async function seedDatabase() {
   const actividadRefs: { [key: string]: string } = {};
   for (const act of seedActividades) {
     const actRef = doc(collection(db, 'actividades'));
-    batch.set(actRef, {
+    const puestoId = puestoRefs[act.puesto];
+    
+    const data: any = {
       nombre: act.nombre,
-      puestoId: puestoRefs[act.puesto],
       activa: true,
       codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+    if (puestoId) {
+        data.puestoId = puestoId;
+    }
+
+    batch.set(actRef, data);
     actividadRefs[act.nombre] = actRef.id;
   }
 
@@ -152,7 +172,6 @@ export async function seedDatabase() {
     batch.set(procRef, {
       nombre: proc.nombre,
       clasificacion: proc.clasificacion,
-      // This is the fix: filter out any potential 'undefined' values if an activity name doesn't match.
       activityOrder: proc.activityOrder.map(name => actividadRefs[name]).filter(id => !!id),
       activo: true,
       codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
@@ -170,8 +189,13 @@ export async function seedDatabase() {
   ];
   const procesoRefs: { [key: string]: string } = {};
   for (const proc of seedProcesos) {
+    const puestoId = puestoRefs[proc.puesto];
+    if (!puestoId) {
+        console.warn(`Skipping proceso "${proc.nombre}" due to missing puesto: "${proc.puesto}"`);
+        continue;
+    }
+
     const procRef = doc(collection(db, 'procesos'));
-    // This is the fix: filter out any potential 'undefined' values if a procedure name doesn't match.
     const linkedProcedimientos = seedProcedimientos
         .filter(p => p.procesoPadre === proc.nombre)
         .map(p => procedimientoRefs[p.nombre])
@@ -181,7 +205,7 @@ export async function seedDatabase() {
         proceso: proc.nombre,
         area: proc.area,
         puesto: proc.puesto,
-        puestoId: puestoRefs[proc.puesto],
+        puestoId: puestoId,
         descripcion: proc.descripcion,
         activo: true,
         codigo: `PR-${Date.now().toString().slice(-6)}`,
