@@ -64,6 +64,7 @@ import { useActivityLog, type ActivityLogEntry, type LogAction } from '@/context
 import { useProcesos, type CapturedProcess, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
+import { useAudits, type Audit, type AuditFinding, type AuditCreationData } from '@/contexts/AuditsContext';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -75,8 +76,6 @@ import { MultiSelect } from "@/components/ui/multi-select";
 
 import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare } from "lucide-react";
 import { Checkbox } from '@/components/ui/checkbox';
-
-const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
 
 const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
 type FindingType = typeof findingTypes[number];
@@ -100,23 +99,6 @@ const auditFindingSchema = z.object({
     path: ["proposedAction"],
 });
 type AuditFindingFormData = z.infer<typeof auditFindingSchema>;
-
-interface AuditFinding extends AuditFindingFormData {
-  id: string;
-  isActionCreated: boolean;
-}
-
-export interface Audit {
-  id: string;
-  auditType: AuditType;
-  targetId: string;
-  targetName: string;
-  processIdsToAudit?: string[];
-  auditorName: string;
-  auditDate: string; // ISO string
-  status: AuditStatus;
-  findings: AuditFinding[];
-}
 
 type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings' | 'pendingActions';
 type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
@@ -178,11 +160,10 @@ export default function AuditoriaPage() {
   const { procesos: allProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos: allProcedimientos, updateProcedimiento, isLoading: isLoadingProcedimientos } = useProcedimientos();
   const { politicas: allPoliticas, isLoadingPoliticas } = usePoliticas();
+  const { audits: pastAudits, addAudit, updateAudit, deleteAudit, isLoadingAudits } = useAudits();
 
-  const [pastAudits, setPastAudits] = useState<Audit[]>([]);
   const [currentAuditSession, setCurrentAuditSession] = useState<Audit | null>(null);
 
-  const [isLoading, setIsLoading] = useState(true);
   const [isStartAuditDialogOpen, setIsStartAuditDialogOpen] = useState(false);
   
   const [newAuditType, setNewAuditType] = useState<AuditType | ''>('');
@@ -241,40 +222,6 @@ export default function AuditoriaPage() {
     resolver: zodResolver(auditFindingSchema),
     defaultValues: { type: undefined, description: '', proposedAction: '' },
   });
-
-  useEffect(() => {
-    setIsLoading(true);
-    try {
-      const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
-      if (storedAudits) {
-        setPastAudits(JSON.parse(storedAudits));
-      }
-    } catch (e) {
-      console.error("Error loading data for audit:", e);
-      toast({ title: "Error al cargar datos", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(LOCAL_STORAGE_AUDITS_KEY, JSON.stringify(pastAudits));
-    }
-  }, [pastAudits, isLoading]);
-
-  useEffect(() => {
-    if (currentAuditSession && !isLoading) {
-        const existingIndex = pastAudits.findIndex(a => a.id === currentAuditSession.id);
-        if (existingIndex !== -1) {
-            const updatedAudits = [...pastAudits];
-            updatedAudits[existingIndex] = currentAuditSession;
-            setPastAudits(updatedAudits);
-        } else if (currentAuditSession.findings.length > 0 || currentAuditSession.status === 'En Progreso') {
-            setPastAudits(prev => [...prev, currentAuditSession]);
-        }
-    }
-  }, [currentAuditSession, isLoading]);
   
   useEffect(() => {
     setNewAuditProcessIds([]);
@@ -420,7 +367,7 @@ export default function AuditoriaPage() {
   }, [isFindingDialogOpen, editingFinding, findingForm]);
 
 
-  const handleStartNewAudit = () => {
+  const handleStartNewAudit = async () => {
     if (!newAuditType || !newAuditTargetId) {
       toast({ title: "Información incompleta", description: "Debe seleccionar un tipo y un objetivo para la auditoría." });
       return;
@@ -433,14 +380,12 @@ export default function AuditoriaPage() {
       : newAuditType === 'procedimiento' ? procedimientosMap.get(newAuditTargetId)?.nombre
       : undefined;
 
-
     if (!targetName) {
         toast({ title: "Error", description: "No se encontró el nombre del objetivo seleccionado." });
         return;
     }
 
-    const newAudit: Audit = {
-      id: Date.now().toString(),
+    const newAuditData: AuditCreationData = {
       auditType: newAuditType,
       targetId: newAuditTargetId,
       targetName: targetName,
@@ -450,8 +395,16 @@ export default function AuditoriaPage() {
       findings: [],
       processIdsToAudit: (newAuditType === 'puesto' && newAuditProcessIds.length > 0) ? newAuditProcessIds : undefined,
     };
-    setCurrentAuditSession(newAudit);
-    addLogEntry({ user: newAuditorName, action: 'create', entityType: 'Auditoría', entityName: targetName, details: `Se inició una nueva auditoría para ${newAuditType}: "${targetName}".` });
+    
+    const newAuditId = await addAudit(newAuditData);
+    if (newAuditId) {
+        setCurrentAuditSession({
+            ...newAuditData,
+            id: newAuditId,
+            createdAt: Date.now()
+        });
+    }
+
     setIsStartAuditDialogOpen(false);
     setNewAuditType('');
     setNewAuditTargetId('');
@@ -467,18 +420,23 @@ export default function AuditoriaPage() {
   const handleFindingSubmit = (data: AuditFindingFormData) => {
     if (!currentAuditSession) return;
     
+    let updatedFindings: AuditFinding[];
+
     if (editingFinding) {
       // Update existing finding
-      const updatedFindings = currentAuditSession.findings.map(f =>
+      updatedFindings = currentAuditSession.findings.map(f =>
         f.id === editingFinding.id ? { ...f, ...data } : f
       );
-      setCurrentAuditSession(prev => prev ? { ...prev, findings: updatedFindings } : null);
     } else {
       // Add new finding
       const newFinding: AuditFinding = { ...data, id: Date.now().toString(), isActionCreated: false };
-      setCurrentAuditSession(prev => prev ? { ...prev, findings: [...prev.findings, newFinding] } : null);
+      updatedFindings = [...currentAuditSession.findings, newFinding];
     }
     
+    const updatedAudit = { ...currentAuditSession, findings: updatedFindings };
+    setCurrentAuditSession(updatedAudit);
+    updateAudit(currentAuditSession.id, { findings: updatedFindings });
+
     setIsFindingDialogOpen(false);
     setEditingFinding(null);
     findingForm.reset();
@@ -492,7 +450,10 @@ export default function AuditoriaPage() {
   function executeDeleteFinding() {
     if (!currentAuditSession || !findingToDelete) return;
     
-    setCurrentAuditSession(prev => prev ? { ...prev, findings: prev.findings.filter(f => f.id !== findingToDelete.id) } : null);
+    const updatedFindings = currentAuditSession.findings.filter(f => f.id !== findingToDelete.id);
+    const updatedAudit = { ...currentAuditSession, findings: updatedFindings };
+    setCurrentAuditSession(updatedAudit);
+    updateAudit(currentAuditSession.id, { findings: updatedFindings });
 
     toast({ title: "Hallazgo Eliminado", description: "El hallazgo ha sido eliminado de la auditoría.", variant: "destructive" });
     
@@ -534,13 +495,8 @@ export default function AuditoriaPage() {
       );
       
       const updatedAudit = { ...auditContext, findings: updatedFindings };
-      
-      const updatedPastAudits = pastAudits.map(audit => audit.id === updatedAudit.id ? updatedAudit : audit);
-      setPastAudits(updatedPastAudits);
-
-      if (currentAuditSession?.id === updatedAudit.id) {
-          setCurrentAuditSession(updatedAudit);
-      }
+      setCurrentAuditSession(updatedAudit);
+      updateAudit(auditContext.id, { findings: updatedFindings });
       
       toast({ title: "Plan de Acción Creado", description: "Se ha registrado la acción en el módulo de 'Acciones de Mejora'."});
     } catch (e) {
@@ -561,15 +517,8 @@ export default function AuditoriaPage() {
         }
 
         const finalAudit = { ...auditToSave, status: 'Completada' as const };
-        setPastAudits(prev => {
-            const existingIndex = prev.findIndex(a => a.id === finalAudit.id);
-            if (existingIndex > -1) {
-                const newAudits = [...prev];
-                newAudits[existingIndex] = finalAudit;
-                return newAudits;
-            }
-            return [...prev, finalAudit];
-        });
+        await updateAudit(finalAudit.id, { status: 'Completada' });
+        
         addLogEntry({ user: finalAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: finalAudit.targetName, details: `Se finalizó la auditoría para "${finalAudit.targetName}".` });
         setCurrentAuditSession(null);
         toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
@@ -615,7 +564,7 @@ export default function AuditoriaPage() {
         );
 
         for (const finding of pendingFindings) {
-            handleCreateActionPlan(finding, updatedAudit);
+            await handleCreateActionPlan(finding, updatedAudit);
             newActionsCreated = true;
         }
 
@@ -641,19 +590,11 @@ export default function AuditoriaPage() {
     setIsConfirmCancelDialogOpen(true);
   };
   
-  const handleCancelAudit = () => {
+  const handleCancelAudit = async () => {
     if (!currentAuditSession) return;
-    const cancelledAudit = { ...currentAuditSession, status: 'Cancelada' as const };
-    setPastAudits(prev => {
-        const existingIndex = prev.findIndex(a => a.id === cancelledAudit.id);
-        if (existingIndex > -1) {
-            const newAudits = [...prev];
-            newAudits[existingIndex] = cancelledAudit;
-            return newAudits;
-        }
-        return [...prev, cancelledAudit];
-    });
-    addLogEntry({ user: cancelledAudit.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: cancelledAudit.targetName, details: `Se canceló la auditoría para "${cancelledAudit.targetName}".` });
+    const cancelledAudit: Partial<AuditCreationData> = { status: 'Cancelada' };
+    await updateAudit(currentAuditSession.id, cancelledAudit);
+    addLogEntry({ user: currentAuditSession.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: currentAuditSession.targetName, details: `Se canceló la auditoría para "${currentAuditSession.targetName}".` });
     setCurrentAuditSession(null);
     toast({ title: "Auditoría Cancelada", description: "La auditoría ha sido guardada en estado 'Cancelada'." });
     setIsConfirmCancelDialogOpen(false);
@@ -663,6 +604,7 @@ export default function AuditoriaPage() {
     let auditToOpen = audit;
     if (audit.status !== 'Completada' && audit.status !== 'Cancelada') {
         auditToOpen = { ...audit, status: 'En Progreso' };
+        updateAudit(audit.id, { status: 'En Progreso' });
     }
     setCurrentAuditSession(auditToOpen);
   };
@@ -682,9 +624,7 @@ export default function AuditoriaPage() {
 
   const executeDeleteAudit = () => {
     if (!auditToDelete) return;
-    setPastAudits(prev => prev.filter(a => a.id !== auditToDelete.id));
-    addLogEntry({ user: auditToDelete.auditorName, action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría para "${auditToDelete.targetName}".` });
-    toast({ title: 'Auditoría Eliminada', description: `La auditoría para "${auditToDelete.targetName}" ha sido eliminada permanentemente.`, variant: 'destructive' });
+    deleteAudit(auditToDelete.id);
     setAuditToDelete(null);
     setIsConfirmDeleteAuditOpen(false);
   };
@@ -825,7 +765,7 @@ export default function AuditoriaPage() {
     return logSortConfig.direction === 'ascending' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
-  const isLoadingAllData = isLoading || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos || isLoadingProcedimientos || isLoadingPoliticas;
+  const isLoadingAllData = isLoadingAudits || isLoadingActividades || isLoadingPuestos || isLoadingDepartamentos || isLoadingSistemasCostos || isLoadingProcesos || isLoadingProcedimientos || isLoadingPoliticas;
 
   const auditAlerts = useMemo(() => {
     if (isLoadingAllData) return [];
@@ -1891,12 +1831,3 @@ export default function AuditoriaPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

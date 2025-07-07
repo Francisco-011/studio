@@ -13,6 +13,7 @@ import { ActividadesProvider } from '@/contexts/ActividadesContext';
 import { ProcesosProvider } from '@/contexts/ProcesosContext';
 import { ProcedimientosProvider } from '@/contexts/ProcedimientosContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
+import { AuditsProvider } from '@/contexts/AuditsContext';
 
 export function AppProviders({ children }: { children: ReactNode }) {
     return (
@@ -28,7 +29,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
                                             <ProcedimientosProvider>
                                                 <ProcesosProvider>
                                                     <AccionesProvider>
-                                                        {children}
+                                                        <AuditsProvider>
+                                                            {children}
+                                                        </AuditsProvider>
                                                     </AccionesProvider>
                                                 </ProcesosProvider>
                                             </ProcedimientosProvider>

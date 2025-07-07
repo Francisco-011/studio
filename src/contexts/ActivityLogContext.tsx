@@ -3,9 +3,11 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, query, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
 
-export type LogAction = 
-  | "create" | "update" | "delete" | "status_change" 
+export type LogAction =
+  | "create" | "update" | "delete" | "status_change"
   | "restore" | "analysis" | "login" | "logout";
 
 export interface ActivityLogEntry {
@@ -26,49 +28,43 @@ interface ActivityLogContextType {
 
 const ActivityLogContext = createContext<ActivityLogContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_LOG_KEY = 'proceza-activity-log';
-const MAX_LOG_ENTRIES = 500; // Limit the log size
+const LOG_COLLECTION = 'activity_log';
+const MAX_LOG_ENTRIES = 500;
 
 export function ActivityLogProvider({ children }: { children: ReactNode }) {
   const [logEntries, setLogEntries] = useState<ActivityLogEntry[]>([]);
   const [isLoadingLog, setIsLoadingLog] = useState(true);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedLog = localStorage.getItem(LOCAL_STORAGE_LOG_KEY);
-        if (savedLog) {
-          setLogEntries(JSON.parse(savedLog));
-        }
-      } catch (error) {
-        console.error("Failed to load activity log from localStorage", error);
-        setLogEntries([]);
-      } finally {
+    const q = query(collection(db, LOG_COLLECTION), orderBy("timestamp", "desc"), limit(MAX_LOG_ENTRIES));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const logsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                timestamp: (data.timestamp as Timestamp)?.toMillis() || 0
+            } as ActivityLogEntry;
+        });
+        setLogEntries(logsData);
         setIsLoadingLog(false);
-      }
-    } else {
+    }, (error) => {
+        console.error("Failed to load activity log from Firestore", error);
         setIsLoadingLog(false);
-    }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoadingLog) {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_LOG_KEY, JSON.stringify(logEntries));
-      } catch (error) {
-        console.error("Failed to save activity log to localStorage", error);
-      }
-    }
-  }, [logEntries, isLoadingLog]);
-
   const addLogEntry = useCallback((log: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
-    const newEntry: ActivityLogEntry = {
+    const newEntry = {
       ...log,
-      id: Date.now().toString() + Math.random().toString(16).substring(2),
-      timestamp: Date.now(),
+      timestamp: serverTimestamp(),
       user: log.user || 'Sistema',
     };
-    setLogEntries((prev) => [newEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
+    addDoc(collection(db, LOG_COLLECTION), newEntry).catch(error => {
+      console.error("Failed to save activity log to Firestore", error);
+    });
   }, []);
 
   return (
