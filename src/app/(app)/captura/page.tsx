@@ -298,18 +298,27 @@ export default function CapturaPage() {
                 for (const actData of procData.activities) {
                     const activityRef = doc(collection(db, 'actividades'));
                     const { puestoId, ...restOfActData } = actData;
+
+                    const activityPayload: { [key: string]: any } = {
+                        ...restOfActData,
+                        puestoId: puestoId === 'none' ? undefined : puestoId,
+                        codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
+                        procedimientoId: newProcedureId,
+                        activa: true,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                        historialDeCambios: []
+                    };
+                    
+                    Object.keys(activityPayload).forEach(key => {
+                        if (activityPayload[key] === undefined) {
+                            delete activityPayload[key];
+                        }
+                    });
+
                     activityRefsAndData.push({
                         ref: activityRef,
-                        data: {
-                            ...restOfActData,
-                            puestoId: puestoId === 'none' ? undefined : puestoId,
-                            codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
-                            procedimientoId: newProcedureId,
-                            activa: true,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp(),
-                            historialDeCambios: []
-                        }
+                        data: activityPayload
                     });
                 }
             }
