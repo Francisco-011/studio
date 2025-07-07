@@ -325,18 +325,25 @@ export default function CapturaPage() {
             
             const { activities, ...restOfProcData } = procData;
 
+            const procedurePayload: { [key: string]: any } = {
+                ...restOfProcData,
+                codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
+                procesoId: newProcessId,
+                activityOrder: activityRefsAndData.map(a => a.ref.id),
+                activo: true,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                historialDeCambios: []
+            };
+            Object.keys(procedurePayload).forEach(key => {
+                if (procedurePayload[key] === undefined) {
+                    delete procedurePayload[key];
+                }
+            });
+
             procedureRefsAndData.push({
                 ref: procedureRef,
-                data: {
-                    ...restOfProcData,
-                    codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2, 5)}`,
-                    procesoId: newProcessId,
-                    activityOrder: activityRefsAndData.map(a => a.ref.id),
-                    activo: true,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    historialDeCambios: []
-                }
+                data: procedurePayload
             });
 
             if (procData.politicasAsociadasIds && procData.politicasAsociadasIds.length > 0) {
