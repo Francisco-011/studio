@@ -1,22 +1,32 @@
+
 import { db } from './firebase';
 import { collection, writeBatch, getDocs, doc, serverTimestamp, query, deleteDoc, arrayUnion } from 'firebase/firestore';
 
 const collectionsToClear = [
   'acciones', 'actividades', 'areas', 'departamentos', 'politicas',
-  'procedimientos', 'procesos', 'puestos', 'sistemas', 'sistemas_costos'
+  'procedimientos', 'procesos', 'puestos', 'sistemas', 'sistemas_costos',
+  'access_exceptions', 'activity_log', 'audits',
 ];
 
 async function clearCollections() {
   console.log('Clearing all collections...');
   for (const collectionName of collectionsToClear) {
-    const q = query(collection(db, collectionName));
-    const querySnapshot = await getDocs(q);
-    const deletePromises: Promise<void>[] = [];
-    querySnapshot.forEach((docSnapshot) => {
-      deletePromises.push(deleteDoc(docSnapshot.ref));
-    });
-    await Promise.all(deletePromises);
-    console.log(`Collection "${collectionName}" cleared.`);
+    try {
+      const q = query(collection(db, collectionName));
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) {
+        console.log(`Collection "${collectionName}" is already empty.`);
+        continue;
+      }
+      const deletePromises: Promise<void>[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        deletePromises.push(deleteDoc(docSnapshot.ref));
+      });
+      await Promise.all(deletePromises);
+      console.log(`Collection "${collectionName}" cleared.`);
+    } catch (error) {
+        console.warn(`Could not clear collection "${collectionName}":`, error);
+    }
   }
   console.log('All collections cleared.');
 }
@@ -64,17 +74,29 @@ export async function seedDatabase() {
   const puestoRefs: { [key: string]: string } = {};
   for (const puesto of seedPuestos) {
     const puestoRef = doc(collection(db, 'puestos'));
-    const jefe = seedPuestos.find(p => p.nombre === puesto.jefeInmediato);
-    batch.set(puestoRef, {
+    
+    const jefeId = puesto.jefeInmediato ? puestoRefs[puesto.jefeInmediato] : undefined;
+
+    const data: any = {
       nombre: puesto.nombre,
       areaId: areaRefs[puesto.area],
-      departamentoId: puesto.departamento ? deptoRefs[puesto.departamento] : undefined,
-      jefeInmediato: jefe ? Object.keys(puestoRefs).find(key => puestoRefs[key] === jefe.nombre) : undefined, // This is tricky, might need post-processing
       nivelOrganizacional: puesto.nivelOrganizacional,
       costoHora: puesto.costoHora,
       monedaCosto: puesto.monedaCosto,
       createdAt: serverTimestamp(),
-    });
+    };
+    
+    if (puesto.departamento) {
+      data.departamentoId = deptoRefs[puesto.departamento];
+    }
+    if (jefeId) {
+      data.jefeInmediato = jefeId;
+    }
+    if (puesto.numeroPersonas) {
+      data.numeroPersonas = puesto.numeroPersonas;
+    }
+
+    batch.set(puestoRef, data);
     puestoRefs[puesto.nombre] = puestoRef.id;
   }
   
