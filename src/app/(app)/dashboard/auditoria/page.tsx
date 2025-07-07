@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -20,21 +19,7 @@ import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-interface AuditFinding {
-  type: "Conforme" | "No Conforme" | "Oportunidad de Mejora";
-}
-interface Audit {
-  id: string;
-  auditDate: string;
-  status: 'En Progreso' | 'Completada' | 'Cancelada';
-  findings: AuditFinding[];
-  targetName: string;
-  auditType: string;
-  targetId: string;
-}
-
-const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
+import { useAudits, type Audit, type AuditFinding } from '@/contexts/AuditsContext';
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -74,9 +59,8 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 type ChartType = 'evolucion' | 'distribucion';
 
 export default function AuditoriaDashboardPage() {
-  const [allAudits, setAllAudits] = useState<Audit[]>([]);
+  const { audits: allAudits, isLoadingAudits } = useAudits();
   const { procesos: allCapturedProcesses, isLoadingProcesos } = useProcesos();
-  const [isLoadingData, setIsLoadingData] = useState(true);
   
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
@@ -90,26 +74,6 @@ export default function AuditoriaDashboardPage() {
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
   const [chartType, setChartType] = useState<ChartType>('evolucion');
-
-
-  useEffect(() => {
-    setIsLoadingData(true);
-    try {
-      const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
-      if (storedAudits) {
-        const parsedAudits = JSON.parse(storedAudits);
-        const sanitizedAudits = parsedAudits.map((audit: any) => ({
-            ...audit,
-            findings: audit.findings || [],
-        }));
-        setAllAudits(sanitizedAudits);
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error);
-    } finally {
-      setIsLoadingData(false);
-    }
-  }, []);
 
   const filterAuditsByCriteria = (auditsToFilter: Audit[], range?: DateRange) => {
     let filtered = auditsToFilter;
@@ -261,7 +225,7 @@ export default function AuditoriaDashboardPage() {
   }, [selectedArea, selectedDepartamento, areas, departamentos, puestos, isLoadingPuestos]);
 
 
-  const isLoadingAll = isLoadingData || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
+  const isLoadingAll = isLoadingAudits || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
 
   const handleExport = () => {
     if (filteredAudits.length === 0) {

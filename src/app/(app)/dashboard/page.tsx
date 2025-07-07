@@ -1,28 +1,15 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Factory, DollarSign, CheckCircle2, ClipboardCheck, AlertTriangle, Loader2, Clock, TrendingUp, FileText, HardDrive } from "lucide-react";
-import { parseISO } from 'date-fns';
 import { useAcciones } from '@/contexts/AccionesContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatMinutesToHours } from '@/lib/utils';
 import { usePermissions } from '@/contexts/PermissionsContext';
-
-interface AuditFinding {
-  type: "Conforme" | "No Conforme" | "Oportunidad de Mejora";
-}
-interface Audit {
-  id: string;
-  auditDate: string;
-  status: 'En Progreso' | 'Completada' | 'Cancelada';
-  findings: AuditFinding[];
-}
-
-const LOCAL_STORAGE_AUDITS_KEY = 'proceza-audits';
+import { useAudits, type AuditFinding } from '@/contexts/AuditsContext';
 
 function formatDashboardCurrency(amount: number, currency: string) {
   try {
@@ -40,36 +27,15 @@ const renderMetric = (value: number | string, loading: boolean) => {
 }
 
 export default function DashboardPage() {
-  const [allAudits, setAllAudits] = useState<Audit[]>([]);
-  const [isLoadingLocalStorage, setIsLoadingLocalStorage] = useState(true);
-
+  const { audits, isLoadingAudits } = useAudits();
   const { procesos, isLoadingProcesos } = useProcesos();
   const { acciones: globalAcciones, isLoadingAcciones } = useAcciones();
   const { hasPermission } = usePermissions();
 
-  useEffect(() => {
-    setIsLoadingLocalStorage(true);
-    try {
-      const storedAudits = localStorage.getItem(LOCAL_STORAGE_AUDITS_KEY);
-      if (storedAudits) {
-        const parsedAudits = JSON.parse(storedAudits);
-        const sanitizedAudits = parsedAudits.map((audit: any) => ({
-            ...audit,
-            findings: audit.findings || [],
-        }));
-        setAllAudits(sanitizedAudits);
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error);
-    } finally {
-      setIsLoadingLocalStorage(false);
-    }
-  }, []);
-
   const dashboardMetrics = useMemo(() => {
     const activeProcesses = procesos.filter(p => p.activo !== false && !p.deletedAt);
     const completedActions = globalAcciones.filter(acc => acc.estado === 'Completada');
-    const completedAudits = allAudits.filter(a => a.status === 'Completada');
+    const completedAudits = audits.filter(a => a.status === 'Completada');
 
     const ahorroCostosMap = new Map<string, number>();
     let totalMinutesSaved = 0;
@@ -103,9 +69,9 @@ export default function DashboardPage() {
       ahorroCostosRealizado,
       ahorroTiempoRealizado,
     };
-  }, [procesos, globalAcciones, allAudits]);
+  }, [procesos, globalAcciones, audits]);
 
-  const isLoadingAll = isLoadingLocalStorage || isLoadingAcciones || isLoadingProcesos;
+  const isLoadingAll = isLoadingAudits || isLoadingAcciones || isLoadingProcesos;
 
   return (
     <div className="container mx-auto py-8">
