@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -95,7 +96,13 @@ export function AuditsProvider({ children }: { children: ReactNode }) {
   const updateAudit = useCallback(async (id: string, data: Partial<AuditCreationData>) => {
     const auditDocRef = doc(db, AUDITS_COLLECTION, id);
     try {
-      await updateDoc(auditDocRef, data);
+      const payload: { [key: string]: any } = { ...data };
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) {
+          delete payload[key];
+        }
+      });
+      await updateDoc(auditDocRef, payload);
     } catch (e) {
       console.error("Error updating audit:", e);
       toast({ title: "Error", description: "No se pudo actualizar la auditoría.", variant: "destructive" });
