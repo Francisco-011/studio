@@ -12,7 +12,7 @@ Antes de comenzar, asegúrate de haber completado los siguientes pasos de la `GU
 1.  **Proyecto de Firebase Creado:** Tu proyecto está configurado en la consola de Firebase.
 2.  **Servicios Activados:** Authentication (con Email/Contraseña) y Firestore Database (en modo producción) están habilitados.
 3.  **Credenciales Conectadas:** El archivo `.env` de tu proyecto está lleno con las credenciales de tu aplicación web de Firebase.
-4.  **Reglas de Seguridad Aplicadas:** Has copiado y publicado las reglas del archivo `firestore.rules` en tu base de datos de Firestore.
+4.  **Reglas de Seguridad Aplicadas:** Has copiado y publicado las reglas del archivo `GUIA_PUESTA_EN_PRODUCCION.md` en tu base de datos de Firestore.
 5.  **Creación de Usuarios de Prueba:**
     *   **Usuario Administrador:** Regístrate con tu correo principal. En Firestore, ve a `users/{tu-id}` y asigna:
         *   `rol`: "Administrador"

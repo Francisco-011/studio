@@ -137,38 +137,14 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 
         // --- GENERIC CATALOGS (Areas, Departamentos, Puestos, Sistemas, etc.) ---
         // Any authenticated user can read catalogs, only Admins and Gerentes can write.
-        match /areas/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /departamentos/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /puestos/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /sistemas/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /sistemas_costos/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /acciones/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /actividades/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
-        match /procedimientos/{docId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
-        }
+        match /areas/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /departamentos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /puestos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /sistemas/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /sistemas_costos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /acciones/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /actividades/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /procedimientos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
         
         // --- PROCESOS y POLITICAS (Special Read Logic) ---
         // Read is more permissive to allow client-side filtering based on Nivel de Acceso and Exceptions.
@@ -187,6 +163,19 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         // Only Admins or Project Managers can manage access exceptions.
         match /access_exceptions/{exceptionId} {
             allow read, write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+
+        // --- AUDITS AND LOGS ---
+        match /audits/{auditId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated();
+          allow update: if isAuthenticated();
+          allow delete: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+        }
+        
+        match /activity_log/{logId} {
+          allow read: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+          allow create: if isAuthenticated();
         }
       }
     }
