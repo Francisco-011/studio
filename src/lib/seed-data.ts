@@ -81,36 +81,28 @@ export async function seedDatabase() {
   const puestoRefs: { [key: string]: string } = {};
   for (const puesto of seedPuestos) {
     const areaId = areaRefs[puesto.area];
-    if (!areaId) {
-        console.warn(`Skipping puesto "${puesto.nombre}" due to missing area: "${puesto.area}"`);
+    const deptoId = puesto.departamento ? deptoRefs[puesto.departamento] : undefined;
+    const jefeId = puesto.jefeInmediato ? puestoRefs[puesto.jefeInmediato] : undefined;
+    
+    if (!areaId || (puesto.departamento && !deptoId) || (puesto.jefeInmediato && !jefeId)) {
+        console.warn(`Skipping puesto "${puesto.nombre}" due to missing reference. AreaFound: ${!!areaId}, DeptoFound: ${!!deptoId}, JefeFound: ${!!jefeId}`);
         continue;
     }
 
     const puestoRef = doc(collection(db, 'puestos'));
     
-    const jefeId = puesto.jefeInmediato ? puestoRefs[puesto.jefeInmediato] : undefined;
-
     const data: any = {
       nombre: puesto.nombre,
       areaId: areaId,
       nivelOrganizacional: puesto.nivelOrganizacional,
-      costoHora: puesto.costoHora,
-      monedaCosto: puesto.monedaCosto,
       createdAt: serverTimestamp(),
     };
     
-    if (puesto.departamento) {
-      const deptoId = deptoRefs[puesto.departamento];
-      if (deptoId) {
-        data.departamentoId = deptoId;
-      }
-    }
-    if (jefeId) {
-      data.jefeInmediato = jefeId;
-    }
-    if (puesto.numeroPersonas) {
-      data.numeroPersonas = puesto.numeroPersonas;
-    }
+    if (puesto.costoHora) data.costoHora = puesto.costoHora;
+    if (puesto.monedaCosto) data.monedaCosto = puesto.monedaCosto;
+    if (deptoId) data.departamentoId = deptoId;
+    if (jefeId) data.jefeInmediato = jefeId;
+    if (puesto.numeroPersonas) data.numeroPersonas = puesto.numeroPersonas;
 
     batch.set(puestoRef, data);
     puestoRefs[puesto.nombre] = puestoRef.id;
@@ -128,7 +120,7 @@ export async function seedDatabase() {
   const actividadRefs: { [key: string]: string } = {};
   for (const act of seedActividades) {
     const actRef = doc(collection(db, 'actividades'));
-    const puestoId = puestoRefs[act.puesto];
+    const puestoId = act.puesto ? puestoRefs[act.puesto] : undefined;
     
     const data: any = {
       nombre: act.nombre,
@@ -189,7 +181,7 @@ export async function seedDatabase() {
   ];
   const procesoRefs: { [key: string]: string } = {};
   for (const proc of seedProcesos) {
-    const puestoId = puestoRefs[proc.puesto];
+    const puestoId = proc.puesto ? puestoRefs[proc.puesto] : undefined;
     if (!puestoId) {
         console.warn(`Skipping proceso "${proc.nombre}" due to missing puesto: "${proc.puesto}"`);
         continue;
@@ -229,7 +221,7 @@ export async function seedDatabase() {
   ];
   for (const pol of seedPoliticas) {
     const polRef = doc(collection(db, 'politicas'));
-    const procesoId = procesoRefs[pol.procesoVinculado];
+    const procesoId = pol.procesoVinculado ? procesoRefs[pol.procesoVinculado] : undefined;
     batch.set(polRef, {
       titulo: pol.titulo,
       descripcion: `Descripción de ejemplo para ${pol.titulo}`,
@@ -256,3 +248,4 @@ export async function seedDatabase() {
   await batch.commit();
   console.log('Database seeded successfully!');
 }
+    
