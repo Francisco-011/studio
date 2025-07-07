@@ -1,4 +1,6 @@
 
+'use server';
+
 import { db } from './firebase';
 import { collection, writeBatch, getDocs, doc, serverTimestamp, query, deleteDoc, arrayUnion } from 'firebase/firestore';
 
@@ -150,7 +152,8 @@ export async function seedDatabase() {
     batch.set(procRef, {
       nombre: proc.nombre,
       clasificacion: proc.clasificacion,
-      activityOrder: proc.activityOrder.map(name => actividadRefs[name]),
+      // This is the fix: filter out any potential 'undefined' values if an activity name doesn't match.
+      activityOrder: proc.activityOrder.map(name => actividadRefs[name]).filter(id => !!id),
       activo: true,
       codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
@@ -168,7 +171,12 @@ export async function seedDatabase() {
   const procesoRefs: { [key: string]: string } = {};
   for (const proc of seedProcesos) {
     const procRef = doc(collection(db, 'procesos'));
-    const linkedProcedimientos = seedProcedimientos.filter(p => p.procesoPadre === proc.nombre).map(p => procedimientoRefs[p.nombre]);
+    // This is the fix: filter out any potential 'undefined' values if a procedure name doesn't match.
+    const linkedProcedimientos = seedProcedimientos
+        .filter(p => p.procesoPadre === proc.nombre)
+        .map(p => procedimientoRefs[p.nombre])
+        .filter(id => !!id);
+        
     batch.set(procRef, {
         proceso: proc.nombre,
         area: proc.area,
