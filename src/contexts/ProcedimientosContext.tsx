@@ -98,9 +98,13 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
             sistemasUtilizados: data.sistemasUtilizados || [],
             procedimientosEntradaIds: data.procedimientosEntradaIds || [],
             procedimientosSalidaIds: data.procedimientosSalidaIds || [],
+            politicasAsociadasIds: data.politicasAsociadasIds || [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
+        // Ensure no undefined values are sent to Firestore
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        
         const docRef = await addDoc(collection(db, PROCEDIMIENTOS_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Procedimiento', entityName: data.nombre, details: `Se creó el procedimiento "${data.nombre}" (${codigo}).` });
         
