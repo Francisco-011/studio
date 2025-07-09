@@ -568,13 +568,14 @@ export default function AuditoriaPage() {
         }
 
         if (newActionsCreated) {
+            // Re-fetch or manually update the local state to reflect isActionCreated flag
+            const currentAuditState = { ...updatedAudit };
             updatedAudit = {
-                ...updatedAudit,
-                findings: updatedAudit.findings.map(f => 
-                    ((f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated) 
-                    ? { ...f, isActionCreated: true } 
-                    : f
-                )
+                ...currentAuditState,
+                findings: currentAuditState.findings.map(f => {
+                    const wasPending = pendingFindings.some(pf => pf.id === f.id);
+                    return wasPending ? { ...f, isActionCreated: true } : f;
+                })
             };
         }
     }
@@ -1009,51 +1010,50 @@ export default function AuditoriaPage() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Iniciar Nueva Auditoría</DialogTitle>
-                            <DialogDescription>Seleccione el tipo y el objetivo específico a auditar.</DialogDescription>
+                            <DialogDescription>Seleccione qué desea auditar y quién es el auditor.</DialogDescription>
                           </DialogHeader>
-                          <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="audit-type" className="text-right">Tipo</Label>
-                              <Select value={newAuditType} onValueChange={(value: AuditType) => setNewAuditType(value)}>
-                                <SelectTrigger id="audit-type" className="col-span-3"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="proceso">Proceso</SelectItem>
-                                  <SelectItem value="puesto">Puesto</SelectItem>
-                                  <SelectItem value="sistema">Sistema</SelectItem>
-                                  <SelectItem value="politica">Política</SelectItem>
-                                  <SelectItem value="procedimiento">Procedimiento</SelectItem>
-                                </SelectContent>
-                              </Select>
+                          <div className="space-y-4 py-4">
+                            <div>
+                                <Label htmlFor="auditor-name">Nombre del Auditor</Label>
+                                <Input id="auditor-name" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} />
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="audit-target" className="text-right">Objetivo</Label>
-                                <div className="col-span-3">
-                                  <Combobox
+                            <div>
+                                <Label>Tipo de Auditoría</Label>
+                                <Select value={newAuditType} onValueChange={(value: AuditType) => setNewAuditType(value)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="proceso">Proceso</SelectItem>
+                                    <SelectItem value="puesto">Puesto</SelectItem>
+                                    <SelectItem value="sistema">Sistema</SelectItem>
+                                    <SelectItem value="politica">Política</SelectItem>
+                                    <SelectItem value="procedimiento">Procedimiento</SelectItem>
+                                </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Objetivo Específico</Label>
+                                <Combobox
                                     value={newAuditTargetId}
                                     onChange={setNewAuditTargetId}
                                     options={auditTargetOptions}
                                     placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."}
                                     searchPlaceholder="Buscar..."
-                                  />
-                                </div>
+                                />
                             </div>
                             {newAuditType === 'puesto' && procesosDelPuestoOptions.length > 0 && (
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right">Procesos a Incluir</Label>
-                                    <div className="col-span-3">
-                                        <MultiSelect
-                                            value={newAuditProcessIds}
-                                            onChange={setNewAuditProcessIds}
-                                            options={procesosDelPuestoOptions}
-                                            placeholder="Todos (o seleccione para limitar)"
-                                        />
-                                    </div>
+                                <div>
+                                    <Label>Procesos a Incluir</Label>
+                                    <MultiSelect
+                                        value={newAuditProcessIds}
+                                        onChange={setNewAuditProcessIds}
+                                        options={procesosDelPuestoOptions}
+                                        placeholder="Todos (o seleccione para limitar)"
+                                    />
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        Limite la auditoría solo a los procesos seleccionados para este puesto.
+                                    </p>
                                 </div>
                             )}
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label htmlFor="auditor-name" className="text-right">Auditor</Label>
-                              <Input id="auditor-name" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} className="col-span-3" />
-                            </div>
                           </div>
                           <DialogFooter>
                             <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
