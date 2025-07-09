@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, CheckCircle2, TrendingUp, Activity as ActivityIcon, FileSearch2, Clock, Loader2, FileText, CalendarRange } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import {
   Table,
   TableBody,
@@ -584,7 +584,7 @@ export default function MejorasDashboardPage() {
         <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
           <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
-            <SelectTrigger><SelectValue placeholder="Todas las Áreas"/></SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
@@ -648,45 +648,43 @@ export default function MejorasDashboardPage() {
           {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
           ahorrosChartData.length > 0 ? (
             <ChartContainer config={ahorrosChartConfig} className="min-h-[300px] w-full">
-              <ResponsiveContainer>
-                <BarChart data={ahorrosChartData} layout="vertical">
-                  <CartesianGrid horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
-                  <Tooltip
-                    cursor={{ fill: "hsl(var(--muted))" }}
-                    content={
-                      <ChartTooltipContent
-                        formatter={(value, name, item) => {
-                            const { payload } = item;
-                            const unidad = payload.unidad || (typeof name === 'string' ? name : null) || 'N/A';
-                            const formattedValue = ahorrosMetricType === 'costo'
-                                ? formatDashboardCurrency(value as number, unidad)
-                                : formatMinutesToHours(value as number);
+              <BarChart data={ahorrosChartData} layout="vertical">
+                <CartesianGrid horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
+                <Tooltip
+                  cursor={{ fill: "hsl(var(--muted))" }}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, name, item) => {
+                          const { payload } = item;
+                          const unidad = payload.unidad || (typeof name === 'string' ? name : null) || 'N/A';
+                          const formattedValue = ahorrosMetricType === 'costo'
+                              ? formatDashboardCurrency(value as number, unidad)
+                              : formatMinutesToHours(value as number);
 
-                            return (
-                                <div className="flex w-full justify-between items-center">
-                                    <span>{ahorrosChartConfig[name as string]?.label || name}</span>
-                                    <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                      {formattedValue}
-                                    </span>
-                                </div>
-                            );
-                        }}
-                        labelClassName="font-bold"
-                      />
-                    }
-                  />
-                  <Legend />
-                  {ahorrosChartType === 'ahorrosPorAccion' ? (
-                    <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
-                  ) : (
-                    Object.keys(ahorrosChartConfig).map(key => (
-                      <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
-                    ))
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
+                          return (
+                              <div className="flex w-full justify-between items-center">
+                                  <span>{ahorrosChartConfig[name as string]?.label || name}</span>
+                                  <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                    {formattedValue}
+                                  </span>
+                              </div>
+                          );
+                      }}
+                      labelClassName="font-bold"
+                    />
+                  }
+                />
+                <Legend />
+                {ahorrosChartType === 'ahorrosPorAccion' ? (
+                  <Bar dataKey="Ahorro" fill="var(--color-Ahorro)" radius={4} />
+                ) : (
+                  Object.keys(ahorrosChartConfig).map(key => (
+                    <Bar key={key} dataKey={key} stackId="a" fill={`var(--color-${key})`} radius={4} />
+                  ))
+                )}
+              </BarChart>
             </ChartContainer>
           ) : (
             <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
@@ -758,36 +756,34 @@ export default function MejorasDashboardPage() {
                 <div className="min-h-[250px] mb-4">
                   {costosChartData.length > 0 ? (
                     <ChartContainer config={costosChartConfig} className="min-h-[250px] w-full">
-                       <ResponsiveContainer>
-                          <BarChart data={costosChartData} layout="vertical">
-                              <CartesianGrid horizontal={false} />
-                              <XAxis type="number" hide />
-                              <YAxis dataKey="displayName" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
-                              <Tooltip
-                                  cursor={{ fill: "hsl(var(--muted))" }}
-                                  content={<ChartTooltipContent 
-                                    formatter={(value, name, item) => {
-                                        const currency = item.payload.displayName.match(/\(([^)]+)\)/)?.[1] || 'N/A';
-                                        return (
-                                            <div className="flex w-full justify-between items-center">
-                                                <span>{costosChartConfig[name as keyof typeof costosChartConfig]?.label || name}</span>
-                                                <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
-                                                    {formatDashboardCurrency(value as number, currency)}
-                                                </span>
-                                            </div>
-                                        );
-                                    }}
-                                    labelFormatter={(label) => {
-                                        const originalItem = costosChartData.find(d => d.name === label);
-                                        return originalItem ? originalItem.displayName : label;
-                                    }}
-                                  />}
-                              />
-                              <Legend />
-                              <Bar dataKey="costoUso" stackId="a" fill="var(--color-costoUso)" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey="costoLicencias" stackId="a" fill="var(--color-costoLicencias)" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                      </ResponsiveContainer>
+                       <BarChart data={costosChartData} layout="vertical">
+                          <CartesianGrid horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="displayName" type="category" tickLine={false} axisLine={false} tickMargin={10} width={120} />
+                          <Tooltip
+                              cursor={{ fill: "hsl(var(--muted))" }}
+                              content={<ChartTooltipContent 
+                                formatter={(value, name, item) => {
+                                    const currency = item.payload.displayName.match(/\(([^)]+)\)/)?.[1] || 'N/A';
+                                    return (
+                                        <div className="flex w-full justify-between items-center">
+                                            <span>{costosChartConfig[name as keyof typeof costosChartConfig]?.label || name}</span>
+                                            <span className="ml-4 font-mono font-medium tabular-nums text-foreground">
+                                                {formatDashboardCurrency(value as number, currency)}
+                                            </span>
+                                        </div>
+                                    );
+                                }}
+                                labelFormatter={(label) => {
+                                    const originalItem = costosChartData.find(d => d.name === label);
+                                    return originalItem ? originalItem.displayName : label;
+                                }}
+                              />}
+                          />
+                          <Legend />
+                          <Bar dataKey="costoUso" stackId="a" fill="var(--color-costoUso)" radius={[0, 4, 4, 0]} />
+                          <Bar dataKey="costoLicencias" stackId="a" fill="var(--color-costoLicencias)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
                     </ChartContainer>
                   ) : <div className="flex items-center justify-center min-h-[250px]"><p className="text-muted-foreground text-sm">No hay datos de costos para graficar.</p></div>}
                 </div>

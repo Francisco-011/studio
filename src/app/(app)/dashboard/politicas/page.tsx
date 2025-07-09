@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, BarChart, Percent, CalendarX, AlertTriangle } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Legend, Tooltip, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
@@ -146,15 +146,13 @@ export default function PoliticasDashboardPage() {
             {isLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div> :
             complianceChartData.length > 0 ? (
                 <ChartContainer config={complianceChartConfig} className="min-h-[250px] w-full">
-                    <ResponsiveContainer>
-                        <PieChart>
-                            <Tooltip content={<ChartTooltipContent hideLabel />} />
-                            <Pie data={complianceChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                {complianceChartData.map((entry) => (<Cell key={entry.name} fill={entry.fill} />))}
-                            </Pie>
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    <PieChart>
+                        <Tooltip content={<ChartTooltipContent hideLabel />} />
+                        <Pie data={complianceChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                            {complianceChartData.map((entry) => (<Cell key={entry.name} fill={entry.fill} />))}
+                        </Pie>
+                        <Legend />
+                    </PieChart>
                 </ChartContainer>
             ) : (<div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No hay datos para mostrar.</p></div>)}
           </CardContent>
@@ -167,19 +165,17 @@ export default function PoliticasDashboardPage() {
             {isLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div> :
              areaChartData.length > 0 ? (
                 <ChartContainer config={areaChartConfig} className="min-h-[250px] w-full">
-                    <ResponsiveContainer>
-                        <BarChart data={areaChartData} layout="vertical" margin={{ left: 20 }}>
-                            <CartesianGrid horizontal={false} />
-                            <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={100} />
-                            <XAxis type="number" hide />
-                            <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                            <Bar dataKey="value" layout="vertical" radius={4}>
-                               {areaChartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={`hsl(var(--chart-${index + 1}))`} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <BarChart data={areaChartData} layout="vertical" margin={{ left: 20 }}>
+                        <CartesianGrid horizontal={false} />
+                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={100} />
+                        <XAxis type="number" hide />
+                        <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
+                        <Bar dataKey="value" layout="vertical" radius={4}>
+                           {areaChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={`hsl(var(--chart-${index + 1}))`} />
+                            ))}
+                        </Bar>
+                    </BarChart>
                 </ChartContainer>
              ) : (<div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No hay datos para mostrar.</p></div>)}
           </CardContent>

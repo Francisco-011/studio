@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardCheck, AlertTriangle, TrendingUp, Loader2, FileText, CalendarRange } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateRange } from "react-day-picker";
@@ -340,21 +341,19 @@ export default function AuditoriaDashboardPage() {
               {chartType === 'evolucion' ? (
                 lineChartData.length > 0 ? (
                   <ChartContainer config={lineChartConfig} className="min-h-[300px] w-full">
-                    <ResponsiveContainer>
-                      <LineChart data={lineChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <Tooltip content={<ChartTooltipContent />} />
-                        <Legend />
-                        <Line type="monotone" dataKey="Auditorías Completadas" stroke="var(--color-Auditorías Completadas)" />
-                        <Line type="monotone" dataKey="Hallazgos No Conformes" stroke="var(--color-Hallazgos No Conformes)" />
-                        <Line type="monotone" dataKey="Oportunidades de Mejora" stroke="var(--color-Oportunidades de Mejora)" />
-                        {isComparing && <Line type="monotone" dataKey="Auditorías Completadas (Comp)" stroke="var(--color-Auditorías Completadas (Comp))" strokeDasharray="5 5" />}
-                        {isComparing && <Line type="monotone" dataKey="Hallazgos No Conformes (Comp)" stroke="var(--color-Hallazgos No Conformes (Comp))" strokeDasharray="5 5" />}
-                        {isComparing && <Line type="monotone" dataKey="Oportunidades de Mejora (Comp)" stroke="var(--color-Oportunidades de Mejora (Comp))" strokeDasharray="5 5" />}
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <LineChart data={lineChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip content={<ChartTooltipContent />} />
+                      <Legend />
+                      <Line type="monotone" dataKey="Auditorías Completadas" stroke="var(--color-Auditorías Completadas)" />
+                      <Line type="monotone" dataKey="Hallazgos No Conformes" stroke="var(--color-Hallazgos No Conformes)" />
+                      <Line type="monotone" dataKey="Oportunidades de Mejora" stroke="var(--color-Oportunidades de Mejora)" />
+                      {isComparing && <Line type="monotone" dataKey="Auditorías Completadas (Comp)" stroke="var(--color-Auditorías Completadas (Comp))" strokeDasharray="5 5" />}
+                      {isComparing && <Line type="monotone" dataKey="Hallazgos No Conformes (Comp)" stroke="var(--color-Hallazgos No Conformes (Comp))" strokeDasharray="5 5" />}
+                      {isComparing && <Line type="monotone" dataKey="Oportunidades de Mejora (Comp)" stroke="var(--color-Oportunidades de Mejora (Comp))" strokeDasharray="5 5" />}
+                    </LineChart>
                   </ChartContainer>
                 ) : (
                   <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
@@ -364,15 +363,13 @@ export default function AuditoriaDashboardPage() {
               ) : (
                 pieChartData.length > 0 ? (
                     <ChartContainer config={pieChartConfig} className="min-h-[300px] w-full">
-                       <ResponsiveContainer>
-                          <PieChart>
-                              <Tooltip content={<ChartTooltipContent hideLabel />} />
-                              <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
-                                  {pieChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
-                              </Pie>
-                              <Legend />
-                          </PieChart>
-                      </ResponsiveContainer>
+                      <PieChart>
+                          <Tooltip content={<ChartTooltipContent hideLabel />} />
+                          <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                              {pieChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                          </Pie>
+                          <Legend />
+                      </PieChart>
                     </ChartContainer>
                 ) : (
                    <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">

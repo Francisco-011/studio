@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Layers, CopyCheck, PackageX, Brain, Factory, FileText, CalendarRange, Users, AlertTriangle } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import {
   Table,
   TableBody,
@@ -644,15 +644,13 @@ export default function ProcesosDashboardPage() {
                     {isLoadingAll ? <div className="h-[200px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> :
                      chartData.length > 0 ? (
                         <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
-                            <ResponsiveContainer>
-                                <PieChart>
-                                    <Tooltip content={<ChartTooltipContent hideLabel />} />
-                                    <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                        {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
-                                    </Pie>
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            <PieChart>
+                                <Tooltip content={<ChartTooltipContent hideLabel />} />
+                                <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                    {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                                </Pie>
+                                <Legend />
+                            </PieChart>
                         </ChartContainer>
                      ) : <p className="text-muted-foreground text-sm h-[200px] flex items-center">No hay datos para graficar.</p>}
                 </CardContent>
