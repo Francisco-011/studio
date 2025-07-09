@@ -82,7 +82,12 @@ export function AuditsProvider({ children }: { children: ReactNode }) {
 
   const addAudit = useCallback(async (data: AuditCreationData): Promise<string | null> => {
     try {
-      const payload = { ...data, createdAt: serverTimestamp() };
+      const payload: { [key: string]: any } = { ...data, createdAt: serverTimestamp() };
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) {
+          delete payload[key];
+        }
+      });
       const docRef = await addDoc(collection(db, AUDITS_COLLECTION), payload);
       addLogEntry({ action: 'create', entityType: 'Auditoría', entityName: data.targetName, details: `Se inició una nueva auditoría para ${data.auditType}: "${data.targetName}".` });
       return docRef.id;
