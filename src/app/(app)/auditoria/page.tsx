@@ -973,7 +973,113 @@ export default function AuditoriaPage() {
 
   return (
     <div className="container mx-auto py-8">
-      {/* ... The rest of this file was omitted for brevity as it is very long... */}
+      {currentAuditSession ? (
+        <h1>Audit Session View</h1>
+      ) : (
+        <Card className="shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <ClipboardCheck className="h-6 w-6 text-primary" />
+              <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
+            </div>
+            <CardDescription className="text-muted-foreground">
+              Inicie nuevas auditorías, revise el historial y monitoree el registro de actividad del sistema.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="historial">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="historial">Historial y Métricas</TabsTrigger>
+                <TabsTrigger value="alertas">Alertas de Auditoría</TabsTrigger>
+                <TabsTrigger value="log"><History className="mr-2 h-4 w-4"/>Registro de Actividad</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="historial" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                      <div>
+                        <CardTitle>Historial de Auditorías</CardTitle>
+                        <CardDescription>Auditorías realizadas anteriormente.</CardDescription>
+                      </div>
+                      <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
+                        <DialogTrigger asChild>
+                           <Button><PlayCircle className="mr-2 h-4 w-4"/>Iniciar Nueva Auditoría</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Iniciar Nueva Auditoría</DialogTitle>
+                            <DialogDescription>Seleccione el tipo y el objetivo específico a auditar.</DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="audit-type" className="text-right">Tipo</Label>
+                              <Select value={newAuditType} onValueChange={(value: AuditType) => setNewAuditType(value)}>
+                                <SelectTrigger id="audit-type" className="col-span-3"><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="proceso">Proceso</SelectItem>
+                                  <SelectItem value="puesto">Puesto</SelectItem>
+                                  <SelectItem value="sistema">Sistema</SelectItem>
+                                  <SelectItem value="politica">Política</SelectItem>
+                                  <SelectItem value="procedimiento">Procedimiento</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="audit-target" className="text-right">Objetivo</Label>
+                                <div className="col-span-3">
+                                  <Combobox
+                                    value={newAuditTargetId}
+                                    onChange={setNewAuditTargetId}
+                                    options={auditTargetOptions}
+                                    placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."}
+                                    searchPlaceholder="Buscar..."
+                                  />
+                                </div>
+                            </div>
+                            {newAuditType === 'puesto' && procesosDelPuestoOptions.length > 0 && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right">Procesos a Incluir</Label>
+                                    <div className="col-span-3">
+                                        <MultiSelect
+                                            value={newAuditProcessIds}
+                                            onChange={setNewAuditProcessIds}
+                                            options={procesosDelPuestoOptions}
+                                            placeholder="Todos (o seleccione para limitar)"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="auditor-name" className="text-right">Auditor</Label>
+                              <Input id="auditor-name" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} className="col-span-3" />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                            <Button onClick={handleStartNewAudit} disabled={!newAuditType || !newAuditTargetId}>Iniciar Auditoría</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    Contenido del historial...
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="alertas" className="mt-4">
+                 Contenido de alertas...
+              </TabsContent>
+              
+              <TabsContent value="log" className="mt-4">
+                 Contenido del log...
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
