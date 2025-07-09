@@ -83,7 +83,6 @@ export async function seedDatabase() {
     const areaId = areaRefs[puesto.area];
     const deptoId = puesto.departamento ? deptoRefs[puesto.departamento] : undefined;
     
-    // Defer jefeId assignment until after first loop
     const puestoRef = doc(collection(db, 'puestos'));
     
     const data: any = {
@@ -91,13 +90,13 @@ export async function seedDatabase() {
       areaId: areaId,
       nivelOrganizacional: puesto.nivelOrganizacional,
       createdAt: serverTimestamp(),
-      costoHora: puesto.costoHora,
-      monedaCosto: puesto.monedaCosto,
-      numeroPersonas: puesto.numeroPersonas,
-      auditFrequencyInDays: puesto.auditFrequencyInDays,
     };
     
     if (deptoId) data.departamentoId = deptoId;
+    if (puesto.costoHora !== undefined) data.costoHora = puesto.costoHora;
+    if (puesto.monedaCosto) data.monedaCosto = puesto.monedaCosto;
+    if (puesto.numeroPersonas !== undefined) data.numeroPersonas = puesto.numeroPersonas;
+    if (puesto.auditFrequencyInDays !== undefined) data.auditFrequencyInDays = puesto.auditFrequencyInDays;
 
     batch.set(puestoRef, data);
     puestoRefs[puesto.nombre] = puestoRef.id;
@@ -194,16 +193,14 @@ export async function seedDatabase() {
       codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      descripcionBreve: act.descripcionBreve,
-      sistemaUtilizado: act.sistema || null,
-      tiempoEstimado: act.tiempoEstimado,
-      tiempoIdeal: act.tiempoIdeal,
-      frecuencia: act.frecuencia,
-      ejecucionesPorPeriodo: act.ejecucionesPorPeriodo,
     };
-    if (puestoId) {
-        data.puestoId = puestoId;
-    }
+    if (puestoId) data.puestoId = puestoId;
+    if (act.descripcionBreve) data.descripcionBreve = act.descripcionBreve;
+    if (act.sistema) data.sistemaUtilizado = act.sistema;
+    if (act.tiempoEstimado) data.tiempoEstimado = act.tiempoEstimado;
+    if (act.tiempoIdeal) data.tiempoIdeal = act.tiempoIdeal;
+    if (act.frecuencia) data.frecuencia = act.frecuencia;
+    if (act.ejecucionesPorPeriodo) data.ejecucionesPorPeriodo = act.ejecucionesPorPeriodo;
 
     batch.set(actRef, data);
     actividadRefs[act.nombre] = actRef.id;
@@ -245,7 +242,8 @@ export async function seedDatabase() {
   const procedimientoRefs: { [key: string]: string } = {};
   for (const proc of seedProcedimientos) {
     const procRef = doc(collection(db, 'procedimientos'));
-    batch.set(procRef, {
+    
+    const data: any = {
       nombre: proc.nombre,
       clasificacion: proc.clasificacion,
       activityOrder: proc.activityOrder.map(name => actividadRefs[name]).filter(id => !!id),
@@ -253,12 +251,15 @@ export async function seedDatabase() {
       codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      descripcion: proc.descripcion,
-      sistemasUtilizados: proc.sistemasUtilizados,
-      informacionRecibe: proc.informacionRecibe,
-      informacionEntrega: proc.informacionEntrega,
-      auditFrequencyInDays: proc.auditFrequencyInDays,
-    });
+    };
+
+    if (proc.descripcion) data.descripcion = proc.descripcion;
+    if (proc.sistemasUtilizados) data.sistemasUtilizados = proc.sistemasUtilizados;
+    if (proc.informacionRecibe) data.informacionRecibe = proc.informacionRecibe;
+    if (proc.informacionEntrega) data.informacionEntrega = proc.informacionEntrega;
+    if (proc.auditFrequencyInDays) data.auditFrequencyInDays = proc.auditFrequencyInDays;
+
+    batch.set(procRef, data);
     procedimientoRefs[proc.nombre] = procRef.id;
   }
   
@@ -282,7 +283,7 @@ export async function seedDatabase() {
         .map(p => procedimientoRefs[p.nombre])
         .filter(id => !!id);
         
-    batch.set(procRef, {
+    const data: any = {
         proceso: proc.nombre,
         area: proc.area,
         puesto: proc.puesto,
@@ -293,9 +294,11 @@ export async function seedDatabase() {
         capturedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         procedimientoOrder: linkedProcedimientos,
-        sistemas: proc.sistemas,
-        auditFrequencyInDays: proc.auditFrequencyInDays,
-    });
+    };
+    if (proc.sistemas) data.sistemas = proc.sistemas;
+    if (proc.auditFrequencyInDays) data.auditFrequencyInDays = proc.auditFrequencyInDays;
+
+    batch.set(procRef, data);
     procesoRefs[proc.nombre] = procRef.id;
     
     // Link back from procedimiento to proceso
@@ -315,11 +318,10 @@ export async function seedDatabase() {
     const procesoId = pol.procesoVinculado ? procesoRefs[pol.procesoVinculado] : undefined;
     const deptoId = pol.departamento ? deptoRefs[pol.departamento] : undefined;
 
-    batch.set(polRef, {
+    const data: any = {
       titulo: pol.titulo,
       descripcion: pol.descripcion,
       areaResponsable: pol.area,
-      departamentoResponsable: deptoId,
       nivelCompliance: pol.nivel,
       clasificacion: pol.clasificacion,
       estado: 'Aprobada',
@@ -329,8 +331,11 @@ export async function seedDatabase() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       procesosAsociadosIds: procesoId ? [procesoId] : [],
-      consecuenciasIncumplimiento: pol.consecuenciasIncumplimiento
-    });
+    };
+    if (deptoId) data.departamentoResponsable = deptoId;
+    if (pol.consecuenciasIncumplimiento) data.consecuenciasIncumplimiento = pol.consecuenciasIncumplimiento;
+    
+    batch.set(polRef, data);
 
     if (procesoId) {
         const procesoDocRef = doc(db, 'procesos', procesoId);
