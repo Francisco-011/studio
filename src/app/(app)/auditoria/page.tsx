@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { format, parseISO, isValid, differenceInDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
@@ -68,7 +68,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Workflow as WorkflowIcon } from 'lucide-react';
 import { Combobox } from "@/components/ui/combobox";
 import { MultiSelect } from "@/components/ui/multi-select";
 
@@ -976,7 +976,8 @@ export default function AuditoriaPage() {
     <div className="container mx-auto py-8">
       {currentAuditSession ? (
         <AuditSessionView 
-            auditSession={currentAuditSession} 
+            auditSession={currentAuditSession}
+            onGoBack={() => setCurrentAuditSession(null)}
             onFinalize={handleFinalizeAudit}
             onCancel={promptCancelAudit}
             onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
@@ -1118,22 +1119,73 @@ export default function AuditoriaPage() {
               <TabsContent value="historial" className="mt-4">
                 <Card>
                   <CardHeader>
-                      <CardTitle>Historial de Auditorías</CardTitle>
+                      <div className="flex justify-between items-center"><CardTitle>Historial de Auditorías</CardTitle><Button variant="outline" onClick={handleAuditExport} disabled={filteredAndSortedAudits.length === 0}><FileText className="mr-2 h-4 w-4"/>Exportar</Button></div>
                       <CardDescription>Auditorías realizadas anteriormente.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    Contenido del historial...
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <Input placeholder="Buscar por objetivo o auditor..." value={auditSearchTerm} onChange={e => setAuditSearchTerm(e.target.value)} />
+                        <Select value={auditTypeFilter} onValueChange={v => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
+                        <Select value={auditStatusFilter} onValueChange={v => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                        <Select value={pendingActionsFilter} onValueChange={v => setPendingActionsFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="with_pending">Con Acciones Pendientes</SelectItem><SelectItem value="no_pending">Sin Acciones Pendientes</SelectItem></SelectContent></Select>
+                    </div>
+                     <div className="rounded-md border">
+                        <Table><TableHeader><TableRow>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditType')}>Tipo {getAuditSortIcon('auditType')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('status')}>Estado {getAuditSortIcon('status')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('pendingActions')}>Acciones Pendientes {getAuditSortIcon('pendingActions')}</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow></TableHeader><TableBody>
+                        {paginatedAudits.length > 0 ? paginatedAudits.map(audit => {
+                            const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+                            return (
+                            <TableRow key={audit.id}><TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell><TableCell>{audit.targetName}</TableCell><TableCell className="capitalize">{audit.auditType}</TableCell>
+                                <TableCell><Badge className={cn("text-white border-transparent", { "bg-green-600": audit.status === "Completada", "bg-red-600": audit.status === "Cancelada", "bg-blue-600": audit.status === "En Progreso" })}>{audit.status}</Badge></TableCell>
+                                <TableCell className="text-center">{pendingActions > 0 ? <Badge variant="destructive">{pendingActions}</Badge> : <Badge variant="secondary">0</Badge>}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEditAudit(audit)}>{audit.status === 'En Progreso' ? <Edit className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}</Button>
+                                    <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                </TableCell>
+                            </TableRow>
+                        )}) : <TableRow><TableCell colSpan={6} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
+                        </TableBody></Table>
+                    </div>
+                     <div className="flex items-center justify-between space-x-2 py-4">
+                        <span className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages}</span>
+                        <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.max(1, p-1))} disabled={auditCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p=>Math.min(totalAuditPages, p+1))} disabled={auditCurrentPage >= totalAuditPages}>Siguiente</Button></div>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
               
               <TabsContent value="log" className="mt-4">
                  <Card>
-                  <CardHeader>
-                    <CardTitle>Registro de Actividad del Sistema</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle>Registro de Actividad del Sistema</CardTitle></CardHeader>
                    <CardContent>
-                     Contenido del log...
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <Input placeholder="Buscar por usuario, entidad o detalle..." value={logSearchTerm} onChange={e=>setLogSearchTerm(e.target.value)} />
+                        <Select value={logEntityTypeFilter} onValueChange={setLogEntityTypeFilter}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logEntityTypeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
+                        <Select value={logActionFilter} onValueChange={v => setLogActionFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logActionOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
+                     </div>
+                      <div className="rounded-md border">
+                        <Table><TableHeader><TableRow>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha {getLogSortIcon('timestamp')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('user')}>Usuario {getLogSortIcon('user')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('action')}>Acción {getLogSortIcon('action')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Entidad {getLogSortIcon('entityType')}</TableHead>
+                            <TableHead>Detalles</TableHead>
+                        </TableRow></TableHeader><TableBody>
+                        {paginatedLogs.length > 0 ? paginatedLogs.map(log => (
+                            <TableRow key={log.id}><TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yy HH:mm')}</TableCell><TableCell>{log.user}</TableCell><TableCell><Badge variant="secondary">{actionTranslations[log.action] || log.action}</Badge></TableCell><TableCell>{log.entityType}</TableCell><TableCell className="text-xs">{log.details}</TableCell></TableRow>
+                        )) : <TableRow><TableCell colSpan={5} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
+                        </TableBody></Table>
+                     </div>
+                      <div className="flex items-center justify-between space-x-2 py-4">
+                        <span className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages}</span>
+                        <div className="space-x-2"><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.max(1, p-1))} disabled={logCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.min(totalLogPages, p+1))} disabled={logCurrentPage >= totalLogPages}>Siguiente</Button></div>
+                     </div>
                   </CardContent>
                  </Card>
               </TabsContent>
@@ -1141,57 +1193,140 @@ export default function AuditoriaPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialogs */}
+      <Dialog open={isFindingDialogOpen} onOpenChange={setIsFindingDialogOpen}>
+        <DialogContent>
+            <DialogHeader><DialogTitle>{editingFinding ? 'Editar Hallazgo' : 'Registrar Nuevo Hallazgo'}</DialogTitle></DialogHeader>
+            <Form {...findingForm}><form onSubmit={findingForm.handleSubmit(handleFindingSubmit)} className="space-y-4 py-4">
+                <FormField control={findingForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Hallazgo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..."/></SelectTrigger></FormControl><SelectContent>{findingTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
+                <FormField control={findingForm.control} name="description" render={({ field }) => (<FormItem><FormLabel>Descripción Detallada</FormLabel><FormControl><Textarea {...field} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
+                <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (<FormItem><FormLabel>Plan de Acción Propuesto</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
+                <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar Hallazgo</Button></DialogFooter>
+            </form></Form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={isConfirmDeleteFindingOpen} onOpenChange={setIsConfirmDeleteFindingOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar este hallazgo? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteFinding} className={buttonVariants({variant: 'destructive'})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={isConfirmDeleteAuditOpen} onOpenChange={setIsConfirmDeleteAuditOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar esta auditoría y todos sus hallazgos?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteAudit} className={buttonVariants({variant: 'destructive'})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={isConfirmCancelDialogOpen} onOpenChange={setIsConfirmCancelDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Cancelar Auditoría</AlertDialogTitle><AlertDialogDescription>¿Desea cancelar esta sesión de auditoría? Podrá retomarla más tarde desde el historial.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Continuar Auditando</AlertDialogCancel><AlertDialogAction onClick={handleCancelAudit}>Sí, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={isFinalizeConfirmDialogOpen} onOpenChange={setIsFinalizeConfirmDialogOpen}>
+        <DialogContent>
+            <AlertDialogHeader><AlertDialogTitle>Finalizar Auditoría con Hallazgos Pendientes</AlertDialogTitle><AlertDialogDescription>Se detectaron hallazgos que requieren un plan de acción. ¿Desea crear automáticamente las acciones de mejora correspondientes en el módulo de 'Acciones'?</AlertDialogDescription></AlertDialogHeader>
+            <div className="py-4"><div className="flex items-center space-x-2"><Checkbox id="auto-create-actions" checked={finalizeOptions.autoCreateActions} onCheckedChange={checked => setFinalizeOptions({autoCreateActions: !!checked})}/><Label htmlFor="auto-create-actions">Sí, crear acciones automáticamente.</Label></div></div>
+            <AlertDialogFooter><AlertDialogCancel>Volver</AlertDialogCancel><AlertDialogAction onClick={handleConfirmFinalization}>Finalizar Auditoría</AlertDialogAction></AlertDialogFooter>
+        </DialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
+// Sub-component for displaying the active audit session
+function AuditSessionView({
+  auditSession,
+  onGoBack,
+  onFinalize,
+  onCancel,
+  onAddFinding,
+  onEditFinding,
+  onDeleteFinding,
+  onCreateActionPlan,
+  auditTargetDetails,
+  activityDisplayFilter,
+  setActivityDisplayFilter,
+}: {
+  auditSession: Audit;
+  onGoBack: () => void;
+  onFinalize: () => void;
+  onCancel: () => void;
+  onAddFinding: () => void;
+  onEditFinding: (finding: AuditFinding) => void;
+  onDeleteFinding: (finding: AuditFinding) => void;
+  onCreateActionPlan: (finding: AuditFinding, auditContext: Audit) => void;
+  auditTargetDetails: any;
+  activityDisplayFilter: 'all' | 'active' | 'inactive';
+  setActivityDisplayFilter: (filter: 'all' | 'active' | 'inactive') => void;
+}) {
 
-// Placeholder for AuditSessionView - This component needs to be created or filled in
-function AuditSessionView(props: any) {
-    const { auditSession, onFinalize, onCancel, onAddFinding, onEditFinding, onDeleteFinding, onCreateActionPlan, auditTargetDetails, activityDisplayFilter, setActivityDisplayFilter } = props;
-    
     if (!auditTargetDetails) {
         return (
             <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
               <Loader2 className="h-16 w-16 text-primary animate-spin" />
               <p className="ml-4 text-lg text-muted-foreground">Cargando detalles de la auditoría...</p>
             </div>
-        )
+        );
     }
 
+    const { name, process, puesto, sistema, policy, procedimiento, relatedProcesses, linkedProcesses, relatedPolicies, departamento, jefeInmediato, procedimientos } = auditTargetDetails;
+
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <Badge variant="default" className="mb-2">{auditSession.status}</Badge>
-                        <CardTitle className="text-2xl font-headline">Sesión de Auditoría: {auditTargetDetails.name}</CardTitle>
-                        <CardDescription>Tipo: <span className="capitalize font-medium">{auditSession.auditType}</span> | Auditor: <span className="font-medium">{auditSession.auditorName}</span></CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={onCancel}>Cancelar Auditoría</Button>
-                        <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
-                    </div>
+        <div className="space-y-6">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-transparent">{auditSession.status}</Badge>
+                    </p>
                 </div>
-            </CardHeader>
-            <CardContent>
-                {/* A placeholder for the detailed view */}
-                <h3 className="font-bold text-lg my-4">Detalles del Objetivo de Auditoría</h3>
-                {auditTargetDetails.process && <p>Proceso: {auditTargetDetails.process.proceso}</p>}
-                {auditTargetDetails.puesto && <p>Puesto: {auditTargetDetails.puesto.nombre}</p>}
-                {/* etc. more details here */}
+                <Button variant="outline" onClick={onGoBack}>Volver a la Lista</Button>
+            </div>
+            
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle>Objetivo de la Auditoría: {name}</CardTitle>
+                        {(auditSession.auditType === 'proceso' || auditSession.auditType === 'puesto') && (
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="activity-filter" className="text-sm">Mostrar Actividades:</Label>
+                                <Select value={activityDisplayFilter} onValueChange={(v) => setActivityDisplayFilter(v as any)}>
+                                    <SelectTrigger id="activity-filter" className="w-[180px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todas</SelectItem>
+                                        <SelectItem value="active">Solo Activas</SelectItem>
+                                        <SelectItem value="inactive">Solo Inactivas</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* Render different details based on audit type */}
+                    {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} />}
+                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} />}
+                    {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
+                    {auditSession.auditType === 'politica' && <PolicyAuditDetails policy={policy} linkedProcesses={linkedProcesses} />}
+                    {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies}/>}
+                </CardContent>
+            </Card>
 
-                <Separator className="my-6" />
-
-                <h3 className="font-bold text-lg my-4">Hallazgos de la Auditoría</h3>
-                <div className="flex justify-end mb-4">
-                    <Button onClick={onAddFinding}><PlusCircle className="mr-2 h-4 w-4" /> Registrar Hallazgo</Button>
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold">Registro de Hallazgos</h3>
+                    <Button onClick={onAddFinding}><PlusCircle className="mr-2 h-4 w-4"/> Agregar Hallazgo</Button>
                 </div>
-                 <div className="space-y-4">
+                <div className="space-y-4">
                     {auditSession.findings.length > 0 ? (
                         auditSession.findings.map(finding => (
                             <Card key={finding.id} className="p-4">
-                               <p>{finding.description}</p>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'default' : 'secondary')} className={cn(finding.type === 'Oportunidad de Mejora' && 'bg-amber-500')}>{finding.type}</Badge>
+                                        <p className="mt-2 text-sm">{finding.description}</p>
+                                        {finding.proposedAction && <p className="mt-2 text-xs text-muted-foreground italic"><strong>Acción Propuesta:</strong> {finding.proposedAction}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {(finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
+                                            <Button size="sm" variant="outline" onClick={() => onCreateActionPlan(finding, auditSession)} disabled={finding.isActionCreated}>
+                                                {finding.isActionCreated ? <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> : <Send className="mr-2 h-4 w-4" />}
+                                                {finding.isActionCreated ? 'Acción Creada' : 'Crear Acción'}
+                                            </Button>
+                                        )}
+                                        <Button variant="ghost" size="icon" onClick={() => onEditFinding(finding)}><Edit className="h-4 w-4"/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => onDeleteFinding(finding)} disabled={finding.isActionCreated} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                    </div>
+                                </div>
                             </Card>
                         ))
                     ) : (
@@ -1200,7 +1335,151 @@ function AuditSessionView(props: any) {
                        </div>
                     )}
                 </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={onCancel}>Cancelar y Salir</Button>
+                <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
+            </div>
+        </div>
+    );
+}
+
+// Sub-components for different audit types
+const SystemAuditDetails = ({ sistema, relatedPolicies }: { sistema: any, relatedPolicies: Politica[] }) => (
+    <div className="space-y-4">
+        <Card>
+            <CardHeader><CardTitle className="text-base">Detalles del Sistema</CardTitle></CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader><TableRow><TableHead>Descripción</TableHead><TableHead>Monto/Uso</TableHead><TableHead>Licencias</TableHead><TableHead>Costo/Lic</TableHead><TableHead>Frecuencia</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {sistema.costos?.length > 0 ? sistema.costos.map((c: SistemaCosto) => (
+                            <TableRow key={c.id}>
+                                <TableCell>{c.descripcion}</TableCell>
+                                <TableCell>{c.montoUso ? `${c.montoUso.toFixed(2)} ${c.moneda}` : '-'}</TableCell>
+                                <TableCell>{c.numeroLicencias || '-'}</TableCell>
+                                <TableCell>{c.costoPorLicencia ? `${c.costoPorLicencia.toFixed(2)} ${c.moneda}` : '-'}</TableCell>
+                                <TableCell>{c.frecuencia || '-'}</TableCell>
+                            </TableRow>
+                        )) : <TableRow><TableCell colSpan={5} className="text-center">No hay costos registrados.</TableCell></TableRow>}
+                    </TableBody>
+                </Table>
             </CardContent>
         </Card>
-    )
-}
+        <Card>
+            <CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader>
+            <CardContent>
+                {relatedPolicies.length > 0 ? (
+                    <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul>
+                ) : <p className="text-sm text-muted-foreground">No hay políticas asociadas directamente al objetivo auditado.</p>}
+            </CardContent>
+        </Card>
+    </div>
+);
+
+const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { process: CapturedProcess, procedimientos: any[], relatedPolicies: Politica[] }) => (
+    <div className="space-y-4">
+        <Card><CardHeader><CardTitle className="text-base">Información General</CardTitle></CardHeader><CardContent><DetailDisplay title="Objetivo" value={process.descripcion} isTextarea/></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Procedimientos y Actividades</CardTitle></CardHeader>
+            <CardContent>
+                <Accordion type="multiple" className="w-full">
+                    {procedimientos.map(({ procedimiento, activities }) => (
+                        <AccordionItem value={procedimiento.id} key={procedimiento.id}>
+                            <AccordionTrigger>{procedimiento.nombre}</AccordionTrigger>
+                            <AccordionContent>
+                                <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
+                                {activities.length === 0 && <p className="text-xs text-muted-foreground">Este procedimiento no tiene actividades.</p>}
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+            </CardContent>
+        </Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+    </div>
+);
+
+const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[] }) => (
+   <div className="space-y-4">
+        <Card>
+            <CardHeader><CardTitle className="text-base">Información del Puesto</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DetailDisplay title="Departamento" value={departamento?.nombre} />
+                <DetailDisplay title="Reporta a" value={jefeInmediato?.nombre} />
+                <DetailDisplay title="Nivel Organizacional" value={puesto.nivelOrganizacional} />
+                <DetailDisplay title="# de Personas" value={puesto.numeroPersonas} />
+            </CardContent>
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="text-base">Procesos Asignados</CardTitle></CardHeader>
+            <CardContent>
+                <Accordion type="multiple" className="w-full">
+                {relatedProcesses.map(({ process, procedimientos }) => (
+                    <AccordionItem value={process.id} key={process.id}>
+                        <AccordionTrigger>{process.proceso}</AccordionTrigger>
+                        <AccordionContent>
+                            <p className="text-xs italic mb-2">{process.descripcion}</p>
+                            <Accordion type="multiple" className="w-full">
+                                {procedimientos.map(({procedimiento, activities}: any) => (
+                                    <AccordionItem value={procedimiento.id} key={procedimiento.id} className="border-l pl-4">
+                                        <AccordionTrigger className="text-sm">{procedimiento.nombre}</AccordionTrigger>
+                                        <AccordionContent>
+                                            <ul className="list-disc pl-5 text-xs space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
+                                            {activities.length === 0 && <p className="text-xs text-muted-foreground">Sin actividades.</p>}
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+                </Accordion>
+            </CardContent>
+        </Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+    </div>
+);
+
+const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, linkedProcesses: CapturedProcess[] }) => (
+    <div className="space-y-4">
+        <Card>
+            <CardHeader><CardTitle className="text-base">Detalles de la Política</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DetailDisplay title="Descripción" value={policy.descripcion} isTextarea />
+                <div className="space-y-4">
+                    <DetailDisplay title="Nivel de Cumplimiento" value={policy.nivelCompliance} />
+                    <DetailDisplay title="Clasificación" value={policy.clasificacion} />
+                    <DetailDisplay title="Vigencia" value={format(parseISO(policy.fechaVigencia), 'PPP', {locale: es})} />
+                    <DetailDisplay title="Próxima Revisión" value={format(parseISO(policy.fechaRevision), 'PPP', {locale: es})} />
+                </div>
+            </CardContent>
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="text-base">Procesos Vinculados</CardTitle></CardHeader>
+            <CardContent>
+                {linkedProcesses.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{linkedProcesses.map(p => <li key={p.id}>{p.proceso}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay procesos vinculados a esta política.</p>}
+            </CardContent>
+        </Card>
+    </div>
+);
+
+const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies }: { procedimiento: Procedimiento, parentProcess: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[] }) => (
+     <div className="space-y-4">
+        <Card>
+            <CardHeader><CardTitle className="text-base">Información General</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DetailDisplay title="Proceso Padre" value={parentProcess?.proceso} />
+                <DetailDisplay title="Clasificación" value={procedimiento.clasificacion} />
+                <DetailDisplay title="Sistemas Utilizados" value={procedimiento.sistemasUtilizados} isList/>
+                <DetailDisplay title="Descripción" value={procedimiento.descripcion} isTextarea />
+            </CardContent>
+        </Card>
+        <Card><CardHeader><CardTitle className="text-base">Actividades</CardTitle></CardHeader>
+            <CardContent>
+                {activities.length > 0 ? <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map(a => <li key={a.id}>{a.nombre}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay actividades definidas.</p>}
+            </CardContent>
+        </Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+    </div>
+);
