@@ -86,7 +86,6 @@ export async function seedDatabase() {
     
     if (!areaId || (puesto.departamento && !deptoId) || (puesto.jefeInmediato && !jefeId)) {
         console.warn(`Skipping puesto "${puesto.nombre}" due to missing reference. AreaFound: ${!!areaId}, DeptoFound: ${!!deptoId}, JefeFound: ${!!jefeId}`);
-        continue;
     }
 
     const puestoRef = doc(collection(db, 'puestos'));
@@ -108,14 +107,74 @@ export async function seedDatabase() {
     puestoRefs[puesto.nombre] = puestoRef.id;
   }
   
+  // --- SISTEMAS ---
+  const seedSistemas = [
+    { nombre: 'SAP S/4HANA', scope: 'Área', scopeNombre: 'Finanzas' },
+    { nombre: 'Microsoft Office 365', scope: 'Empresa' },
+    { nombre: 'Jira', scope: 'Departamento', scopeNombre: 'Desarrollo' },
+    { nombre: 'Slack', scope: 'Empresa' },
+  ];
+  const sistemaRefs: { [key: string]: string } = {};
+  for (const sistema of seedSistemas) {
+    const sistemaRef = doc(collection(db, 'sistemas'));
+    let scopeId: string | undefined;
+    if (sistema.scope === 'Área') {
+        scopeId = areaRefs[sistema.scopeNombre];
+    } else if (sistema.scope === 'Departamento') {
+        scopeId = deptoRefs[sistema.scopeNombre];
+    } else if (sistema.scope === 'Puesto') {
+        scopeId = puestoRefs[sistema.scopeNombre];
+    }
+
+    if (sistema.scope !== 'Empresa' && !scopeId) {
+        console.warn(`Skipping sistema "${sistema.nombre}" because scope entity "${sistema.scopeNombre}" not found.`);
+        continue;
+    }
+
+    batch.set(sistemaRef, {
+        nombre: sistema.nombre,
+        scope: sistema.scope,
+        scopeId: scopeId || null,
+        createdAt: serverTimestamp()
+    });
+    sistemaRefs[sistema.nombre] = sistemaRef.id;
+  }
+  
+  // --- SISTEMAS COSTOS ---
+  const seedSistemasCostos = [
+    { sistema: 'SAP S/4HANA', descripcion: 'Licenciamiento Anual', costoPorLicencia: 1200, numeroLicencias: 10, frecuencia: 'Anual', moneda: 'USD' },
+    { sistema: 'Microsoft Office 365', descripcion: 'Suscripción E3 Mensual', costoPorLicencia: 36, numeroLicencias: 50, frecuencia: 'Mensual', moneda: 'USD' },
+    { sistema: 'Jira', descripcion: 'Suscripción Cloud Standard', montoUso: 815, frecuencia: 'Mensual', moneda: 'USD' },
+    { sistema: 'Slack', descripcion: 'Plan Pro Anual', costoPorLicencia: 81, numeroLicencias: 50, frecuencia: 'Anual', moneda: 'USD' },
+  ];
+
+  for (const costo of seedSistemasCostos) {
+      const sistemaId = sistemaRefs[costo.sistema];
+      if (!sistemaId) {
+          console.warn(`Skipping cost for "${costo.sistema}" because the system was not found.`);
+          continue;
+      }
+      const costoRef = doc(collection(db, 'sistemas_costos'));
+      batch.set(costoRef, {
+          sistemaId: sistemaId,
+          descripcion: costo.descripcion,
+          costoPorLicencia: costo.costoPorLicencia || null,
+          numeroLicencias: costo.numeroLicencias || null,
+          montoUso: costo.montoUso || null,
+          frecuencia: costo.frecuencia,
+          moneda: costo.moneda
+      });
+  }
+
   // --- ACTIVIDADES ---
   const seedActividades = [
-    { nombre: 'Revisar Facturas de Proveedores', puesto: 'Contador Senior' },
-    { nombre: 'Programar Pago a Proveedor', puesto: 'Contador Senior' },
+    { nombre: 'Revisar Facturas de Proveedores', puesto: 'Contador Senior', sistema: 'SAP S/4HANA' },
+    { nombre: 'Programar Pago a Proveedor', puesto: 'Contador Senior', sistema: 'SAP S/4HANA' },
     { nombre: 'Aprobar Pago Mayor a 50k', puesto: 'Jefe de Contabilidad' },
-    { nombre: 'Atender Ticket de Soporte Nivel 1', puesto: 'Técnico de Soporte' },
+    { nombre: 'Atender Ticket de Soporte Nivel 1', puesto: 'Técnico de Soporte', sistema: 'Jira' },
     { nombre: 'Publicar Vacante', puesto: 'Reclutador' },
     { nombre: 'Entrevistar Candidato', puesto: 'Reclutador' },
+    { nombre: 'Elaborar reporte mensual', puesto: 'Contador Senior', sistema: 'Microsoft Office 365' }
   ];
   const actividadRefs: { [key: string]: string } = {};
   for (const act of seedActividades) {
@@ -128,6 +187,7 @@ export async function seedDatabase() {
       codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      sistemaUtilizado: act.sistema || null
     };
     if (puestoId) {
         data.puestoId = puestoId;
