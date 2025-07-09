@@ -15,7 +15,7 @@ import {z} from 'genkit';
 const AnalyzeProcessesInputSchema = z.object({
   processDescriptions: z.string().describe('Una lista de descripciones de procesos para analizar, incluyendo IDs, área, puesto y sistemas.'),
   systemUsage: z.string().describe('Una descripción del uso de sistemas en toda la organización.'),
-  allProcedimientos: z.string().optional().describe('Una lista de todos los procedimientos definidos en el sistema, incluyendo su nombre, ID, descripción y el proceso al que están asociados.'),
+  allProcedimientos: z.string().optional().describe('Una lista de todos los procedimientos definidos en el sistema, incluyendo su nombre, ID, descripción, el proceso al que están asociados y la lista de IDs de sus actividades asignadas (`activityOrder`).'),
   allPuestos: z.string().optional().describe('Una lista de todos los puestos de trabajo, incluyendo nombre, área, departamento y su costo por hora.'),
   allActivities: z.string().describe('Una lista de todas las actividades definidas en el sistema, incluyendo su nombre, ID, descripción, tiempo estimado y frecuencia.'),
   systemCostInformation: z.string().optional().describe('Información detallada sobre los costos asociados a los sistemas utilizados, incluyendo costos anuales estimados y detalles de licenciamiento o uso.'),
@@ -104,6 +104,12 @@ const TaskReassignmentSuggestionSchema = z.object({
   estimatedMonthlySavings: z.number().describe('El ahorro mensual estimado en costos si se realiza la reasignación.'),
 });
 
+const OrphanActivitySchema = z.object({
+  activityName: z.string().describe('El nombre de la actividad que no está asignada a ningún procedimiento.'),
+  activityId: z.string().describe('El ID de la actividad huérfana.'),
+  reason: z.string().describe('La razón por la que se considera huérfana (ej. no está en ninguna lista de `activityOrder` de los procedimientos analizados).'),
+});
+
 
 const AnalyzeProcessesOutputSchema = z.object({
   redundantSystems: z.array(RedundantSystemSchema).describe('Una lista de sistemas identificados como potencialmente redundantes, incluyendo su costo anual.'),
@@ -114,6 +120,7 @@ const AnalyzeProcessesOutputSchema = z.object({
   duplicatePolicySuggestions: z.array(DuplicatePolicySuggestionSchema).describe('Sugerencias para consolidar políticas que parecen ser duplicadas.'),
   highCostActivities: z.array(HighCostActivitySchema).describe('Una lista de actividades que tienen el mayor impacto en costos operativos, para priorizar su optimización o automatización.'),
   taskReassignmentSuggestions: z.array(TaskReassignmentSuggestionSchema).describe('Sugerencias para reasignar tareas de roles de alto costo a roles más económicos, cuantificando el ahorro.'),
+  orphanActivities: z.array(OrphanActivitySchema).describe('Una lista de actividades que existen en el sistema pero no están asignadas a ningún procedimiento analizado.'),
   summary: z.string().describe('Un resumen de alto nivel de todos los hallazgos, incluyendo los de políticas, costos y eficiencia.'),
 });
 export type AnalyzeProcessesOutput = z.infer<typeof AnalyzeProcessesOutputSchema>;
@@ -133,7 +140,7 @@ Se te proporcionan descripciones detalladas de procesos, procedimientos, activid
 
 **Instrucción CRÍTICA: NO debes generar hallazgos ni sugerencias para problemas que ya están siendo abordados por las "Acciones de Mejora Existentes" que se listan a continuación.**
 
-Tu análisis debe centrarse en CINCO áreas clave:
+Tu análisis debe centrarse en SEIS áreas clave:
 
 1.  **Sistemas Redundantes (redundantSystems)**: Basado en el uso de sistemas en los procesos y la información de costos, identifica sistemas que podrían ser redundantes.
 
@@ -149,6 +156,8 @@ Tu análisis debe centrarse en CINCO áreas clave:
 4.  **Análisis de Costo y Eficiencia Operativa**: Basado en los tiempos de actividad, frecuencias y costos por hora de los puestos, identifica las mayores ineficiencias.
     - **Actividades de Alto Costo (highCostActivities)**: Identifica las actividades que, por su combinación de duración, frecuencia y costo del puesto que la ejecuta, representan los mayores costos operativos mensuales. Calcula este costo.
     - **Sugerencias de Reasignación de Tareas (taskReassignmentSuggestions)**: Compara las actividades con el nivel de seniority y costo de los puestos. Si una actividad de bajo valor (ej. administrativa, repetitiva) es ejecutada por un puesto de alto costo (ej. Gerencial, Directivo), sugiérela para reasignación a un puesto más apropiado y económico. Cuantifica el ahorro mensual potencial basado en la diferencia de costo por hora.
+
+5.  **Análisis de Actividades Huérfanas (orphanActivities)**: Utilizando la "Lista Completa de Actividades" y la "Lista Completa de Procedimientos" (que incluye las actividades asignadas a cada uno), identifica qué actividades existen en el sistema pero no están asignadas a NINGUNO de los procedimientos proporcionados para el análisis. Esto ayuda a encontrar trabajo definido pero no utilizado.
 
 
 **Datos de Entrada:**
