@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, FileText, BarChart, Percent, CalendarX, AlertTriangle } from "lucide-react";
-import { PieChart, Pie, Cell, Legend, Tooltip, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Loader2, FileText, Percent, CalendarX, AlertTriangle } from "lucide-react";
+import { PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
