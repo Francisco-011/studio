@@ -345,6 +345,20 @@ export async function seedDatabase() {
     }
   }
 
+  // Update activities with their procedimientoId
+  for (const proc of seedProcedimientos) {
+    const procId = procedimientoRefs[proc.nombre];
+    if (procId && proc.activityOrder) {
+      for (const actName of proc.activityOrder) {
+        const actId = actividadRefs[actName];
+        if (actId) {
+          const actRef = doc(db, 'actividades', actId);
+          batch.update(actRef, { procedimientoId: procId });
+        }
+      }
+    }
+  }
+
   await batch.commit();
   console.log('Database seeded successfully!');
 }
