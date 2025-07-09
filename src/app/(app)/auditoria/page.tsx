@@ -777,52 +777,64 @@ export default function AuditoriaPage() {
 
   const auditAlerts = useMemo(() => {
     if (isLoadingAllData) return [];
-    
+  
     const now = new Date();
     const alerts: { id: string; type: AuditType; name: string; lastAudited?: string; daysOverdue: number }[] = [];
-
+  
     allProcesses.forEach(proc => {
-      if (!proc || !proc.auditFrequencyInDays) return;
-
-      const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
-      if (!lastAuditDate || !isValid(lastAuditDate)) {
-        alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, daysOverdue: 9999 }); // Never audited
-      } else {
-        const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
-        if (now > nextDueDate) {
-          alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+      try {
+        if (!proc || typeof proc.auditFrequencyInDays !== 'number' || !isFinite(proc.auditFrequencyInDays)) return;
+  
+        const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+        if (!lastAuditDate || !isValid(lastAuditDate)) {
+          alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, daysOverdue: 9999 }); // Never audited
+        } else {
+          const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
+          if (now > nextDueDate) {
+            alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
         }
+      } catch (error) {
+        console.error(`Failed to process audit alert for process ${proc?.id}:`, error);
       }
     });
-
+  
     puestos.forEach(puesto => {
-      if (!puesto || !puesto.auditFrequencyInDays) return;
-      const lastAuditDate = puesto.lastAuditedAt ? parseISO(puesto.lastAuditedAt) : null;
-      if (!lastAuditDate || !isValid(lastAuditDate)) {
-        alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, daysOverdue: 9999 });
-      } else {
-        const nextDueDate = addDays(lastAuditDate, puesto.auditFrequencyInDays);
-        if (now > nextDueDate) {
-          alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+      try {
+        if (!puesto || typeof puesto.auditFrequencyInDays !== 'number' || !isFinite(puesto.auditFrequencyInDays)) return;
+        const lastAuditDate = puesto.lastAuditedAt ? parseISO(puesto.lastAuditedAt) : null;
+        if (!lastAuditDate || !isValid(lastAuditDate)) {
+          alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, daysOverdue: 9999 });
+        } else {
+          const nextDueDate = addDays(lastAuditDate, puesto.auditFrequencyInDays);
+          if (now > nextDueDate) {
+            alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
         }
+      } catch (error) {
+        console.error(`Failed to process audit alert for puesto ${puesto?.id}:`, error);
       }
     });
-
+  
     allProcedimientos.forEach(proc => {
-      if (!proc || !proc.auditFrequencyInDays) return;
-      const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
-      if (!lastAuditDate || !isValid(lastAuditDate)) {
-        alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, daysOverdue: 9999 });
-      } else {
-        const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
-        if (now > nextDueDate) {
-          alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+      try {
+        if (!proc || typeof proc.auditFrequencyInDays !== 'number' || !isFinite(proc.auditFrequencyInDays)) return;
+        const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+        if (!lastAuditDate || !isValid(lastAuditDate)) {
+          alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, daysOverdue: 9999 });
+        } else {
+          const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
+          if (now > nextDueDate) {
+            alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
+          }
         }
+      } catch (error) {
+        console.error(`Failed to process audit alert for procedimiento ${proc?.id}:`, error);
       }
     });
     
     return alerts.sort((a,b) => b.daysOverdue - a.daysOverdue);
-
+  
   }, [allProcesses, puestos, allProcedimientos, isLoadingAllData]);
 
   const filteredAuditAlerts = useMemo(() => {
