@@ -70,24 +70,20 @@ export async function seedDatabase() {
 
   // --- PUESTOS ---
   const seedPuestos = [
-    { nombre: 'Director de Finanzas', area: 'Finanzas', nivelOrganizacional: 'Directivo', costoHora: 500, monedaCosto: 'MXN' },
-    { nombre: 'Jefe de Contabilidad', area: 'Finanzas', departamento: 'Contabilidad', nivelOrganizacional: 'Gerencial', jefeInmediato: 'Director de Finanzas', costoHora: 350, monedaCosto: 'MXN' },
-    { nombre: 'Contador Senior', area: 'Finanzas', departamento: 'Contabilidad', nivelOrganizacional: 'Operativo', jefeInmediato: 'Jefe de Contabilidad', costoHora: 200, monedaCosto: 'MXN' },
-    { nombre: 'Director de Operaciones', area: 'Operaciones', nivelOrganizacional: 'Directivo', costoHora: 500, monedaCosto: 'MXN' },
-    { nombre: 'Gerente de TI', area: 'Tecnología', nivelOrganizacional: 'Gerencial', costoHora: 400, monedaCosto: 'USD' },
-    { nombre: 'Técnico de Soporte', area: 'Tecnología', departamento: 'Infraestructura', nivelOrganizacional: 'Operativo', jefeInmediato: 'Gerente de TI', costoHora: 150, monedaCosto: 'USD' },
-    { nombre: 'Reclutador', area: 'Recursos Humanos', departamento: 'Reclutamiento y Selección', nivelOrganizacional: 'Operativo', costoHora: 180, monedaCosto: 'MXN' }
+    { nombre: 'Director de Finanzas', area: 'Finanzas', nivelOrganizacional: 'Directivo', costoHora: 500, monedaCosto: 'MXN', numeroPersonas: 1, auditFrequencyInDays: 365 },
+    { nombre: 'Jefe de Contabilidad', area: 'Finanzas', departamento: 'Contabilidad', nivelOrganizacional: 'Gerencial', jefeInmediato: 'Director de Finanzas', costoHora: 350, monedaCosto: 'MXN', numeroPersonas: 1 },
+    { nombre: 'Contador Senior', area: 'Finanzas', departamento: 'Contabilidad', nivelOrganizacional: 'Operativo', jefeInmediato: 'Jefe de Contabilidad', costoHora: 200, monedaCosto: 'MXN', numeroPersonas: 3, auditFrequencyInDays: 180 },
+    { nombre: 'Director de Operaciones', area: 'Operaciones', nivelOrganizacional: 'Directivo', costoHora: 500, monedaCosto: 'MXN', numeroPersonas: 1 },
+    { nombre: 'Gerente de TI', area: 'Tecnología', nivelOrganizacional: 'Gerencial', costoHora: 400, monedaCosto: 'USD', numeroPersonas: 1, auditFrequencyInDays: 180 },
+    { nombre: 'Técnico de Soporte', area: 'Tecnología', departamento: 'Infraestructura', nivelOrganizacional: 'Operativo', jefeInmediato: 'Gerente de TI', costoHora: 150, monedaCosto: 'USD', numeroPersonas: 5 },
+    { nombre: 'Reclutador', area: 'Recursos Humanos', departamento: 'Reclutamiento y Selección', nivelOrganizacional: 'Operativo', costoHora: 180, monedaCosto: 'MXN', numeroPersonas: 2 }
   ];
   const puestoRefs: { [key: string]: string } = {};
   for (const puesto of seedPuestos) {
     const areaId = areaRefs[puesto.area];
     const deptoId = puesto.departamento ? deptoRefs[puesto.departamento] : undefined;
-    const jefeId = puesto.jefeInmediato ? puestoRefs[puesto.jefeInmediato] : undefined;
     
-    if (!areaId || (puesto.departamento && !deptoId) || (puesto.jefeInmediato && !jefeId)) {
-        console.warn(`Skipping puesto "${puesto.nombre}" due to missing reference. AreaFound: ${!!areaId}, DeptoFound: ${!!deptoId}, JefeFound: ${!!jefeId}`);
-    }
-
+    // Defer jefeId assignment until after first loop
     const puestoRef = doc(collection(db, 'puestos'));
     
     const data: any = {
@@ -95,16 +91,27 @@ export async function seedDatabase() {
       areaId: areaId,
       nivelOrganizacional: puesto.nivelOrganizacional,
       createdAt: serverTimestamp(),
+      costoHora: puesto.costoHora,
+      monedaCosto: puesto.monedaCosto,
+      numeroPersonas: puesto.numeroPersonas,
+      auditFrequencyInDays: puesto.auditFrequencyInDays,
     };
     
-    if (puesto.costoHora) data.costoHora = puesto.costoHora;
-    if (puesto.monedaCosto) data.monedaCosto = puesto.monedaCosto;
     if (deptoId) data.departamentoId = deptoId;
-    if (jefeId) data.jefeInmediato = jefeId;
-    if (puesto.numeroPersonas) data.numeroPersonas = puesto.numeroPersonas;
 
     batch.set(puestoRef, data);
     puestoRefs[puesto.nombre] = puestoRef.id;
+  }
+  // Second loop to assign jefeInmediato
+  for (const puesto of seedPuestos) {
+      if (puesto.jefeInmediato) {
+          const puestoId = puestoRefs[puesto.nombre];
+          const jefeId = puestoRefs[puesto.jefeInmediato];
+          if (puestoId && jefeId) {
+              const puestoRef = doc(db, 'puestos', puestoId);
+              batch.update(puestoRef, { jefeInmediato: jefeId });
+          }
+      }
   }
   
   // --- SISTEMAS ---
@@ -168,13 +175,13 @@ export async function seedDatabase() {
 
   // --- ACTIVIDADES ---
   const seedActividades = [
-    { nombre: 'Revisar Facturas de Proveedores', puesto: 'Contador Senior', sistema: 'SAP S/4HANA' },
-    { nombre: 'Programar Pago a Proveedor', puesto: 'Contador Senior', sistema: 'SAP S/4HANA' },
-    { nombre: 'Aprobar Pago Mayor a 50k', puesto: 'Jefe de Contabilidad' },
-    { nombre: 'Atender Ticket de Soporte Nivel 1', puesto: 'Técnico de Soporte', sistema: 'Jira' },
-    { nombre: 'Publicar Vacante', puesto: 'Reclutador' },
-    { nombre: 'Entrevistar Candidato', puesto: 'Reclutador' },
-    { nombre: 'Elaborar reporte mensual', puesto: 'Contador Senior', sistema: 'Microsoft Office 365' }
+    { nombre: 'Revisar Facturas de Proveedores', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 15, tiempoIdeal: 10, frecuencia: 'Diario', ejecucionesPorPeriodo: 20, descripcionBreve: 'Validar que la factura del proveedor cumpla con los requisitos fiscales y de la orden de compra.' },
+    { nombre: 'Programar Pago a Proveedor', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 10, tiempoIdeal: 8, frecuencia: 'Semanal', ejecucionesPorPeriodo: 1, descripcionBreve: 'Registrar la factura en el sistema y programar la fecha de pago según las condiciones pactadas.' },
+    { nombre: 'Aprobar Pago Mayor a 50k', puesto: 'Jefe de Contabilidad', tiempoEstimado: 5, tiempoIdeal: 5, frecuencia: 'A demanda', ejecucionesPorPeriodo: 5, descripcionBreve: 'Realizar la aprobación final en el sistema para pagos que exceden el umbral de 50,000 MXN.' },
+    { nombre: 'Atender Ticket de Soporte Nivel 1', puesto: 'Técnico de Soporte', sistema: 'Jira', tiempoEstimado: 25, tiempoIdeal: 20, frecuencia: 'Diario', ejecucionesPorPeriodo: 10, descripcionBreve: 'Proporcionar primera línea de soporte a usuarios con problemas técnicos comunes.' },
+    { nombre: 'Publicar Vacante', puesto: 'Reclutador', tiempoEstimado: 30, tiempoIdeal: 25, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1, descripcionBreve: 'Redactar y publicar ofertas de empleo en diversas plataformas y redes sociales.' },
+    { nombre: 'Entrevistar Candidato', puesto: 'Reclutador', tiempoEstimado: 60, tiempoIdeal: 45, frecuencia: 'A demanda', ejecucionesPorPeriodo: 3, descripcionBreve: 'Conducir entrevistas por competencias para evaluar la idoneidad de los candidatos.' },
+    { nombre: 'Elaborar reporte mensual de gastos', puesto: 'Contador Senior', sistema: 'Microsoft Office 365', tiempoEstimado: 240, tiempoIdeal: 180, frecuencia: 'Mensual', ejecucionesPorPeriodo: 1, descripcionBreve: 'Consolidar y analizar los gastos del mes para generar el reporte para la dirección.' }
   ];
   const actividadRefs: { [key: string]: string } = {};
   for (const act of seedActividades) {
@@ -187,7 +194,12 @@ export async function seedDatabase() {
       codigo: `AC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      sistemaUtilizado: act.sistema || null
+      descripcionBreve: act.descripcionBreve,
+      sistemaUtilizado: act.sistema || null,
+      tiempoEstimado: act.tiempoEstimado,
+      tiempoIdeal: act.tiempoIdeal,
+      frecuencia: act.frecuencia,
+      ejecucionesPorPeriodo: act.ejecucionesPorPeriodo,
     };
     if (puestoId) {
         data.puestoId = puestoId;
@@ -203,19 +215,31 @@ export async function seedDatabase() {
       nombre: 'Proceso de Pago a Proveedores',
       procesoPadre: 'Cuentas por Pagar',
       clasificacion: 'Privado',
-      activityOrder: ['Revisar Facturas de Proveedores', 'Programar Pago a Proveedor', 'Aprobar Pago Mayor a 50k']
+      activityOrder: ['Revisar Facturas de Proveedores', 'Programar Pago a Proveedor', 'Aprobar Pago Mayor a 50k'],
+      descripcion: 'Flujo operativo para la gestión y liquidación de facturas de proveedores, desde la recepción hasta el pago.',
+      sistemasUtilizados: ['SAP S/4HANA', 'Microsoft Office 365'],
+      informacionRecibe: 'Factura de proveedor, Orden de Compra',
+      informacionEntrega: 'Comprobante de pago, Registro contable',
+      auditFrequencyInDays: 180,
     },
     {
       nombre: 'Resolución de Incidencias de TI',
       procesoPadre: 'Soporte Técnico a Usuarios',
       clasificacion: 'Público',
-      activityOrder: ['Atender Ticket de Soporte Nivel 1']
+      activityOrder: ['Atender Ticket de Soporte Nivel 1'],
+      descripcion: 'Protocolo para atender y resolver las solicitudes de soporte técnico de los empleados.',
+      sistemasUtilizados: ['Jira', 'Slack'],
+      informacionRecibe: 'Ticket de soporte',
+      informacionEntrega: 'Solución a incidencia, Ticket cerrado',
     },
     {
       nombre: 'Reclutamiento de Personal',
       procesoPadre: 'Atracción de Talento',
       clasificacion: 'Confidencial',
-      activityOrder: ['Publicar Vacante', 'Entrevistar Candidato']
+      activityOrder: ['Publicar Vacante', 'Entrevistar Candidato'],
+      descripcion: 'Define los pasos a seguir para reclutar y seleccionar nuevo personal para la empresa.',
+      informacionRecibe: 'Requisición de personal aprobada',
+      informacionEntrega: 'Candidato seleccionado, Oferta de empleo',
     }
   ];
   const procedimientoRefs: { [key: string]: string } = {};
@@ -229,15 +253,20 @@ export async function seedDatabase() {
       codigo: `PC-${Date.now().toString().slice(-5)}-${Math.random().toString(16).slice(2,5)}`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      descripcion: proc.descripcion,
+      sistemasUtilizados: proc.sistemasUtilizados,
+      informacionRecibe: proc.informacionRecibe,
+      informacionEntrega: proc.informacionEntrega,
+      auditFrequencyInDays: proc.auditFrequencyInDays,
     });
     procedimientoRefs[proc.nombre] = procRef.id;
   }
   
   // --- PROCESOS ---
   const seedProcesos = [
-    { nombre: 'Cuentas por Pagar', area: 'Finanzas', puesto: 'Jefe de Contabilidad', descripcion: 'Gestiona el flujo completo de pagos a proveedores.' },
-    { nombre: 'Soporte Técnico a Usuarios', area: 'Tecnología', puesto: 'Gerente de TI', descripcion: 'Provee asistencia técnica a todos los empleados.' },
-    { nombre: 'Atracción de Talento', area: 'Recursos Humanos', puesto: 'Reclutador', descripcion: 'Ciclo completo de reclutamiento para nuevas posiciones.' },
+    { nombre: 'Cuentas por Pagar', area: 'Finanzas', puesto: 'Jefe de Contabilidad', descripcion: 'Gestiona el flujo completo de pagos a proveedores, asegurando la precisión y el cumplimiento de las políticas financieras.', auditFrequencyInDays: 365, sistemas: ['SAP S/4HANA'] },
+    { nombre: 'Soporte Técnico a Usuarios', area: 'Tecnología', puesto: 'Gerente de TI', descripcion: 'Provee asistencia técnica a todos los empleados para resolver incidencias de hardware y software.', sistemas: ['Jira', 'Slack'] },
+    { nombre: 'Atracción de Talento', area: 'Recursos Humanos', puesto: 'Reclutador', descripcion: 'Ciclo completo de reclutamiento para nuevas posiciones, desde la publicación de la vacante hasta la selección del candidato final.', auditFrequencyInDays: 365 },
   ];
   const procesoRefs: { [key: string]: string } = {};
   for (const proc of seedProcesos) {
@@ -264,6 +293,8 @@ export async function seedDatabase() {
         capturedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         procedimientoOrder: linkedProcedimientos,
+        sistemas: proc.sistemas,
+        auditFrequencyInDays: proc.auditFrequencyInDays,
     });
     procesoRefs[proc.nombre] = procRef.id;
     
@@ -276,16 +307,19 @@ export async function seedDatabase() {
 
   // --- POLÍTICAS ---
   const seedPoliticas = [
-    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar' },
-    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar' },
+    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', departamento: 'Infraestructura', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar', consecuenciasIncumplimiento: 'Suspensión de acceso y posibles sanciones disciplinarias.', descripcion: 'Define los roles y responsabilidades para el acceso a sistemas que manejan información financiera sensible, como SAP.' },
+    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar', consecuenciasIncumplimiento: 'No reembolso de gastos no autorizados.', descripcion: 'Establece los lineamientos y topes para los gastos de viaje de los empleados.' },
   ];
   for (const pol of seedPoliticas) {
     const polRef = doc(collection(db, 'politicas'));
     const procesoId = pol.procesoVinculado ? procesoRefs[pol.procesoVinculado] : undefined;
+    const deptoId = pol.departamento ? deptoRefs[pol.departamento] : undefined;
+
     batch.set(polRef, {
       titulo: pol.titulo,
-      descripcion: `Descripción de ejemplo para ${pol.titulo}`,
+      descripcion: pol.descripcion,
       areaResponsable: pol.area,
+      departamentoResponsable: deptoId,
       nivelCompliance: pol.nivel,
       clasificacion: pol.clasificacion,
       estado: 'Aprobada',
@@ -295,6 +329,7 @@ export async function seedDatabase() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       procesosAsociadosIds: procesoId ? [procesoId] : [],
+      consecuenciasIncumplimiento: pol.consecuenciasIncumplimiento
     });
 
     if (procesoId) {
