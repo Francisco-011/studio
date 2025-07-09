@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, isValid, differenceInDays } from 'date-fns';
+import { format, parseISO, isValid, differenceInDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 
@@ -628,6 +628,15 @@ export default function AuditoriaPage() {
     setIsConfirmDeleteAuditOpen(false);
   };
 
+  const processMetrics = (audits: Audit[]) => {
+      const completedAudits = audits.filter(a => a.status === 'Completada');
+      return {
+          auditoriasCompletadasCount: completedAudits.length,
+          hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'No Conforme').length, 0),
+          hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'Oportunidad de Mejora').length, 0),
+      };
+  }
+
   const filteredAndSortedAudits = useMemo(() => {
     setAuditCurrentPage(1);
     let filtered = pastAudits.filter(audit => {
@@ -635,7 +644,7 @@ export default function AuditoriaPage() {
       const matchesSearch = audit.targetName.toLowerCase().includes(lowerSearch) || audit.auditorName.toLowerCase().includes(lowerSearch);
       const matchesType = auditTypeFilter === 'all' || audit.auditType === auditTypeFilter;
       const matchesStatus = auditStatusFilter === 'all' || audit.status === auditStatusFilter;
-      const pendingCount = audit.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+      const pendingCount = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
       const matchesPending = pendingActionsFilter === 'all' ||
                            (pendingActionsFilter === 'with_pending' && pendingCount > 0) ||
                            (pendingActionsFilter === 'no_pending' && pendingCount === 0);
@@ -649,8 +658,8 @@ export default function AuditoriaPage() {
           valA = a.findings.length;
           valB = b.findings.length;
         } else if (auditSortConfig.key === 'pendingActions') {
-            valA = a.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
-            valB = b.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+            valA = (a.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+            valB = (b.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
         } else {
           valA = a[auditSortConfig.key as keyof Audit];
           valB = b[auditSortConfig.key as keyof Audit];
@@ -773,43 +782,41 @@ export default function AuditoriaPage() {
     const alerts: { id: string; type: AuditType; name: string; lastAudited?: string; daysOverdue: number }[] = [];
 
     allProcesses.forEach(proc => {
-      if (proc.auditFrequencyInDays) {
-        const lastAudit = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
-        if (!lastAudit) {
-          alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, daysOverdue: 9999 }); // Never audited
-        } else {
-          const nextDueDate = new Date(lastAudit.getTime() + proc.auditFrequencyInDays * 24 * 60 * 60 * 1000);
-          if (now > nextDueDate) {
-            alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
-          }
+      if (!proc || !proc.auditFrequencyInDays) return;
+
+      const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+      if (!lastAuditDate || !isValid(lastAuditDate)) {
+        alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, daysOverdue: 9999 }); // Never audited
+      } else {
+        const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
+        if (now > nextDueDate) {
+          alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
         }
       }
     });
 
     puestos.forEach(puesto => {
-      if (puesto.auditFrequencyInDays) {
-        const lastAudit = puesto.lastAuditedAt ? parseISO(puesto.lastAuditedAt) : null;
-        if (!lastAudit) {
-          alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, daysOverdue: 9999 });
-        } else {
-          const nextDueDate = new Date(lastAudit.getTime() + puesto.auditFrequencyInDays * 24 * 60 * 60 * 1000);
-          if (now > nextDueDate) {
-            alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
-          }
+      if (!puesto || !puesto.auditFrequencyInDays) return;
+      const lastAuditDate = puesto.lastAuditedAt ? parseISO(puesto.lastAuditedAt) : null;
+      if (!lastAuditDate || !isValid(lastAuditDate)) {
+        alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, daysOverdue: 9999 });
+      } else {
+        const nextDueDate = addDays(lastAuditDate, puesto.auditFrequencyInDays);
+        if (now > nextDueDate) {
+          alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
         }
       }
     });
 
     allProcedimientos.forEach(proc => {
-      if (proc.auditFrequencyInDays) {
-        const lastAudit = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
-        if (!lastAudit) {
-          alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, daysOverdue: 9999 });
-        } else {
-          const nextDueDate = new Date(lastAudit.getTime() + proc.auditFrequencyInDays * 24 * 60 * 60 * 1000);
-          if (now > nextDueDate) {
-            alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
-          }
+      if (!proc || !proc.auditFrequencyInDays) return;
+      const lastAuditDate = proc.lastAuditedAt ? parseISO(proc.lastAuditedAt) : null;
+      if (!lastAuditDate || !isValid(lastAuditDate)) {
+        alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, daysOverdue: 9999 });
+      } else {
+        const nextDueDate = addDays(lastAuditDate, proc.auditFrequencyInDays);
+        if (now > nextDueDate) {
+          alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
         }
       }
     });
@@ -954,7 +961,7 @@ export default function AuditoriaPage() {
 
   return (
     <div className="container mx-auto py-8">
-      {/* ... The rest of the page JSX was omitted for brevity as it is very long... */}
+      {/* ... The rest of this file was omitted for brevity as it is very long... */}
     </div>
   );
 }
