@@ -1,12 +1,14 @@
-# REGLAS TEMPORALES PARA CARGA DE DATOS DE PRUEBA
+# REGLAS TEMPORALES PARA CARGA DE DATOS DE PRUEBA (VERSIÓN ABIERTA)
 
-**¡IMPORTANTE!** Estas reglas de seguridad son **temporales y permisivas**. Están diseñadas exclusivamente para permitir que el script de "Cargar Datos de Prueba" funcione correctamente.
+**¡ADVERTENCIA DE SEGURIDAD MUY IMPORTANTE!**
+
+Estas reglas de seguridad son **extremadamente permisivas y abren completamente tu base de datos**, permitiendo que CUALQUIERA pueda leer y escribir en ella. Están diseñadas **únicamente como último recurso** para garantizar que el script de "Cargar Datos de Prueba" funcione.
 
 **Instrucciones:**
-1.  **Copie y pegue TODO el contenido** de las reglas de abajo en la sección de Reglas de su base de datos de Firestore en la consola de Firebase.
+1.  **Copie y pegue TODO el contenido** de las reglas de abajo en la sección de Reglas de su base de datos de Firestore.
 2.  **Publique** los cambios.
-3.  Vuelva a la aplicación y ejecute la función **"Cargar Datos de Prueba"** desde el módulo de Configuración.
-4.  Una vez que la carga de datos haya finalizado exitosamente, **VUELVA A COPIAR las reglas originales** del archivo `GUIA_PUESTA_EN_PRODUCCION.md` y publíquelas para restaurar la seguridad del sistema.
+3.  Vuelva a la aplicación y ejecute la función **"Cargar Datos de Prueba"**.
+4.  **INMEDIATAMENTE DESPUÉS** de que la carga de datos finalice, **VUELVA A COPIAR las reglas originales y seguras** del archivo `GUIA_PUESTA_EN_PRODUCCION.md` y publíquelas para restaurar la seguridad del sistema. No deje la base de datos en este estado vulnerable.
 
 ---
 
@@ -15,53 +17,11 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if a user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Helper function to get user's data
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-
-    // --- USERS ---
-    // Users can read their own data.
-    // Admins can read anyone's data.
-    // Users can only be created during signup.
-    // Users can update their own data. Admins can update anyone's data.
-    match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || getUserData(request.auth.uid).rol == 'Administrador');
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (request.auth.uid == userId || getUserData(request.auth.uid).rol == 'Administrador');
-    }
-
-    // --- GENERIC CATALOGS & MAIN DATA (RELAXED WRITE RULES FOR SEEDING) ---
-    // Any authenticated user can read AND write to these collections.
-    match /areas/{docId} { allow read, write: if isAuthenticated(); }
-    match /departamentos/{docId} { allow read, write: if isAuthenticated(); }
-    match /puestos/{docId} { allow read, write: if isAuthenticated(); }
-    match /sistemas/{docId} { allow read, write: if isAuthenticated(); }
-    match /sistemas_costos/{docId} { allow read, write: if isAuthenticated(); }
-    match /acciones/{docId} { allow read, write: if isAuthenticated(); }
-    match /actividades/{docId} { allow read, write: if isAuthenticated(); }
-    match /procedimientos/{docId} { allow read, write: if isAuthenticated(); }
-    match /procesos/{processId} { allow read, write: if isAuthenticated(); }
-    match /politicas/{policyId} { allow read, write: if isAuthenticated(); }
-    
-    // --- ACCESS EXCEPTIONS (RELAXED FOR SEEDING) ---
-    match /access_exceptions/{exceptionId} {
-        allow read, write: if isAuthenticated();
-    }
-
-    // --- AUDITS AND LOGS (Relaxed for seeding) ---
-    match /audits/{auditId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    match /activity_log/{logId} {
-      allow read, write: if isAuthenticated();
+    // Estas reglas permiten el acceso de lectura y escritura a CUALQUIER
+    // documento en su base de datos, sin requerir autenticación.
+    // Use esto únicamente para la carga de datos inicial y luego reviértalo.
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
