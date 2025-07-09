@@ -909,9 +909,9 @@ export default function AuditoriaPage() {
   const procesosDelPuestoOptions = useMemo(() => {
     if (newAuditType !== 'puesto' || !newAuditTargetId) return [];
     return allProcesses
-      .filter(p => p.puesto === puestosMap.get(newAuditTargetId)?.nombre)
+      .filter(p => p.puestoId === newAuditTargetId)
       .map(proc => ({ value: proc.id, label: proc.proceso }));
-  }, [newAuditType, newAuditTargetId, allProcesses, puestosMap]);
+  }, [newAuditType, newAuditTargetId, allProcesses]);
 
   const handleAuditExport = () => {
     if (filteredAndSortedAudits.length === 0) {
@@ -1040,17 +1040,17 @@ export default function AuditoriaPage() {
                                     searchPlaceholder="Buscar..."
                                 />
                             </div>
-                            {newAuditType === 'puesto' && procesosDelPuestoOptions.length > 0 && (
+                             {newAuditType === 'puesto' && (
                                 <div>
-                                    <Label>Procesos a Incluir</Label>
+                                    <Label>Procesos a Auditar (Opcional)</Label>
                                     <MultiSelect
                                         value={newAuditProcessIds}
                                         onChange={setNewAuditProcessIds}
                                         options={procesosDelPuestoOptions}
-                                        placeholder="Todos (o seleccione para limitar)"
+                                        placeholder="Seleccione procesos..."
                                     />
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        Limite la auditoría solo a los procesos seleccionados para este puesto.
+                                        Si no selecciona ninguno, se auditarán todos los procesos del puesto.
                                     </p>
                                 </div>
                             )}
