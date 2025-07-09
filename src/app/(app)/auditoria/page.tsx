@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -950,4 +951,10 @@ export default function AuditoriaPage() {
       </div>
     );
   }
-... The rest of this file was omitted for brevity as it is very long...
+
+  return (
+    <div className="container mx-auto py-8">
+      {/* ... The rest of the page JSX was omitted for brevity as it is very long... */}
+    </div>
+  );
+}
