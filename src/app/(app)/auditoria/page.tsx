@@ -1210,11 +1210,11 @@ export default function AuditoriaPage() {
       <AlertDialog open={isConfirmDeleteAuditOpen} onOpenChange={setIsConfirmDeleteAuditOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar esta auditoría y todos sus hallazgos?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteAudit} className={buttonVariants({variant: 'destructive'})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={isConfirmCancelDialogOpen} onOpenChange={setIsConfirmCancelDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Cancelar Auditoría</AlertDialogTitle><AlertDialogDescription>¿Desea cancelar esta sesión de auditoría? Podrá retomarla más tarde desde el historial.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Continuar Auditando</AlertDialogCancel><AlertDialogAction onClick={handleCancelAudit}>Sí, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={isFinalizeConfirmDialogOpen} onOpenChange={setIsFinalizeConfirmDialogOpen}>
-        <DialogContent>
+        <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Finalizar Auditoría con Hallazgos Pendientes</AlertDialogTitle><AlertDialogDescription>Se detectaron hallazgos que requieren un plan de acción. ¿Desea crear automáticamente las acciones de mejora correspondientes en el módulo de 'Acciones'?</AlertDialogDescription></AlertDialogHeader>
             <div className="py-4"><div className="flex items-center space-x-2"><Checkbox id="auto-create-actions" checked={finalizeOptions.autoCreateActions} onCheckedChange={checked => setFinalizeOptions({autoCreateActions: !!checked})}/><Label htmlFor="auto-create-actions">Sí, crear acciones automáticamente.</Label></div></div>
             <AlertDialogFooter><AlertDialogCancel>Volver</AlertDialogCancel><AlertDialogAction onClick={handleConfirmFinalization}>Finalizar Auditoría</AlertDialogAction></AlertDialogFooter>
-        </DialogContent>
+        </AlertDialogContent>
       </AlertDialog>
     </div>
   );
