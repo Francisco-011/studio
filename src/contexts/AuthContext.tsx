@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
 
@@ -32,7 +32,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        let userDocSnap = await getDoc(userDocRef);
+
+        // If the user document doesn't exist, create a default one.
+        // This handles cases where signup might have been interrupted
+        // or for users created before the profile collection was standard.
+        if (!userDocSnap.exists()) {
+          const newProfile = {
+            nombreCompleto: firebaseUser.displayName || firebaseUser.email || 'Usuario Nuevo',
+            email: firebaseUser.email,
+            rol: 'Usuario Final' as UserRole,
+            nivelAcceso: 'Público' as NivelAcceso,
+            activo: true,
+            createdAt: serverTimestamp(),
+          };
+          try {
+            await setDoc(userDocRef, newProfile);
+            // Re-fetch the document to get the server-generated timestamp and confirm creation
+            userDocSnap = await getDoc(userDocRef);
+          } catch (error) {
+            console.error("Failed to create user profile in Firestore:", error);
+            auth.signOut();
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+        }
+        
         if (userDocSnap.exists()) {
           const userProfileData = userDocSnap.data();
           setUser({
@@ -44,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             puestoId: userProfileData.puestoId,
           });
         } else {
-          // This might happen if user is in auth but not in firestore. Log them out.
+          // This should now be a very rare case, but as a fallback, sign out.
           auth.signOut();
           setUser(null);
         }
