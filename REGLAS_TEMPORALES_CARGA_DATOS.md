@@ -50,9 +50,9 @@ service cloud.firestore {
     match /procesos/{processId} { allow read, write: if isAuthenticated(); }
     match /politicas/{policyId} { allow read, write: if isAuthenticated(); }
     
-    // --- ACCESS EXCEPTIONS (Still requires high privilege) ---
+    // --- ACCESS EXCEPTIONS (RELAXED FOR SEEDING) ---
     match /access_exceptions/{exceptionId} {
-        allow read, write: if isAuthenticated() && getUserData(request.auth.uid).rol == 'Administrador';
+        allow read, write: if isAuthenticated();
     }
 
     // --- AUDITS AND LOGS (Relaxed for seeding) ---
