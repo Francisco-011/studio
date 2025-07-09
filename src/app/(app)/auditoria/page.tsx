@@ -675,7 +675,7 @@ export default function AuditoriaPage() {
           valA = valA.toLowerCase();
           valB = valB.toLowerCase();
         }
-
+        
         if (valA < valB) return auditSortConfig.direction === 'ascending' ? -1 : 1;
         if (valA > valB) return auditSortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
