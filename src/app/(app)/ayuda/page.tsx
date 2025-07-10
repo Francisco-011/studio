@@ -5,11 +5,11 @@ import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye } from "lucide-react";
+import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 
-const DetailItem = ({ icon, term, description }: { icon: React.ElementType, term: string, description: string }) => (
+const DetailItem = ({ icon, term, description }: { icon: React.ElementType, term: string, description: React.ReactNode }) => (
   <div className="flex items-start gap-3">
     <div className="flex-shrink-0">
       <div className="bg-primary/10 text-primary rounded-md h-8 w-8 flex items-center justify-center">
@@ -127,15 +127,15 @@ export default function AyudaPage() {
                       <AccordionItem value="politicas">
                           <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><FileText className="mr-2 h-5 w-5 text-primary"/>Políticas</AccordionTrigger>
                           <AccordionContent className="p-4 space-y-2">
-                              <p><strong>Función:</strong> Gestiona el ciclo de vida completo de las políticas de la organización, desde su creación como borrador, pasando por su revisión y aprobación, hasta su archivo. Asegura un marco de gobernanza formal y auditable.</p>
+                              <p><strong>Función:</strong> Gestiona el ciclo de vida completo de las políticas de la organización, desde su creación como borrador, pasando por su revisión y aprobación, hasta su publicación. Asegura un marco de gobernanza formal y auditable.</p>
                               <h5 className="font-semibold pt-2">Ciclo de Vida de una Política:</h5>
                               <ol className="list-decimal pl-5 space-y-1">
                                 <li><strong>Borrador:</strong> La política puede ser editada libremente.</li>
                                 <li><strong>En Revisión:</strong> Se envía a revisión. Ya no es editable.</li>
                                 <li><strong>Aprobada:</strong> La política es oficial y está bloqueada para edición. Ahora puede ser vinculada a procesos, procedimientos y actividades.</li>
-                                <li><strong>Archivada:</strong> La política ya no está vigente pero se conserva para el historial.</li>
+                                <li><strong>Publicada:</strong> Una política aprobada y vigente que se considera estable y está en uso general.</li>
                               </ol>
-                               <p className="mt-2"><strong>Nota:</strong> Para editar una política Aprobada o Archivada, primero se debe regresar al estado de "Borrador" usando la acción "Crear Nueva Versión".</p>
+                               <p className="mt-2"><strong>Nota:</strong> Para editar una política Aprobada o Publicada, primero se debe regresar al estado de "Borrador" usando la acción "Crear Nueva Versión".</p>
                           </AccordionContent>
                       </AccordionItem>
                       
@@ -220,9 +220,40 @@ export default function AyudaPage() {
                   </Accordion>
                 </AccordionContent>
               </AccordionItem>
+              
+              <AccordionItem value="item-metrics">
+                <AccordionTrigger className="text-lg font-semibold">3. Entendiendo las Métricas Clave</AccordionTrigger>
+                <AccordionContent className="space-y-4 text-sm">
+                    <DetailItem 
+                        icon={DollarSign} 
+                        term="Ahorro Realizado (Dashboard de Mejoras)" 
+                        description={
+                            <div>
+                                <p>Esta métrica cuantifica el impacto real de las acciones de mejora completadas. No es solo una estimación.</p>
+                                <p className="mt-1"><strong>Cálculo de Ahorro en Costo:</strong> Se basa en los cambios registrados en el historial de la acción de mejora. Si un campo de "costo" fue modificado (ej: el costo de una actividad o procedimiento), el sistema calcula la diferencia entre el valor "Antes" y "Después".</p>
+                                <p className="mt-1"><strong>Cálculo de Ahorro en Tiempo:</strong> Similar al costo, se calcula la diferencia entre el valor "Antes" y "Después" de los campos de "tiempo". El resultado se presenta en un formato legible (ej: 40h 30min).</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Nota: Si una acción se completa sin modificar campos de costo/tiempo en el sistema, se utilizará el ahorro estimado que se ingresó al crear la acción.</p>
+                            </div>
+                        }
+                    />
+                    <DetailItem 
+                        icon={Calculator} 
+                        term="Costo Operativo Mensual (Dashboard de Procesos)" 
+                        description={
+                            <div>
+                                <p>Esta métrica estima el costo mensual de las actividades asignadas a un puesto, basándose en la información registrada en los módulos de "Actividades" y "Configuración > Puestos".</p>
+                                <p className="mt-1"><strong>Fórmula por Actividad:</strong> `Costo Mensual = (Costo/hr del Puesto / 60) * Tiempo Estimado (min) * Ejecuciones por Mes`</p>
+                                <p className="mt-1"><strong>Ejecuciones por Mes:</strong> Se calcula usando la "Frecuencia" y "Veces por Periodo" de la actividad (ej: Semanal, 5 veces = 4.33 * 5 ejecuciones/mes).</p>
+                                <p className="mt-1"><strong>% de Carga vs Sueldo:</strong> `(Costo Operativo Mensual / Sueldo Mensual Estimado) * 100`. El sueldo se estima como `Costo/hr * 173.2 horas/mes`. Un % alto puede indicar que el puesto dedica una parte significativa de su tiempo (y costo) a las actividades mapeadas.</p>
+                            </div>
+                        }
+                    />
+                </AccordionContent>
+              </AccordionItem>
+
 
               <AccordionItem value="item-security">
-                <AccordionTrigger className="text-lg font-semibold">3. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
                   <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender la diferencia:</p>
                   

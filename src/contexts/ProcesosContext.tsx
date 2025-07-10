@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -277,6 +278,24 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     const procesoToToggle = procesos.find(p => p.id === id);
     if (!procesoToToggle) return;
     const newStatus = !(procesoToToggle.activo !== false);
+
+    if (newStatus === false) { // Logic for deactivating
+      const hasActiveChildren = (procesoToToggle.procedimientoOrder || []).some(procId => {
+          const procedure = procedimientos.find(p => p.id === procId);
+          return procedure && procedure.activo;
+      });
+
+      if (hasActiveChildren) {
+          toast({
+              title: "Acción no permitida",
+              description: "No puede inactivar un proceso que tiene procedimientos activos.",
+              variant: "destructive",
+              duration: 5000
+          });
+          return;
+      }
+    }
+
     try {
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
         await updateDoc(procesoDocRef, { activo: newStatus, updatedAt: serverTimestamp() });
@@ -285,7 +304,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         console.error("Error toggling proceso status: ", e);
         toast({ title: "Error", description: "No se pudo cambiar el estado del proceso.", variant: "destructive" });
     }
-  }, [procesos, addLogEntry]);
+  }, [procesos, addLogEntry, procedimientos]);
 
   return (
     <ProcesosContext.Provider value={{ procesos, addProceso, updateProceso, softDeleteProceso, restoreProceso, toggleProcesoStatus, isLoadingProcesos }}>
@@ -301,5 +320,3 @@ export function useProcesos(): ProcesosContextType {
   }
   return context;
 }
-
-  

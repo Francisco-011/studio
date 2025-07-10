@@ -9,9 +9,9 @@ import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayRemove } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
-import type { CambioHistorial } from './ActividadesContext';
+import type { CambioHistorial, Actividad } from './ActividadesContext';
 import type { Moneda } from './AccionesContext';
-
+import { useActividades } from './ActividadesContext';
 
 export interface Procedimiento {
   id: string;
@@ -57,6 +57,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
   const [isLoadingProcedimientos, setIsLoadingProcedimientos] = useState(true);
   const { addLogEntry } = useActivityLog();
+  const { actividades } = useActividades();
 
   useEffect(() => {
     const q = query(collection(db, PROCEDIMIENTOS_COLLECTION));
@@ -205,8 +206,26 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   }, [procedimientos, addLogEntry]);
 
   const toggleProcedimientoStatus = useCallback(async (procedimiento: Procedimiento) => {
-    const docRef = doc(db, PROCEDIMIENTOS_COLLECTION, procedimiento.id);
     const newStatus = !procedimiento.activo;
+    
+    if (newStatus === false) { // Logic for deactivating
+      const hasActiveChildren = (procedimiento.activityOrder || []).some(actId => {
+          const activity = actividades.find(a => a.id === actId);
+          return activity && activity.activa;
+      });
+
+      if (hasActiveChildren) {
+          toast({
+              title: "Acción no permitida",
+              description: "No puede inactivar un procedimiento que tiene actividades activas.",
+              variant: "destructive",
+              duration: 5000
+          });
+          return;
+      }
+    }
+
+    const docRef = doc(db, PROCEDIMIENTOS_COLLECTION, procedimiento.id);
     const change: CambioHistorial = {
         timestamp: new Date().toISOString(),
         field: 'activo',
@@ -224,7 +243,7 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
         console.error("Error toggling status:", e);
         toast({ title: "Error", description: "No se pudo cambiar el estado.", variant: "destructive" });
     }
-  }, [addLogEntry]);
+  }, [addLogEntry, actividades]);
 
 
   return (

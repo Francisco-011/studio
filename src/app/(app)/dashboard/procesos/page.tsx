@@ -26,7 +26,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { summarizeEntity, type SummarizeEntityOutput } from '@/ai/flows/summarize-entity-flow';
 import { Badge } from "@/components/ui/badge";
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { DateRange } from "react-day-picker";
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
