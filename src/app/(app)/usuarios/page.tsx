@@ -135,10 +135,21 @@ const PERMISSION_CONFIG = {
       view: 'Ver Lista de Procesos',
       edit: 'Editar Procesos',
       toggle_status: 'Activar/Inactivar Procesos',
-      delete: 'Eliminar Procesos',
+      delete: 'Eliminar Procesos (Papelera)',
       restore: 'Recuperar Procesos Eliminados',
+      recalculate: 'Recalcular Totales de Proceso',
       export: 'Exportar CSV de Procesos',
       view_history: 'Ver Historial de Cambios de Proceso',
+    },
+  },
+  procedimientos: {
+    label: 'Procedimientos',
+    permissions: {
+      view: 'Ver Lista de Procedimientos',
+      create: 'Crear Procedimientos',
+      edit: 'Editar Procedimientos',
+      delete: 'Eliminar Procedimientos',
+      recalculate: 'Recalcular Totales de Procedimiento',
     },
   },
   actividades: {
@@ -149,21 +160,11 @@ const PERMISSION_CONFIG = {
       edit: 'Editar Actividades',
       toggle_status: 'Activar/Inactivar Actividades',
       delete: 'Eliminar Actividades',
-      restore: 'Recuperar Actividades Eliminadas',
       export: 'Exportar CSV de Actividades',
       view_history: 'Ver Historial de Cambios de Actividad',
     },
   },
-  procedimientos: {
-    label: 'Procedimientos',
-    permissions: {
-      view: 'Ver Lista de Procedimientos',
-      create: 'Crear Procedimientos',
-      edit: 'Editar Procedimientos',
-      delete: 'Eliminar Procedimientos',
-    },
-  },
-   politicas: {
+  politicas: {
     label: 'Políticas',
     permissions: {
       view: 'Ver Políticas',
@@ -177,6 +178,7 @@ const PERMISSION_CONFIG = {
     permissions: {
       view: 'Ver Panel',
       manage_flows: 'Gestionar Flujos (Drag & Drop)',
+      reassign_puesto: 'Reasignar Puesto a Actividad',
       export: 'Exportar Vista a CSV',
       view_details: 'Ver Detalles de Elementos',
     },
@@ -279,11 +281,11 @@ const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
   Consultor: {
     'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
     'captura:create_process': true,
-    'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
+    'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true, 'procesosRegistrados:recalculate': true,
     'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
-    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true,
+    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true, 'procedimientos:recalculate': true,
     'politicas:view': true, 'politicas:create': true,
-    'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true,
+    'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true, 'panelJerarquico:reassign_puesto': true,
     'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
     'consulta_ia:view': true,
     'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
