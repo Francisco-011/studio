@@ -1430,7 +1430,7 @@ function AuditSessionView({
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} puestosMap={puestosMap} procedimientosMap={procedimientosMap} politicasMap={politicasMap} />}
-                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={procedimientosMap}/>}
+                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}/>}
                     {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'politica' && <PolicyAuditDetails policy={policy} linkedProcesses={linkedProcesses} />}
                     {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap}/>}
@@ -1455,7 +1455,7 @@ function AuditSessionView({
                                         {finding.proposedAction && <div className="mt-2 text-xs text-muted-foreground italic"><strong>Acción Propuesta:</strong> {finding.proposedAction}</div>}
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        {!isSessionReadOnly && (finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
+                                        {(finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
                                             <Button size="sm" variant="outline" onClick={() => onCreateActionPlan(finding, auditSession)} disabled={finding.isActionCreated}>
                                                 {finding.isActionCreated ? <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> : <Send className="mr-2 h-4 w-4" />}
                                                 {finding.isActionCreated ? 'Acción Creada' : 'Crear Acción'}
