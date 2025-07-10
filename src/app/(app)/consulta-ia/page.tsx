@@ -17,7 +17,7 @@ import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useExceptions } from '@/contexts/ExceptionsContext';
-import { queryConversationalAgent } from '@/ai/flows/conversational-query-flow';
+import { queryConversationalAgent, type ConversationalQueryInput } from '@/ai/flows/conversational-query-flow';
 import { toast } from '@/hooks/use-toast';
 
 interface Message {
@@ -59,7 +59,8 @@ export default function ConsultaIaPage() {
     }
 
     const userMessage: Message = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setIsLoading(true);
 
@@ -125,12 +126,15 @@ Procesos Vinculados (IDs): [${p.procesosAsociadosIds?.join(', ') || ''}]
           
       const fullContext = `Contexto de Procesos:\n${processContext}\n\nContexto de Procedimientos:\n${procedimientoContext}\n\nContexto de Actividades:\n${activityContext}\n\nContexto de Políticas:\n${politicaContext}`;
 
-      const response = await queryConversationalAgent({
+      const request: ConversationalQueryInput = {
         question: input,
         contextData: fullContext,
         userRole: user.rol,
         userAccessLevel: user.nivelAcceso,
-      });
+        history: messages,
+      };
+
+      const response = await queryConversationalAgent(request);
 
       const assistantMessage: Message = { role: 'assistant', content: response.answer };
       setMessages(prev => [...prev, assistantMessage]);

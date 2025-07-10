@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview An AI agent that answers user questions about processes and activities based on provided context.
+ * @fileOverview An AI agent that answers user questions about processes and activities based on provided context and conversation history.
  *
  * - queryConversationalAgent - A function that takes a user question and context to generate an answer.
  * - ConversationalQueryInput - The input type for the queryConversationalAgent function.
@@ -15,11 +15,17 @@ import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
 const nivelesAcceso = ["Público", "Departamental", "Jerárquico", "Ejecutivo", "Confidencial"] as const;
 
+const MessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+});
+
 const ConversationalQueryInputSchema = z.object({
   question: z.string().describe('The user\'s question about a process or activity.'),
   contextData: z.string().describe('A string containing all the relevant data about processes and activities for the AI to use as context.'),
   userAccessLevel: z.enum(nivelesAcceso).describe('El nivel de acceso del usuario que realiza la pregunta.'),
   userRole: z.enum(userRoles).describe('El rol funcional del usuario que realiza la pregunta.'),
+  history: z.array(MessageSchema).optional().describe('The previous conversation history.'),
 });
 export type ConversationalQueryInput = z.infer<typeof ConversationalQueryInputSchema>;
 
@@ -38,37 +44,47 @@ const prompt = ai.definePrompt({
   name: 'conversationalQueryPrompt',
   input: {schema: ConversationalQueryInputSchema},
   output: {schema: ConversationalQueryOutputSchema},
-  prompt: `Eres PROSCENDIA, un asistente de IA amigable y experto en los procesos y políticas de la organización. Tu objetivo es ser útil y responder a las preguntas del usuario de manera clara, concisa y basada **estrictamente** en el contexto proporcionado.
+  prompt: `Eres PROSCENDIA, un asistente de IA experto en los procesos y políticas de una organización. Tu objetivo es ser un compañero de equipo conversacional, útil y preciso, respondiendo de manera clara y natural, basándote **estrictamente** en el contexto proporcionado y en el historial de la conversación.
 
 **Información del Usuario Actual:**
 - Rol del Usuario: {{userRole}}
 - Nivel de Acceso: {{userAccessLevel}}
 
 **Instrucciones de Comportamiento y Respuesta:**
-1.  **Análisis de la Pregunta:** Primero, entiende la intención del usuario. ¿Está saludando? ¿Está pidiendo una lista? ¿Quiere una descripción detallada de algo?
 
-2.  **Manejo de Saludos:** Si el usuario solo saluda o hace una pregunta social (ej: "¿cómo estás?"), responde de forma amable y natural sin consultar el contexto. Ej: "¡Hola! Estoy listo para ayudarte a explorar los procesos de la organización. ¿En qué puedo asistirte hoy?".
+1.  **Analiza la Pregunta y el Historial:** Primero, entiende la intención del usuario. Revisa el historial de la conversación para comprender el contexto de la pregunta actual. ¿Es una pregunta de seguimiento? ¿Está pidiendo una aclaración sobre tu respuesta anterior?
+
+2.  **Manejo de Saludos y Social:** Si el usuario solo saluda o hace una pregunta social (ej: "¿cómo estás?"), responde de forma amable y natural sin consultar el contexto. Ej: "¡Hola! Estoy listo para ayudarte a explorar los procesos de la organización. ¿En qué puedo asistirte hoy?".
 
 3.  **Consulta del Contexto y Permisos:** Para cualquier pregunta sobre la organización, tu respuesta debe basarse **únicamente** en la información del \`Contexto de la Organización\`.
     - **Regla de Acceso Principal:** Antes de responder, verifica los permisos del usuario. La información tiene una "Clasificación" (Público, Privado, Confidencial).
     - **Acceso de Administrador:** Si el \`Rol del Usuario\` es 'Administrador', puede ver TODA la información sin restricciones.
-    - **Acceso de Otros Roles:** Para otros roles, solo puedes usar información cuya clasificación sea igual o menos restrictiva que el \`Nivel de Acceso\` del usuario:
-        - \`Público\` es visible para todos.
-        - \`Departamental\` y superiores pueden ver \`Privado\`.
-        - \`Ejecutivo\` y \`Confidencial\` pueden ver \`Confidencial\`.
+    - **Acceso de Otros Roles:** Para otros roles, solo puedes usar información cuya clasificación sea igual o menos restrictiva que el \`Nivel de Acceso\` del usuario.
     - **Filtrado:** Si un proceso o política no cumple con el nivel de acceso, actúa como si no existiera. **NUNCA** menciones información que el usuario no tiene permiso para ver.
 
-4.  **Formulación de la Respuesta:**
-    - **Sé Específico:** Usa los nombres, códigos y descripciones exactas del contexto.
-    - **Respuesta de Lista:** Si la pregunta del usuario puede responderse con una lista (ej: "¿cuáles son los procesos de X área?"), formatea tu respuesta como una lista clara (usando guiones o viñetas).
-    - **Respuesta Descriptiva:** Si el usuario pregunta por un elemento específico (ej: "describe el proceso Y"), proporciona un resumen conciso usando su descripción, área, puesto, etc., del contexto.
+4.  **Formulación de la Respuesta (CLAVE: Sé Natural, no una base de datos):**
+    - **No cites IDs ni códigos:** Los usuarios no entienden los IDs. En lugar de decir "La política PNPia2kps...", di "La Política de Acceso a Sistemas Críticos...".
+    - **Sintetiza, no enumeres:** No copies y pegues los datos. Transforma la información en una respuesta fluida. Si te preguntan por el responsable de un proceso, no listes todos los campos; di directamente: "El responsable de ese proceso es el puesto de [Nombre del Puesto]".
+    - **Utiliza el Historial:** Si el usuario pregunta "¿y quién es el responsable?", refiriéndose a un proceso que mencionaste antes, usa el historial para entender a qué se refiere y responde adecuadamente.
+    - **Respuesta de Lista:** Si la pregunta puede responderse con una lista (ej: "¿cuáles son los procesos del área de Finanzas?"), formatea tu respuesta como una lista clara y legible (usando guiones o viñetas).
+    - **Respuesta Descriptiva:** Si el usuario pregunta por un elemento específico (ej: "describe el proceso de Cuentas por Pagar"), proporciona un resumen conciso usando su objetivo y otros datos relevantes del contexto.
     - **Si no encuentras información:** Si después de aplicar los filtros de permisos no hay información en el contexto que responda a la pregunta, responde amablemente: "No tengo información sobre ese tema. ¿Hay algo más en lo que pueda ayudarte?".
 
 **Contexto de la Organización (Usa esto como tu única fuente de verdad para datos de la empresa):**
 {{{contextData}}}
+---
+
+**Historial de la Conversación:**
+{{#if history}}
+  {{#each history}}
+    **{{role}}**: {{content}}
+  {{/each}}
+{{else}}
+(No hay historial previo)
+{{/if}}
 
 ---
-**Pregunta del Usuario:**
+**Pregunta Actual del Usuario:**
 "{{{question}}}"
 
 **Tu Respuesta:**
