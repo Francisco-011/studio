@@ -104,6 +104,8 @@ type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate
 type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
 type SortableAuditAlertKeys = 'name' | 'type' | 'daysOverdue';
 type SortDirection = 'ascending' | 'descending';
+type AuditTab = 'alertas' | 'historial' | 'log';
+
 
 interface SortConfig<T> {
   key: T;
@@ -201,6 +203,8 @@ export default function AuditoriaPage() {
   const [logEntityTypeFilter, setLogEntityTypeFilter] = useState<'all' | string>('all');
   const [logSortConfig, setLogSortConfig] = useState<SortConfig<SortableLogKeys> | null>(null);
   const [logCurrentPage, setLogCurrentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState<AuditTab>('alertas');
+
 
   const [isFinalizeConfirmDialogOpen, setIsFinalizeConfirmDialogOpen] = useState(false);
   const [auditToFinalize, setAuditToFinalize] = useState<Audit | null>(null);
@@ -1062,7 +1066,7 @@ export default function AuditoriaPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="alertas">
+            <Tabs defaultValue="alertas" value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="alertas">Alertas de Auditoría ({auditAlerts.length})</TabsTrigger>
                 <TabsTrigger value="historial">Historial de Auditorías</TabsTrigger>
@@ -1299,7 +1303,7 @@ function AuditSessionView({
                         Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge>
                     </div>
                 </div>
-                <Button variant="outline" onClick={onGoBack}>Volver a la Lista</Button>
+                <Button onClick={onGoBack}>Volver a la Lista</Button>
             </div>
             
             <Card>
