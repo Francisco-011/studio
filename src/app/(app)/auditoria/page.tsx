@@ -89,8 +89,8 @@ const auditFindingSchema = z.object({
   description: z.string().min(10, 'La descripción del hallazgo es requerida (mínimo 10 caracteres).'),
   proposedAction: z.string().optional(),
 }).refine(data => {
-    if ((data.type === 'No Conforme' || data.type === 'Oportunidad de Mejora') && (!data.proposedAction || data.proposedAction.length < 10)) {
-        return false;
+    if ((data.type === 'No Conforme' || data.type === 'Oportunidad de Mejora')) {
+        return !!data.proposedAction && data.proposedAction.length >= 10;
     }
     return true;
 }, {
@@ -123,7 +123,7 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
     <div className="text-sm">
       <strong className="font-semibold text-foreground/90">{title}:</strong>
       {isValueEmpty ? (
-        <div className="text-muted-foreground">No especificado</div>
+        <div className="text-muted-foreground italic">No especificado</div>
       ) : isList && Array.isArray(value) ? (
         <div className="flex flex-wrap gap-1 mt-1">
           {value.map((item, idx) => (
@@ -1384,7 +1384,7 @@ function AuditSessionView({
                         <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
                     </div>
                 </div>
-                <Button onClick={onGoBack} variant="outline" className="bg-primary text-primary-foreground hover:bg-primary/90">Volver a la Lista</Button>
+                <Button onClick={onGoBack} className={buttonVariants({ variant: 'default' })}>Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1461,7 +1461,7 @@ function AuditSessionView({
             
             {!isSessionReadOnly && (
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="destructive" onClick={onCancel} disabled={auditSession.findings.length > 0}>
+                    <Button variant="destructive" onClick={onCancel}>
                         <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría
                     </Button>
                     <Button onClick={onFinalize} className={cn(buttonVariants({ variant: "default" }))}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
@@ -1506,7 +1506,18 @@ const SystemAuditDetails = ({ sistema, relatedPolicies }: { sistema: any, relate
 
 const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { process: CapturedProcess, procedimientos: any[], relatedPolicies: Politica[] }) => (
     <div className="space-y-4">
-        <Card><CardHeader><CardTitle className="text-base">Información General</CardTitle></CardHeader><CardContent><DetailDisplay title="Objetivo" value={process.descripcion} isTextarea/></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Información General del Proceso</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DetailDisplay title="Área" value={process.area} />
+                <DetailDisplay title="Departamento" value={process.departamento} />
+                <DetailDisplay title="Puesto Principal" value={process.puesto} />
+                <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === process.auditFrequencyInDays)?.label} />
+                <DetailDisplay title="Última Auditoría" value={process.lastAuditedAt ? format(parseISO(process.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
+                <DetailDisplay title="Estado" value={process.activo !== false ? 'Activo' : 'Inactivo'} />
+                <div className="md:col-span-2"><DetailDisplay title="Objetivo" value={process.descripcion} isTextarea /></div>
+                <div className="md:col-span-2"><DetailDisplay title="Políticas Vinculadas" value={relatedPolicies.map(p => p.titulo)} isList /></div>
+            </CardContent>
+        </Card>
         <Card><CardHeader><CardTitle className="text-base">Procedimientos y Actividades</CardTitle></CardHeader>
             <CardContent>
                 <Accordion type="multiple" className="w-full">
@@ -1522,7 +1533,6 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { pro
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1535,13 +1545,16 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                 <DetailDisplay title="Reporta a" value={jefeInmediato?.nombre} />
                 <DetailDisplay title="Nivel Organizacional" value={puesto.nivelOrganizacional} />
                 <DetailDisplay title="# de Personas" value={puesto.numeroPersonas} />
+                <DetailDisplay title="Costo por Hora" value={puesto.costoHora ? `${puesto.costoHora.toFixed(2)} ${puesto.monedaCosto}` : undefined} />
+                <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === puesto.auditFrequencyInDays)?.label} />
+                <DetailDisplay title="Última Auditoría" value={puesto.lastAuditedAt ? format(parseISO(puesto.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
             </CardContent>
         </Card>
         <Card>
             <CardHeader><CardTitle className="text-base">Procesos Asignados</CardTitle></CardHeader>
             <CardContent>
                 <Accordion type="multiple" className="w-full">
-                {relatedProcesses.map(({ process, procedimientos }) => (
+                {relatedProcesses.map(({ process, procedimientos }: any) => (
                     <AccordionItem value={process.id} key={process.id}>
                         <AccordionTrigger>{process.proceso}</AccordionTrigger>
                         <AccordionContent>
@@ -1563,7 +1576,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables (Vía Procesos)</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1572,33 +1585,49 @@ const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, lin
         <Card>
             <CardHeader><CardTitle className="text-base">Detalles de la Política</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <DetailDisplay title="Descripción" value={policy.descripcion} isTextarea />
-                <div className="space-y-4">
-                    <DetailDisplay title="Nivel de Cumplimiento" value={policy.nivelCompliance} />
-                    <DetailDisplay title="Clasificación" value={policy.clasificacion} />
-                    <DetailDisplay title="Vigencia" value={format(parseISO(policy.fechaVigencia), 'PPP', {locale: es})} />
-                    <DetailDisplay title="Próxima Revisión" value={format(parseISO(policy.fechaRevision), 'PPP', {locale: es})} />
-                </div>
+                <DetailDisplay title="Título" value={policy.titulo} />
+                <DetailDisplay title="Código" value={policy.codigo} />
+                <DetailDisplay title="Estado" value={policy.estado} />
+                <DetailDisplay title="Nivel de Cumplimiento" value={policy.nivelCompliance} />
+                <DetailDisplay title="Área Responsable" value={policy.areaResponsable} />
+                <DetailDisplay title="Departamento Responsable" value={policy.departamentoResponsable} />
+                <DetailDisplay title="Fecha de Vigencia" value={format(parseISO(policy.fechaVigencia), "PPP", { locale: es })} />
+                <DetailDisplay title="Próxima Revisión" value={format(parseISO(policy.fechaRevision), "PPP", { locale: es })} />
+                <div className="md:col-span-2"><DetailDisplay title="Descripción" value={policy.descripcion} isTextarea /></div>
             </CardContent>
         </Card>
         <Card>
             <CardHeader><CardTitle className="text-base">Procesos Vinculados</CardTitle></CardHeader>
             <CardContent>
-                {linkedProcesses.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{linkedProcesses.map(p => <li key={p.id}>{p.proceso}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay procesos vinculados a esta política.</div>}
+                {linkedProcesses.length > 0 ? 
+                    <div className="space-y-2">
+                        {linkedProcesses.map(p => (
+                            <div key={p.id} className="text-sm">
+                                <p className="font-medium">{p.proceso}</p>
+                                <p className="text-xs text-muted-foreground">{p.area} / {p.puesto}</p>
+                            </div>
+                        ))}
+                    </div>
+                 : <div className="text-sm text-muted-foreground">No hay procesos vinculados a esta política.</div>}
             </CardContent>
         </Card>
     </div>
 );
 
-const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies }: { procedimiento: Procedimiento, parentProcess: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[] }) => (
+const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies }: { procedimiento: Procedimiento, parentProcess?: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[] }) => (
      <div className="space-y-4">
         <Card>
-            <CardHeader><CardTitle className="text-base">Información General</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Información General del Procedimiento</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <DetailDisplay title="Proceso Padre" value={parentProcess?.proceso} />
                 <DetailDisplay title="Clasificación" value={procedimiento.clasificacion} />
-                <DetailDisplay title="Sistemas Utilizados" value={procedimiento.sistemasUtilizados} isList/>
-                <DetailDisplay title="Descripción" value={procedimiento.descripcion} isTextarea />
+                <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === procedimiento.auditFrequencyInDays)?.label} />
+                <DetailDisplay title="Última Auditoría" value={procedimiento.lastAuditedAt ? format(parseISO(procedimiento.lastAuditedAt), 'PPP', {locale: es}) : 'Nunca'} />
+                <DetailDisplay title="Tiempo Estimado (Mensual)" value={procedimiento.tiempoEstimado ? formatMinutesToHours(procedimiento.tiempoEstimado) : 'No calculado'} />
+                <DetailDisplay title="Costo Estimado (Mensual)" value={procedimiento.costoEstimado ? `${procedimiento.costoEstimado.toFixed(2)} ${procedimiento.monedaCosto || ''}` : 'No calculado'} />
+                <div className="md:col-span-2"><DetailDisplay title="Descripción" value={procedimiento.descripcion} isTextarea /></div>
+                <div className="md:col-span-2"><DetailDisplay title="Sistemas Utilizados" value={procedimiento.sistemasUtilizados} isList/></div>
+                <div className="md:col-span-2"><DetailDisplay title="Políticas Aplicables" value={relatedPolicies.map(p => p.titulo)} isList/></div>
             </CardContent>
         </Card>
         <Card><CardHeader><CardTitle className="text-base">Actividades</CardTitle></CardHeader>
@@ -1606,6 +1635,5 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
                 {activities.length > 0 ? <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map(a => <li key={a.id}>{a.nombre}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay actividades definidas.</div>}
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
