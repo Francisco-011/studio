@@ -1027,25 +1027,26 @@ export default function AuditoriaPage() {
   return (
     <div className="container mx-auto py-8">
       {currentAuditSession ? (
-        <AuditSessionView 
-            auditSession={currentAuditSession}
-            onGoBack={() => {
+        <AuditSessionView
+          allProcedimientos={allProcedimientos} 
+          auditSession={currentAuditSession}
+          onGoBack={() => {
               const previousTab = activeTab;
               setCurrentAuditSession(null);
               setTimeout(() => setActiveTab(previousTab), 0);
-            }}
-            onFinalize={handleFinalizeAudit}
-            onCancel={() => promptCancelAudit(currentAuditSession)}
-            onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
-            onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
-            onDeleteFinding={promptDeleteFinding}
-            onCreateActionPlan={handleCreateActionPlan}
-            auditTargetDetails={auditTargetDetails}
-            activityDisplayFilter={activityDisplayFilter}
-            setActivityDisplayFilter={setActivityDisplayFilter}
-            puestosMap={puestosMap}
-            procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}
-            politicasMap={politicasMap}
+          }}
+          onFinalize={handleFinalizeAudit}
+          onCancel={() => promptCancelAudit(currentAuditSession)}
+          onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
+          onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
+          onDeleteFinding={promptDeleteFinding}
+          onCreateActionPlan={handleCreateActionPlan}
+          auditTargetDetails={auditTargetDetails}
+          activityDisplayFilter={activityDisplayFilter}
+          setActivityDisplayFilter={setActivityDisplayFilter}
+          puestosMap={puestosMap}
+          procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}
+          politicasMap={politicasMap}
         />
       ) : (
         <Card className="shadow-lg">
@@ -1336,6 +1337,7 @@ export default function AuditoriaPage() {
 
 // Sub-component for displaying the active audit session
 function AuditSessionView({
+  allProcedimientos,
   auditSession,
   onGoBack,
   onFinalize,
@@ -1351,6 +1353,7 @@ function AuditSessionView({
   procedimientosMap,
   politicasMap
 }: {
+  allProcedimientos: Procedimiento[];
   auditSession: Audit;
   onGoBack: () => void;
   onFinalize: () => void;
