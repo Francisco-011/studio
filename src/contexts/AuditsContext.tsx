@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, getDocs, runTransaction } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 
@@ -28,6 +28,7 @@ export interface AuditFinding {
 
 export interface Audit {
   id: string;
+  codigo: string; // New professional ID
   auditType: AuditType;
   targetId: string;
   targetName: string;
@@ -40,7 +41,7 @@ export interface Audit {
   cancellationReason?: string;
 }
 
-export type AuditCreationData = Omit<Audit, 'id' | 'createdAt'>;
+export type AuditCreationData = Omit<Audit, 'id' | 'createdAt' | 'codigo'>;
 
 interface AuditsContextType {
   audits: Audit[];
@@ -53,6 +54,7 @@ interface AuditsContextType {
 const AuditsContext = createContext<AuditsContextType | undefined>(undefined);
 
 const AUDITS_COLLECTION = 'audits';
+const COUNTERS_COLLECTION = 'counters';
 
 export function AuditsProvider({ children }: { children: ReactNode }) {
   const [audits, setAudits] = useState<Audit[]>([]);
@@ -80,17 +82,46 @@ export function AuditsProvider({ children }: { children: ReactNode }) {
 
     return () => unsubscribe();
   }, []);
+  
+  const getNextAuditCode = async (): Promise<string> => {
+    const year = new Date().getFullYear();
+    const counterDocRef = doc(db, COUNTERS_COLLECTION, `audits_${year}`);
+
+    try {
+      const newSequence = await runTransaction(db, async (transaction) => {
+        const counterDoc = await transaction.get(counterDocRef);
+        let nextVal = 1;
+        if (counterDoc.exists()) {
+          nextVal = (counterDoc.data().sequence || 0) + 1;
+        }
+        transaction.set(counterDocRef, { sequence: nextVal }, { merge: true });
+        return nextVal;
+      });
+      return `AUD-${year}-${String(newSequence).padStart(4, '0')}`;
+    } catch (error) {
+      console.error("Error generating audit code:", error);
+      toast({title: "Error de Código", description: "No se pudo generar un código único para la auditoría.", variant: "destructive"});
+      // Fallback in case transaction fails
+      return `AUD-ERR-${Date.now()}`;
+    }
+  };
+
 
   const addAudit = useCallback(async (data: AuditCreationData): Promise<string | null> => {
     try {
-      const payload: { [key: string]: any } = { ...data, createdAt: serverTimestamp() };
+      const newCode = await getNextAuditCode();
+      const payload: { [key: string]: any } = { 
+        ...data, 
+        codigo: newCode,
+        createdAt: serverTimestamp() 
+      };
       Object.keys(payload).forEach(key => {
         if (payload[key] === undefined) {
           delete payload[key];
         }
       });
       const docRef = await addDoc(collection(db, AUDITS_COLLECTION), payload);
-      addLogEntry({ action: 'create', entityType: 'Auditoría', entityName: data.targetName, details: `Se inició una nueva auditoría para ${data.auditType}: "${data.targetName}".` });
+      addLogEntry({ action: 'create', entityType: 'Auditoría', entityName: data.targetName, details: `Se inició una nueva auditoría (${newCode}) para ${data.auditType}: "${data.targetName}".` });
       return docRef.id;
     } catch (e) {
       console.error("Error adding audit:", e);
@@ -120,7 +151,7 @@ export function AuditsProvider({ children }: { children: ReactNode }) {
     if (!auditToDelete) return;
     try {
       await deleteDoc(doc(db, AUDITS_COLLECTION, id));
-      addLogEntry({ action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría para "${auditToDelete.targetName}".` });
+      addLogEntry({ action: 'delete', entityType: 'Auditoría', entityName: auditToDelete.targetName, details: `Se eliminó la auditoría "${auditToDelete.codigo}" para "${auditToDelete.targetName}".` });
       toast({ title: "Auditoría Eliminada", variant: "destructive" });
     } catch (e) {
       console.error("Error deleting audit:", e);

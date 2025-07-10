@@ -99,7 +99,7 @@ const auditFindingSchema = z.object({
 });
 type AuditFindingFormData = z.infer<typeof auditFindingSchema>;
 
-type SortableAuditKeys = 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings' | 'pendingActions';
+type SortableAuditKeys = 'codigo' | 'targetName' | 'auditType' | 'auditorName' | 'auditDate' | 'status' | 'numFindings' | 'pendingActions';
 type SortableLogKeys = 'timestamp' | 'user' | 'entityType' | 'entityName' | 'action';
 type SortableAuditAlertKeys = 'name' | 'type' | 'daysOverdue';
 type SortDirection = 'ascending' | 'descending';
@@ -406,11 +406,13 @@ export default function AuditoriaPage() {
     
     const newAuditId = await addAudit(newAuditData);
     if (newAuditId) {
-        setCurrentAuditSession({
+        const auditDataFromDb = {
             ...newAuditData,
             id: newAuditId,
+            codigo: `AUD-${new Date().getFullYear()}-TEMP`, // Placeholder, context will update
             createdAt: Date.now()
-        });
+        };
+        setCurrentAuditSession(auditDataFromDb);
     }
 
     setIsStartAuditDialogOpen(false);
@@ -683,7 +685,7 @@ export default function AuditoriaPage() {
     setAuditCurrentPage(1);
     let filtered = pastAudits.filter(audit => {
       const lowerSearch = auditSearchTerm.toLowerCase();
-      const matchesSearch = audit.targetName.toLowerCase().includes(lowerSearch) || audit.auditorName.toLowerCase().includes(lowerSearch);
+      const matchesSearch = audit.targetName.toLowerCase().includes(lowerSearch) || audit.auditorName.toLowerCase().includes(lowerSearch) || (audit.codigo || '').toLowerCase().includes(lowerSearch);
       const matchesType = auditTypeFilter === 'all' || audit.auditType === auditTypeFilter;
       const matchesStatus = auditStatusFilter === 'all' || audit.status === auditStatusFilter;
       const pendingCount = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
@@ -971,7 +973,7 @@ export default function AuditoriaPage() {
         return;
     }
 
-    const headers = ["ID Auditoría", "Fecha", "Tipo", "Objetivo Auditado", "Auditor", "Estado", "Total Hallazgos", "Hallazgos No Conformes", "Oportunidades de Mejora", "Acciones Pendientes"];
+    const headers = ["Código Auditoría", "Fecha", "Tipo", "Objetivo Auditado", "Auditor", "Estado", "Total Hallazgos", "Hallazgos No Conformes", "Oportunidades de Mejora", "Acciones Pendientes"];
     
     const csvRows = [
         headers.join(','),
@@ -982,7 +984,7 @@ export default function AuditoriaPage() {
             const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
 
             return [
-                escapeCsvCell(audit.id),
+                escapeCsvCell(audit.codigo),
                 escapeCsvCell(format(parseISO(audit.auditDate), 'yyyy-MM-dd')),
                 escapeCsvCell(audit.auditType),
                 escapeCsvCell(audit.targetName),
@@ -1045,7 +1047,7 @@ export default function AuditoriaPage() {
           activityDisplayFilter={activityDisplayFilter}
           setActivityDisplayFilter={setActivityDisplayFilter}
           puestosMap={puestosMap}
-          procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}
+          procedimientosMap={procedimientosMap}
           politicasMap={politicasMap}
         />
       ) : (
@@ -1191,6 +1193,7 @@ export default function AuditoriaPage() {
                      </div>
                      <div className="rounded-md border">
                         <Table><TableHeader><TableRow>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('codigo')}>Código {getAuditSortIcon('codigo')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditorName')}>Auditor {getAuditSortIcon('auditorName')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
@@ -1203,6 +1206,7 @@ export default function AuditoriaPage() {
                             const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
                             return (
                             <TableRow key={audit.id}>
+                                <TableCell className="font-mono text-xs">{audit.codigo}</TableCell>
                                 <TableCell>
                                   <p className="font-medium">{audit.targetName}</p>
                                   <p className="text-xs text-muted-foreground capitalize">{audit.auditType}</p>
@@ -1228,7 +1232,7 @@ export default function AuditoriaPage() {
                                     <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
                                 </TableCell>
                             </TableRow>
-                        )}) : <TableRow><TableCell colSpan={7} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
+                        )}) : <TableRow><TableCell colSpan={8} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
                         </TableBody></Table>
                     </div>
                      <div className="flex items-center justify-between space-x-2 py-4">
@@ -1391,6 +1395,8 @@ function AuditSessionView({
                     <Badge variant="default" className="mb-2 bg-blue-600 hover:bg-blue-700">{auditTypeLabel}</Badge>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
                     <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                        <span>Código: {auditSession.codigo}</span>
+                        <span>|</span>
                         <span>Auditor: {auditSession.auditorName}</span>
                         <span>|</span>
                         <span>Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')}</span>
@@ -1424,7 +1430,7 @@ function AuditSessionView({
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} puestosMap={puestosMap} procedimientosMap={procedimientosMap} politicasMap={politicasMap} />}
-                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}/>}
+                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={procedimientosMap}/>}
                     {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'politica' && <PolicyAuditDetails policy={policy} linkedProcesses={linkedProcesses} />}
                     {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap}/>}
@@ -1561,7 +1567,7 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies, puestos
             <CardContent>
                 <Accordion type="multiple" className="w-full">
                     {procedimientos.map(({ procedimiento, activities }, procIndex) => (
-                        <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map(p => [p.procedimiento.id, p.procedimiento]))}/>
+                        <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={procedimientosMap}/>
                     ))}
                 </Accordion>
             </CardContent>
@@ -1594,7 +1600,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                             <div className="text-xs italic mb-2">{process.descripcion}</div>
                             <Accordion type="multiple" className="w-full">
                                 {procedimientos.map(({procedimiento, activities}: any, procManualIndex: number) => (
-                                    <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procManualIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map((p: any) => [p.procedimiento.id, p.procedimiento]))}/>
+                                    <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procManualIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={procedimientosMap}/>
                                 ))}
                             </Accordion>
                         </AccordionContent>
@@ -1678,11 +1684,11 @@ const ProcedureDetailView = ({ procedure, activities, index, parentProcess, pues
                     </div>
                     <div className="space-y-4">
                         <DetailDisplay title="Información que Recibe" value={procedure.informacionRecibe} isTextarea/>
-                        <DetailDisplay title="Procedimientos de Entrada" value={(procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
+                        <DetailDisplay title="Procedimientos de Entrada" value={(procedure.procedimientosEntradaIds || []).map(id => procedimientosMap.get(id) || id)} isList />
                     </div>
                      <div className="space-y-4">
                         <DetailDisplay title="Información que Entrega" value={procedure.informacionEntrega} isTextarea/>
-                        <DetailDisplay title="Procedimientos de Salida" value={(procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id)?.nombre || id)} isList />
+                        <DetailDisplay title="Procedimientos de Salida" value={(procedure.procedimientosSalidaIds || []).map(id => procedimientosMap.get(id) || id)} isList />
                     </div>
                     <div className="space-y-4">
                         <DetailDisplay title="Frecuencia Auditoría" value={auditFrequencyOptions.find(o => o.value === procedure.auditFrequencyInDays)?.label} />
