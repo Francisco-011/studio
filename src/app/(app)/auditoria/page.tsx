@@ -1044,7 +1044,7 @@ export default function AuditoriaPage() {
             activityDisplayFilter={activityDisplayFilter}
             setActivityDisplayFilter={setActivityDisplayFilter}
             puestosMap={puestosMap}
-            procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p.nombre]))}
+            procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}
             politicasMap={politicasMap}
         />
       ) : (
@@ -1421,10 +1421,10 @@ function AuditSessionView({
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} puestosMap={puestosMap} procedimientosMap={procedimientosMap} politicasMap={politicasMap} />}
-                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} procedimientosMap={procedimientosMap} politicasMap={politicasMap} />}
+                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(allProcedimientos.map(p => [p.id, p]))}/>}
                     {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'politica' && <PolicyAuditDetails policy={policy} linkedProcesses={linkedProcesses} />}
-                    {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies} puestosMap={puestosMap} procedimientosMap={procedimientosMap} politicasMap={politicasMap}/>}
+                    {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies} puestosMap={puestosMap} politicasMap={politicasMap}/>}
                 </CardContent>
             </Card>
 
@@ -1558,7 +1558,7 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies, puestos
             <CardContent>
                 <Accordion type="multiple" className="w-full">
                     {procedimientos.map(({ procedimiento, activities }, procIndex) => (
-                        <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map(p => [p.procedimiento.id, p.procedimiento.nombre]))}/>
+                        <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map(p => [p.procedimiento.id, p.procedimiento]))}/>
                     ))}
                 </Accordion>
             </CardContent>
@@ -1566,7 +1566,7 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies, puestos
     </div>
 );
 
-const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies, puestosMap, procedimientosMap, politicasMap }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto>, procedimientosMap: Map<string, Procedimiento>, politicasMap: Map<string, Politica> }) => (
+const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies, puestosMap, politicasMap, procedimientosMap }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto>, politicasMap: Map<string, Politica>, procedimientosMap: Map<string, Procedimiento> }) => (
    <div className="space-y-4">
         <Card>
             <CardHeader><CardTitle className="text-base">Información del Puesto</CardTitle></CardHeader>
@@ -1591,7 +1591,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                             <div className="text-xs italic mb-2">{process.descripcion}</div>
                             <Accordion type="multiple" className="w-full">
                                 {procedimientos.map(({procedimiento, activities}: any, procManualIndex: number) => (
-                                    <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procManualIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map((p: any) => [p.procedimiento.id, p.procedimiento.nombre]))}/>
+                                    <ProcedureDetailView key={procedimiento.id} procedure={procedimiento} activities={activities} index={procManualIndex} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map(procedimientos.map((p: any) => [p.procedimiento.id, p.procedimiento]))}/>
                                 ))}
                             </Accordion>
                         </AccordionContent>
@@ -1638,10 +1638,10 @@ const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, lin
     </div>
 );
 
-const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies, puestosMap, procedimientosMap, politicasMap }: { procedimiento: Procedimiento, parentProcess?: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto>, procedimientosMap: Map<string, Procedimiento>, politicasMap: Map<string, Politica> }) => (
-    <div className="space-y-4">
-        <ProcedureDetailView procedure={procedimiento} activities={activities} index={0} parentProcess={parentProcess} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={procedimientosMap} />
-    </div>
+const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies, puestosMap, politicasMap }: { procedimiento: Procedimiento, parentProcess?: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto>, politicasMap: Map<string, Politica> }) => (
+    <Accordion type="single" collapsible defaultValue="item-0">
+        <ProcedureDetailView procedure={procedimiento} activities={activities} index={0} parentProcess={parentProcess} puestosMap={puestosMap} politicasMap={politicasMap} procedimientosMap={new Map([[procedimiento.id, procedimiento]])} />
+    </Accordion>
 );
 
 const ProcedureDetailView = ({ procedure, activities, index, parentProcess, puestosMap, politicasMap, procedimientosMap }: { procedure: Procedimiento, activities: Actividad[], index: number, parentProcess?: CapturedProcess, puestosMap: Map<string, Puesto>, politicasMap: Map<string, Politica>, procedimientosMap: Map<string, Procedimiento>}) => {
