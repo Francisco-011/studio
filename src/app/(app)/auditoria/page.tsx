@@ -70,7 +70,6 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { cn, formatMinutesToHours } from '@/lib/utils';
 import { CheckCircle, Workflow as WorkflowIcon } from 'lucide-react';
-import { Combobox } from "@/components/ui/combobox";
 import { MultiSelect } from "@/components/ui/multi-select";
 
 
@@ -178,8 +177,7 @@ export default function AuditoriaPage() {
   
   const [isConfirmDeleteFindingOpen, setIsConfirmDeleteFindingOpen] = useState(false);
   const [findingToDelete, setFindingToDelete] = useState<AuditFinding | null>(null);
-  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
-
+  
   const [isConfirmDeleteAuditOpen, setIsConfirmDeleteAuditOpen] = useState(false);
   const [auditToDelete, setAuditToDelete] = useState<Audit | null>(null);
   
@@ -592,20 +590,6 @@ export default function AuditoriaPage() {
     setIsFinalizeConfirmDialogOpen(false);
     setAuditToFinalize(null);
   }
-
-  const promptCancelAudit = () => {
-    setIsConfirmCancelDialogOpen(true);
-  };
-  
-  const handleCancelAudit = async () => {
-    if (!currentAuditSession) return;
-    const cancelledAudit: Partial<AuditCreationData> = { status: 'Cancelada' };
-    await updateAudit(currentAuditSession.id, cancelledAudit);
-    addLogEntry({ user: currentAuditSession.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: currentAuditSession.targetName, details: `Se canceló la auditoría para "${currentAuditSession.targetName}".` });
-    setCurrentAuditSession(null);
-    toast({ title: "Auditoría Cancelada", description: "La auditoría ha sido guardada en estado 'Cancelada'." });
-    setIsConfirmCancelDialogOpen(false);
-  };
   
   const handleEditAudit = (audit: Audit) => {
     if (audit.status === 'Completada' || audit.status === 'Cancelada') {
@@ -994,7 +978,6 @@ export default function AuditoriaPage() {
               setTimeout(() => setActiveTab(previousTab), 0);
             }}
             onFinalize={handleFinalizeAudit}
-            onCancel={promptCancelAudit}
             onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
             onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
             onDeleteFinding={promptDeleteFinding}
@@ -1040,26 +1023,28 @@ export default function AuditoriaPage() {
                       </div>
                       <div>
                           <Label>Objetivo Específico</Label>
-                          <Combobox
-                              value={newAuditTargetId}
-                              onChange={setNewAuditTargetId}
-                              options={auditTargetOptions}
+                          <MultiSelect
+                              value={newAuditType === 'puesto' ? newAuditProcessIds : (newAuditTargetId ? [newAuditTargetId] : [])}
+                              onChange={(selected) => {
+                                  if (newAuditType === 'puesto') {
+                                      setNewAuditProcessIds(selected);
+                                      // If a puesto is selected, we keep it, otherwise the multiselect for processes is the main target.
+                                      if(!newAuditTargetId && selected.length > 0) {
+                                        const firstProc = allProcesses.find(p => p.id === selected[0]);
+                                        const puesto = puestos.find(p => p.id === firstProc?.puestoId);
+                                        if(puesto) setNewAuditTargetId(puesto.id);
+                                      }
+                                  } else {
+                                      setNewAuditTargetId(selected[0] || '');
+                                  }
+                              }}
+                              options={newAuditType === 'puesto' ? procesosDelPuestoOptions : auditTargetOptions}
                               placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."}
-                              searchPlaceholder="Buscar..."
                           />
                       </div>
                        {newAuditType === 'puesto' && (
-                          <div>
-                            <Label>Procesos a Auditar (Opcional)</Label>
-                            <MultiSelect
-                              value={newAuditProcessIds}
-                              onChange={setNewAuditProcessIds}
-                              options={procesosDelPuestoOptions}
-                              placeholder="Seleccione procesos..."
-                            />
-                            <div className="text-sm text-muted-foreground mt-1">
-                                Si no selecciona ninguno, se auditarán todos los procesos del puesto.
-                            </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                              Si no selecciona procesos, se auditarán todos los del puesto.
                           </div>
                       )}
                     </div>
@@ -1253,7 +1238,6 @@ export default function AuditoriaPage() {
       </Dialog>
       <AlertDialog open={isConfirmDeleteFindingOpen} onOpenChange={setIsConfirmDeleteFindingOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar este hallazgo? Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteFinding} className={buttonVariants({variant: 'destructive'})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={isConfirmDeleteAuditOpen} onOpenChange={setIsConfirmDeleteAuditOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de eliminar esta auditoría y todos sus hallazgos?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={executeDeleteAudit} className={buttonVariants({variant: 'destructive'})}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      <AlertDialog open={isConfirmCancelDialogOpen} onOpenChange={setIsConfirmCancelDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Cancelar Auditoría</AlertDialogTitle><AlertDialogDescription>¿Desea cancelar esta sesión de auditoría? Podrá retomarla más tarde desde el historial.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Continuar Auditando</AlertDialogCancel><AlertDialogAction onClick={handleCancelAudit}>Sí, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={isFinalizeConfirmDialogOpen} onOpenChange={setIsFinalizeConfirmDialogOpen}>
         <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Finalizar Auditoría con Hallazgos Pendientes</AlertDialogTitle><AlertDialogDescription>Se detectaron hallazgos que requieren un plan de acción. ¿Desea crear automáticamente las acciones de mejora correspondientes en el módulo de 'Acciones'?</AlertDialogDescription></AlertDialogHeader>
@@ -1270,7 +1254,6 @@ function AuditSessionView({
   auditSession,
   onGoBack,
   onFinalize,
-  onCancel,
   onAddFinding,
   onEditFinding,
   onDeleteFinding,
@@ -1282,7 +1265,6 @@ function AuditSessionView({
   auditSession: Audit;
   onGoBack: () => void;
   onFinalize: () => void;
-  onCancel: () => void;
   onAddFinding: () => void;
   onEditFinding: (finding: AuditFinding) => void;
   onDeleteFinding: (finding: AuditFinding) => void;
@@ -1318,7 +1300,7 @@ function AuditSessionView({
                         <span>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></span>
                     </div>
                 </div>
-                <Button onClick={onGoBack} variant="default" className={cn(buttonVariants({ variant: "default" }))}>Volver a la Lista</Button>
+                <Button onClick={onGoBack} className={cn(buttonVariants({ variant: "default" }))}>Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1395,7 +1377,6 @@ function AuditSessionView({
             
             {!isSessionReadOnly && (
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={onCancel}>Cancelar y Salir</Button>
                     <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
                 </div>
             )}
