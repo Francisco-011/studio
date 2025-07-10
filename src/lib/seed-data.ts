@@ -310,12 +310,13 @@ export async function seedDatabase() {
 
   // --- POLÍTICAS ---
   const seedPoliticas = [
-    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', departamento: 'Infraestructura', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar', consecuenciasIncumplimiento: 'Suspensión de acceso y posibles sanciones disciplinarias.', descripcion: 'Define los roles y responsabilidades para el acceso a sistemas que manejan información financiera sensible, como SAP.' },
-    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar', consecuenciasIncumplimiento: 'No reembolso de gastos no autorizados.', descripcion: 'Establece los lineamientos y topes para los gastos de viaje de los empleados.' },
+    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', departamento: 'Infraestructura', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Proceso de Pago a Proveedores', consecuenciasIncumplimiento: 'Suspensión de acceso y posibles sanciones disciplinarias.', descripcion: 'Define los roles y responsabilidades para el acceso a sistemas que manejan información financiera sensible, como SAP.' },
+    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Proceso de Pago a Proveedores', consecuenciasIncumplimiento: 'No reembolso de gastos no autorizados.', descripcion: 'Establece los lineamientos y topes para los gastos de viaje de los empleados.' },
   ];
   for (const pol of seedPoliticas) {
     const polRef = doc(collection(db, 'politicas'));
     const procesoId = pol.procesoVinculado ? procesoRefs[pol.procesoVinculado] : undefined;
+    const procedimientoId = pol.procedimientoVinculado ? procedimientoRefs[pol.procedimientoVinculado] : undefined;
     const deptoId = pol.departamento ? deptoRefs[pol.departamento] : undefined;
 
     const data: any = {
@@ -331,6 +332,7 @@ export async function seedDatabase() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       procesosAsociadosIds: procesoId ? [procesoId] : [],
+      procedimientosAsociadosIds: procedimientoId ? [procedimientoId] : [],
     };
     if (deptoId) data.departamentoResponsable = deptoId;
     if (pol.consecuenciasIncumplimiento) data.consecuenciasIncumplimiento = pol.consecuenciasIncumplimiento;
@@ -341,6 +343,13 @@ export async function seedDatabase() {
         const procesoDocRef = doc(db, 'procesos', procesoId);
         batch.update(procesoDocRef, {
             politicasAsociadas: arrayUnion({ policyId: polRef.id, linkType: 'Regula' })
+        });
+    }
+
+    if (procedimientoId) {
+        const procedimientoDocRef = doc(db, 'procedimientos', procedimientoId);
+        batch.update(procedimientoDocRef, {
+            politicasAsociadasIds: arrayUnion(polRef.id)
         });
     }
   }
