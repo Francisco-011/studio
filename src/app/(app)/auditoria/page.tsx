@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -1131,25 +1132,43 @@ export default function AuditoriaPage() {
                     </div>
                      <div className="rounded-md border">
                         <Table><TableHeader><TableRow>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditType')}>Tipo {getAuditSortIcon('auditType')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditorName')}>Auditor {getAuditSortIcon('auditorName')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('status')}>Estado {getAuditSortIcon('status')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('pendingActions')}>Acciones Pendientes {getAuditSortIcon('pendingActions')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('numFindings')}>Hallazgos {getAuditSortIcon('numFindings')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('pendingActions')}>Acciones Pend. {getAuditSortIcon('pendingActions')}</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow></TableHeader><TableBody>
                         {paginatedAudits.length > 0 ? paginatedAudits.map(audit => {
                             const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
                             return (
-                            <TableRow key={audit.id}><TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell><TableCell>{audit.targetName}</TableCell><TableCell className="capitalize">{audit.auditType}</TableCell>
-                                <TableCell><Badge className={cn("text-white border-transparent", { "bg-green-600": audit.status === "Completada", "bg-red-600": audit.status === "Cancelada", "bg-blue-600": audit.status === "En Progreso" })}>{audit.status}</Badge></TableCell>
+                            <TableRow key={audit.id}>
+                                <TableCell>{audit.targetName}</TableCell>
+                                <TableCell className="capitalize">{audit.auditType}</TableCell>
+                                <TableCell>{audit.auditorName}</TableCell>
+                                <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
+                                <TableCell>
+                                  <Badge className={cn("text-white border-transparent", {
+                                      "bg-green-600 hover:bg-green-700": audit.status === "Completada",
+                                      "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
+                                      "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
+                                  })}>
+                                      {audit.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">{audit.findings?.length || 0}</TableCell>
                                 <TableCell className="text-center">{pendingActions > 0 ? <Badge variant="destructive">{pendingActions}</Badge> : <Badge variant="secondary">0</Badge>}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => handleEditAudit(audit)}>{audit.status === 'En Progreso' ? <Edit className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditAudit(audit)}>
+                                      {audit.status === 'En Progreso' ? <Edit className="mr-2 h-4 w-4"/> : <Eye className="mr-2 h-4 w-4"/>}
+                                      {audit.status === 'En Progreso' ? 'Editar' : 'Ver'}
+                                    </Button>
                                     <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
                                 </TableCell>
                             </TableRow>
-                        )}) : <TableRow><TableCell colSpan={6} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
+                        )}) : <TableRow><TableCell colSpan={8} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
                         </TableBody></Table>
                     </div>
                      <div className="flex items-center justify-between space-x-2 py-4">
@@ -1264,7 +1283,7 @@ function AuditSessionView({
                 <div>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
                     <div className="text-sm text-muted-foreground mt-1">
-                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-transparent">{auditSession.status}</Badge>
+                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-transparent">{auditSession.status}</Badge>
                     </div>
                 </div>
                 <Button variant="outline" onClick={onGoBack}>Volver a la Lista</Button>
@@ -1483,5 +1502,3 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
         <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
-
-    
