@@ -733,7 +733,14 @@ export default function AccionesPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Responsable</FormLabel>
-                                <FormControl><Input placeholder="Ej: Equipo de TI, Ana Pérez" {...field} disabled={isReadOnly} /></FormControl>
+                                <Combobox
+                                  options={puestos.map(p => ({ value: p.nombre, label: p.nombre }))}
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  placeholder="Seleccione un puesto responsable"
+                                  searchPlaceholder="Buscar puesto..."
+                                  disabled={isReadOnly}
+                                />
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -1190,4 +1197,3 @@ export default function AccionesPage() {
     </div>
   );
 }
-
