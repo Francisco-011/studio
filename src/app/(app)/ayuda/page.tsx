@@ -4,9 +4,24 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LifeBuoy } from "lucide-react";
+import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
+
+const DetailItem = ({ icon, term, description }: { icon: React.ElementType, term: string, description: string }) => (
+  <div className="flex items-start gap-3">
+    <div className="flex-shrink-0">
+      <div className="bg-primary/10 text-primary rounded-md h-8 w-8 flex items-center justify-center">
+          {React.createElement(icon, { className: "h-5 w-5" })}
+      </div>
+    </div>
+    <div>
+      <dt className="font-semibold">{term}</dt>
+      <dd className="mt-1 text-muted-foreground">{description}</dd>
+    </div>
+  </div>
+);
+
 
 export default function AyudaPage() {
   return (
@@ -42,123 +57,182 @@ export default function AyudaPage() {
               </AccordionItem>
               
               <AccordionItem value="item-modules">
-                <AccordionTrigger className="text-lg font-semibold">2. Descripción de Módulos</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold">2. Descripción Detallada de Módulos</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
-                  <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
-                    <h5 className="font-bold text-primary">Dashboard (Resumen Ejecutivo)</h5>
-                    <p className="mt-1"><strong>Función:</strong> Es la pantalla de bienvenida y el centro de mando. Ofrece una vista rápida de los indicadores clave (KPIs) más importantes del sistema y sirve como punto de acceso a los dashboards especializados.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Permite tener un pulso rápido de la salud operativa y de cumplimiento de la organización.</p>
-                  </div>
-                   <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Captura</h5>
-                    <p className="mt-1"><strong>Función:</strong> El corazón del sistema. En este módulo se registran nuevos procesos, detallando quién lo hace (área/puesto), qué hace (descripción), cómo lo hace (métricas de tiempo/costo), qué necesita (entradas) y qué produce (salidas).</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Estandariza la forma en que se documentan los procesos, asegurando que toda la información relevante sea capturada de manera consistente.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Procesos Registrados</h5>
-                    <p className="mt-1"><strong>Función:</strong> Un centro de gestión donde puedes buscar, filtrar, ver detalles, editar y gestionar el estado (activo/inactivo) de los procesos existentes. Permite expandir cada proceso para ver sus procedimientos y actividades asociadas.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Proporciona un repositorio central y fácilmente consultable de todo el conocimiento de procesos de la empresa.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Actividades</h5>
-                    <p className="mt-1"><strong>Función:</strong> Funciona como un catálogo maestro de todas las tareas o pasos individuales que pueden formar parte de un procedimiento.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Permite la estandarización del trabajo a nivel granular. Una misma actividad (ej. "Aprobar factura") puede ser reutilizada en múltiples procedimientos, asegurando consistencia.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Políticas</h5>
-                    <p className="mt-1"><strong>Función:</strong> Gestiona el ciclo de vida completo de las políticas de la organización, desde su creación como borrador, pasando por su revisión y aprobación, hasta su archivo.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Asegura un marco de gobernanza formal y auditable. Solo las políticas aprobadas se consideran activas en el sistema.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Panel Jerárquico</h5>
-                    <p className="mt-1"><strong>Función:</strong> Una vista interactiva que muestra la estructura completa <strong>Proceso → Procedimiento → Actividad → Política</strong>. Permite arrastrar actividades desde un "pool" para asignarlas a procedimientos y visualizar al instante qué políticas regulan cada parte del flujo.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Ofrece una visión clara de cómo se distribuye y regula el trabajo en la organización. Es la herramienta principal para construir y auditar flujos.</p>
-                  </div>
-                   <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Análisis IA (Mejoras)</h5>
-                    <p className="mt-1"><strong>Función:</strong> Este módulo tiene dos sub-funciones:
-                        1.  **Análisis de Ineficiencias:** Examina los datos capturados para encontrar posibles duplicidades (de procesos, actividades), sistemas redundantes y gaps de cumplimiento en las políticas.
-                        2.  **Análisis de Perfil de Puesto:** Genera un perfil de puesto profesional y valida si las actividades asignadas a un rol están alineadas con sus responsabilidades.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Automatiza el trabajo de análisis, descubriendo ineficiencias ocultas, sugiriendo mejoras accionables y validando la coherencia de la estructura organizacional.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Consulta IA</h5>
-                    <p className="mt-1"><strong>Función:</strong> Un asistente de chat conversacional que entiende la estructura de datos de PROSCENDIA. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Democratiza el acceso a la información, permitiendo a cualquier usuario obtener respuestas rápidas sin necesidad de navegar por todas las pantallas.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Acciones</h5>
-                    <p className="mt-1"><strong>Función:</strong> Permite crear, asignar, dar seguimiento y cuantificar el impacto de cada iniciativa de mejora, desde su concepción hasta su finalización.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Convierte las ideas y hallazgos en proyectos concretos y medibles, asegurando que las oportunidades de mejora no se queden en el papel.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Auditoría y Cumplimiento</h5>
-                    <p className="mt-1"><strong>Función:</strong> Permite realizar auditorías formales sobre procesos, puestos o sistemas. Se pueden registrar hallazgos y generar planes de acción. Su dashboard muestra **alertas automáticas** para las auditorías que están pendientes o vencidas según la frecuencia programada.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Facilita las labores de control interno, mantiene un registro trazable y ayuda a gestionar proactivamente el calendario de cumplimiento.</p>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Configuración</h5>
-                    <p className="mt-1"><strong>Función:</strong> El panel de control administrativo. Aquí se gestionan las listas maestras (Áreas, Departamentos, Puestos, Sistemas y sus costos) y se realizan cargas masivas de datos.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Mantiene la integridad de los datos del sistema y permite una configuración y actualización rápida y eficiente.</p>
-                  </div>
-                   <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Usuarios y Permisos</h5>
-                    <p className="mt-1"><strong>Función:</strong> Desde aquí, un Administrador puede gestionar los roles de los usuarios, definir qué puede hacer y ver cada rol dentro del sistema, y gestionar **excepciones de acceso** a documentos específicos para usuarios individuales.</p>
-                    <p className="mt-1"><strong>Beneficios:</strong> Asegura un control de acceso granular y flexible, protegiendo la integridad y confidencialidad de los datos.</p>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-              
-              <AccordionItem value="item-how-to">
-                <AccordionTrigger className="text-lg font-semibold">3. Guías de Tareas Comunes</AccordionTrigger>
-                <AccordionContent className="space-y-4 text-sm">
-                  <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
-                    <h5 className="font-bold text-primary">Cómo Capturar un Proceso y su Flujo Completo</h5>
-                    <ol className="list-decimal pl-5 space-y-1 mt-2">
-                      <li>Ve al módulo <strong>"Captura"</strong>.</li>
-                      <li>Rellena la información general del proceso (jerarquía, nombre, descripción, métricas, frecuencia de auditoría, etc.).</li>
-                      <li>Al guardar, serás redirigido a la página de <strong>"Definir Procedimientos"</strong>. Aquí, añade uno o más procedimientos que componen el proceso.</li>
-                      <li>Luego, ve al **"Panel Jerárquico"**. Expande el proceso que acabas de crear hasta ver sus procedimientos.</li>
-                      <li>Desde el **"Pool de Actividades"** a la derecha, arrastra y suelta las actividades que necesites sobre el procedimiento correspondiente.</li>
-                      <li>Una vez guardado, todo el flujo será visible en **"Procesos Registrados"** y en el **"Panel Jerárquico"**.</li>
-                    </ol>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Cómo Vincular Políticas y Actividades en el Panel Jerárquico</h5>
-                    <ol className="list-decimal pl-5 space-y-1 mt-2">
-                      <li>Ve al **"Panel Jerárquico"**.</li>
-                      <li>Expande el árbol de la izquierda para encontrar el <strong>procedimiento</strong> al que quieres añadirle trabajo.</li>
-                      <li>En el **"Pool de Actividades"** de la derecha, busca la actividad que quieres asignar (puedes usar los filtros).</li>
-                      <li><strong>Arrastra la actividad</strong> desde el pool y **suéltala sobre el nombre del procedimiento** o entre dos actividades existentes dentro de un procedimiento.</li>
-                      <li>Para vincular una política, ve al módulo <strong>"Políticas"</strong>, edita la política deseada y usa el botón **"Vincular a Elementos"** para asociarla a procesos, procedimientos o actividades, especificando el tipo de relación.</li>
-                    </ol>
-                  </div>
-                  <div className="pt-4 border-t border-dashed">
-                    <h5 className="font-bold text-primary">Cómo Realizar un Análisis con IA</h5>
-                    <ol className="list-decimal pl-5 space-y-1 mt-2">
-                      <li>Ve a <strong>"Análisis IA"</strong> y selecciona la pestaña **"Análisis de Ineficiencias"**.</li>
-                      <li>Haz clic en el botón <strong>"Analizar Ineficiencias con IA"</strong>.</li>
-                      <li>Se abrirá una ventana para que selecciones los procesos, procedimientos, actividades, puestos y sistemas que la IA debe examinar.</li>
-                      <li>La IA devolverá un resumen y listas de posibles **duplicidades, redundancias y gaps de políticas**, evitando sugerir mejoras que ya estén registradas como "Acciones".</li>
-                      <li>Si los hallazgos son acertados, puedes generar **"Acciones de Mejora"** directamente desde los resultados.</li>
-                    </ol>
-                  </div>
+                  
+                  <Accordion type="multiple" className="w-full space-y-2">
+                      <AccordionItem value="dashboard">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><LayoutDashboard className="mr-2 h-5 w-5 text-primary"/>Dashboard</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Es la pantalla de bienvenida y el centro de mando. Ofrece una vista de alto nivel de los indicadores clave (KPIs) de la organización y sirve como punto de acceso rápido a los dashboards especializados.</p>
+                              <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                  <DetailItem icon={Database} term="Procesos Mapeados" description="Número total de procesos activos en el sistema."/>
+                                  <DetailItem icon={CheckSquare} term="Acciones Completadas" description="Total de iniciativas de mejora que han sido finalizadas."/>
+                                  <DetailItem icon={Target} term="Ahorro Realizado" description="Suma de los ahorros (en costo y tiempo) generados por las acciones completadas."/>
+                                  <DetailItem icon={ClipboardCheck} term="Auditorías Completadas" description="Número total de auditorías finalizadas."/>
+                              </dl>
+                              <p className="mt-2"><strong>Acceso a Dashboards Especializados:</strong> Use los botones en la parte inferior para navegar a los paneles de control detallados de cada área (Procesos, Mejoras, Sistemas, etc.).</p>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                      <AccordionItem value="captura">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ClipboardEdit className="mr-2 h-5 w-5 text-primary"/>Captura Integral</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> El corazón del sistema para el registro de información. Este módulo permite capturar un proceso completo, incluyendo sus procedimientos y actividades, desde una única pantalla, asegurando la integridad y la relación entre los datos desde el inicio.</p>
+                              <h5 className="font-semibold pt-2">Flujo de Trabajo:</h5>
+                              <ol className="list-decimal pl-5 space-y-1">
+                                <li><strong>Datos del Proceso:</strong> Complete la información general del proceso, como su nombre, área/puesto responsable y objetivo.</li>
+                                <li><strong>Definir Procedimientos:</strong> Haga clic en "Definir Procedimientos y Flujo". Esto expandirá la sección para agregar los pasos secuenciales (procedimientos) del proceso.</li>
+                                <li><strong>Detallar Procedimientos:</strong> Para cada procedimiento, defina su nombre, descripción, clasificación, sistemas que utiliza, y políticas asociadas.</li>
+                                <li><strong>Agregar Actividades:</strong> Dentro de cada procedimiento, agregue las actividades específicas, detallando su nombre, tiempo y puesto que la ejecuta.</li>
+                                <li><strong>Guardar Todo:</strong> Al finalizar, haga clic en "Guardar Proceso Completo". El sistema creará todas las entidades y sus relaciones automáticamente.</li>
+                              </ol>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                      <AccordionItem value="procedimientos">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ListOrdered className="mr-2 h-5 w-5 text-primary"/>Procedimientos</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Es el catálogo maestro de todos los procedimientos del sistema. Un procedimiento es una secuencia de actividades para llevar a cabo una parte de un proceso. Este módulo permite gestionarlos de forma centralizada.</p>
+                              <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <DetailItem icon={PlusCircle} term="Agregar Procedimiento" description="Crea un nuevo procedimiento, asignándolo a un proceso padre y definiendo sus características (clasificación, sistemas, etc.)."/>
+                                <DetailItem icon={Edit2} term="Editar" description="Modifica los detalles de un procedimiento existente."/>
+                                <DetailItem icon={Trash2} term="Eliminar" description="Borra un procedimiento. Solo es posible si no tiene actividades asignadas."/>
+                                <DetailItem icon={Calculator} term="Recalcular Totales" description="Calcula y actualiza el tiempo y costo mensual estimado del procedimiento, sumando los de sus actividades activas."/>
+                              </dl>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                      <AccordionItem value="actividades">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ListChecks className="mr-2 h-5 w-5 text-primary"/>Actividades</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Funciona como un catálogo maestro de todas las tareas o pasos individuales que pueden formar parte de un procedimiento. Permite la estandarización del trabajo a nivel granular. Una misma actividad puede ser reutilizada en múltiples procedimientos.</p>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                      <AccordionItem value="procesos-registrados">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Database className="mr-2 h-5 w-5 text-primary"/>Procesos Registrados</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Un centro de gestión donde puedes buscar, filtrar, ver detalles, editar y gestionar el estado (activo/inactivo) de los procesos existentes. Permite expandir cada proceso para ver sus procedimientos y actividades asociadas.</p>
+                              <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <DetailItem icon={Search} term="Filtros" description="Utilice los filtros superiores para acotar la búsqueda por área, puesto, estado o contenido (si tiene o no procedimientos/actividades)."/>
+                                <DetailItem icon={ChevronRight} term="Expandir" description="Haga clic en la flecha a la izquierda de cada proceso para ver sus procedimientos y actividades en detalle."/>
+                                <DetailItem icon={Edit2} term="Editar Proceso" description="Permite modificar los datos generales de un proceso."/>
+                                <DetailItem icon={Trash2} term="Eliminar Proceso" description="Mueve un proceso a la papelera (borrado lógico). Solo se puede si no tiene procedimientos."/>
+                              </dl>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                      <AccordionItem value="politicas">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><FileText className="mr-2 h-5 w-5 text-primary"/>Políticas</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Gestiona el ciclo de vida completo de las políticas de la organización, desde su creación como borrador, pasando por su revisión y aprobación, hasta su archivo. Asegura un marco de gobernanza formal y auditable.</p>
+                              <h5 className="font-semibold pt-2">Ciclo de Vida de una Política:</h5>
+                              <ol className="list-decimal pl-5 space-y-1">
+                                <li><strong>Borrador:</strong> La política puede ser editada libremente.</li>
+                                <li><strong>En Revisión:</strong> Se envía a revisión. Ya no es editable.</li>
+                                <li><strong>Aprobada:</strong> La política es oficial y está bloqueada para edición. Ahora puede ser vinculada a procesos, procedimientos y actividades.</li>
+                                <li><strong>Archivada:</strong> La política ya no está vigente pero se conserva para el historial.</li>
+                              </ol>
+                               <p className="mt-2"><strong>Nota:</strong> Para editar una política Aprobada o Archivada, primero se debe regresar al estado de "Borrador" usando la acción "Crear Nueva Versión".</p>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                       <AccordionItem value="panel-jerarquico">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><FolderTree className="mr-2 h-5 w-5 text-primary"/>Panel Jerárquico</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Una vista interactiva que muestra la estructura completa **Área → Departamento → Puesto → Proceso → Procedimiento → Actividad**. Es la herramienta principal para construir y auditar los flujos de trabajo.</p>
+                               <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <DetailItem icon={FolderTree} term="Árbol Jerárquico" description="Explore la estructura completa de la organización expandiendo cada nivel."/>
+                                <DetailItem icon={ListChecks} term="Pool de Actividades" description="A la derecha, encontrará un catálogo de todas las actividades disponibles en el sistema."/>
+                                <DetailItem icon={Share2} term="Arrastrar y Soltar (Drag & Drop)" description="Arrastre una actividad desde el 'Pool' y suéltela sobre un procedimiento en el árbol para asignarla."/>
+                                <DetailItem icon={Eye} term="Ver Detalles" description="Haga clic en el icono del ojo para ver los detalles completos de un proceso o actividad."/>
+                              </dl>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                       <AccordionItem value="mejoras">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><TrendingUp className="mr-2 h-5 w-5 text-primary"/>Análisis de Mejoras (IA)</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Este módulo utiliza Inteligencia Artificial para analizar la información del sistema y proponer mejoras.</p>
+                              <h5 className="font-semibold pt-2">Pestañas:</h5>
+                              <ul className="list-disc pl-5 space-y-1">
+                                <li><strong>Análisis de Ineficiencias:</strong> Seleccione los elementos que desea analizar (procesos, sistemas, etc.) y la IA buscará duplicidades, sistemas redundantes, procesos sin políticas, y otras oportunidades de optimización. Puede generar "Acciones de Mejora" directamente desde los resultados.</li>
+                                <li><strong>Análisis de Perfil de Puesto:</strong> Seleccione un puesto y la IA generará una descripción profesional del rol basándose en las actividades que tiene asignadas. También identificará qué actividades parecen estar alineadas y cuáles no, sugiriendo posibles reasignaciones.</li>
+                              </ul>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                      <AccordionItem value="consulta-ia">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><MessageCircleQuestion className="mr-2 h-5 w-5 text-primary"/>Consulta IA</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Un asistente de chat conversacional que entiende la estructura de datos de PROSCENDIA. Puedes hacerle preguntas en lenguaje natural sobre procesos, políticas y sus relaciones. El asistente respeta los niveles de acceso del usuario, por lo que solo responderá con información que el usuario tiene permitido ver.</p>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                       <AccordionItem value="acciones">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Target className="mr-2 h-5 w-5 text-primary"/>Acciones de Mejora</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Permite crear, asignar, dar seguimiento y cuantificar el impacto de cada iniciativa de mejora, desde su concepción hasta su finalización. Convierte las ideas y hallazgos en proyectos concretos y medibles.</p>
+                               <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <DetailItem icon={PlusCircle} term="Agregar" description="Registra una nueva acción de mejora, especificando su objetivo, responsable, fechas y ahorros estimados (en costo y tiempo)."/>
+                                <DetailItem icon={History} term="Ver Historial" description="Muestra un registro de todos los cambios realizados en una acción, especialmente útil para ver las mejoras cuantificadas al completarse."/>
+                                <DetailItem icon={FileText} term="Exportar" description="Descarga la lista de acciones filtradas a un archivo CSV."/>
+                              </dl>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                       <AccordionItem value="auditoria">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ClipboardCheck className="mr-2 h-5 w-5 text-primary"/>Auditoría y Cumplimiento</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Facilita las labores de control interno. Permite realizar auditorías formales, registrar hallazgos y generar planes de acción. Mantiene un registro trazable y ayuda a gestionar proactivamente el cumplimiento.</p>
+                              <h5 className="font-semibold pt-2">Pestañas:</h5>
+                              <ul className="list-disc pl-5 space-y-1">
+                                <li><strong>Alertas de Auditoría:</strong> Muestra automáticamente qué procesos, puestos o procedimientos requieren una auditoría porque su fecha de revisión programada ha vencido.</li>
+                                <li><strong>Historial de Auditorías:</strong> Un registro de todas las auditorías pasadas, permitiendo consultar sus resultados.</li>
+                                <li><strong>Registro de Actividad:</strong> Una bitácora detallada de todas las acciones importantes realizadas por los usuarios en el sistema.</li>
+                              </ul>
+                               <p className="mt-2"><strong>Flujo de Auditoría:</strong> Al iniciar una auditoría, se entra a una "sesión" donde se revisan los detalles del elemento auditado y se registran "hallazgos". Un hallazgo puede ser "Conforme", "No Conforme" o "Oportunidad de Mejora". Para los dos últimos, se pueden generar "Acciones de Mejora" directamente.</p>
+                          </AccordionContent>
+                      </AccordionItem>
+                      
+                       <AccordionItem value="configuracion">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Settings className="mr-2 h-5 w-5 text-primary"/>Configuración</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> El panel de control administrativo. Aquí se gestionan las listas maestras (Áreas, Departamentos, Puestos, Sistemas y sus costos) y se realizan cargas masivas de datos.</p>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                      <AccordionItem value="usuarios">
+                          <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Users className="mr-2 h-5 w-5 text-primary"/>Usuarios y Permisos</AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-2">
+                              <p><strong>Función:</strong> Desde aquí, un Administrador puede gestionar los roles de los usuarios, definir qué puede hacer y ver cada rol dentro del sistema, y gestionar **excepciones de acceso** a documentos específicos para usuarios individuales.</p>
+                              <h5 className="font-semibold pt-2">Pestañas:</h5>
+                              <ul className="list-disc pl-5 space-y-1">
+                                <li><strong>Gestión de Usuarios:</strong> Permite editar el rol, nivel de acceso y puesto de cada usuario.</li>
+                                <li><strong>Roles y Permisos:</strong> Una matriz detallada para configurar qué puede hacer cada rol en cada módulo del sistema.</li>
+                                <li><strong>Excepciones de Acceso:</strong> Permite dar o quitar acceso a un documento específico (ej. un proceso confidencial) a un usuario individual, sin cambiar su nivel de acceso general.</li>
+                              </ul>
+                          </AccordionContent>
+                      </AccordionItem>
+
+                  </Accordion>
                 </AccordionContent>
               </AccordionItem>
 
               <AccordionItem value="item-security">
-                <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold">3. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
                   <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender la diferencia:</p>
                   
                   <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
                     <h4 className="font-semibold text-base">Roles: ¿Qué puedes HACER?</h4>
-                    <p>Un rol define las acciones que un usuario puede realizar en el sistema. Los roles predeterminados son:</p>
+                    <p>Un rol define las acciones que un usuario puede realizar en el sistema. Un administrador puede configurar permisos granulares para cada rol desde el módulo de "Usuarios". Los roles predeterminados son:</p>
                     <ul className="list-disc pl-5 space-y-2 mt-2">
-                        <li><strong>Administrador:</strong> Tiene control total. Puede ver toda la información, configurar catálogos, gestionar usuarios y permisos.</li>
-                        <li><strong>Gerente de Proyecto:</strong> Puede crear y gestionar procesos, políticas y acciones de mejora. Tiene acceso a la mayoría de los módulos de análisis.</li>
-                        <li><strong>Consultor:</strong> Un rol analítico. Puede ver y proponer mejoras, pero no puede realizar cambios de configuración críticos ni gestionar usuarios.</li>
-                        <li><strong>Usuario Final:</strong> Es un rol de consulta. Solo puede ver los procesos y políticas a los que tiene acceso, sin capacidad de edición.</li>
+                        <li><strong>Administrador:</strong> Tiene control total sobre todas las funciones y datos del sistema.</li>
+                        <li><strong>Gerente de Proyecto:</strong> Puede crear y gestionar procesos, políticas y acciones de mejora.</li>
+                        <li><strong>Consultor:</strong> Un rol analítico para ver y proponer mejoras, pero con capacidades de edición limitadas.</li>
+                        <li><strong>Usuario Final:</strong> Es un rol principalmente de consulta. Solo puede ver los procesos y políticas a los que tiene acceso.</li>
                     </ul>
                   </div>
 
@@ -169,21 +243,13 @@ export default function AyudaPage() {
                     <p><strong>Confidencial → Ejecutivo → Jerárquico → Departamental → Público</strong></p>
                     <p>Un usuario puede ver cualquier procedimiento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver procedimientos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
                   </div>
-
+                  
                   <div className="pt-4 border-t border-dashed">
-                    <h4 className="font-semibold text-base">Ejemplo Práctico</h4>
-                    <ul className="list-disc pl-5 space-y-2 mt-2">
-                      <li><strong>Proceso A: "Solicitud de Vacaciones"</strong>. Contiene un procedimiento clasificado como <strong>Público</strong>.</li>
-                      <li><strong>Proceso B: "Cierre Contable Mensual"</strong>. Contiene un procedimiento clasificado como <strong>Privado</strong>.</li>
-                    </ul>
-                    <ul className="list-none mt-3 space-y-2">
-                      <li>Un <strong>Usuario Final</strong> (con nivel de acceso 'Público') podrá ver el Proceso A y todo su contenido. Sin embargo, el Proceso B ni siquiera aparecerá en su lista, porque no tiene acceso a ninguno de sus procedimientos.</li>
-                      <li>Un <strong>Gerente de Proyecto</strong> (con nivel 'Jerárquico') podrá ver ambos procesos (A y B) y sus contenidos, ya que su nivel de acceso es superior a la clasificación de ambos procedimientos.</li>
-                    </ul>
+                    <h4 className="font-semibold text-base">Excepciones de Acceso</h4>
+                    <p>El módulo de "Usuarios y Permisos" permite crear excepciones. Una excepción puede otorgar acceso a un documento específico a un usuario que normalmente no podría verlo, o viceversa, denegar el acceso a un documento que sí podría ver. Esto ofrece un control de seguridad aún más granular.</p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
-
             </Accordion>
           </ScrollArea>
            <Separator className="my-4" />
