@@ -174,13 +174,44 @@ export async function seedDatabase() {
 
   // --- ACTIVIDADES ---
   const seedActividades = [
+    // Proceso 1: Pago a Proveedores
     { nombre: 'Revisar Facturas de Proveedores', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 15, tiempoIdeal: 10, frecuencia: 'Diario', ejecucionesPorPeriodo: 20, descripcionBreve: 'Validar que la factura del proveedor cumpla con los requisitos fiscales y de la orden de compra.' },
     { nombre: 'Programar Pago a Proveedor', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 10, tiempoIdeal: 8, frecuencia: 'Semanal', ejecucionesPorPeriodo: 1, descripcionBreve: 'Registrar la factura en el sistema y programar la fecha de pago según las condiciones pactadas.' },
     { nombre: 'Aprobar Pago Mayor a 50k', puesto: 'Jefe de Contabilidad', tiempoEstimado: 5, tiempoIdeal: 5, frecuencia: 'A demanda', ejecucionesPorPeriodo: 5, descripcionBreve: 'Realizar la aprobación final en el sistema para pagos que exceden el umbral de 50,000 MXN.' },
+    // Proceso 2: Soporte Técnico
     { nombre: 'Atender Ticket de Soporte Nivel 1', puesto: 'Técnico de Soporte', sistema: 'Jira', tiempoEstimado: 25, tiempoIdeal: 20, frecuencia: 'Diario', ejecucionesPorPeriodo: 10, descripcionBreve: 'Proporcionar primera línea de soporte a usuarios con problemas técnicos comunes.' },
+    // Proceso 3: Reclutamiento
     { nombre: 'Publicar Vacante', puesto: 'Reclutador', tiempoEstimado: 30, tiempoIdeal: 25, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1, descripcionBreve: 'Redactar y publicar ofertas de empleo en diversas plataformas y redes sociales.' },
     { nombre: 'Entrevistar Candidato', puesto: 'Reclutador', tiempoEstimado: 60, tiempoIdeal: 45, frecuencia: 'A demanda', ejecucionesPorPeriodo: 3, descripcionBreve: 'Conducir entrevistas por competencias para evaluar la idoneidad de los candidatos.' },
-    { nombre: 'Elaborar reporte mensual de gastos', puesto: 'Contador Senior', sistema: 'Microsoft Office 365', tiempoEstimado: 240, tiempoIdeal: 180, frecuencia: 'Mensual', ejecucionesPorPeriodo: 1, descripcionBreve: 'Consolidar y analizar los gastos del mes para generar el reporte para la dirección.' }
+    { nombre: 'Elaborar reporte mensual de gastos', puesto: 'Contador Senior', sistema: 'Microsoft Office 365', tiempoEstimado: 240, tiempoIdeal: 180, frecuencia: 'Mensual', ejecucionesPorPeriodo: 1, descripcionBreve: 'Consolidar y analizar los gastos del mes para generar el reporte para la dirección.' },
+    
+    // Nuevas Actividades
+    // Proceso 4: Gestión de Presupuesto Anual
+    { nombre: 'Diseñar formato de presupuesto', puesto: 'Director de Finanzas', sistema: 'Microsoft Office 365', tiempoEstimado: 480, tiempoIdeal: 360, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Distribuir plantillas a áreas', puesto: 'Director de Finanzas', sistema: 'Microsoft Office 365', tiempoEstimado: 120, tiempoIdeal: 90, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Recopilar presupuestos de áreas', puesto: 'Jefe de Contabilidad', sistema: 'Microsoft Office 365', tiempoEstimado: 240, tiempoIdeal: 180, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Analizar desviaciones vs año anterior', puesto: 'Jefe de Contabilidad', sistema: 'SAP S/4HANA', tiempoEstimado: 960, tiempoIdeal: 720, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Presentar presupuesto consolidado a dirección', puesto: 'Director de Finanzas', tiempoEstimado: 120, tiempoIdeal: 90, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Cargar presupuesto aprobado en SAP', puesto: 'Jefe de Contabilidad', sistema: 'SAP S/4HANA', tiempoEstimado: 180, tiempoIdeal: 120, frecuencia: 'Anual', ejecucionesPorPeriodo: 1 },
+    
+    // Proceso 5: Mantenimiento de Infraestructura TI
+    { nombre: 'Revisar logs de servidores', puesto: 'Técnico de Soporte', tiempoEstimado: 60, tiempoIdeal: 45, frecuencia: 'Diario', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Aplicar parches de seguridad', puesto: 'Gerente de TI', tiempoEstimado: 240, tiempoIdeal: 180, frecuencia: 'Mensual', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Realizar respaldo de información crítica', puesto: 'Técnico de Soporte', sistema: 'SAP S/4HANA', tiempoEstimado: 120, tiempoIdeal: 90, frecuencia: 'Semanal', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Auditar inventario físico vs sistema', puesto: 'Técnico de Soporte', tiempoEstimado: 480, tiempoIdeal: 360, frecuencia: 'Semestral', ejecucionesPorPeriodo: 1 },
+    
+    // Proceso 6: Onboarding
+    { nombre: 'Solicitar equipo de cómputo', puesto: 'Reclutador', sistema: 'Jira', tiempoEstimado: 15, tiempoIdeal: 10, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Crear cuentas de usuario', puesto: 'Técnico de Soporte', tiempoEstimado: 30, tiempoIdeal: 20, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Preparar kit de bienvenida', puesto: 'Reclutador', tiempoEstimado: 20, tiempoIdeal: 15, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1 },
+    
+    // Proceso 7: Gestión de Activos Fijos
+    { nombre: 'Dar de alta activo fijo', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 20, tiempoIdeal: 15, frecuencia: 'A demanda', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Calcular depreciación mensual', puesto: 'Contador Senior', sistema: 'SAP S/4HANA', tiempoEstimado: 180, tiempoIdeal: 120, frecuencia: 'Mensual', ejecucionesPorPeriodo: 1 },
+
+    // Proceso 8: Desarrollo de Software
+    { nombre: 'Planificar sprint', puesto: 'Gerente de TI', sistema: 'Jira', tiempoEstimado: 120, tiempoIdeal: 90, frecuencia: 'Quincenal', ejecucionesPorPeriodo: 1 },
+    { nombre: 'Desarrollar nueva funcionalidad', puesto: 'Gerente de TI', tiempoEstimado: 1920, tiempoIdeal: 1600, frecuencia: 'Quincenal', ejecucionesPorPeriodo: 1 }, // 40h
   ];
   const actividadRefs: { [key: string]: string } = {};
   for (const act of seedActividades) {
@@ -208,36 +239,24 @@ export async function seedDatabase() {
 
   // --- PROCEDIMIENTOS ---
   const seedProcedimientos = [
-    {
-      nombre: 'Proceso de Pago a Proveedores',
-      procesoPadre: 'Cuentas por Pagar',
-      clasificacion: 'Privado',
-      activityOrder: ['Revisar Facturas de Proveedores', 'Programar Pago a Proveedor', 'Aprobar Pago Mayor a 50k'],
-      descripcion: 'Flujo operativo para la gestión y liquidación de facturas de proveedores, desde la recepción hasta el pago.',
-      sistemasUtilizados: ['SAP S/4HANA', 'Microsoft Office 365'],
-      informacionRecibe: 'Factura de proveedor, Orden de Compra',
-      informacionEntrega: 'Comprobante de pago, Registro contable',
-      auditFrequencyInDays: 180,
-    },
-    {
-      nombre: 'Resolución de Incidencias de TI',
-      procesoPadre: 'Soporte Técnico a Usuarios',
-      clasificacion: 'Público',
-      activityOrder: ['Atender Ticket de Soporte Nivel 1'],
-      descripcion: 'Protocolo para atender y resolver las solicitudes de soporte técnico de los empleados.',
-      sistemasUtilizados: ['Jira', 'Slack'],
-      informacionRecibe: 'Ticket de soporte',
-      informacionEntrega: 'Solución a incidencia, Ticket cerrado',
-    },
-    {
-      nombre: 'Reclutamiento de Personal',
-      procesoPadre: 'Atracción de Talento',
-      clasificacion: 'Confidencial',
-      activityOrder: ['Publicar Vacante', 'Entrevistar Candidato'],
-      descripcion: 'Define los pasos a seguir para reclutar y seleccionar nuevo personal para la empresa.',
-      informacionRecibe: 'Requisición de personal aprobada',
-      informacionEntrega: 'Candidato seleccionado, Oferta de empleo',
-    }
+    // Proceso 1
+    { nombre: 'Pago a Proveedores', procesoPadre: 'Cuentas por Pagar', clasificacion: 'Privado', activityOrder: ['Revisar Facturas de Proveedores', 'Programar Pago a Proveedor', 'Aprobar Pago Mayor a 50k'], descripcion: 'Flujo operativo para la gestión y liquidación de facturas de proveedores.', sistemasUtilizados: ['SAP S/4HANA', 'Microsoft Office 365'] },
+    // Proceso 2
+    { nombre: 'Resolución de Incidencias de TI', procesoPadre: 'Soporte Técnico a Usuarios', clasificacion: 'Público', activityOrder: ['Atender Ticket de Soporte Nivel 1'], descripcion: 'Protocolo para atender y resolver las solicitudes de soporte técnico de los empleados.', sistemasUtilizados: ['Jira', 'Slack'] },
+    // Proceso 3
+    { nombre: 'Reclutamiento de Personal', procesoPadre: 'Atracción de Talento', clasificacion: 'Confidencial', activityOrder: ['Publicar Vacante', 'Entrevistar Candidato'], descripcion: 'Define los pasos a seguir para reclutar y seleccionar nuevo personal.' },
+    // Proceso 4
+    { nombre: 'Elaboración de Plantillas de Presupuesto', procesoPadre: 'Gestión de Presupuesto Anual', clasificacion: 'Confidencial', activityOrder: ['Diseñar formato de presupuesto', 'Distribuir plantillas a áreas'] },
+    { nombre: 'Consolidación y Revisión de Presupuesto', procesoPadre: 'Gestión de Presupuesto Anual', clasificacion: 'Confidencial', activityOrder: ['Recopilar presupuestos de áreas', 'Analizar desviaciones vs año anterior'] },
+    { nombre: 'Aprobación Final de Presupuesto', procesoPadre: 'Gestión de Presupuesto Anual', clasificacion: 'Confidencial', activityOrder: ['Presentar presupuesto consolidado a dirección', 'Cargar presupuesto aprobado en SAP'] },
+    // Proceso 5
+    { nombre: 'Mantenimiento Preventivo de Servidores', procesoPadre: 'Mantenimiento de Infraestructura de TI', clasificacion: 'Privado', activityOrder: ['Revisar logs de servidores', 'Aplicar parches de seguridad', 'Realizar respaldo de información crítica'] },
+    // Proceso 6
+    { nombre: 'Preparación de Ingreso de Personal', procesoPadre: 'Onboarding de Nuevos Empleados', clasificacion: 'Privado', activityOrder: ['Solicitar equipo de cómputo', 'Crear cuentas de usuario', 'Preparar kit de bienvenida'] },
+    // Proceso 7
+    { nombre: 'Contabilidad de Activos', procesoPadre: 'Gestión de Activos Fijos', clasificacion: 'Privado', activityOrder: ['Dar de alta activo fijo', 'Calcular depreciación mensual'] },
+    // Proceso 8
+    { nombre: 'Ciclo de Desarrollo', procesoPadre: 'Desarrollo de Nuevas Funcionalidades', clasificacion: 'Privado', activityOrder: ['Planificar sprint', 'Desarrollar nueva funcionalidad'] },
   ];
   const procedimientoRefs: { [key: string]: string } = {};
   for (const proc of seedProcedimientos) {
@@ -255,9 +274,6 @@ export async function seedDatabase() {
 
     if (proc.descripcion) data.descripcion = proc.descripcion;
     if (proc.sistemasUtilizados) data.sistemasUtilizados = proc.sistemasUtilizados;
-    if (proc.informacionRecibe) data.informacionRecibe = proc.informacionRecibe;
-    if (proc.informacionEntrega) data.informacionEntrega = proc.informacionEntrega;
-    if (proc.auditFrequencyInDays) data.auditFrequencyInDays = proc.auditFrequencyInDays;
 
     batch.set(procRef, data);
     procedimientoRefs[proc.nombre] = procRef.id;
@@ -267,7 +283,12 @@ export async function seedDatabase() {
   const seedProcesos = [
     { nombre: 'Cuentas por Pagar', area: 'Finanzas', puesto: 'Jefe de Contabilidad', descripcion: 'Gestiona el flujo completo de pagos a proveedores, asegurando la precisión y el cumplimiento de las políticas financieras.', auditFrequencyInDays: 365, sistemas: ['SAP S/4HANA'] },
     { nombre: 'Soporte Técnico a Usuarios', area: 'Tecnología', puesto: 'Gerente de TI', descripcion: 'Provee asistencia técnica a todos los empleados para resolver incidencias de hardware y software.', sistemas: ['Jira', 'Slack'] },
-    { nombre: 'Atracción de Talento', area: 'Recursos Humanos', puesto: 'Reclutador', descripcion: 'Ciclo completo de reclutamiento para nuevas posiciones, desde la publicación de la vacante hasta la selección del candidato final.', auditFrequencyInDays: 365 },
+    { nombre: 'Atracción de Talento', area: 'Recursos Humanos', puesto: 'Reclutador', descripcion: 'Ciclo completo de reclutamiento para nuevas posiciones.', auditFrequencyInDays: 365 },
+    { nombre: 'Gestión de Presupuesto Anual', area: 'Finanzas', puesto: 'Director de Finanzas', descripcion: 'Coordina la creación, consolidación y aprobación del presupuesto anual de la compañía.', auditFrequencyInDays: 365 },
+    { nombre: 'Mantenimiento de Infraestructura de TI', area: 'Tecnología', puesto: 'Gerente de TI', descripcion: 'Asegura la disponibilidad y seguridad de la infraestructura tecnológica de la empresa.', auditFrequencyInDays: 180 },
+    { nombre: 'Onboarding de Nuevos Empleados', area: 'Recursos Humanos', puesto: 'Reclutador', descripcion: 'Proceso para integrar a los nuevos empleados a la cultura y herramientas de la empresa.' },
+    { nombre: 'Gestión de Activos Fijos', area: 'Finanzas', puesto: 'Jefe de Contabilidad', descripcion: 'Control y seguimiento contable de los activos fijos de la empresa.', auditFrequencyInDays: 180 },
+    { nombre: 'Desarrollo de Nuevas Funcionalidades', area: 'Tecnología', puesto: 'Gerente de TI', descripcion: 'Ciclo de vida para el desarrollo e implementación de nuevas características en el software interno.' }
   ];
   const procesoRefs: { [key: string]: string } = {};
   for (const proc of seedProcesos) {
@@ -310,8 +331,8 @@ export async function seedDatabase() {
 
   // --- POLÍTICAS ---
   const seedPoliticas = [
-    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', departamento: 'Infraestructura', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Proceso de Pago a Proveedores', consecuenciasIncumplimiento: 'Suspensión de acceso y posibles sanciones disciplinarias.', descripcion: 'Define los roles y responsabilidades para el acceso a sistemas que manejan información financiera sensible, como SAP.' },
-    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Proceso de Pago a Proveedores', consecuenciasIncumplimiento: 'No reembolso de gastos no autorizados.', descripcion: 'Establece los lineamientos y topes para los gastos de viaje de los empleados.' },
+    { titulo: 'Política de Acceso a Sistemas Críticos', area: 'Tecnología', departamento: 'Infraestructura', nivel: 'Obligatorio', clasificacion: 'Privado', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Pago a Proveedores', consecuenciasIncumplimiento: 'Suspensión de acceso y posibles sanciones disciplinarias.', descripcion: 'Define los roles y responsabilidades para el acceso a sistemas que manejan información financiera sensible, como SAP.' },
+    { titulo: 'Política de Gastos de Viaje', area: 'Finanzas', nivel: 'Recomendado', clasificacion: 'Público', procesoVinculado: 'Cuentas por Pagar', procedimientoVinculado: 'Pago a Proveedores', consecuenciasIncumplimiento: 'No reembolso de gastos no autorizados.', descripcion: 'Establece los lineamientos y topes para los gastos de viaje de los empleados.' },
   ];
   for (const pol of seedPoliticas) {
     const polRef = doc(collection(db, 'politicas'));
