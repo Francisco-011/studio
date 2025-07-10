@@ -1043,6 +1043,7 @@ export default function AuditoriaPage() {
             auditTargetDetails={auditTargetDetails}
             activityDisplayFilter={activityDisplayFilter}
             setActivityDisplayFilter={setActivityDisplayFilter}
+            puestosMap={puestosMap}
         />
       ) : (
         <Card className="shadow-lg">
@@ -1344,6 +1345,7 @@ function AuditSessionView({
   auditTargetDetails,
   activityDisplayFilter,
   setActivityDisplayFilter,
+  puestosMap,
 }: {
   auditSession: Audit;
   onGoBack: () => void;
@@ -1356,6 +1358,7 @@ function AuditSessionView({
   auditTargetDetails: any;
   activityDisplayFilter: 'all' | 'active' | 'inactive';
   setActivityDisplayFilter: (filter: 'all' | 'active' | 'inactive') => void;
+  puestosMap: Map<string, Puesto>;
 }) {
 
     if (!auditTargetDetails) {
@@ -1384,7 +1387,7 @@ function AuditSessionView({
                         <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
                     </div>
                 </div>
-                <Button onClick={onGoBack} className={buttonVariants({ variant: 'default' })}>Volver a la Lista</Button>
+                <Button onClick={onGoBack} className={buttonVariants({ variant: "default" })}>Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1409,11 +1412,11 @@ function AuditSessionView({
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} />}
-                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} />}
+                    {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} puestosMap={puestosMap} />}
+                    {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} puestosMap={puestosMap} />}
                     {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'politica' && <PolicyAuditDetails policy={policy} linkedProcesses={linkedProcesses} />}
-                    {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies}/>}
+                    {auditSession.auditType === 'procedimiento' && <ProcedureAuditDetails procedimiento={procedimiento} parentProcess={process} activities={procedimientos[0]?.activities || []} relatedPolicies={relatedPolicies} puestosMap={puestosMap} />}
                 </CardContent>
             </Card>
 
@@ -1471,6 +1474,31 @@ function AuditSessionView({
     );
 }
 
+const ActivityDetailView = ({ activity, puestosMap, index }: { activity: Actividad, puestosMap: Map<string, Puesto>, index: number }) => {
+    return (
+        <Card className="bg-background/50">
+            <CardHeader className="p-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <span className="font-semibold text-xs w-6 text-center">{index}</span> {activity.nombre}
+                </CardTitle>
+                 {!activity.activa && <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-transparent text-xs w-fit mt-1 ml-8">Inactiva</Badge>}
+            </CardHeader>
+            <CardContent className="px-3 pt-0 pb-3 ml-8 border-t mt-2 pt-3 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                <DetailDisplay title="Descripción" value={activity.descripcionBreve} isTextarea />
+                <div className="space-y-2">
+                    <DetailDisplay title="Puesto que Ejecuta" value={puestosMap.get(activity.puestoId || '')?.nombre} />
+                    <DetailDisplay title="Frecuencia" value={activity.frecuencia ? `${activity.frecuencia} (${activity.ejecucionesPorPeriodo || 1})` : undefined} />
+                </div>
+                <div className="space-y-2">
+                    <DetailDisplay title="Tiempo Estimado" value={activity.tiempoEstimado ? `${activity.tiempoEstimado} min` : undefined} />
+                    <DetailDisplay title="Tiempo Ideal" value={activity.tiempoIdeal ? `${activity.tiempoIdeal} min` : undefined} />
+                </div>
+                <DetailDisplay title="Costo por Ejecución" value={activity.puestoId && activity.tiempoEstimado && puestosMap.get(activity.puestoId)?.costoHora ? `${((puestosMap.get(activity.puestoId)!.costoHora! / 60) * activity.tiempoEstimado).toFixed(2)} ${puestosMap.get(activity.puestoId)!.monedaCosto}` : undefined} />
+            </CardContent>
+        </Card>
+    )
+}
+
 // Sub-components for different audit types
 const SystemAuditDetails = ({ sistema, relatedPolicies }: { sistema: any, relatedPolicies: Politica[] }) => (
     <div className="space-y-4">
@@ -1504,7 +1532,7 @@ const SystemAuditDetails = ({ sistema, relatedPolicies }: { sistema: any, relate
     </div>
 );
 
-const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { process: CapturedProcess, procedimientos: any[], relatedPolicies: Politica[] }) => (
+const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies, puestosMap }: { process: CapturedProcess, procedimientos: any[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto> }) => (
     <div className="space-y-4">
         <Card><CardHeader><CardTitle className="text-base">Información General del Proceso</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1521,12 +1549,14 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { pro
         <Card><CardHeader><CardTitle className="text-base">Procedimientos y Actividades</CardTitle></CardHeader>
             <CardContent>
                 <Accordion type="multiple" className="w-full">
-                    {procedimientos.map(({ procedimiento, activities }) => (
+                    {procedimientos.map(({ procedimiento, activities }, procIndex) => (
                         <AccordionItem value={procedimiento.id} key={procedimiento.id}>
-                            <AccordionTrigger>{procedimiento.nombre}</AccordionTrigger>
-                            <AccordionContent>
-                                <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
-                                {activities.length === 0 && <div className="text-xs text-muted-foreground">Este procedimiento no tiene actividades.</div>}
+                            <AccordionTrigger>{procIndex + 1}. {procedimiento.nombre}</AccordionTrigger>
+                            <AccordionContent className="space-y-2">
+                                {activities.map((act: Actividad, actIndex: number) => 
+                                    <ActivityDetailView key={act.id} activity={act} puestosMap={puestosMap} index={actIndex + 1}/>
+                                )}
+                                {activities.length === 0 && <div className="text-xs text-muted-foreground pl-4">Este procedimiento no tiene actividades.</div>}
                             </AccordionContent>
                         </AccordionItem>
                     ))}
@@ -1536,7 +1566,7 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { pro
     </div>
 );
 
-const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[] }) => (
+const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies, puestosMap }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto> }) => (
    <div className="space-y-4">
         <Card>
             <CardHeader><CardTitle className="text-base">Información del Puesto</CardTitle></CardHeader>
@@ -1560,11 +1590,11 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                         <AccordionContent>
                             <div className="text-xs italic mb-2">{process.descripcion}</div>
                             <Accordion type="multiple" className="w-full">
-                                {procedimientos.map(({procedimiento, activities}: any) => (
+                                {procedimientos.map(({procedimiento, activities}: any, procIndex: number) => (
                                     <AccordionItem value={procedimiento.id} key={procedimiento.id} className="border-l pl-4">
-                                        <AccordionTrigger className="text-sm">{procedimiento.nombre}</AccordionTrigger>
-                                        <AccordionContent>
-                                            <ul className="list-disc pl-5 text-xs space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
+                                        <AccordionTrigger className="text-sm">{procIndex + 1}. {procedimiento.nombre}</AccordionTrigger>
+                                        <AccordionContent className="space-y-2">
+                                            {activities.map((act: Actividad, actIndex: number) => <ActivityDetailView key={act.id} activity={act} puestosMap={puestosMap} index={actIndex + 1}/>)}
                                             {activities.length === 0 && <div className="text-xs text-muted-foreground">Sin actividades.</div>}
                                         </AccordionContent>
                                     </AccordionItem>
@@ -1614,7 +1644,7 @@ const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, lin
     </div>
 );
 
-const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies }: { procedimiento: Procedimiento, parentProcess?: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[] }) => (
+const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relatedPolicies, puestosMap }: { procedimiento: Procedimiento, parentProcess?: CapturedProcess, activities: Actividad[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto> }) => (
      <div className="space-y-4">
         <Card>
             <CardHeader><CardTitle className="text-base">Información General del Procedimiento</CardTitle></CardHeader>
@@ -1630,10 +1660,12 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
                 <div className="md:col-span-2"><DetailDisplay title="Políticas Aplicables" value={relatedPolicies.map(p => p.titulo)} isList/></div>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Actividades</CardTitle></CardHeader>
-            <CardContent>
-                {activities.length > 0 ? <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map(a => <li key={a.id}>{a.nombre}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay actividades definidas.</div>}
+        <Card>
+            <CardHeader><CardTitle className="text-base">Actividades</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+                {activities.length > 0 ? activities.map((a, index) => <ActivityDetailView key={a.id} activity={a} puestosMap={puestosMap} index={index + 1} />) : <div className="text-sm text-muted-foreground">No hay actividades definidas.</div>}
             </CardContent>
         </Card>
     </div>
 );
+
