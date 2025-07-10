@@ -1129,11 +1129,10 @@ export default function AuditoriaPage() {
                         <Select value={auditTypeFilter} onValueChange={v => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
                         <Select value={auditStatusFilter} onValueChange={v => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
                         <Select value={pendingActionsFilter} onValueChange={v => setPendingActionsFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="with_pending">Con Acciones Pendientes</SelectItem><SelectItem value="no_pending">Sin Acciones Pendientes</SelectItem></SelectContent></Select>
-                    </div>
+                     </div>
                      <div className="rounded-md border">
                         <Table><TableHeader><TableRow>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditType')}>Tipo {getAuditSortIcon('auditType')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditorName')}>Auditor {getAuditSortIcon('auditorName')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestAuditSort('status')}>Estado {getAuditSortIcon('status')}</TableHead>
@@ -1146,7 +1145,6 @@ export default function AuditoriaPage() {
                             return (
                             <TableRow key={audit.id}>
                                 <TableCell>{audit.targetName}</TableCell>
-                                <TableCell className="capitalize">{audit.auditType}</TableCell>
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
                                 <TableCell>
@@ -1163,12 +1161,12 @@ export default function AuditoriaPage() {
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="sm" onClick={() => handleEditAudit(audit)}>
                                       {audit.status === 'En Progreso' ? <Edit className="mr-2 h-4 w-4"/> : <Eye className="mr-2 h-4 w-4"/>}
-                                      {audit.status === 'En Progreso' ? 'Editar' : 'Ver'}
+                                      Ver / Editar
                                     </Button>
                                     <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
                                 </TableCell>
                             </TableRow>
-                        )}) : <TableRow><TableCell colSpan={8} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
+                        )}) : <TableRow><TableCell colSpan={7} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
                         </TableBody></Table>
                     </div>
                      <div className="flex items-center justify-between space-x-2 py-4">
