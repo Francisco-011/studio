@@ -121,7 +121,7 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
     <div className="text-sm">
       <strong className="font-semibold text-foreground/90">{title}:</strong>
       {isValueEmpty ? (
-        <p className="text-muted-foreground">No especificado</p>
+        <div className="text-muted-foreground">No especificado</div>
       ) : isList && Array.isArray(value) ? (
         <div className="flex flex-wrap gap-1 mt-1">
           {value.map((item, idx) => (
@@ -129,7 +129,7 @@ const DetailDisplay = ({ title, value, isList = false, isTextarea = false }: { t
           ))}
         </div>
       ) : (
-        <p className={cn("text-muted-foreground", isTextarea && "whitespace-pre-wrap mt-1")}>{typeof value === 'number' ? value.toString() : value}</p>
+        <div className={cn("text-muted-foreground", isTextarea && "whitespace-pre-wrap mt-1")}>{typeof value === 'number' ? value.toString() : value}</div>
       )}
     </div>
   );
@@ -967,7 +967,7 @@ export default function AuditoriaPage() {
     return (
       <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-16 w-16 text-primary animate-spin" />
-        <p className="ml-4 text-lg text-muted-foreground">Cargando datos de auditoría...</p>
+        <div className="ml-4 text-lg text-muted-foreground">Cargando datos de auditoría...</div>
       </div>
     );
   }
@@ -1042,9 +1042,9 @@ export default function AuditoriaPage() {
                                   options={procesosDelPuestoOptions}
                                   placeholder="Seleccione procesos..."
                               />
-                              <p className="text-sm text-muted-foreground mt-1">
+                              <div className="text-sm text-muted-foreground mt-1">
                                   Si no selecciona ninguno, se auditarán todos los procesos del puesto.
-                              </p>
+                              </div>
                           </div>
                       )}
                     </div>
@@ -1106,7 +1106,7 @@ export default function AuditoriaPage() {
                         </Table>
                       </div>
                       <div className="flex items-center justify-between space-x-2 py-4">
-                        <span className="text-sm text-muted-foreground">Página {auditAlertCurrentPage} de {totalAuditAlertPages}</span>
+                        <div className="text-sm text-muted-foreground">Página {auditAlertCurrentPage} de {totalAuditAlertPages}</div>
                         <div className="space-x-2">
                            <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.max(1, p - 1))} disabled={auditAlertCurrentPage === 1}>Anterior</Button>
                            <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.min(totalAuditAlertPages, p + 1))} disabled={auditAlertCurrentPage >= totalAuditAlertPages}>Siguiente</Button>
@@ -1153,7 +1153,7 @@ export default function AuditoriaPage() {
                         </TableBody></Table>
                     </div>
                      <div className="flex items-center justify-between space-x-2 py-4">
-                        <span className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages}</span>
+                        <div className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages}</div>
                         <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.max(1, p-1))} disabled={auditCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p=>Math.min(totalAuditPages, p+1))} disabled={auditCurrentPage >= totalAuditPages}>Siguiente</Button></div>
                     </div>
                   </CardContent>
@@ -1183,7 +1183,7 @@ export default function AuditoriaPage() {
                         </TableBody></Table>
                      </div>
                       <div className="flex items-center justify-between space-x-2 py-4">
-                        <span className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages}</span>
+                        <div className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages}</div>
                         <div className="space-x-2"><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.max(1, p-1))} disabled={logCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.min(totalLogPages, p+1))} disabled={logCurrentPage >= totalLogPages}>Siguiente</Button></div>
                      </div>
                   </CardContent>
@@ -1251,7 +1251,7 @@ function AuditSessionView({
         return (
             <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
               <Loader2 className="h-16 w-16 text-primary animate-spin" />
-              <p className="ml-4 text-lg text-muted-foreground">Cargando detalles de la auditoría...</p>
+              <div className="ml-4 text-lg text-muted-foreground">Cargando detalles de la auditoría...</div>
             </div>
         );
     }
@@ -1263,9 +1263,9 @@ function AuditSessionView({
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground mt-1">
                         Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-transparent">{auditSession.status}</Badge>
-                    </p>
+                    </div>
                 </div>
                 <Button variant="outline" onClick={onGoBack}>Volver a la Lista</Button>
             </div>
@@ -1313,8 +1313,8 @@ function AuditSessionView({
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <Badge variant={finding.type === 'No Conforme' ? 'destructive' : (finding.type === 'Oportunidad de Mejora' ? 'default' : 'secondary')} className={cn(finding.type === 'Oportunidad de Mejora' && 'bg-amber-500')}>{finding.type}</Badge>
-                                        <p className="mt-2 text-sm">{finding.description}</p>
-                                        {finding.proposedAction && <p className="mt-2 text-xs text-muted-foreground italic"><strong>Acción Propuesta:</strong> {finding.proposedAction}</p>}
+                                        <div className="mt-2 text-sm">{finding.description}</div>
+                                        {finding.proposedAction && <div className="mt-2 text-xs text-muted-foreground italic"><strong>Acción Propuesta:</strong> {finding.proposedAction}</div>}
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {(finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
@@ -1331,7 +1331,7 @@ function AuditSessionView({
                         ))
                     ) : (
                        <div className="text-center p-6 bg-muted/50 rounded-lg">
-                           <p className="text-muted-foreground">Aún no se han registrado hallazgos para esta auditoría.</p>
+                           <div className="text-muted-foreground">Aún no se han registrado hallazgos para esta auditoría.</div>
                        </div>
                     )}
                 </div>
@@ -1372,7 +1372,7 @@ const SystemAuditDetails = ({ sistema, relatedPolicies }: { sistema: any, relate
             <CardContent>
                 {relatedPolicies.length > 0 ? (
                     <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul>
-                ) : <p className="text-sm text-muted-foreground">No hay políticas asociadas directamente al objetivo auditado.</p>}
+                ) : <div className="text-sm text-muted-foreground">No hay políticas asociadas directamente al objetivo auditado.</div>}
             </CardContent>
         </Card>
     </div>
@@ -1389,14 +1389,14 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies }: { pro
                             <AccordionTrigger>{procedimiento.nombre}</AccordionTrigger>
                             <AccordionContent>
                                 <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
-                                {activities.length === 0 && <p className="text-xs text-muted-foreground">Este procedimiento no tiene actividades.</p>}
+                                {activities.length === 0 && <div className="text-xs text-muted-foreground">Este procedimiento no tiene actividades.</div>}
                             </AccordionContent>
                         </AccordionItem>
                     ))}
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1419,14 +1419,14 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                     <AccordionItem value={process.id} key={process.id}>
                         <AccordionTrigger>{process.proceso}</AccordionTrigger>
                         <AccordionContent>
-                            <p className="text-xs italic mb-2">{process.descripcion}</p>
+                            <div className="text-xs italic mb-2">{process.descripcion}</div>
                             <Accordion type="multiple" className="w-full">
                                 {procedimientos.map(({procedimiento, activities}: any) => (
                                     <AccordionItem value={procedimiento.id} key={procedimiento.id} className="border-l pl-4">
                                         <AccordionTrigger className="text-sm">{procedimiento.nombre}</AccordionTrigger>
                                         <AccordionContent>
                                             <ul className="list-disc pl-5 text-xs space-y-1">{activities.map((act: Actividad) => <li key={act.id}>{act.nombre}</li>)}</ul>
-                                            {activities.length === 0 && <p className="text-xs text-muted-foreground">Sin actividades.</p>}
+                                            {activities.length === 0 && <div className="text-xs text-muted-foreground">Sin actividades.</div>}
                                         </AccordionContent>
                                     </AccordionItem>
                                 ))}
@@ -1437,7 +1437,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1458,7 +1458,7 @@ const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, lin
         <Card>
             <CardHeader><CardTitle className="text-base">Procesos Vinculados</CardTitle></CardHeader>
             <CardContent>
-                {linkedProcesses.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{linkedProcesses.map(p => <li key={p.id}>{p.proceso}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay procesos vinculados a esta política.</p>}
+                {linkedProcesses.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{linkedProcesses.map(p => <li key={p.id}>{p.proceso}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay procesos vinculados a esta política.</div>}
             </CardContent>
         </Card>
     </div>
@@ -1477,9 +1477,11 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
         </Card>
         <Card><CardHeader><CardTitle className="text-base">Actividades</CardTitle></CardHeader>
             <CardContent>
-                {activities.length > 0 ? <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map(a => <li key={a.id}>{a.nombre}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay actividades definidas.</p>}
+                {activities.length > 0 ? <ul className="list-decimal pl-5 text-sm space-y-1">{activities.map(a => <li key={a.id}>{a.nombre}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay actividades definidas.</div>}
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <p className="text-sm text-muted-foreground">No hay políticas asociadas.</p>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
+
+    
