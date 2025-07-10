@@ -34,9 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         let userDocSnap = await getDoc(userDocRef);
 
-        // If the user document doesn't exist, create a default one.
-        // This handles cases where signup might have been interrupted
-        // or for users created before the profile collection was standard.
         if (!userDocSnap.exists()) {
           const newProfile = {
             nombreCompleto: firebaseUser.displayName || firebaseUser.email || 'Usuario Nuevo',
@@ -48,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           };
           try {
             await setDoc(userDocRef, newProfile);
-            // Re-fetch the document to get the server-generated timestamp and confirm creation
             userDocSnap = await getDoc(userDocRef);
           } catch (error) {
             console.error("Failed to create user profile in Firestore:", error);
@@ -61,16 +57,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (userDocSnap.exists()) {
           const userProfileData = userDocSnap.data();
+          
+          let nivelAcceso = userProfileData.nivelAcceso;
+          // Ensure Administrador role always has Confidencial access level if not specified.
+          if (userProfileData.rol === 'Administrador' && !nivelAcceso) {
+            nivelAcceso = 'Confidencial';
+          } else if (!nivelAcceso) {
+            nivelAcceso = 'Público';
+          }
+          
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             nombreCompleto: userProfileData.nombreCompleto,
             rol: userProfileData.rol,
-            nivelAcceso: userProfileData.nivelAcceso || 'Público', // Default to 'Público' if not set
+            nivelAcceso: nivelAcceso,
             puestoId: userProfileData.puestoId,
           });
         } else {
-          // This should now be a very rare case, but as a fallback, sign out.
           auth.signOut();
           setUser(null);
         }
