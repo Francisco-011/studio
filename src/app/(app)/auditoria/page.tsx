@@ -227,6 +227,8 @@ export default function AuditoriaPage() {
     defaultValues: { type: undefined, description: '', proposedAction: '' },
   });
   
+  const watchedFindingType = findingForm.watch('type');
+  
   useEffect(() => {
     setNewAuditProcessIds([]);
   }, [newAuditType, newAuditTargetId]);
@@ -607,10 +609,12 @@ export default function AuditoriaPage() {
   
   const handleEditAudit = (audit: Audit) => {
     if (audit.status === 'Completada' || audit.status === 'Cancelada') {
+      setActiveTab('historial');
       setCurrentAuditSession(audit);
     } else {
       const auditToOpen = { ...audit, status: 'En Progreso' as const };
       updateAudit(audit.id, { status: 'En Progreso' });
+      setActiveTab('historial');
       setCurrentAuditSession(auditToOpen);
     }
   };
@@ -983,7 +987,12 @@ export default function AuditoriaPage() {
       {currentAuditSession ? (
         <AuditSessionView 
             auditSession={currentAuditSession}
-            onGoBack={() => setCurrentAuditSession(null)}
+            onGoBack={() => {
+              const previousTab = activeTab;
+              setCurrentAuditSession(null);
+              // This timeout helps ensure the state update for tab happens after going back
+              setTimeout(() => setActiveTab(previousTab), 0);
+            }}
             onFinalize={handleFinalizeAudit}
             onCancel={promptCancelAudit}
             onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
@@ -1041,16 +1050,16 @@ export default function AuditoriaPage() {
                       </div>
                        {newAuditType === 'puesto' && (
                           <div>
-                              <Label>Procesos a Auditar (Opcional)</Label>
-                              <MultiSelect
-                                  value={newAuditProcessIds}
-                                  onChange={setNewAuditProcessIds}
-                                  options={procesosDelPuestoOptions}
-                                  placeholder="Seleccione procesos..."
-                              />
-                              <div className="text-sm text-muted-foreground mt-1">
-                                  Si no selecciona ninguno, se auditarán todos los procesos del puesto.
-                              </div>
+                            <Label>Procesos a Auditar (Opcional)</Label>
+                            <MultiSelect
+                              value={newAuditProcessIds}
+                              onChange={setNewAuditProcessIds}
+                              options={procesosDelPuestoOptions}
+                              placeholder="Seleccione procesos..."
+                            />
+                            <div className="text-sm text-muted-foreground mt-1">
+                                Si no selecciona ninguno, se auditarán todos los procesos del puesto.
+                            </div>
                           </div>
                       )}
                     </div>
@@ -1235,7 +1244,9 @@ export default function AuditoriaPage() {
             <Form {...findingForm}><form onSubmit={findingForm.handleSubmit(handleFindingSubmit)} className="space-y-4 py-4">
                 <FormField control={findingForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Hallazgo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..."/></SelectTrigger></FormControl><SelectContent>{findingTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
                 <FormField control={findingForm.control} name="description" render={({ field }) => (<FormItem><FormLabel>Descripción Detallada</FormLabel><FormControl><Textarea {...field} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
-                <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (<FormItem><FormLabel>Plan de Acción Propuesto</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
+                {(watchedFindingType === 'No Conforme' || watchedFindingType === 'Oportunidad de Mejora') && (
+                  <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (<FormItem><FormLabel>Plan de Acción Propuesto</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
+                )}
                 <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar Hallazgo</Button></DialogFooter>
             </form></Form>
         </DialogContent>
@@ -1299,11 +1310,15 @@ function AuditSessionView({
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
-                    <div className="text-sm text-muted-foreground mt-1">
-                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge>
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                        <span>Auditor: {auditSession.auditorName}</span>
+                        <span>|</span>
+                        <span>Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')}</span>
+                        <span>|</span>
+                        <span>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></span>
                     </div>
                 </div>
-                <Button onClick={onGoBack}>Volver a la Lista</Button>
+                <Button onClick={onGoBack} variant="default" className={cn(buttonVariants({ variant: "default" }))}>Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1526,3 +1541,4 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
         <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
+

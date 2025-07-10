@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -31,6 +32,7 @@ interface ComboboxProps {
   placeholder?: string
   searchPlaceholder?: string
   emptyResultText?: string
+  disabled?: boolean;
 }
 
 export function Combobox({
@@ -40,6 +42,7 @@ export function Combobox({
   placeholder = "Seleccione una opción...",
   searchPlaceholder = "Buscar...",
   emptyResultText = "No se encontraron resultados.",
+  disabled = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -51,6 +54,7 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className="w-full justify-between font-normal"
+          disabled={disabled}
         >
           {value
             ? options.find((option) => option.value === value)?.label

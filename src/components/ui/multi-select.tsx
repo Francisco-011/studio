@@ -10,6 +10,7 @@ import {
   CommandGroup,
   CommandItem,
   CommandList,
+  CommandInput,
 } from "@/components/ui/command";
 import { Command as CommandPrimitive } from "cmdk";
 import { cn } from "@/lib/utils";
@@ -113,6 +114,7 @@ export function MultiSelect({
         {open && selectables.length > 0 ? (
           <div className="absolute top-0 z-10 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in">
             <CommandList>
+              <CommandInput placeholder="Buscar..." />
               <CommandGroup className="h-full max-h-60 overflow-auto">
                 {selectables.map((option) => {
                   return (
