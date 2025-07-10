@@ -602,12 +602,13 @@ export default function AuditoriaPage() {
   };
   
   const handleEditAudit = (audit: Audit) => {
-    let auditToOpen = audit;
-    if (audit.status !== 'Completada' && audit.status !== 'Cancelada') {
-        auditToOpen = { ...audit, status: 'En Progreso' };
-        updateAudit(audit.id, { status: 'En Progreso' });
+    if (audit.status === 'Completada' || audit.status === 'Cancelada') {
+      setCurrentAuditSession(audit);
+    } else {
+      const auditToOpen = { ...audit, status: 'En Progreso' as const };
+      updateAudit(audit.id, { status: 'En Progreso' });
+      setCurrentAuditSession(auditToOpen);
     }
-    setCurrentAuditSession(auditToOpen);
   };
 
   const promptDeleteAudit = (audit: Audit) => {
@@ -1084,8 +1085,7 @@ export default function AuditoriaPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                                <TableHead className="cursor-pointer" onClick={() => requestAuditAlertSort('name')}>Nombre {getAuditAlertSortIcon('name')}</TableHead>
-                                <TableHead className="cursor-pointer" onClick={() => requestAuditAlertSort('type')}>Tipo {getAuditAlertSortIcon('type')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditAlertSort('name')}>Objetivo a Auditar {getAuditAlertSortIcon('name')}</TableHead>
                                 <TableHead>Última Auditoría</TableHead>
                                 <TableHead className="text-right cursor-pointer" onClick={() => requestAuditAlertSort('daysOverdue')}>Días de Atraso {getAuditAlertSortIcon('daysOverdue')}</TableHead>
                                 <TableHead className="text-right">Acción</TableHead>
@@ -1094,14 +1094,16 @@ export default function AuditoriaPage() {
                           <TableBody>
                             {paginatedAuditAlerts.length > 0 ? paginatedAuditAlerts.map(alert => (
                                 <TableRow key={alert.id}>
-                                    <TableCell>{alert.name}</TableCell>
-                                    <TableCell className="capitalize">{alert.type}</TableCell>
+                                    <TableCell>
+                                      <p className="font-medium">{alert.name}</p>
+                                      <p className="text-xs text-muted-foreground capitalize">{alert.type}</p>
+                                    </TableCell>
                                     <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy', {locale: es}) : 'Nunca auditado'}</TableCell>
                                     <TableCell className="text-right"><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
                                     <TableCell className="text-right"><Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type, alert.id)}><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría</Button></TableCell>
                                 </TableRow>
                             )) : (
-                                <TableRow><TableCell colSpan={5} className="text-center">No hay alertas de auditoría.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={4} className="text-center">No hay alertas de auditoría.</TableCell></TableRow>
                             )}
                           </TableBody>
                         </Table>
@@ -1144,7 +1146,10 @@ export default function AuditoriaPage() {
                             const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
                             return (
                             <TableRow key={audit.id}>
-                                <TableCell>{audit.targetName}</TableCell>
+                                <TableCell>
+                                  <p className="font-medium">{audit.targetName}</p>
+                                  <p className="text-xs text-muted-foreground capitalize">{audit.auditType}</p>
+                                </TableCell>
                                 <TableCell>{audit.auditorName}</TableCell>
                                 <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
                                 <TableCell>
@@ -1274,6 +1279,8 @@ function AuditSessionView({
     }
 
     const { name, process, puesto, sistema, policy, procedimiento, relatedProcesses, linkedProcesses, relatedPolicies, departamento, jefeInmediato, procedimientos } = auditTargetDetails;
+    const isSessionReadOnly = auditSession.status === 'Completada' || auditSession.status === 'Cancelada';
+
 
     return (
         <div className="space-y-6">
@@ -1281,7 +1288,7 @@ function AuditSessionView({
                 <div>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
                     <div className="text-sm text-muted-foreground mt-1">
-                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-transparent">{auditSession.status}</Badge>
+                        Auditor: {auditSession.auditorName} | Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')} | Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge>
                     </div>
                 </div>
                 <Button variant="outline" onClick={onGoBack}>Volver a la Lista</Button>
@@ -1309,7 +1316,6 @@ function AuditSessionView({
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {/* Render different details based on audit type */}
                     {auditSession.auditType === 'proceso' && <ProcessAuditDetails process={process} procedimientos={procedimientos} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'puesto' && <PuestoAuditDetails puesto={puesto} departamento={departamento} jefeInmediato={jefeInmediato} relatedProcesses={relatedProcesses} relatedPolicies={relatedPolicies} />}
                     {auditSession.auditType === 'sistema' && <SystemAuditDetails sistema={sistema} relatedPolicies={relatedPolicies} />}
@@ -1321,7 +1327,9 @@ function AuditSessionView({
             <div>
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold">Registro de Hallazgos</h3>
-                    <Button onClick={onAddFinding}><PlusCircle className="mr-2 h-4 w-4"/> Agregar Hallazgo</Button>
+                     {!isSessionReadOnly && (
+                        <Button onClick={onAddFinding}><PlusCircle className="mr-2 h-4 w-4"/> Agregar Hallazgo</Button>
+                     )}
                 </div>
                 <div className="space-y-4">
                     {auditSession.findings.length > 0 ? (
@@ -1334,14 +1342,18 @@ function AuditSessionView({
                                         {finding.proposedAction && <div className="mt-2 text-xs text-muted-foreground italic"><strong>Acción Propuesta:</strong> {finding.proposedAction}</div>}
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        {(finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
+                                        {!isSessionReadOnly && (finding.type === 'No Conforme' || finding.type === 'Oportunidad de Mejora') && (
                                             <Button size="sm" variant="outline" onClick={() => onCreateActionPlan(finding, auditSession)} disabled={finding.isActionCreated}>
                                                 {finding.isActionCreated ? <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> : <Send className="mr-2 h-4 w-4" />}
                                                 {finding.isActionCreated ? 'Acción Creada' : 'Crear Acción'}
                                             </Button>
                                         )}
-                                        <Button variant="ghost" size="icon" onClick={() => onEditFinding(finding)}><Edit className="h-4 w-4"/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => onDeleteFinding(finding)} disabled={finding.isActionCreated} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                        {!isSessionReadOnly && (
+                                            <>
+                                                <Button variant="ghost" size="icon" onClick={() => onEditFinding(finding)}><Edit className="h-4 w-4"/></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => onDeleteFinding(finding)} disabled={finding.isActionCreated} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </Card>
@@ -1354,10 +1366,12 @@ function AuditSessionView({
                 </div>
             </div>
             
-            <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={onCancel}>Cancelar y Salir</Button>
-                <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
-            </div>
+            {!isSessionReadOnly && (
+                <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={onCancel}>Cancelar y Salir</Button>
+                    <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
+                </div>
+            )}
         </div>
     );
 }
