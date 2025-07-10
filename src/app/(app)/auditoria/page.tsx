@@ -183,6 +183,7 @@ export default function AuditoriaPage() {
   
   const [isConfirmCancelAuditOpen, setIsConfirmCancelAuditOpen] = useState(false);
   const [auditToCancel, setAuditToCancel] = useState<Audit | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
   
   const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -620,15 +621,35 @@ export default function AuditoriaPage() {
   };
   
   const promptCancelAudit = (audit: Audit) => {
+    if (audit.findings && audit.findings.length > 0) {
+        toast({
+            title: "Acción no permitida",
+            description: "No se puede cancelar una auditoría que ya tiene hallazgos registrados.",
+            variant: "default"
+        });
+        return;
+    }
     setAuditToCancel(audit);
     setIsConfirmCancelAuditOpen(true);
   };
 
   const executeCancelAudit = async () => {
-    if (!auditToCancel) return;
+    if (!auditToCancel || !cancellationReason.trim()) {
+        toast({ title: "Justificación requerida", description: "Por favor, ingrese un motivo para la cancelación.", variant: "destructive" });
+        return;
+    }
     try {
-      await updateAudit(auditToCancel.id, { status: 'Cancelada' });
-      addLogEntry({ user: auditToCancel.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: auditToCancel.targetName, details: `Se canceló la auditoría para "${auditToCancel.targetName}".` });
+      await updateAudit(auditToCancel.id, { 
+        status: 'Cancelada', 
+        cancellationReason: cancellationReason 
+      });
+      addLogEntry({ 
+        user: auditToCancel.auditorName, 
+        action: 'status_change', 
+        entityType: 'Auditoría', 
+        entityName: auditToCancel.targetName, 
+        details: `Se canceló la auditoría para "${auditToCancel.targetName}" por el siguiente motivo: ${cancellationReason}.` 
+      });
       setCurrentAuditSession(null);
       toast({ title: "Auditoría Cancelada", description: "La sesión de auditoría ha sido cancelada." });
     } catch (error) {
@@ -637,6 +658,7 @@ export default function AuditoriaPage() {
     } finally {
       setIsConfirmCancelAuditOpen(false);
       setAuditToCancel(null);
+      setCancellationReason("");
     }
   };
 
@@ -1284,8 +1306,25 @@ export default function AuditoriaPage() {
       </AlertDialog>
       <AlertDialog open={isConfirmCancelAuditOpen} onOpenChange={setIsConfirmCancelAuditOpen}>
         <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Cancelación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de que desea cancelar esta sesión de auditoría? El estado cambiará a "Cancelada" y no podrá editarla más.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel>Volver</AlertDialogCancel><AlertDialogAction onClick={executeCancelAudit} className={buttonVariants({variant: "destructive"})}>Sí, Cancelar Auditoría</AlertDialogAction></AlertDialogFooter>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Cancelación de Auditoría</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción cambiará el estado de la auditoría a "Cancelada" y no podrá ser editada. Por favor, proporcione una justificación.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4 space-y-2">
+              <Label htmlFor="cancellation-reason">Justificación de la Cancelación</Label>
+              <Textarea
+                id="cancellation-reason"
+                placeholder="Ej: El objetivo de la auditoría ya no es relevante..."
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setAuditToCancel(null)}>Volver</AlertDialogCancel>
+              <AlertDialogAction onClick={executeCancelAudit} disabled={!cancellationReason.trim()} className={buttonVariants({variant: "destructive"})}>Sí, Cancelar Auditoría</AlertDialogAction>
+            </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
@@ -1337,7 +1376,7 @@ function AuditSessionView({
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-headline font-bold">Auditoría: {name}</h1>
-                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                         <span>Auditor: {auditSession.auditorName}</span>
                         <span>|</span>
                         <span>Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')}</span>
@@ -1345,7 +1384,7 @@ function AuditSessionView({
                         <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
                     </div>
                 </div>
-                <Button onClick={onGoBack} variant="outline">Volver a la Lista</Button>
+                <Button onClick={onGoBack} variant="outline" className="bg-primary text-primary-foreground hover:bg-primary/90">Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1422,7 +1461,7 @@ function AuditSessionView({
             
             {!isSessionReadOnly && (
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="destructive" onClick={onCancel}>
+                    <Button variant="destructive" onClick={onCancel} disabled={auditSession.findings.length > 0}>
                         <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría
                     </Button>
                     <Button onClick={onFinalize} className={cn(buttonVariants({ variant: "default" }))}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>

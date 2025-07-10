@@ -37,6 +37,7 @@ export interface Audit {
   status: AuditStatus;
   findings: AuditFinding[];
   createdAt: number;
+  cancellationReason?: string;
 }
 
 export type AuditCreationData = Omit<Audit, 'id' | 'createdAt'>;
