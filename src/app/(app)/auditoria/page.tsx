@@ -181,6 +181,9 @@ export default function AuditoriaPage() {
   const [isConfirmDeleteAuditOpen, setIsConfirmDeleteAuditOpen] = useState(false);
   const [auditToDelete, setAuditToDelete] = useState<Audit | null>(null);
   
+  const [isConfirmCancelAuditOpen, setIsConfirmCancelAuditOpen] = useState(false);
+  const [auditToCancel, setAuditToCancel] = useState<Audit | null>(null);
+  
   const [activityDisplayFilter, setActivityDisplayFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
@@ -615,6 +618,28 @@ export default function AuditoriaPage() {
     setAuditToDelete(audit);
     setIsConfirmDeleteAuditOpen(true);
   };
+  
+  const promptCancelAudit = (audit: Audit) => {
+    setAuditToCancel(audit);
+    setIsConfirmCancelAuditOpen(true);
+  };
+
+  const executeCancelAudit = async () => {
+    if (!auditToCancel) return;
+    try {
+      await updateAudit(auditToCancel.id, { status: 'Cancelada' });
+      addLogEntry({ user: auditToCancel.auditorName, action: 'status_change', entityType: 'Auditoría', entityName: auditToCancel.targetName, details: `Se canceló la auditoría para "${auditToCancel.targetName}".` });
+      setCurrentAuditSession(null);
+      toast({ title: "Auditoría Cancelada", description: "La sesión de auditoría ha sido cancelada." });
+    } catch (error) {
+      console.error("Error canceling audit:", error);
+      toast({ title: "Error", description: "No se pudo cancelar la auditoría.", variant: "destructive" });
+    } finally {
+      setIsConfirmCancelAuditOpen(false);
+      setAuditToCancel(null);
+    }
+  };
+
 
   const executeDeleteAudit = () => {
     if (!auditToDelete) return;
@@ -932,7 +957,7 @@ export default function AuditoriaPage() {
             const totalFindings = audit.findings.length;
             const nonConform = audit.findings.filter(f => f.type === 'No Conforme').length;
             const opportunity = audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length;
-            const pendingActions = audit.findings.filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+            const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
 
             return [
                 escapeCsvCell(audit.id),
@@ -985,10 +1010,10 @@ export default function AuditoriaPage() {
             onGoBack={() => {
               const previousTab = activeTab;
               setCurrentAuditSession(null);
-              // This timeout helps ensure the state update for tab happens after going back
               setTimeout(() => setActiveTab(previousTab), 0);
             }}
             onFinalize={handleFinalizeAudit}
+            onCancel={() => promptCancelAudit(currentAuditSession)}
             onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
             onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
             onDeleteFinding={promptDeleteFinding}
@@ -1257,6 +1282,12 @@ export default function AuditoriaPage() {
             <AlertDialogFooter><AlertDialogCancel>Volver</AlertDialogCancel><AlertDialogAction onClick={handleConfirmFinalization}>Finalizar Auditoría</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={isConfirmCancelAuditOpen} onOpenChange={setIsConfirmCancelAuditOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle>Confirmar Cancelación</AlertDialogTitle><AlertDialogDescription>¿Está seguro de que desea cancelar esta sesión de auditoría? El estado cambiará a "Cancelada" y no podrá editarla más.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>Volver</AlertDialogCancel><AlertDialogAction onClick={executeCancelAudit} className={buttonVariants({variant: "destructive"})}>Sí, Cancelar Auditoría</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1266,6 +1297,7 @@ function AuditSessionView({
   auditSession,
   onGoBack,
   onFinalize,
+  onCancel,
   onAddFinding,
   onEditFinding,
   onDeleteFinding,
@@ -1277,6 +1309,7 @@ function AuditSessionView({
   auditSession: Audit;
   onGoBack: () => void;
   onFinalize: () => void;
+  onCancel: () => void;
   onAddFinding: () => void;
   onEditFinding: (finding: AuditFinding) => void;
   onDeleteFinding: (finding: AuditFinding) => void;
@@ -1309,10 +1342,10 @@ function AuditSessionView({
                         <span>|</span>
                         <span>Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')}</span>
                         <span>|</span>
-                        <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-blue-600 hover:bg-blue-700": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
+                        <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
                     </div>
                 </div>
-                <Button onClick={onGoBack} className={cn(buttonVariants({ variant: "default" }))}>Volver a la Lista</Button>
+                <Button onClick={onGoBack} variant="outline">Volver a la Lista</Button>
             </div>
             
             <Card>
@@ -1389,7 +1422,10 @@ function AuditSessionView({
             
             {!isSessionReadOnly && (
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button onClick={onFinalize}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
+                    <Button variant="destructive" onClick={onCancel}>
+                        <XCircle className="mr-2 h-4 w-4"/> Cancelar Auditoría
+                    </Button>
+                    <Button onClick={onFinalize} className={cn(buttonVariants({ variant: "default" }))}><CheckSquare className="mr-2 h-4 w-4"/> Finalizar Auditoría</Button>
                 </div>
             )}
         </div>
