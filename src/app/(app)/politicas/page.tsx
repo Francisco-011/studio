@@ -32,7 +32,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { FileText, PlusCircle, Edit2, Trash2, Loader2, Search, AlertTriangle, CalendarIcon, History, MoreVertical, Send, CheckCheck, Archive, ShieldQuestion, ChevronsUpDown, ArrowUp, ArrowDown, BookUp } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '@/components/ui/multi-select';
 
@@ -154,7 +154,7 @@ export default function PoliticasPage() {
   }
 
   function handleEdit(politica: Politica) {
-    if (politica.estado === 'Aprobada' || politica.estado === 'Archivada') {
+    if (politica.estado === 'Aprobada' || politica.estado === 'Publicada') {
       toast({ title: 'Acción no permitida', description: 'Para editar, primero regrese la política al estado de "Borrador".', variant: 'default'});
       return;
     }
@@ -455,7 +455,7 @@ export default function PoliticasPage() {
                            className={cn("text-white border-transparent", {
                              "bg-green-600 hover:bg-green-700": politica.estado === 'Aprobada',
                              "bg-purple-600 hover:bg-purple-700": politica.estado === 'En Revisión',
-                             "bg-sky-600 hover:bg-sky-700": politica.estado === 'Archivada',
+                             "bg-blue-600 hover:bg-blue-700": politica.estado === 'Publicada',
                              "bg-amber-600 hover:bg-amber-700": politica.estado === 'Borrador',
                            })}
                          >
@@ -484,14 +484,14 @@ export default function PoliticasPage() {
                              <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
                            </DropdownMenuTrigger>
                            <DropdownMenuContent align="end">
-                             <DropdownMenuItem onClick={() => handleEdit(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Archivada'}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                             <DropdownMenuItem onClick={() => promptDelete(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Archivada'} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleEdit(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Publicada'}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => promptDelete(politica)} disabled={politica.estado === 'Aprobada' || politica.estado === 'Publicada'} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
                              <DropdownMenuSeparator />
                               {politica.estado === 'Borrador' && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'En Revisión')}><Send className="mr-2 h-4 w-4" /> Enviar a Revisión</DropdownMenuItem>}
                               {politica.estado === 'En Revisión' && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Aprobada')}><CheckCheck className="mr-2 h-4 w-4" /> Aprobar</DropdownMenuItem>}
                               {politica.estado === 'En Revisión' && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Borrador')}><ShieldQuestion className="mr-2 h-4 w-4" /> Regresar a Borrador</DropdownMenuItem>}
-                              {politica.estado === 'Aprobada' && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Archivada')}><Archive className="mr-2 h-4 w-4" /> Archivar</DropdownMenuItem>}
-                              {(politica.estado === 'Aprobada' || politica.estado === 'Archivada') && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Borrador')}><ShieldQuestion className="mr-2 h-4 w-4" /> Crear Nueva Versión</DropdownMenuItem>}
+                              {politica.estado === 'Aprobada' && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Publicada')}><BookUp className="mr-2 h-4 w-4" /> Publicar</DropdownMenuItem>}
+                              {(politica.estado === 'Aprobada' || politica.estado === 'Publicada') && hasPermission('politicas:manage_status') && <DropdownMenuItem onClick={() => updatePoliticaStatus(politica.id, 'Borrador')}><ShieldQuestion className="mr-2 h-4 w-4" /> Crear Nueva Versión</DropdownMenuItem>}
                               <DropdownMenuSeparator />
                              <DropdownMenuItem onClick={() => handleViewHistory(politica)} disabled={!politica.historialDeCambios || politica.historialDeCambios.length === 0}><History className="mr-2 h-4 w-4" /> Ver Historial</DropdownMenuItem>
                            </DropdownMenuContent>
@@ -520,7 +520,7 @@ export default function PoliticasPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPoliticaToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDelete}>Eliminar</AlertDialogAction>
+            <AlertDialogAction onClick={executeDelete} className={buttonVariants({ variant: "destructive"})}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

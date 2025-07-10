@@ -18,7 +18,7 @@ import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
 
-export const politicaEstados = ["Borrador", "En Revisión", "Aprobada", "Archivada"] as const;
+export const politicaEstados = ["Borrador", "En Revisión", "Aprobada", "Publicada"] as const;
 export type PoliticaEstado = typeof politicaEstados[number];
 
 export const politicaLinkTypes = ["Aplica a", "Regula", "Complementa", "Requiere", "Implementa"] as const;
@@ -181,8 +181,8 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     const originalPolitica = politicas.find(p => p.id === id);
     if (!originalPolitica) return;
     
-    if (originalPolitica.estado === 'Aprobada' || originalPolitica.estado === 'Archivada') {
-        toast({ title: 'Acción no permitida', description: 'Las políticas aprobadas o archivadas no pueden ser editadas directamente. Cámbielas a estado "Borrador" primero.', variant: 'default', duration: 6000 });
+    if (originalPolitica.estado === 'Aprobada' || originalPolitica.estado === 'Publicada') {
+        toast({ title: 'Acción no permitida', description: 'Las políticas aprobadas o publicadas no pueden ser editadas directamente. Cámbielas a estado "Borrador" primero.', variant: 'default', duration: 6000 });
         return;
     }
 
@@ -291,8 +291,8 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     const politicaToDelete = politicas.find(p => p.id === id);
     if (!politicaToDelete) return;
     
-    if (politicaToDelete.estado === 'Aprobada' || politicaToDelete.estado === 'Archivada') {
-       toast({ title: "Eliminación Bloqueada", description: "No se pueden eliminar políticas aprobadas o archivadas.", variant: 'destructive'});
+    if (politicaToDelete.estado === 'Aprobada' || politicaToDelete.estado === 'Publicada') {
+       toast({ title: "Eliminación Bloqueada", description: "No se pueden eliminar políticas aprobadas o publicadas.", variant: 'destructive'});
        return;
     }
     
