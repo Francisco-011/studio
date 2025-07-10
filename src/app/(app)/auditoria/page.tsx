@@ -1411,7 +1411,7 @@ function AuditSessionView({
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <CardTitle>Objetivo de la Auditoría: {name}</CardTitle>
-                        {(auditSession.auditType === 'proceso' || auditSession.auditType === 'puesto') && (
+                        {(auditSession.auditType === 'proceso' || auditSession.auditType === 'puesto' || auditSession.auditType === 'procedimiento') && (
                             <div className="flex items-center gap-2">
                                 <Label htmlFor="activity-filter" className="text-sm">Mostrar Actividades:</Label>
                                 <Select value={activityDisplayFilter} onValueChange={(v) => setActivityDisplayFilter(v as any)}>
@@ -1713,3 +1713,5 @@ const ProcedureDetailView = ({ procedure, activities, index, parentProcess, pues
         </AccordionItem>
     );
 }
+
+    
