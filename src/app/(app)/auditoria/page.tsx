@@ -682,7 +682,7 @@ export default function AuditoriaPage() {
 
   const totalAuditPages = Math.ceil(filteredAndSortedAudits.length / AUDIT_ITEMS_PER_PAGE);
   const paginatedAudits = useMemo(() => filteredAndSortedAudits.slice((auditCurrentPage - 1) * AUDIT_ITEMS_PER_PAGE, auditCurrentPage * AUDIT_ITEMS_PER_PAGE), [filteredAndSortedAudits, auditCurrentPage]);
-
+  
   const requestAuditSort = (key: SortableAuditKeys) => {
     let direction: SortDirection = 'ascending';
     if (auditSortConfig?.key === key && auditSortConfig.direction === 'ascending') {
@@ -704,6 +704,17 @@ export default function AuditoriaPage() {
     analysis: 'Análisis IA',
     login: 'Inicio de Sesión',
     logout: 'Cierre de Sesión',
+  };
+
+  const actionBadgeClasses: Record<LogAction, string> = {
+    create: 'bg-green-600 hover:bg-green-700',
+    update: 'bg-blue-600 hover:bg-blue-700',
+    delete: 'bg-red-600 hover:bg-red-700',
+    status_change: 'bg-purple-600 hover:bg-purple-700',
+    restore: 'bg-cyan-600 hover:bg-cyan-700',
+    analysis: 'bg-indigo-600 hover:bg-indigo-700',
+    login: 'bg-gray-500 hover:bg-gray-600',
+    logout: 'bg-gray-500 hover:bg-gray-600',
   };
 
   const uniqueLogEntityTypes = useMemo(() => Array.from(new Set(logEntries.map(log => log.entityType))), [logEntries]);
@@ -1023,28 +1034,25 @@ export default function AuditoriaPage() {
                       </div>
                       <div>
                           <Label>Objetivo Específico</Label>
-                          <MultiSelect
-                              value={newAuditType === 'puesto' ? newAuditProcessIds : (newAuditTargetId ? [newAuditTargetId] : [])}
-                              onChange={(selected) => {
-                                  if (newAuditType === 'puesto') {
-                                      setNewAuditProcessIds(selected);
-                                      // If a puesto is selected, we keep it, otherwise the multiselect for processes is the main target.
-                                      if(!newAuditTargetId && selected.length > 0) {
-                                        const firstProc = allProcesses.find(p => p.id === selected[0]);
-                                        const puesto = puestos.find(p => p.id === firstProc?.puestoId);
-                                        if(puesto) setNewAuditTargetId(puesto.id);
-                                      }
-                                  } else {
-                                      setNewAuditTargetId(selected[0] || '');
-                                  }
-                              }}
-                              options={newAuditType === 'puesto' ? procesosDelPuestoOptions : auditTargetOptions}
-                              placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."}
-                          />
+                           <Select value={newAuditTargetId} onValueChange={setNewAuditTargetId} disabled={!newAuditType}>
+                                <SelectTrigger><SelectValue placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."} /></SelectTrigger>
+                                <SelectContent>
+                                    {auditTargetOptions.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+                                </SelectContent>
+                           </Select>
                       </div>
                        {newAuditType === 'puesto' && (
-                          <div className="text-sm text-muted-foreground mt-1">
-                              Si no selecciona procesos, se auditarán todos los del puesto.
+                          <div>
+                            <Label>Procesos a Auditar (Opcional)</Label>
+                             <MultiSelect
+                                value={newAuditProcessIds}
+                                onChange={setNewAuditProcessIds}
+                                options={procesosDelPuestoOptions}
+                                placeholder="Todos los procesos del puesto"
+                              />
+                            <div className="text-sm text-muted-foreground mt-1">
+                                Si no selecciona procesos, se auditarán todos los del puesto.
+                            </div>
                           </div>
                       )}
                     </div>
@@ -1098,7 +1106,7 @@ export default function AuditoriaPage() {
                                     </TableCell>
                                     <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy', {locale: es}) : 'Nunca auditado'}</TableCell>
                                     <TableCell className="text-right"><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
-                                    <TableCell className="text-right"><Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type, alert.id)}><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría</Button></TableCell>
+                                    <TableCell className="text-right"><Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type as any, alert.id)}><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría</Button></TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow><TableCell colSpan={4} className="text-center">No hay alertas de auditoría.</TableCell></TableRow>
@@ -1191,7 +1199,7 @@ export default function AuditoriaPage() {
                      </div>
                       <div className="rounded-md border">
                         <Table><TableHeader><TableRow>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha {getLogSortIcon('timestamp')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha y Hora {getLogSortIcon('timestamp')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('user')}>Usuario {getLogSortIcon('user')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Tipo Entidad {getLogSortIcon('entityType')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityName')}>Nombre Entidad {getLogSortIcon('entityName')}</TableHead>
@@ -1204,7 +1212,11 @@ export default function AuditoriaPage() {
                                 <TableCell>{log.user}</TableCell>
                                 <TableCell>{log.entityType}</TableCell>
                                 <TableCell>{log.entityName}</TableCell>
-                                <TableCell><Badge variant="secondary">{actionTranslations[log.action] || log.action}</Badge></TableCell>
+                                <TableCell>
+                                    <Badge className={cn("text-white border-transparent", actionBadgeClasses[log.action] || 'bg-gray-500')}>
+                                      {actionTranslations[log.action] || log.action}
+                                    </Badge>
+                                </TableCell>
                                 <TableCell className="text-xs">{log.details}</TableCell>
                             </TableRow>
                         )) : <TableRow><TableCell colSpan={6} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
@@ -1297,7 +1309,7 @@ function AuditSessionView({
                         <span>|</span>
                         <span>Fecha: {format(parseISO(auditSession.auditDate), 'dd/MM/yyyy')}</span>
                         <span>|</span>
-                        <span>Estado: <Badge className={cn("text-white border-transparent", { "bg-orange-500 hover:bg-orange-600": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></span>
+                        <div>Estado: <Badge className={cn("text-white border-transparent", { "bg-blue-600 hover:bg-blue-700": auditSession.status === 'En Progreso', "bg-green-600": auditSession.status === 'Completada', "bg-red-600": auditSession.status === 'Cancelada' })}>{auditSession.status}</Badge></div>
                     </div>
                 </div>
                 <Button onClick={onGoBack} className={cn(buttonVariants({ variant: "default" }))}>Volver a la Lista</Button>
@@ -1522,4 +1534,3 @@ const ProcedureAuditDetails = ({ procedimiento, parentProcess, activities, relat
         <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
-
