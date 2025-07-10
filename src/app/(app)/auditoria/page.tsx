@@ -1195,13 +1195,21 @@ export default function AuditoriaPage() {
                         <Table><TableHeader><TableRow>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha {getLogSortIcon('timestamp')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('user')}>Usuario {getLogSortIcon('user')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Tipo Entidad {getLogSortIcon('entityType')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityName')}>Nombre Entidad {getLogSortIcon('entityName')}</TableHead>
                             <TableHead className="cursor-pointer" onClick={()=>requestLogSort('action')}>Acción {getLogSortIcon('action')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Entidad {getLogSortIcon('entityType')}</TableHead>
                             <TableHead>Detalles</TableHead>
                         </TableRow></TableHeader><TableBody>
                         {paginatedLogs.length > 0 ? paginatedLogs.map(log => (
-                            <TableRow key={log.id}><TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yy HH:mm')}</TableCell><TableCell>{log.user}</TableCell><TableCell><Badge variant="secondary">{actionTranslations[log.action] || log.action}</Badge></TableCell><TableCell>{log.entityType}</TableCell><TableCell className="text-xs">{log.details}</TableCell></TableRow>
-                        )) : <TableRow><TableCell colSpan={5} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
+                            <TableRow key={log.id}>
+                                <TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yy HH:mm')}</TableCell>
+                                <TableCell>{log.user}</TableCell>
+                                <TableCell>{log.entityType}</TableCell>
+                                <TableCell>{log.entityName}</TableCell>
+                                <TableCell><Badge variant="secondary">{actionTranslations[log.action] || log.action}</Badge></TableCell>
+                                <TableCell className="text-xs">{log.details}</TableCell>
+                            </TableRow>
+                        )) : <TableRow><TableCell colSpan={6} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
                         </TableBody></Table>
                      </div>
                       <div className="flex items-center justify-between space-x-2 py-4">
