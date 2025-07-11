@@ -319,29 +319,32 @@ export default function AyudaPage() {
               <AccordionItem value="item-security">
                 <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
-                  <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender cómo interactúan.</p>
+                  <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Niveles de Acceso** y los **Roles**. Es crucial entender cómo interactúan.</p>
                   
                   <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
-                    <h4 className="font-semibold text-base">Capa 1: Nivel de Acceso (La primera validación)</h4>
+                    <h4 className="font-semibold text-base">Capa 1: Nivel de Acceso y Clasificación del Documento</h4>
                     <p>
-                        Tu **Nivel de Acceso** (`Público`, `Departamental`, `Jerárquico`, `Ejecutivo`, `Confidencial`) se compara con la **Clasificación del Documento** (`Público`, `Privado`, `Confidencial`).
+                        Tu **Nivel de Acceso** (`Público`, `Departamental`, `Jerárquico`, etc.) se compara con la **Clasificación del Documento** (`Público`, `Privado`, `Confidencial`).
                         Solo puedes ver documentos con una clasificación igual o inferior a tu nivel.
                     </p>
-                    <ul className="list-disc pl-5 space-y-1 mt-2">
-                        <li>Si un documento es **Público**, todos pueden verlo.</li>
-                        <li>Si un documento es **Privado**, necesitas un nivel `Departamental` o superior para pasar este primer filtro.</li>
-                        <li>Si un documento es **Confidencial**, necesitas un nivel `Ejecutivo` o `Confidencial`.</li>
-                    </ul>
+                    <div className="mt-2">
+                        <h5 className="font-semibold">Analogía de la Llave y la Cerradura:</h5>
+                        <p>Imagina que tu Nivel de Acceso es una **llave** y la Clasificación del documento es una **cerradura**.</p>
+                        <ul className="list-disc pl-5 space-y-1 mt-2">
+                          <li>La **Cerradura "Pública"** es la más simple; todas las llaves (`Público`, `Departamental`, etc.) pueden abrirla.</li>
+                          <li>La **Cerradura "Privada"** requiere una llave de mayor nivel. Es abierta por las llaves `Departamental`, `Jerárquico`, `Ejecutivo` y `Confidencial`, pero no por la llave `Público`.</li>
+                          <li>La **Cerradura "Confidencial"** es la más segura y solo puede ser abierta por las llaves más altas: `Ejecutivo` y `Confidencial`.</li>
+                        </ul>
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t border-dashed">
-                    <h4 className="font-semibold text-base">Capa 2: Estructura Organizacional (La segunda validación)</h4>
-                    <p>Si un documento **NO es Público** (es decir, es `Privado` o `Confidencial`), el sistema realiza una segunda comprobación basada en tu puesto y departamento:</p>
+                    <h4 className="font-semibold text-base">Capa 2: Estructura Organizacional (Filtro Adicional)</h4>
+                    <p>Si un documento **NO es Público** (es decir, es `Privado` o `Confidencial`), el sistema realiza una segunda comprobación basada en tu puesto y departamento, una vez que ya pasaste el primer filtro de clasificación:</p>
                     <ul className="list-disc pl-5 space-y-2 mt-2">
                         <li><strong>Nivel Departamental:</strong> Solo verás los documentos `Privados` que pertenezcan a **tu propio departamento**. No podrás ver documentos privados de otros departamentos.</li>
-                        <li><strong>Nivel Jerárquico:</strong> Verás los documentos `Privados` de **tu departamento** y de **todos los departamentos que te reportan** (directa e indirectamente), según la estructura definida en "Jefe Inmediato" en el catálogo de Puestos.</li>
-                        <li><strong>Nivel Ejecutivo:</strong> Funciona como `Jerárquico`, pero generalmente se asigna a roles de mayor nivel con una línea de reporte más amplia.</li>
-                        <li><strong>Nivel Confidencial y Rol Administrador:</strong> Tienen acceso a toda la información, sin importar el departamento o la jerarquía.</li>
+                        <li><strong>Nivel Jerárquico o Ejecutivo:</strong> Verás los documentos `Privados` de **tu departamento** y de **todos los departamentos que te reportan** (directa e indirectamente), según la estructura definida en "Jefe Inmediato" en el catálogo de Puestos.</li>
+                        <li><strong>Nivel Confidencial y Rol Administrador:</strong> Tienen acceso a toda la información, sin importar el departamento o la jerarquía. Este nivel omite el filtro de estructura organizacional.</li>
                     </ul>
                   </div>
                   
