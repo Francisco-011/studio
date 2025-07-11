@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -41,25 +42,51 @@ export default function DashboardPage() {
     let totalMinutesSaved = 0;
 
     completedActions.forEach(action => {
-      action.historialDeCambios?.forEach(cambio => {
+      // Check for real savings in history first
+      const historyCostSavings = action.historialDeCambios?.reduce((acc, cambio) => {
+        if (cambio.field.toLowerCase().includes('costo')) {
           const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-          if (ahorro > 0) {
-              if (cambio.field.toLowerCase().includes('costo')) {
-                  const moneda = action.monedaAhorro || 'MXN';
-                  ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + ahorro);
-              }
-              if (cambio.field.toLowerCase().includes('tiempo')) {
-                  totalMinutesSaved += ahorro;
-              }
-          }
-      });
+          return acc + (ahorro > 0 ? ahorro : 0);
+        }
+        return acc;
+      }, 0) || 0;
+
+      const historyTimeSavings = action.historialDeCambios?.reduce((acc, cambio) => {
+        if (cambio.field.toLowerCase().includes('tiempo')) {
+          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
+          return acc + (ahorro > 0 ? ahorro : 0);
+        }
+        return acc;
+      }, 0) || 0;
+
+      // Calculate cost savings
+      let costoRealizado = 0;
+      if (historyCostSavings > 0) {
+        costoRealizado = historyCostSavings;
+      } else if (action.ahorroEstimado && action.ahorroEstimado > 0) {
+        costoRealizado = action.ahorroEstimado;
+      }
+
+      if (costoRealizado > 0) {
+        const moneda = action.monedaAhorro || 'MXN';
+        ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + costoRealizado);
+      }
+      
+      // Calculate time savings
+      let tiempoRealizado = 0;
+       if (historyTimeSavings > 0) {
+        tiempoRealizado = historyTimeSavings;
+      } else if (action.ahorroTiempoEstimado && action.ahorroTiempoEstimado > 0) {
+        tiempoRealizado = action.ahorroTiempoEstimado;
+      }
+      totalMinutesSaved += tiempoRealizado;
     });
 
     const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
       .map(([currency, total]) => formatDashboardCurrency(total, currency))
-      .join(', ') || 'N/A';
+      .join(', ') || formatDashboardCurrency(0, "MXN");
 
-    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
+    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : '0 min';
     
     return {
       procesosMapeadosCount: activeProcesses.length,
