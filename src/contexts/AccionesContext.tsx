@@ -42,6 +42,7 @@ export interface Accion {
   unidadTiempoAhorro?: TiempoUnidad;
   origenMejora?: string;
   area?: string;
+  departamento?: string;
   puesto?: string;
   procesoId?: string;
   actividadId?: string;
@@ -121,7 +122,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
     const fieldsToCompare: (keyof typeof data)[] = [
         'nombre', 'descripcion', 'responsable', 'estado', 'fechaObjetivo', 'fechaFinalizacion',
         'ahorroEstimado', 'monedaAhorro', 'ahorroTiempoEstimado', 'unidadTiempoAhorro',
-        'origenMejora', 'area', 'puesto', 'procesoId', 'actividadId', 'procedimientoId'
+        'origenMejora', 'area', 'puesto', 'procesoId', 'actividadId', 'procedimientoId', 'departamento'
     ];
 
     fieldsToCompare.forEach(key => {

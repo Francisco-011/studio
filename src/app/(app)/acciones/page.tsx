@@ -9,6 +9,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAcciones, type Accion, accionEstados, monedaOptions, type Moneda, type AccionEstado, tiempoUnidadOptions, type TiempoUnidad, type CambioHistorial } from '@/contexts/AccionesContext';
 import { useAreas } from '@/contexts/AreasContext';
+import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
@@ -41,6 +42,7 @@ import { Combobox } from '@/components/ui/combobox';
 
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
+const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 const NO_PUESTO_SELECTED = "__NO_PUESTO_SELECTED__";
 const NO_ELEMENTO_SELECTED = "__NO_ELEMENTO_SELECTED__";
 
@@ -54,6 +56,7 @@ const accionFormSchema = z.object({
   procedimientoId: z.string().optional(),
   actividadId: z.string().optional(),
   area: z.string().optional(),
+  departamento: z.string().optional(),
   puesto: z.string().optional(),
   estado: z.enum(accionEstados, { errorMap: () => ({ message: "Seleccione un estado válido."})}),
   fechaObjetivo: z.date().optional(),
@@ -138,6 +141,7 @@ const escapeCsvCell = (cellData: string | number | undefined | null): string => 
 export default function AccionesPage() {
   const { acciones, addAccion, updateAccion, deleteAccion, isLoadingAcciones } = useAcciones();
   const { areas, isLoading: isLoadingAreas } = useAreas();
+  const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
@@ -202,6 +206,7 @@ export default function AccionesPage() {
       descripcion: '',
       responsable: '',
       area: undefined,
+      departamento: undefined,
       puesto: undefined,
       procesoId: undefined,
       procedimientoId: undefined,
@@ -224,14 +229,32 @@ export default function AccionesPage() {
   }, [editingAccion]);
 
   const watchedArea = accionForm.watch('area');
-  const availablePuestos = useMemo(() => {
-    if (!watchedArea || isLoadingPuestos || isLoadingAreas) {
-        return puestos;
-    }
+  const watchedDepartamento = accionForm.watch('departamento');
+
+  const availableDepartamentos = useMemo(() => {
+    if (!watchedArea || isLoadingDepartamentos || isLoadingAreas) return [];
     const areaId = areas.find(a => a.nombre === watchedArea)?.id;
-    if (!areaId) return puestos;
-    return puestos.filter(p => p.areaId === areaId);
-  }, [watchedArea, areas, puestos, isLoadingPuestos, isLoadingAreas]);
+    if (!areaId) return [];
+    return departamentos.filter(d => d.areaId === areaId);
+  }, [watchedArea, areas, departamentos, isLoadingDepartamentos, isLoadingAreas]);
+
+  const availablePuestos = useMemo(() => {
+    if (!watchedArea || isLoadingPuestos || isLoadingAreas) return [];
+    const areaId = areas.find(a => a.nombre === watchedArea)?.id;
+    if (!areaId) return [];
+    
+    let puestosFiltrados = puestos.filter(p => p.areaId === areaId);
+    if (watchedDepartamento && watchedDepartamento !== NO_DEPARTAMENTO_SELECTED) {
+        const deptoId = departamentos.find(d => d.areaId === areaId && d.nombre === watchedDepartamento)?.id;
+        if(deptoId) {
+            puestosFiltrados = puestosFiltrados.filter(p => p.departamentoId === deptoId);
+        } else {
+            puestosFiltrados = [];
+        }
+    }
+    return puestosFiltrados;
+  }, [watchedArea, watchedDepartamento, areas, departamentos, puestos, isLoadingPuestos, isLoadingAreas]);
+
 
   const watchedProcesoId = accionForm.watch('procesoId');
   const watchedProcedimientoId = accionForm.watch('procedimientoId');
@@ -244,6 +267,7 @@ export default function AccionesPage() {
         const process = capturedProcesses.find(p => p.id === watchedProcesoId);
         if (process) {
             accionForm.setValue('area', process.area);
+            accionForm.setValue('departamento', process.departamento);
             accionForm.setValue('puesto', process.puesto);
         }
     }
@@ -258,6 +282,7 @@ export default function AccionesPage() {
         const parentProcess = capturedProcesses.find(p => p.id === procedure.procesoId);
         if (parentProcess) {
           accionForm.setValue('area', parentProcess.area);
+          accionForm.setValue('departamento', parentProcess.departamento);
           accionForm.setValue('puesto', parentProcess.puesto);
         }
       }
@@ -278,6 +303,7 @@ export default function AccionesPage() {
         accionForm.reset({
           ...editingAccion,
           area: editingAccion.area || undefined,
+          departamento: editingAccion.departamento || undefined,
           puesto: editingAccion.puesto || undefined,
           procesoId: editingAccion.procesoId || undefined,
           procedimientoId: editingAccion.procedimientoId || undefined,
@@ -295,6 +321,7 @@ export default function AccionesPage() {
     const dataToSave = {
         ...data,
         area: data.area || undefined,
+        departamento: data.departamento || undefined,
         puesto: data.puesto || undefined,
         procesoId: data.procesoId === NO_ELEMENTO_SELECTED ? undefined : data.procesoId,
         procedimientoId: data.procedimientoId === NO_ELEMENTO_SELECTED ? undefined : data.procedimientoId,
@@ -390,7 +417,7 @@ export default function AccionesPage() {
             const getElementName = (acc: Accion) => {
                 if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
                 if (acc.procedimientoId) return `PC: ${procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || ''}`;
-                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === acc.actividadId)?.nombre || ''}`;
+                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === ac.actividadId)?.nombre || ''}`;
                 return '';
             };
             valA = getElementName(a);
@@ -762,7 +789,7 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <FormField
                             control={accionForm.control}
                             name="area"
@@ -770,7 +797,11 @@ export default function AccionesPage() {
                               <FormItem>
                                 <FormLabel>Área (Opcional)</FormLabel>
                                 <Select
-                                  onValueChange={(value) => field.onChange(value === NO_AREA_SELECTED ? undefined : value)}
+                                  onValueChange={(value) => {
+                                      field.onChange(value === NO_AREA_SELECTED ? undefined : value);
+                                      accionForm.setValue('departamento', undefined);
+                                      accionForm.setValue('puesto', undefined);
+                                  }}
                                   value={field.value || NO_AREA_SELECTED}
                                   disabled={isLoadingAreas || isReadOnly}
                                 >
@@ -786,6 +817,30 @@ export default function AccionesPage() {
                           />
                           <FormField
                             control={accionForm.control}
+                            name="departamento"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Departamento (Opcional)</FormLabel>
+                                    <Select
+                                        onValueChange={(value) => {
+                                            field.onChange(value === NO_DEPARTAMENTO_SELECTED ? undefined : value);
+                                            accionForm.setValue('puesto', undefined);
+                                        }}
+                                        value={field.value || NO_DEPARTAMENTO_SELECTED}
+                                        disabled={isLoadingDepartamentos || isReadOnly || !watchedArea}
+                                    >
+                                        <FormControl><SelectTrigger><SelectValue placeholder={!watchedArea ? "Seleccione un área" : "Seleccione un depto"} /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            <SelectItem value={NO_DEPARTAMENTO_SELECTED}>Ninguno</SelectItem>
+                                            {availableDepartamentos.map(depto => (<SelectItem key={depto.id} value={depto.nombre}>{depto.nombre}</SelectItem>))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={accionForm.control}
                             name="puesto"
                             render={({ field }) => (
                               <FormItem>
@@ -793,15 +848,15 @@ export default function AccionesPage() {
                                 <Select
                                   onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
                                   value={field.value || NO_PUESTO_SELECTED}
-                                  disabled={isLoadingPuestos || isReadOnly}
+                                  disabled={isLoadingPuestos || isReadOnly || !watchedArea}
                                 >
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl>
+                                  <FormControl><SelectTrigger><SelectValue placeholder={!watchedArea ? "Seleccione un área" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
                                   <SelectContent>
                                       <SelectItem value={NO_PUESTO_SELECTED}>Ninguno</SelectItem>
                                       {availablePuestos.map(puesto => (<SelectItem key={puesto.id} value={puesto.nombre}>{puesto.nombre}</SelectItem>))}
                                   </SelectContent>
                                 </Select>
-                                <FormDescription className="text-xs">Puestos filtrados por el área seleccionada.</FormDescription>
+                                <FormDescription className="text-xs">Puestos filtrados por área/depto.</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
