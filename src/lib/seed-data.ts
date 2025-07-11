@@ -3,11 +3,12 @@
 
 import { db } from './firebase';
 import { collection, writeBatch, getDocs, doc, serverTimestamp, query, deleteDoc, arrayUnion } from 'firebase/firestore';
+import type { UserRole } from '@/app/(app)/usuarios/page';
 
 const collectionsToClear = [
   'acciones', 'actividades', 'areas', 'departamentos', 'politicas',
   'procedimientos', 'procesos', 'puestos', 'sistemas', 'sistemas_costos',
-  'access_exceptions', 'activity_log', 'audits',
+  'access_exceptions', 'activity_log', 'audits', 'permissions',
 ];
 
 async function clearCollections() {
@@ -37,6 +38,64 @@ export async function seedDatabase() {
   await clearCollections();
 
   const batch = writeBatch(db);
+
+  // --- PERMISSIONS ---
+  const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
+    Administrador: {},
+    'Gerente de Proyecto': {
+      'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
+      'captura:create_process': true,
+      'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:toggle_status': true, 'procesosRegistrados:delete': true, 'procesosRegistrados:recalculate': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true,
+      'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:toggle_status': true, 'actividades:delete': true, 'actividades:export': true, 'actividades:view_history': true,
+      'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true, 'procedimientos:delete': true, 'procedimientos:recalculate': true,
+      'politicas:view': true, 'politicas:create': true, 'politicas:delete': true, 'politicas:manage_status': true,
+      'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true, 'panelJerarquico:reassign_puesto': true,
+      'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
+      'consulta_ia:view': true,
+      'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:delete': true, 'acciones:export': true, 'acciones:view_history': true,
+      'auditoria:view_history': true, 'auditoria:perform': true, 'auditoria:view_log': true,
+      'configuracion_catalogos:view': true,
+      'configuracion_cargamasiva:view': true,
+      'usuarios:view': true, 'usuarios:edit': true,
+      'excepciones:view': true, 'excepciones:create': true, 'excepciones:delete': true,
+      'ayuda:view': true,
+    },
+    Consultor: {
+      'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
+      'captura:create_process': true,
+      'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true, 'procesosRegistrados:recalculate': true,
+      'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
+      'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true, 'procedimientos:recalculate': true,
+      'politicas:view': true, 'politicas:create': true,
+      'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true, 'panelJerarquico:reassign_puesto': true,
+      'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
+      'consulta_ia:view': true,
+      'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
+      'auditoria:view_history': true, 'auditoria:perform': true,
+      'configuracion_catalogos:view': true,
+      'ayuda:view': true,
+    },
+    'Usuario Final': {
+      'dashboard:view_resumen': true,
+      'dashboard:view_procesos': true,
+      'procesosRegistrados:view': true,
+      'actividades:view': true,
+      'procedimientos:view': true,
+      'politicas:view': true,
+      'panelJerarquico:view': true,
+      'panelJerarquico:view_details': true,
+      'consulta_ia:view': true,
+      'acciones:view': true,
+      'auditoria:view_history': true,
+      'ayuda:view': true,
+    },
+  };
+
+  for (const [role, permissions] of Object.entries(initialRolePermissions)) {
+    if (role === 'Administrador') continue; // Admins don't need a permissions doc
+    const permDocRef = doc(db, 'permissions', role);
+    batch.set(permDocRef, permissions);
+  }
 
   // --- AREAS ---
   const seedAreas = [{ nombre: 'Finanzas' }, { nombre: 'Operaciones' }, { nombre: 'Tecnología' }, { nombre: 'Recursos Humanos' }];

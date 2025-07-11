@@ -5,12 +5,12 @@ import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -64,7 +64,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
+import { usePermissions, PERMISSION_CONFIG } from '@/contexts/PermissionsContext';
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useExceptions, type AccessException, type AccessExceptionCreationData } from '@/contexts/ExceptionsContext';
@@ -109,205 +109,7 @@ type ExceptionFormData = z.infer<typeof exceptionFormSchema>;
 
 
 const ITEMS_PER_PAGE = 10;
-const LOCAL_STORAGE_PERMISSIONS_KEY = 'proceza-role-permissions';
-
-const PERMISSION_CONFIG = {
-  dashboard: {
-    label: 'Dashboards',
-    permissions: {
-      view_resumen: 'Ver Resumen Ejecutivo',
-      view_procesos: 'Ver Dash. Procesos',
-      view_mejoras: 'Ver Dash. Mejoras',
-      view_sistemas: 'Ver Dash. Sistemas y Costos',
-      view_auditoria: 'Ver Dash. Auditoría',
-      view_politicas: 'Ver Dash. Políticas',
-    },
-  },
-  captura: {
-    label: 'Captura de Procesos',
-    permissions: {
-      create_process: 'Iniciar Nueva Captura de Proceso',
-    },
-  },
-  procesosRegistrados: {
-    label: 'Procesos Registrados',
-    permissions: {
-      view: 'Ver Lista de Procesos',
-      edit: 'Editar Procesos',
-      toggle_status: 'Activar/Inactivar Procesos',
-      delete: 'Eliminar Procesos',
-      recalculate: 'Recalcular Totales de Proceso',
-      export: 'Exportar CSV de Procesos',
-      view_history: 'Ver Historial de Cambios de Proceso',
-    },
-  },
-  procedimientos: {
-    label: 'Procedimientos',
-    permissions: {
-      view: 'Ver Lista de Procedimientos',
-      create: 'Crear Procedimientos',
-      edit: 'Editar Procedimientos',
-      delete: 'Eliminar Procedimientos',
-      recalculate: 'Recalcular Totales de Procedimiento',
-    },
-  },
-  actividades: {
-    label: 'Actividades',
-    permissions: {
-      view: 'Ver Lista de Actividades',
-      create: 'Crear Actividades',
-      edit: 'Editar Actividades',
-      toggle_status: 'Activar/Inactivar Actividades',
-      delete: 'Eliminar Actividades',
-      export: 'Exportar CSV de Actividades',
-      view_history: 'Ver Historial de Cambios de Actividad',
-    },
-  },
-  politicas: {
-    label: 'Políticas',
-    permissions: {
-      view: 'Ver Políticas',
-      create: 'Crear/Editar Políticas',
-      delete: 'Eliminar Políticas',
-      manage_status: 'Gestionar Estados (Aprobar, Archivar)',
-    },
-  },
-  panelJerarquico: {
-    label: 'Panel Jerárquico',
-    permissions: {
-      view: 'Ver Panel',
-      manage_flows: 'Gestionar Flujos (Drag & Drop)',
-      reassign_puesto: 'Reasignar Puesto a Actividad',
-      export: 'Exportar Vista a CSV',
-      view_details: 'Ver Detalles de Elementos',
-    },
-  },
-  analisis_ia: {
-    label: 'Análisis IA (Oportunidades)',
-    permissions: {
-      view: 'Ver Página de Análisis',
-      analyze: 'Ejecutar Análisis con IA',
-      generate_actions: 'Generar Acciones Propuestas desde IA',
-    },
-  },
-  consulta_ia: {
-    label: 'Consulta IA',
-    permissions: {
-      view: 'Ver y Usar Chat de IA',
-    },
-  },
-  acciones: {
-    label: 'Acciones de Mejora',
-    permissions: {
-      view: 'Ver Acciones',
-      create: 'Crear Acciones',
-      edit: 'Editar Acciones',
-      delete: 'Eliminar Acciones',
-      export: 'Exportar CSV de Acciones',
-      view_history: 'Ver Historial de Cambios de Acción',
-    },
-  },
-  auditoria: {
-    label: 'Auditoría y Cumplimiento',
-    permissions: {
-      view_history: 'Ver Historial de Auditorías',
-      perform: 'Realizar Nuevas Auditorías',
-      delete: 'Eliminar Auditorías',
-      view_log: 'Ver Registro de Actividad del Sistema',
-    },
-  },
-  configuracion_catalogos: {
-    label: 'Configuración - Catálogos',
-    permissions: {
-      view: 'Ver Página de Catálogos',
-      manage_areas: 'Gestionar Áreas',
-      manage_deptos: 'Gestionar Departamentos',
-      manage_puestos: 'Gestionar Puestos',
-      manage_sistemas: 'Gestionar Sistemas y Costos',
-    },
-  },
-  configuracion_cargamasiva: {
-    label: 'Configuración - Carga Masiva',
-    permissions: {
-      view: 'Ver Página de Carga Masiva',
-      execute: 'Ejecutar Cargas Masivas',
-    },
-  },
-  usuarios: {
-    label: 'Gestión de Usuarios',
-    permissions: {
-      view: 'Ver Lista de Usuarios',
-      edit: 'Editar Usuarios',
-      manage_permissions: 'Gestionar Permisos de Roles',
-    },
-  },
-  excepciones: {
-    label: 'Excepciones de Acceso',
-    permissions: {
-      view: 'Ver Excepciones',
-      create: 'Crear Excepciones',
-      delete: 'Eliminar Excepciones',
-    },
-  },
-  ayuda: {
-    label: 'Ayuda',
-    permissions: {
-      view: 'Ver Módulo de Ayuda',
-    },
-  },
-};
 type ModuleKey = keyof typeof PERMISSION_CONFIG;
-
-// Default permissions state
-const initialRolePermissions: Record<UserRole, Record<string, boolean>> = {
-  Administrador: Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => ({ ...acc, ...Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true])) }), {}),
-  'Gerente de Proyecto': Object.keys(PERMISSION_CONFIG).reduce((acc, mod) => {
-    const modulePermissions = Object.fromEntries(Object.keys(PERMISSION_CONFIG[mod as ModuleKey].permissions).map(p => [`${mod}:${p}`, true]));
-    if (mod === 'configuracion_catalogos' || mod === 'configuracion_cargamasiva' || mod === 'usuarios') {
-        Object.keys(modulePermissions).forEach(key => {
-            if (!key.endsWith(':view')) {
-                modulePermissions[key] = false;
-            }
-        });
-    }
-    if (mod === 'usuarios') modulePermissions[`${mod}:manage_permissions`] = false;
-    if (mod === 'auditoria') modulePermissions[`${mod}:delete`] = false;
-    if (mod === 'procedimientos') {
-        Object.keys(modulePermissions).forEach(key => { modulePermissions[key] = true; });
-    }
-    return { ...acc, ...modulePermissions };
-  }, {}),
-  Consultor: {
-    'dashboard:view_resumen': true, 'dashboard:view_procesos': true, 'dashboard:view_mejoras': true, 'dashboard:view_sistemas': true, 'dashboard:view_auditoria': true, 'dashboard:view_politicas': true,
-    'captura:create_process': true,
-    'procesosRegistrados:view': true, 'procesosRegistrados:edit': true, 'procesosRegistrados:export': true, 'procesosRegistrados:view_history': true, 'procesosRegistrados:recalculate': true,
-    'actividades:view': true, 'actividades:create': true, 'actividades:edit': true, 'actividades:export': true, 'actividades:view_history': true,
-    'procedimientos:view': true, 'procedimientos:create': true, 'procedimientos:edit': true, 'procedimientos:recalculate': true,
-    'politicas:view': true, 'politicas:create': true,
-    'panelJerarquico:view': true, 'panelJerarquico:manage_flows': true, 'panelJerarquico:export': true, 'panelJerarquico:view_details': true, 'panelJerarquico:reassign_puesto': true,
-    'analisis_ia:view': true, 'analisis_ia:analyze': true, 'analisis_ia:generate_actions': true,
-    'consulta_ia:view': true,
-    'acciones:view': true, 'acciones:create': true, 'acciones:edit': true, 'acciones:export': true, 'acciones:view_history': true,
-    'auditoria:view_history': true, 'auditoria:perform': true,
-    'configuracion_catalogos:view': true,
-    'ayuda:view': true,
-  },
-  'Usuario Final': {
-    'dashboard:view_resumen': true,
-    'dashboard:view_procesos': true,
-    'procesosRegistrados:view': true,
-    'actividades:view': true,
-    'procedimientos:view': true,
-    'politicas:view': true,
-    'panelJerarquico:view': true,
-    'panelJerarquico:view_details': true,
-    'consulta_ia:view': true,
-    'acciones:view': true,
-    'auditoria:view_history': true,
-    'ayuda:view': true,
-  },
-};
-
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -320,11 +122,9 @@ export default function UsuariosPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { addLogEntry } = useActivityLog();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, rolePermissions, setRolePermissions, isLoadingPermissions } = usePermissions();
   
-  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, Record<string, boolean>>>(initialRolePermissions);
-  const [selectedRoleForPerms, setSelectedRoleForPerms] = useState<UserRole>('Administrador');
-  const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
+  const [selectedRoleForPerms, setSelectedRoleForPerms] = useState<UserRole>('Gerente de Proyecto');
 
   // Exception management states
   const { exceptions, addException, deleteException, isLoadingExceptions } = useExceptions();
@@ -352,27 +152,6 @@ export default function UsuariosPage() {
 
     return () => unsubscribe();
   }, []);
-
-
-  useEffect(() => {
-    try {
-      const savedPermissions = localStorage.getItem(LOCAL_STORAGE_PERMISSIONS_KEY);
-      if (savedPermissions) {
-        setRolePermissions(JSON.parse(savedPermissions));
-      }
-    } catch (e) {
-      console.error("Error loading permissions from localStorage", e);
-    } finally {
-      setIsLoadingPermissions(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isLoadingPermissions) {
-      localStorage.setItem(LOCAL_STORAGE_PERMISSIONS_KEY, JSON.stringify(rolePermissions));
-    }
-  }, [rolePermissions, isLoadingPermissions]);
-
 
   const userForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
@@ -490,12 +269,23 @@ export default function UsuariosPage() {
     }));
   };
 
-  const handleSavePermissions = () => {
-    toast({
-      title: 'Permisos Guardados',
-      description: `Los permisos para el rol '${selectedRoleForPerms}' han sido actualizados.`,
-    });
-    addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRoleForPerms, details: `Se actualizaron los permisos para el rol "${selectedRoleForPerms}".` });
+  const handleSavePermissions = async () => {
+    if (!rolePermissions[selectedRoleForPerms]) {
+      toast({ title: "Error", description: `No hay permisos definidos para el rol ${selectedRoleForPerms}`, variant: "destructive"});
+      return;
+    }
+    try {
+        const roleDocRef = doc(db, 'permissions', selectedRoleForPerms);
+        await setDoc(roleDocRef, rolePermissions[selectedRoleForPerms]);
+        toast({
+          title: 'Permisos Guardados',
+          description: `Los permisos para el rol '${selectedRoleForPerms}' han sido actualizados en la base de datos.`,
+        });
+        addLogEntry({ action: 'update', entityType: 'Permisos de Rol', entityName: selectedRoleForPerms, details: `Se actualizaron los permisos para el rol "${selectedRoleForPerms}".` });
+    } catch (e) {
+        console.error("Error saving permissions to Firestore:", e);
+        toast({ title: "Error al Guardar", description: "No se pudieron guardar los permisos en la base de datos.", variant: "destructive"});
+    }
   };
 
   async function handleExceptionSubmit(data: ExceptionFormData) {
@@ -676,7 +466,7 @@ export default function UsuariosPage() {
               {hasPermission('usuarios:manage_permissions') ? (
                 <>
                   <CardDescription className="mb-4">
-                    Seleccione un rol para ver y modificar los permisos asociados.
+                    Seleccione un rol para ver y modificar los permisos asociados. Los cambios se guardarán en la base de datos.
                   </CardDescription>
                   <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
                     <div className="flex-grow">
