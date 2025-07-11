@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { useProcedimientos } from '@/contexts/ProcedimientosContext';
 import { useActividades } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useExceptions } from '@/contexts/ExceptionsContext';
+import { usePuestos } from '@/contexts/PuestosContext';
 import { queryConversationalAgent, type ConversationalQueryInput } from '@/ai/flows/conversational-query-flow';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,7 +38,7 @@ export default function ConsultaIaPage() {
   const { actividades } = useActividades();
   const { politicas } = usePoliticas();
   const { exceptions } = useExceptions();
-
+  const { puestos } = usePuestos();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -48,6 +49,25 @@ export default function ConsultaIaPage() {
         scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages]);
+  
+  const getSubordinateHierarchyNames = useCallback((userId: string | undefined): string[] => {
+    if (!userId) return [];
+    
+    const subordinatePuestos = new Set<string>();
+    const directReports = puestos.filter(p => p.jefeInmediato === userId);
+    const queue = [...directReports];
+
+    while (queue.length > 0) {
+        const currentPuesto = queue.shift();
+        if (currentPuesto && !subordinatePuestos.has(currentPuesto.nombre)) {
+            subordinatePuestos.add(currentPuesto.nombre);
+            const reportsOfCurrent = puestos.filter(p => p.jefeInmediato === currentPuesto.id);
+            queue.push(...reportsOfCurrent);
+        }
+    }
+    return Array.from(subordinatePuestos);
+  }, [puestos]);
+
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,6 +95,7 @@ Nombre: ${p.proceso}
 Código: ${p.codigo}
 Objetivo: ${p.descripcion}
 Área: ${p.area}
+Departamento: ${p.departamento || 'N/A'}
 Puesto: ${p.puesto}
 Políticas Vinculadas (IDs): [${p.politicasAsociadas?.map(link => link.policyId).join(', ') || ''}]
 ---
@@ -120,17 +141,25 @@ Nombre: ${p.titulo}
 Código: ${p.codigo}
 Descripción: ${p.descripcion}
 Clasificación: ${p.clasificacion}
+Área Responsable: ${p.areaResponsable}
+Departamento Responsable: ${p.departamentoResponsable || 'N/A'}
 Procesos Vinculados (IDs): [${p.procesosAsociadosIds?.join(', ') || ''}]
 ---
           `).join('\n\n');
           
       const fullContext = `Contexto de Procesos:\n${processContext}\n\nContexto de Procedimientos:\n${procedimientoContext}\n\nContexto de Actividades:\n${activityContext}\n\nContexto de Políticas:\n${politicaContext}`;
+      
+      const userPuesto = puestos.find(p => p.id === user.puestoId);
+      const userDepartamento = userPuesto?.departamentoId ? puestos.find(d => d.id === userPuesto.departamentoId)?.nombre : undefined;
 
       const request: ConversationalQueryInput = {
         question: input,
         contextData: fullContext,
         userRole: user.rol,
         userAccessLevel: user.nivelAcceso,
+        userPuesto: userPuesto?.nombre,
+        userDepartamento: userDepartamento,
+        userSubordinates: getSubordinateHierarchyNames(user.puestoId),
         history: messages,
       };
 
@@ -251,3 +280,5 @@ Procesos Vinculados (IDs): [${p.procesosAsociadosIds?.join(', ') || ''}]
     </div>
   );
 }
+
+    

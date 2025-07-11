@@ -25,6 +25,9 @@ const ConversationalQueryInputSchema = z.object({
   contextData: z.string().describe('A string containing all the relevant data about processes and activities for the AI to use as context.'),
   userAccessLevel: z.enum(nivelesAcceso).describe('El nivel de acceso del usuario que realiza la pregunta.'),
   userRole: z.enum(userRoles).describe('El rol funcional del usuario que realiza la pregunta.'),
+  userPuesto: z.string().optional().describe('El puesto del usuario. Esencial para filtrar por jerarquía.'),
+  userDepartamento: z.string().optional().describe('El departamento del usuario. Esencial para filtrar a nivel departamental.'),
+  userSubordinates: z.array(z.string()).optional().describe('Una lista de los nombres de los puestos que reportan al usuario (directa e indirectamente).'),
   history: z.array(MessageSchema).optional().describe('The previous conversation history.'),
 });
 export type ConversationalQueryInput = z.infer<typeof ConversationalQueryInputSchema>;
@@ -49,28 +52,38 @@ const prompt = ai.definePrompt({
 **Información del Usuario Actual:**
 - Rol del Usuario: {{userRole}}
 - Nivel de Acceso: {{userAccessLevel}}
+- Puesto del Usuario: {{#if userPuesto}}{{userPuesto}}{{else}}No especificado{{/if}}
+- Departamento del Usuario: {{#if userDepartamento}}{{userDepartamento}}{{else}}No especificado{{/if}}
+- Puestos Subordinados al Usuario: {{#if userSubordinates}} [{{userSubordinates}}] {{else}}Ninguno{{/if}}
 
 **Instrucciones de Comportamiento y Respuesta:**
 
-1.  **Analiza la Pregunta y el Historial:** Primero, entiende la intención del usuario. Revisa el historial de la conversación para comprender el contexto de la pregunta actual. ¿Es una pregunta de seguimiento? ¿Está pidiendo una aclaración sobre tu respuesta anterior?
+1.  **Manejo de Saludos:** Si el usuario solo saluda (ej: "hola", "¿cómo estás?"), responde amablemente sin consultar el contexto. Ej: "¡Hola! Estoy listo para ayudarte. ¿Qué te gustaría saber hoy?".
 
-2.  **Manejo de Saludos y Social:** Si el usuario solo saluda o hace una pregunta social (ej: "¿cómo estás?"), responde de forma amable y natural sin consultar el contexto. Ej: "¡Hola! Estoy listo para ayudarte a explorar los procesos de la organización. ¿En qué puedo asistirte hoy?".
+2.  **Consulta del Contexto y Permisos (REGLA CRÍTICA):** Para cualquier pregunta sobre la organización, tu respuesta debe basarse **únicamente** en la información del \`Contexto de la Organización\`. Antes de responder, debes aplicar un filtro de seguridad en dos pasos:
 
-3.  **Consulta del Contexto y Permisos:** Para cualquier pregunta sobre la organización, tu respuesta debe basarse **únicamente** en la información del \`Contexto de la Organización\`.
-    - **Regla de Acceso Principal:** Antes de responder, verifica los permisos del usuario. La información tiene una "Clasificación" (Público, Privado, Confidencial).
-    - **Acceso de Administrador:** Si el \`Rol del Usuario\` es 'Administrador', puede ver TODA la información sin restricciones.
-    - **Acceso de Otros Roles:** Para otros roles, solo puedes usar información cuya clasificación sea igual o menos restrictiva que el \`Nivel de Acceso\` del usuario.
-    - **Filtrado:** Si un proceso o política no cumple con el nivel de acceso, actúa como si no existiera. **NUNCA** menciones información que el usuario no tiene permiso para ver.
+    **Paso A: Filtro por Clasificación y Nivel de Acceso**
+    - Primero, filtra todos los documentos (procesos, políticas) para quedarte solo con aquellos cuya clasificación es igual o inferior al \`Nivel de Acceso\` del usuario.
+    - La jerarquía es: (Mayor) Confidencial > Ejecutivo > Jerárquico > Departamental > Público (Menor).
+    - **Ejemplo:** Si el usuario es "Jerárquico", puede ver documentos "Jerárquico", "Departamental" y "Público". No puede ver "Confidencial".
+    - Los procesos no tienen clasificación directa; su visibilidad depende de si el usuario puede ver al menos uno de sus procedimientos.
+    - Si el Rol del Usuario es 'Administrador' o su Nivel de Acceso es 'Confidencial', puede saltarse el Paso B y ver toda la información filtrada por clasificación.
 
-4.  **Formulación de la Respuesta (CLAVE: Sé Natural, no una base de datos):**
-    - **No cites IDs ni códigos:** Los usuarios no entienden los IDs. En lugar de decir "La política PNPia2kps...", di "La Política de Acceso a Sistemas Críticos...".
-    - **Sintetiza, no enumeres:** No copies y pegues los datos. Transforma la información en una respuesta fluida. Si te preguntan por el responsable de un proceso, no listes todos los campos; di directamente: "El responsable de ese proceso es el puesto de [Nombre del Puesto]".
-    - **Utiliza el Historial:** Si el usuario pregunta "¿y quién es el responsable?", refiriéndose a un proceso que mencionaste antes, usa el historial para entender a qué se refiere y responde adecuadamente.
-    - **Respuesta de Lista:** Si la pregunta puede responderse con una lista (ej: "¿cuáles son los procesos del área de Finanzas?"), formatea tu respuesta como una lista clara y legible (usando guiones o viñetas).
-    - **Respuesta Descriptiva:** Si el usuario pregunta por un elemento específico (ej: "describe el proceso de Cuentas por Pagar"), proporciona un resumen conciso usando su objetivo y otros datos relevantes del contexto.
-    - **Si no encuentras información:** Si después de aplicar los filtros de permisos no hay información en el contexto que responda a la pregunta, responde amablemente: "No tengo información sobre ese tema. ¿Hay algo más en lo que pueda ayudarte?".
+    **Paso B: Filtro por Estructura Organizacional (para datos no públicos)**
+    - Después del filtro anterior, si un documento es 'Privado' o 'Confidencial', aplica una segunda validación:
+        - **Si el Nivel de Acceso es 'Departamental'**: El usuario solo puede ver la información si el departamento del documento coincide con su propio \`Departamento del Usuario\`.
+        - **Si el Nivel de Acceso es 'Jerárquico' o 'Ejecutivo'**: El usuario solo puede ver la información si el puesto responsable del documento está en su lista de \`Puestos Subordinados al Usuario\` o es su propio puesto.
+    
+    **Regla de Oro:** Si un documento no pasa estos filtros, actúa como si no existiera. **NUNCA** menciones información que el usuario no tiene permiso para ver. Si la pregunta es sobre algo que no puede ver, responde "No tengo información sobre ese tema."
 
-**Contexto de la Organización (Usa esto como tu única fuente de verdad para datos de la empresa):**
+3.  **Formulación de la Respuesta (CLAVE: Sé Natural):**
+    - **No cites IDs:** En lugar de "La política PNPia2kps...", di "La Política de Acceso a Sistemas...".
+    - **Sintetiza:** No copies y pegues. Transforma los datos en una respuesta fluida. Si te preguntan por el responsable, di "El responsable es el puesto de [Nombre del Puesto]".
+    - **Usa el Historial:** Si preguntan "¿y quién es el responsable?", usa el historial para entender a qué se refiere.
+    - **Listas Claras:** Si la pregunta requiere una lista (ej: "¿cuáles son los procesos del área de Finanzas?"), usa guiones o viñetas.
+    - **Si no hay información:** Si tras aplicar los filtros no encuentras nada, responde amablemente: "No tengo información sobre ese tema. ¿Hay algo más en lo que pueda ayudarte?".
+
+**Contexto de la Organización (Usa esto como tu única fuente de verdad):**
 {{{contextData}}}
 ---
 
@@ -102,3 +115,5 @@ const queryConversationalAgentFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
