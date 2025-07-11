@@ -335,9 +335,19 @@ export default function AyudaPage() {
                   <div className="pt-4 border-t border-dashed">
                     <h4 className="font-semibold text-base">Niveles de Acceso: ¿Qué puedes VER?</h4>
                     <p>El Nivel de Acceso de un usuario determina qué información puede visualizar, basándose en la "Clasificación de Visibilidad" de cada procedimiento y política.</p>
-                     <p>La jerarquía de acceso es la siguiente (de mayor a menor):</p>
+                    <p>La jerarquía de acceso es la siguiente (de mayor a menor):</p>
                     <p><strong>Confidencial → Ejecutivo → Jerárquico → Departamental → Público</strong></p>
                     <p>Un usuario puede ver cualquier documento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver documentos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
+                    <div className="mt-4 pt-4 border-t">
+                      <h5 className="font-semibold">¿Cómo se relacionan los Niveles y las Clasificaciones?</h5>
+                      <p className="mt-1">Piense en su **Nivel de Acceso** como una **llave** y en la **Clasificación del Documento** como una **cerradura**.</p>
+                       <ul className="list-disc pl-5 space-y-1 mt-2">
+                           <li>La **Cerradura "Pública"** es la más simple. Puede ser abierta por **CUALQUIER** llave (`Público`, `Departamental`, `Jerárquico`, `Ejecutivo` o `Confidencial`).</li>
+                           <li>La **Cerradura "Privada"** requiere una llave de mayor nivel. Es abierta por las llaves `Departamental`, `Jerárquico`, `Ejecutivo` y `Confidencial`, pero no por la llave `Público`.</li>
+                           <li>La **Cerradura "Confidencial"** es la más segura. Solo puede ser abierta por las llaves de más alto nivel: `Ejecutivo` y `Confidencial`.</li>
+                       </ul>
+                       <p className="text-xs text-muted-foreground mt-2">El tener 5 niveles de usuario (llaves) y 3 niveles de documentos (cerraduras) permite una mayor granularidad en los permisos de usuario sin complicar en exceso la tarea de clasificar cada documento.</p>
+                    </div>
                   </div>
                   
                   <div className="pt-4 border-t border-dashed">
