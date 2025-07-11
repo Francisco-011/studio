@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign, HardDrive, Factory, AlertTriangle } from "lucide-react";
+import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign, Factory, AlertTriangle, HardDrive } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 
@@ -334,10 +334,10 @@ export default function AyudaPage() {
 
                   <div className="pt-4 border-t border-dashed">
                     <h4 className="font-semibold text-base">Niveles de Acceso: ¿Qué puedes VER?</h4>
-                    <p>El Nivel de Acceso de un usuario determina qué información puede visualizar, basándose en la "Clasificación de Visibilidad" de cada procedimiento.</p>
+                    <p>El Nivel de Acceso de un usuario determina qué información puede visualizar, basándose en la "Clasificación de Visibilidad" de cada procedimiento y política.</p>
                      <p>La jerarquía de acceso es la siguiente (de mayor a menor):</p>
                     <p><strong>Confidencial → Ejecutivo → Jerárquico → Departamental → Público</strong></p>
-                    <p>Un usuario puede ver cualquier procedimiento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver procedimientos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
+                    <p>Un usuario puede ver cualquier documento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver documentos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
                   </div>
                   
                   <div className="pt-4 border-t border-dashed">
