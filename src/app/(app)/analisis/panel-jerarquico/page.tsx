@@ -443,10 +443,6 @@ export default function PanelJerarquicoPage() {
                                 if (procedureStatusFilter === 'all') return true;
                                 return procedureStatusFilter === 'active' ? p.activo !== false : p.activo === false;
                             })
-                            .filter(procedure => {
-                                if (!filteredActivityId) return true;
-                                return procedure.activityOrder?.includes(filteredActivityId);
-                            })
                             .map((procedure, procIdx) => {
                                 const procedurePolicies = (procedure.politicasAsociadasIds || [])
                                   .map(polId => politicas.find(p => p.id === polId)).filter((p): p is Politica => !!p)
@@ -482,10 +478,6 @@ export default function PanelJerarquicoPage() {
                                   children: [...procedurePolicies, ...activityNodes], payload: { ...procedure, sourceIndex: procIdx, sourceParentId: proc.id }
                                 };
                             });
-
-                        if (filteredActivityId && procedureNodes.length === 0) {
-                            return null;
-                        }
                         
                         return {
                             id: `proceso-${proc.id}`,
@@ -495,15 +487,15 @@ export default function PanelJerarquicoPage() {
                     }).filter((node): node is TreeNode => node !== null);
                     
                     puestoNode.children = processTreeNodes;
-                    puestoChildren.push(puestoNode);
+                    if(puestoNode.children.length > 0) puestoChildren.push(puestoNode);
                 });
                 
                 deptoNode.children = puestoChildren.sort((a,b) => a.name.localeCompare(b.name));
-                deptoChildren.push(deptoNode);
+                if(deptoNode.children.length > 0) deptoChildren.push(deptoNode);
             });
             
             areaNode.children = deptoChildren.sort((a,b) => a.name.localeCompare(b.name));
-            finalTreeNodes.push(areaNode);
+            if(areaNode.children.length > 0) finalTreeNodes.push(areaNode);
         });
 
         return finalTreeNodes.sort((a,b) => a.name.localeCompare(b.name));
@@ -511,16 +503,35 @@ export default function PanelJerarquicoPage() {
 
     let finalTree = buildTree();
     
+    // Filter tree by activity if specified
+    if (filteredActivityId) {
+        const recursiveActivityFilter = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map(node => {
+                if (node.type === 'actividad' && node.originalId === filteredActivityId) {
+                    return node;
+                }
+                if (node.children) {
+                    const filteredChildren = recursiveActivityFilter(node.children);
+                    if (filteredChildren.length > 0) {
+                        return { ...node, children: filteredChildren };
+                    }
+                }
+                return null;
+            }).filter((node): node is TreeNode => node !== null);
+        };
+        finalTree = recursiveActivityFilter(finalTree);
+    }
+    
     if (treeGeneralSearchTerm) {
         const lowerTerm = treeGeneralSearchTerm.toLowerCase();
     
-        const recursiveFilter = (nodes: TreeNode[]): TreeNode[] => {
+        const recursiveSearchFilter = (nodes: TreeNode[]): TreeNode[] => {
             return nodes.map(node => {
                 const selfMatches = node.name.toLowerCase().includes(lowerTerm) || 
                                     (node.type === 'politica' && node.payload?.codigo && node.payload.codigo.toLowerCase().includes(lowerTerm));
 
                 if (node.children) {
-                    const filteredChildren = recursiveFilter(node.children);
+                    const filteredChildren = recursiveSearchFilter(node.children);
                     if (filteredChildren.length > 0 || selfMatches) {
                         return { ...node, children: filteredChildren };
                     }
@@ -531,7 +542,7 @@ export default function PanelJerarquicoPage() {
             }).filter((node): node is TreeNode => node !== null);
         };
         
-        finalTree = recursiveFilter(finalTree);
+        finalTree = recursiveSearchFilter(finalTree);
     }
     
     setTreeData(finalTree);
@@ -1375,6 +1386,7 @@ type AssignmentCountFilterType = 'all' | 'assigned' | 'unassigned';
 type ActivityStatusFilterType = 'all' | 'active' | 'inactive';
 type ProcessStatusFilterType = 'all' | 'active' | 'inactive';
     
+
 
 
 
