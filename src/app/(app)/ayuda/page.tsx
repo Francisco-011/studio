@@ -319,35 +319,30 @@ export default function AyudaPage() {
               <AccordionItem value="item-security">
                 <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
-                  <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender la diferencia:</p>
+                  <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Roles** y los **Niveles de Acceso**. Es crucial entender cómo interactúan.</p>
                   
                   <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
-                    <h4 className="font-semibold text-base">Roles: ¿Qué puedes HACER?</h4>
-                    <p>Un rol define las acciones que un usuario puede realizar en el sistema. Un administrador puede configurar permisos granulares para cada rol desde el módulo de "Usuarios". Los roles predeterminados son:</p>
-                    <ul className="list-disc pl-5 space-y-2 mt-2">
-                        <li><strong>Administrador:</strong> Tiene control total sobre todas las funciones y datos del sistema.</li>
-                        <li><strong>Gerente de Proyecto:</strong> Puede crear y gestionar procesos, políticas y acciones de mejora.</li>
-                        <li><strong>Consultor:</strong> Un rol analítico para ver y proponer mejoras, pero con capacidades de edición limitadas.</li>
-                        <li><strong>Usuario Final:</strong> Es un rol principalmente de consulta. Solo puede ver los procesos y políticas a los que tiene acceso.</li>
+                    <h4 className="font-semibold text-base">Capa 1: Nivel de Acceso (La primera validación)</h4>
+                    <p>
+                        Tu **Nivel de Acceso** (`Público`, `Departamental`, `Jerárquico`, `Ejecutivo`, `Confidencial`) se compara con la **Clasificación del Documento** (`Público`, `Privado`, `Confidencial`).
+                        Solo puedes ver documentos con una clasificación igual o inferior a tu nivel.
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                        <li>Si un documento es **Público**, todos pueden verlo.</li>
+                        <li>Si un documento es **Privado**, necesitas un nivel `Departamental` o superior para pasar este primer filtro.</li>
+                        <li>Si un documento es **Confidencial**, necesitas un nivel `Ejecutivo` o `Confidencial`.</li>
                     </ul>
                   </div>
 
                   <div className="pt-4 border-t border-dashed">
-                    <h4 className="font-semibold text-base">Niveles de Acceso: ¿Qué puedes VER?</h4>
-                    <p>El Nivel de Acceso de un usuario determina qué información puede visualizar, basándose en la "Clasificación de Visibilidad" de cada procedimiento y política.</p>
-                    <p>La jerarquía de acceso es la siguiente (de mayor a menor):</p>
-                    <p><strong>Confidencial → Ejecutivo → Jerárquico → Departamental → Público</strong></p>
-                    <p>Un usuario puede ver cualquier documento con una clasificación igual o inferior a su propio nivel de acceso. Por ejemplo, un usuario con nivel "Jerárquico" puede ver documentos clasificados como "Jerárquico", "Departamental" y "Público", pero no podrá ver los "Confidenciales".</p>
-                    <div className="mt-4 pt-4 border-t">
-                      <h5 className="font-semibold">¿Cómo se relacionan los Niveles y las Clasificaciones?</h5>
-                      <p className="mt-1">Piense en su **Nivel de Acceso** como una **llave** y en la **Clasificación del Documento** como una **cerradura**.</p>
-                       <ul className="list-disc pl-5 space-y-1 mt-2">
-                           <li>La **Cerradura "Pública"** es la más simple. Puede ser abierta por **CUALQUIER** llave (`Público`, `Departamental`, `Jerárquico`, `Ejecutivo` o `Confidencial`).</li>
-                           <li>La **Cerradura "Privada"** requiere una llave de mayor nivel. Es abierta por las llaves `Departamental`, `Jerárquico`, `Ejecutivo` y `Confidencial`, pero no por la llave `Público`.</li>
-                           <li>La **Cerradura "Confidencial"** es la más segura. Solo puede ser abierta por las llaves de más alto nivel: `Ejecutivo` y `Confidencial`.</li>
-                       </ul>
-                       <p className="text-xs text-muted-foreground mt-2">El tener 5 niveles de usuario (llaves) y 3 niveles de documentos (cerraduras) permite una mayor granularidad en los permisos de usuario sin complicar en exceso la tarea de clasificar cada documento.</p>
-                    </div>
+                    <h4 className="font-semibold text-base">Capa 2: Estructura Organizacional (La segunda validación)</h4>
+                    <p>Si un documento **NO es Público** (es decir, es `Privado` o `Confidencial`), el sistema realiza una segunda comprobación basada en tu puesto y departamento:</p>
+                    <ul className="list-disc pl-5 space-y-2 mt-2">
+                        <li><strong>Nivel Departamental:</strong> Solo verás los documentos `Privados` que pertenezcan a **tu propio departamento**. No podrás ver documentos privados de otros departamentos.</li>
+                        <li><strong>Nivel Jerárquico:</strong> Verás los documentos `Privados` de **tu departamento** y de **todos los departamentos que te reportan** (directa e indirectamente), según la estructura definida en "Jefe Inmediato" en el catálogo de Puestos.</li>
+                        <li><strong>Nivel Ejecutivo:</strong> Funciona como `Jerárquico`, pero generalmente se asigna a roles de mayor nivel con una línea de reporte más amplia.</li>
+                        <li><strong>Nivel Confidencial y Rol Administrador:</strong> Tienen acceso a toda la información, sin importar el departamento o la jerarquía.</li>
+                    </ul>
                   </div>
                   
                   <div className="pt-4 border-t border-dashed">
