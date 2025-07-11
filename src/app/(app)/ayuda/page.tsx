@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign } from "lucide-react";
+import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign, HardDrive } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 
@@ -21,6 +21,12 @@ const DetailItem = ({ icon, term, description }: { icon: React.ElementType, term
       <dd className="mt-1 text-muted-foreground">{description}</dd>
     </div>
   </div>
+);
+
+const FormulaBox = ({ children }: { children: React.ReactNode }) => (
+    <div className="mt-2 p-3 bg-muted/50 border rounded-md text-xs font-mono text-foreground/80">
+        {children}
+    </div>
 );
 
 
@@ -220,37 +226,105 @@ export default function AyudaPage() {
                   </Accordion>
                 </AccordionContent>
               </AccordionItem>
-              
+
               <AccordionItem value="item-metrics">
-                <AccordionTrigger className="text-lg font-semibold">3. Entendiendo las Métricas Clave</AccordionTrigger>
-                <AccordionContent className="space-y-4 text-sm">
-                    <DetailItem 
-                        icon={DollarSign} 
-                        term="Ahorro Realizado (Dashboard de Mejoras)" 
-                        description={
-                            <div>
-                                <p>Esta métrica cuantifica el impacto real de las acciones de mejora completadas. No es solo una estimación.</p>
-                                <p className="mt-1"><strong>Cálculo de Ahorro en Costo:</strong> Se basa en los cambios registrados en el historial de la acción de mejora. Si un campo de "costo" fue modificado (ej: el costo de una actividad o procedimiento), el sistema calcula la diferencia entre el valor "Antes" y "Después".</p>
-                                <p className="mt-1"><strong>Cálculo de Ahorro en Tiempo:</strong> Similar al costo, se calcula la diferencia entre el valor "Antes" y "Después" de los campos de "tiempo". El resultado se presenta en un formato legible (ej: 40h 30min).</p>
-                                <p className="mt-1 text-xs text-muted-foreground">Nota: Si una acción se completa sin modificar campos de costo/tiempo en el sistema, se utilizará el ahorro estimado que se ingresó al crear la acción.</p>
-                            </div>
-                        }
-                    />
-                    <DetailItem 
-                        icon={Calculator} 
-                        term="Costo Operativo Mensual (Dashboard de Procesos)" 
-                        description={
-                            <div>
-                                <p>Esta métrica estima el costo mensual de las actividades asignadas a un puesto, basándose en la información registrada en los módulos de "Actividades" y "Configuración > Puestos".</p>
-                                <p className="mt-1"><strong>Fórmula por Actividad:</strong> `Costo Mensual = (Costo/hr del Puesto / 60) * Tiempo Estimado (min) * Ejecuciones por Mes`</p>
-                                <p className="mt-1"><strong>Ejecuciones por Mes:</strong> Se calcula usando la "Frecuencia" y "Veces por Periodo" de la actividad (ej: Semanal, 5 veces = 4.33 * 5 ejecuciones/mes).</p>
-                                <p className="mt-1"><strong>% de Carga vs Sueldo:</strong> `(Costo Operativo Mensual / Sueldo Mensual Estimado) * 100`. El sueldo se estima como `Costo/hr * 173.2 horas/mes`. Un % alto puede indicar que el puesto dedica una parte significativa de su tiempo (y costo) a las actividades mapeadas.</p>
-                            </div>
-                        }
-                    />
+                <AccordionTrigger className="text-lg font-semibold">3. Entendiendo las Métricas del Dashboard</AccordionTrigger>
+                <AccordionContent className="space-y-6 text-sm">
+                    <p>Esta sección desglosa cómo se calculan los indicadores clave (KPIs) en los diferentes dashboards para máxima transparencia.</p>
+
+                    <Accordion type="multiple" className="w-full space-y-2">
+                        {/* DASHBOARD MEJORAS */}
+                        <AccordionItem value="metrics-mejoras">
+                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><TrendingUp className="mr-2 h-5 w-5 text-primary"/>Dashboard: Impacto y Mejoras</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4">
+                                <DetailItem 
+                                    icon={DollarSign} 
+                                    term="Ahorro Anual Realizado / Ahorro de Tiempo" 
+                                    description={
+                                        <div>
+                                            <p>Cuantifica el impacto real de las acciones de mejora que han sido marcadas como **"Completada"**.</p>
+                                            <p className="mt-1"><strong>Lógica de Cálculo:</strong></p>
+                                            <ol className="list-decimal pl-5 mt-1 space-y-1">
+                                                <li><strong>Prioridad 1 (Historial de Cambios):</strong> Si al completar una acción, se modificaron campos de tiempo o costo en el sistema (ej. se redujo el tiempo de una actividad), el sistema busca en el **historial de la acción** la diferencia entre el valor "Antes" y "Después". Este es el ahorro más preciso.</li>
+                                                <li><strong>Prioridad 2 (Estimación Inicial):</strong> Si no hay cambios registrados en el historial, el sistema utiliza el valor que se ingresó en los campos "Ahorro Estimado" al crear o editar la acción.</li>
+                                            </ol>
+                                            <p className="mt-1 text-xs text-muted-foreground">Nota: El ahorro se anualiza si el cambio fue en una métrica mensual, semanal, etc.</p>
+                                        </div>
+                                    }
+                                />
+                                <DetailItem 
+                                    icon={HardDrive} 
+                                    term="Análisis de Costos de Sistemas" 
+                                    description={
+                                        <div>
+                                            <p>Calcula el costo anual de cada sistema basándose en los datos del módulo de **Configuración > Sistemas y Costos**.</p>
+                                            <FormulaBox>Costo Anual Sistema = Suma de (Costo por Uso) + (Costo/Licencia * #Licencias)</FormulaBox>
+                                            <p className="mt-1">Si la frecuencia de un costo es "Mensual", se multiplica por 12 para anualizarlo.</p>
+                                        </div>
+                                    }
+                                />
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* DASHBOARD PROCESOS */}
+                        <AccordionItem value="metrics-procesos">
+                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Factory className="mr-2 h-5 w-5 text-primary"/>Dashboard: Procesos y Eficiencia</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4">
+                                <DetailItem 
+                                    icon={Calculator} 
+                                    term="Costo Operativo Mensual (en Análisis de Carga de Trabajo)" 
+                                    description={
+                                        <div>
+                                            <p>Estima el costo mensual de las actividades asignadas a un puesto, basándose en el **Costo/hr** del puesto y la **Frecuencia** y **Tiempo** de sus actividades.</p>
+                                            <FormulaBox>Costo Mensual Actividad = (Costo/hr del Puesto / 60) * Tiempo Estimado (min) * Ejecuciones por Mes</FormulaBox>
+                                            <p className="mt-1"><strong>Ejecuciones por Mes:</strong> Se calcula usando la "Frecuencia" y "Veces por Periodo" de la actividad. Por ejemplo, una actividad "Semanal" que se ejecuta "2" veces, se calcularía como `4.33 * 2 = 8.66` ejecuciones al mes.</p>
+                                        </div>
+                                    }
+                                />
+                                <DetailItem 
+                                    icon={Calculator} 
+                                    term="% de Carga vs Sueldo (en Análisis de Carga de Trabajo)" 
+                                    description={
+                                        <div>
+                                            <p>Compara el costo operativo de las actividades mapeadas contra un sueldo mensual estimado para determinar qué porcentaje del tiempo (y costo) de un puesto está dedicado a esas tareas.</p>
+                                            <FormulaBox>% Carga = (Costo Operativo Mensual / Sueldo Mensual Estimado) * 100</FormulaBox>
+                                            <p className="mt-1">El **Sueldo Mensual Estimado** se calcula como `Costo/hr del Puesto * 173.2` (horas laborables promedio en un mes).</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Un % alto puede indicar una alta carga de trabajo mapeada o que el puesto está correctamente documentado. Un % bajo puede indicar que muchas de sus actividades aún no se han capturado en el sistema.</p>
+                                        </div>
+                                    }
+                                />
+                                <DetailItem 
+                                    icon={Calculator} 
+                                    term="Tiempo/Costo Estimado (Mes) (en tablas de Procesos y Procedimientos)" 
+                                    description={
+                                        <div>
+                                            <p>Es la suma total de los tiempos y costos de todos sus elementos hijos **activos**. Para un Proceso, es la suma de sus Procedimientos. Para un Procedimiento, es la suma de sus Actividades.</p>
+                                            <p className="mt-1">Estos valores no se actualizan en tiempo real. Se deben recalcular usando el botón <Calculator className="inline-block h-3 w-3"/> en las páginas de **Procesos Registrados** o **Procedimientos**.</p>
+                                        </div>
+                                    }
+                                />
+                            </AccordionContent>
+                        </AccordionItem>
+                        
+                        {/* DASHBOARD AUDITORIA */}
+                         <AccordionItem value="metrics-auditoria">
+                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ClipboardCheck className="mr-2 h-5 w-5 text-primary"/>Dashboard: Auditoría</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4">
+                                <DetailItem 
+                                    icon={ClipboardCheck} 
+                                    term="Auditorías Completadas" 
+                                    description="Cuenta el número total de registros de auditoría cuyo estado es 'Completada'."
+                                />
+                                 <DetailItem 
+                                    icon={AlertTriangle} 
+                                    term="Hallazgos No Conformes / Oportunidades de Mejora" 
+                                    description="Dentro de las auditorías completadas, cuenta el número de hallazgos que fueron marcados con estos tipos."
+                                />
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 </AccordionContent>
               </AccordionItem>
-
 
               <AccordionItem value="item-security">
                 <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
