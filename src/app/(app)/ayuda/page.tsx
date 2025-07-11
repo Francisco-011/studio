@@ -252,17 +252,6 @@ export default function AyudaPage() {
                                         </div>
                                     }
                                 />
-                                <DetailItem 
-                                    icon={HardDrive} 
-                                    term="Análisis de Costos de Sistemas" 
-                                    description={
-                                        <div>
-                                            <p>Calcula el costo anual de cada sistema basándose en los datos del módulo de **Configuración > Sistemas y Costos**.</p>
-                                            <FormulaBox>Costo Anual Sistema = Suma de (Costo por Uso) + (Costo/Licencia * #Licencias)</FormulaBox>
-                                            <p className="mt-1">Si la frecuencia de un costo es "Mensual", se multiplica por 12 para anualizarlo.</p>
-                                        </div>
-                                    }
-                                />
                             </AccordionContent>
                         </AccordionItem>
 
@@ -306,19 +295,20 @@ export default function AyudaPage() {
                             </AccordionContent>
                         </AccordionItem>
                         
-                        {/* DASHBOARD AUDITORIA */}
-                         <AccordionItem value="metrics-auditoria">
-                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><ClipboardCheck className="mr-2 h-5 w-5 text-primary"/>Dashboard: Auditoría</AccordionTrigger>
+                        {/* DASHBOARD SISTEMAS */}
+                         <AccordionItem value="metrics-sistemas">
+                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><HardDrive className="mr-2 h-5 w-5 text-primary"/>Dashboard: Sistemas y Costos</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4">
                                 <DetailItem 
-                                    icon={ClipboardCheck} 
-                                    term="Auditorías Completadas" 
-                                    description="Cuenta el número total de registros de auditoría cuyo estado es 'Completada'."
-                                />
-                                 <DetailItem 
-                                    icon={AlertTriangle} 
-                                    term="Hallazgos No Conformes / Oportunidades de Mejora" 
-                                    description="Dentro de las auditorías completadas, cuenta el número de hallazgos que fueron marcados con estos tipos."
+                                    icon={DollarSign} 
+                                    term="Análisis de Costos de Sistemas" 
+                                    description={
+                                        <div>
+                                            <p>Calcula el costo anual de cada sistema basándose en los datos del módulo de **Configuración &gt; Sistemas y Costos**.</p>
+                                            <FormulaBox>Costo Anual Sistema = Suma de (Costo por Uso) + (Costo/Licencia * #Licencias)</FormulaBox>
+                                            <p className="mt-1">Si la frecuencia de un costo es "Mensual", se multiplica por 12 para anualizarlo. Si es "Anual", se toma el valor directo. La fuente de estos datos es el módulo de Configuración.</p>
+                                        </div>
+                                    }
                                 />
                             </AccordionContent>
                         </AccordionItem>
