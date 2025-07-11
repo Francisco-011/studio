@@ -27,7 +27,7 @@ export type ComboboxOption = {
 
 interface ComboboxProps {
   options: ComboboxOption[]
-  value?: string
+  value?: string | null
   onChange: (value: string) => void
   placeholder?: string
   searchPlaceholder?: string
