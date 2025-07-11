@@ -134,6 +134,14 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
           allow create: if isAuthenticated(); // Anyone can create their profile during signup
           allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
         }
+        
+        // --- PERMISSIONS ---
+        // Any authenticated user can read permissions to configure their UI.
+        // Only Admins can change permission configurations.
+        match /permissions/{role} {
+            allow read: if isAuthenticated();
+            allow write: if hasRole(['Administrador']);
+        }
 
         // --- GENERIC CATALOGS (Areas, Departamentos, Puestos, Sistemas, etc.) ---
         // Any authenticated user can read catalogs, only Admins and Gerentes can write.
