@@ -13,6 +13,8 @@ import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
+import { usePuestos } from './PuestosContext';
+import { useDepartamentos } from './DepartamentosContext';
 
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
@@ -86,6 +88,30 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
   const { exceptions, isLoadingExceptions } = useExceptions();
+  const { puestos } = usePuestos();
+  const { departamentos } = useDepartamentos();
+
+  const getSubordinateHierarchy = useCallback((userId: string | undefined): { subordinatePuestos: Set<string>, subordinateDeptos: Set<string> } => {
+    const subordinatePuestos = new Set<string>();
+    const subordinateDeptos = new Set<string>();
+    if (!userId) return { subordinatePuestos, subordinateDeptos };
+
+    const directReports = puestos.filter(p => p.jefeInmediato === userId);
+    const queue = [...directReports];
+
+    while (queue.length > 0) {
+        const currentPuesto = queue.shift();
+        if (currentPuesto && !subordinatePuestos.has(currentPuesto.id)) {
+            subordinatePuestos.add(currentPuesto.id);
+            if(currentPuesto.departamentoId) {
+                subordinateDeptos.add(currentPuesto.departamentoId);
+            }
+            const reportsOfCurrent = puestos.filter(p => p.jefeInmediato === currentPuesto.id);
+            queue.push(...reportsOfCurrent);
+        }
+    }
+    return { subordinatePuestos, subordinateDeptos };
+  }, [puestos]);
 
   useEffect(() => {
     if (authLoading || isLoadingExceptions) {
@@ -112,6 +138,8 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
                 historialDeCambios: data.historialDeCambios || [],
             } as Politica;
         });
+        
+        const areaMap = new Map(departamentos.map(d => [d.id, d.areaId]));
 
         if (user.rol === 'Administrador') {
             setPoliticas(allPoliticas);
@@ -121,11 +149,37 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
 
             const includeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
             const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
-
+            
+            const { subordinateDeptos } = getSubordinateHierarchy(user.puestoId);
+            if (user.departamentoId) {
+                subordinateDeptos.add(user.departamentoId);
+            }
+            
             const filtered = allPoliticas.filter(p => {
                 if (excludeIds.has(p.id)) return false;
                 if (includeIds.has(p.id)) return true;
-                return allowedClassifications.includes(p.clasificacion);
+
+                if (!allowedClassifications.includes(p.clasificacion)) return false;
+                
+                if (p.clasificacion === 'Público') return true;
+                
+                if (user.nivelAcceso === 'Departamental') {
+                    if (p.departamentoResponsable) {
+                         const policyDeptoId = departamentos.find(d => d.nombre === p.departamentoResponsable && areaMap.get(d.id) === user.areaId)?.id;
+                         return policyDeptoId === user.departamentoId;
+                    }
+                    return false;
+                }
+                
+                if (user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') {
+                     if (p.departamentoResponsable) {
+                        const policyDeptoId = departamentos.find(d => d.nombre === p.departamentoResponsable)?.id;
+                        return policyDeptoId ? subordinateDeptos.has(policyDeptoId) : false;
+                    }
+                    return false;
+                }
+                
+                return true;
             });
             setPoliticas(filtered);
         }
@@ -137,7 +191,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, exceptions, isLoadingExceptions]);
+  }, [user, authLoading, exceptions, isLoadingExceptions, puestos, departamentos, getSubordinateHierarchy]);
 
   const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {

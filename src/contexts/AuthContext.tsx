@@ -4,9 +4,11 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
+import type { Puesto } from './PuestosContext';
+import type { Departamento } from './DepartamentosContext';
 
 interface UserProfile {
   uid: string;
@@ -15,6 +17,8 @@ interface UserProfile {
   rol: UserRole;
   nivelAcceso: NivelAcceso;
   puestoId?: string;
+  departamentoId?: string;
+  areaId?: string;
 }
 
 interface AuthContextType {
@@ -59,11 +63,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userProfileData = userDocSnap.data();
           
           let nivelAcceso = userProfileData.nivelAcceso;
-          // Ensure Administrador role always has Confidencial access level if not specified.
           if (userProfileData.rol === 'Administrador' && !nivelAcceso) {
             nivelAcceso = 'Confidencial';
           } else if (!nivelAcceso) {
             nivelAcceso = 'Público';
+          }
+          
+          let areaId, departamentoId;
+          if (userProfileData.puestoId) {
+             const puestoQuery = query(collection(db, 'puestos'), where('__name__', '==', userProfileData.puestoId));
+             const puestoSnap = await getDocs(puestoQuery);
+             if (!puestoSnap.empty) {
+                const puestoData = puestoSnap.docs[0].data() as Puesto;
+                areaId = puestoData.areaId;
+                departamentoId = puestoData.departamentoId;
+             }
           }
           
           setUser({
@@ -73,7 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             rol: userProfileData.rol,
             nivelAcceso: nivelAcceso,
             puestoId: userProfileData.puestoId,
+            areaId: areaId,
+            departamentoId: departamentoId,
           });
+
         } else {
           auth.signOut();
           setUser(null);

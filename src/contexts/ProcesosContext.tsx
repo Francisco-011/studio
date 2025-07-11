@@ -14,6 +14,7 @@ import { useAuth } from './AuthContext';
 import { useExceptions } from './ExceptionsContext';
 import type { NivelAcceso } from '@/app/(app)/usuarios/page';
 import { useProcedimientos, type Procedimiento } from './ProcedimientosContext';
+import { usePuestos } from './PuestosContext';
 import type { Moneda } from './AccionesContext';
 
 
@@ -104,8 +105,27 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
   const [isLoadingProcesos, setIsLoadingProcesos] = useState(true);
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
+  const { puestos } = usePuestos();
   const { exceptions, isLoadingExceptions } = useExceptions();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
+
+  const getSubordinateHierarchy = useCallback((userId: string | undefined): Set<string> => {
+    const subordinatePuestos = new Set<string>();
+    if (!userId) return subordinatePuestos;
+
+    const directReports = puestos.filter(p => p.jefeInmediato === userId);
+    const queue = [...directReports];
+
+    while (queue.length > 0) {
+        const currentPuesto = queue.shift();
+        if (currentPuesto && !subordinatePuestos.has(currentPuesto.id)) {
+            subordinatePuestos.add(currentPuesto.id);
+            const reportsOfCurrent = puestos.filter(p => p.jefeInmediato === currentPuesto.id);
+            queue.push(...reportsOfCurrent);
+        }
+    }
+    return subordinatePuestos;
+  }, [puestos]);
 
   useEffect(() => {
     if (authLoading || isLoadingExceptions || isLoadingProcedimientos) {
@@ -123,16 +143,12 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allProcesosFromDB = snapshot.docs.map(doc => {
             const data = doc.data();
-            const capturedAtData = data.capturedAt as Timestamp;
-            const updatedAtData = data.updatedAt as Timestamp;
-            const deletedAtData = data.deletedAt as Timestamp;
-            
             return {
                 id: doc.id,
                 ...data,
-                capturedAt: capturedAtData?.toDate().toISOString() || new Date().toISOString(),
-                updatedAt: updatedAtData?.toMillis() || capturedAtData?.toMillis() || Date.now(),
-                deletedAt: deletedAtData?.toDate().toISOString(),
+                capturedAt: (data.capturedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                updatedAt: (data.updatedAt as Timestamp)?.toMillis() || (data.capturedAt as Timestamp)?.toMillis() || Date.now(),
+                deletedAt: (data.deletedAt as Timestamp)?.toDate().toISOString(),
                 politicasAsociadas: Array.isArray(data.politicasAsociadas) ? data.politicasAsociadas : [],
             } as CapturedProcess;
         });
@@ -146,6 +162,9 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             const includeProcessIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
             const excludeProcessIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
             
+            const subordinatePuestoIds = getSubordinateHierarchy(user.puestoId);
+            if(user.puestoId) subordinatePuestoIds.add(user.puestoId);
+            
             const visibleProcesses = allProcesosFromDB.filter(proc => {
                 if (excludeProcessIds.has(proc.id)) return false;
                 if (includeProcessIds.has(proc.id)) return true;
@@ -157,7 +176,21 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
                 const hasVisibleProcedure = proc.procedimientoOrder.some(procId => {
                     const procedure = procedimientos.find(p => p.id === procId);
                     if (!procedure) return false;
-                    return allowedClassifications.includes(procedure.clasificacion);
+
+                    const classificationAllowed = allowedClassifications.includes(procedure.clasificacion);
+                    if (!classificationAllowed) return false;
+
+                    if (procedure.clasificacion === 'Público') return true;
+                    
+                    if (user.nivelAcceso === 'Departamental') {
+                        return proc.puestoId ? puestos.find(p => p.id === proc.puestoId)?.departamentoId === user.departamentoId : false;
+                    }
+
+                    if (user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') {
+                        return proc.puestoId ? subordinatePuestoIds.has(proc.puestoId) : false;
+                    }
+                    
+                    return true;
                 });
 
                 return hasVisibleProcedure;
@@ -173,7 +206,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, exceptions, isLoadingExceptions, procedimientos, isLoadingProcedimientos]);
+  }, [user, authLoading, exceptions, isLoadingExceptions, procedimientos, isLoadingProcedimientos, puestos, getSubordinateHierarchy]);
 
   const addProceso = useCallback(async (data: CapturaFormData): Promise<CapturedProcess | null> => {
     try {
