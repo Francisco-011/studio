@@ -235,9 +235,9 @@ export default function CapturaPage() {
 
   useEffect(() => {
     if (watchedProcessName) {
-      const existingProcess = allProcesses.find(p => p.proceso.trim().toLowerCase() === watchedProcessName.trim().toLowerCase());
+      const existingProcess = allProcesses.find(p => !p.deletedAt && p.proceso.trim().toLowerCase() === watchedProcessName.trim().toLowerCase());
       if (existingProcess) {
-        setSimilarProcessWarning(`Advertencia: ya existe un proceso con un nombre idéntico: "${existingProcess.proceso}" en el área de "${existingProcess.area}".`);
+        setSimilarProcessWarning(`Advertencia: ya existe un proceso activo con este nombre: "${existingProcess.proceso}" en el área de "${existingProcess.area}".`);
       } else {
         setSimilarProcessWarning(null);
       }
