@@ -4,7 +4,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFieldArray, type Control } from "react-hook-form";
+import { useForm, useFieldArray, type Control, type UseFormReturn } from "react-hook-form";
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
@@ -169,6 +169,145 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defa
         </div>
     );
 }
+
+const ProcedureAccordionItem = ({ control, index, remove, allProcedimientos, allProcesses, allActivities, allPuestos, allSistemas, allPoliticas, defaultPuestoId }: {
+    control: Control<UnifiedCaptureFormData>;
+    index: number;
+    remove: (index: number) => void;
+    allProcedimientos: any[];
+    allProcesses: any[];
+    allActivities: any[];
+    allPuestos: any[];
+    allSistemas: any[];
+    allPoliticas: any[];
+    defaultPuestoId?: string;
+}) => {
+    const { watch } = useFormContext<UnifiedCaptureFormData>();
+    const procedureName = watch(`procedures.${index}.nombre`);
+
+    const similarProcedimientoWarning = useMemo(() => {
+        if (!procedureName) return null;
+        const existingProc = allProcedimientos.find(p => p.nombre.trim().toLowerCase() === procedureName.trim().toLowerCase());
+        if (existingProc) {
+            const parentProcess = allProcesses.find(p => p.id === existingProc.procesoId);
+            return `Advertencia: ya existe un procedimiento con este nombre en "${parentProcess?.proceso || 'otro proceso'}".`;
+        }
+        return null;
+    }, [procedureName, allProcedimientos, allProcesses]);
+    
+    return (
+        <Accordion type="single" collapsible defaultValue="item-1">
+            <AccordionItem value="item-1" className="bg-slate-50 dark:bg-slate-900/50 rounded-lg border">
+                <AccordionTrigger className="px-4 hover:no-underline">
+                    <div className="flex items-center gap-2 flex-grow">
+                        <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                        <span className="font-bold text-primary">{index + 1}.</span>
+                        <FormField
+                            control={control}
+                            name={`procedures.${index}.nombre`}
+                            render={({ field }) => (
+                                <FormItem className="flex-grow">
+                                    <FormControl><Input placeholder={`Nombre del procedimiento ${index + 1}`} {...field} onClick={e => e.stopPropagation()} /></FormControl>
+                                    {similarProcedimientoWarning && (
+                                        <FormDescription className="text-amber-600 flex items-center gap-1 pt-1 text-xs">
+                                            <AlertTriangle className="h-3 w-3" />{similarProcedimientoWarning}
+                                        </FormDescription>
+                                    )}
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Eliminar procedimiento"
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(index); } }}
+                            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-0")}
+                            onClick={(e) => { e.stopPropagation(); remove(index); }}
+                        >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </div>
+                    </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-4 border-t space-y-4">
+                     <FormField control={control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione..." /></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect options={allSistemas.map(s => ({ value: s.nombre, label: s.nombre }))} value={field.value} onChange={(newSelected) => field.onChange(newSelected)} placeholder="Seleccione sistemas..." /><FormMessage /></FormItem>)} />
+                        <FormField control={control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value} onChange={(newValue) => field.onChange(newValue)} options={allPoliticas.filter(p => p.estado === 'Aprobada').map(p => ({ value: p.id, label: `${p.codigo} - ${p.titulo}` }))} placeholder="Vincular políticas..." /><FormMessage /></FormItem>)} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                            control={control}
+                            name={`procedures.${index}.procedimientosEntradaIds`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Procedimientos de Entrada</FormLabel>
+                                    <MultiSelect
+                                        value={field.value}
+                                        onChange={(newValues) => {
+                                            const justSelectedInitiator = newValues.includes(PROCEDIMIENTO_INICIADOR) && !field.value?.includes(PROCEDIMIENTO_INICIADOR);
+                                            if (justSelectedInitiator) {
+                                                field.onChange([PROCEDIMIENTO_INICIADOR]);
+                                            } else {
+                                                field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_INICIADOR));
+                                            }
+                                        }}
+                                        options={[
+                                            { value: PROCEDIMIENTO_INICIADOR, label: '(Es un procedimiento iniciador)' },
+                                            ...allProcedimientos.map(p => ({ value: p.id, label: p.nombre }))
+                                        ]}
+                                        placeholder="Seleccione..."
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField control={control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+
+                        <FormField
+                            control={control}
+                            name={`procedures.${index}.procedimientosSalidaIds`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Procedimientos de Salida</FormLabel>
+                                    <MultiSelect
+                                        value={field.value}
+                                        onChange={(newValues) => {
+                                            const justSelectedFinalizer = newValues.includes(PROCEDIMIENTO_FINALIZADOR) && !field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
+                                            if (justSelectedFinalizer) {
+                                                field.onChange([PROCEDIMIENTO_FINALIZADOR]);
+                                            } else {
+                                                field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_FINALIZADOR));
+                                            }
+                                        }}
+                                        options={[
+                                            { value: PROCEDIMIENTO_FINALIZADOR, label: '(Es un procedimiento finalizador)' },
+                                            ...allProcedimientos.map(p => ({ value: p.id, label: p.nombre }))
+                                        ]}
+                                        placeholder="Seleccione..."
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField control={control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                    <ActivitiesSection
+                        control={control}
+                        procIndex={index}
+                        allActivities={allActivities}
+                        allPuestos={allPuestos}
+                        defaultPuestoId={defaultPuestoId}
+                    />
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
+    );
+};
 
 
 export default function CapturaPage() {
@@ -462,10 +601,7 @@ export default function CapturaPage() {
                   </div>
                   
                   <div className="space-y-3">
-                    {procedureFields.map((field, index) => {
-                      const procedimientosDisponibles = allProcedimientos.filter(p => p.id !== field.id);
-                      
-                      return (
+                    {procedureFields.map((field, index) => (
                       <div 
                         key={field.id}
                         draggable
@@ -474,123 +610,21 @@ export default function CapturaPage() {
                         onDragEnd={handleDropProcedure}
                         onDragOver={e => e.preventDefault()}
                       >
-                        <Accordion type="single" collapsible defaultValue="item-1">
-                          <AccordionItem value="item-1" className="bg-slate-50 dark:bg-slate-900/50 rounded-lg border">
-                            <AccordionTrigger className="px-4 hover:no-underline">
-                              <div className="flex items-center gap-2 flex-grow">
-                                <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
-                                <span className="font-bold text-primary">{index + 1}.</span>
-                                <FormField
-                                    control={form.control}
-                                    name={`procedures.${index}.nombre`}
-                                    render={({ field }) => (
-                                        <FormItem className="flex-grow">
-                                            <FormControl><Input placeholder={`Nombre del procedimiento ${index + 1}`} {...field} onClick={e => e.stopPropagation()} /></FormControl>
-                                            {(() => {
-                                                const procName = field.value;
-                                                if (!procName) return null;
-                                                const existingProc = allProcedimientos.find(p => p.nombre.trim().toLowerCase() === procName.trim().toLowerCase());
-                                                if (existingProc) {
-                                                const parentProcess = allProcesses.find(p => p.id === existingProc.procesoId);
-                                                return <FormDescription className="text-amber-600 flex items-center gap-1 pt-1 text-xs"><AlertTriangle className="h-3 w-3" />{`Advertencia: ya existe un procedimiento con este nombre en "${parentProcess?.proceso || 'otro proceso'}".`}</FormDescription>;
-                                                }
-                                                return null;
-                                            })()}
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <div 
-                                  role="button" 
-                                  tabIndex={0} 
-                                  aria-label="Eliminar procedimiento" 
-                                  onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); removeProcedure(index); }}} 
-                                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-0")} 
-                                  onClick={(e) => { e.stopPropagation(); removeProcedure(index); }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive"/>
-                                </div>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="p-4 border-t space-y-4">
-                               <FormField control={form.control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <FormField control={form.control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione..."/></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                               </div>
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <FormField control={form.control} name={`procedures.${index}.sistemasUtilizados`} render={({ field }) => (<FormItem><FormLabel>Sistemas Utilizados</FormLabel><MultiSelect options={sistemas.map(s => ({value: s.nombre, label: s.nombre}))} value={field.value} onChange={(newSelected) => field.onChange(newSelected)} placeholder="Seleccione sistemas..."/><FormMessage/></FormItem>)}/>
-                                  <FormField control={form.control} name={`procedures.${index}.politicasAsociadasIds`} render={({ field }) => (<FormItem><FormLabel>Políticas Vinculadas</FormLabel><MultiSelect value={field.value} onChange={(newValue) => field.onChange(newValue)} options={politicas.filter(p => p.estado === 'Aprobada').map(p => ({value: p.id, label: `${p.codigo} - ${p.titulo}`}))} placeholder="Vincular políticas..."/><FormMessage /></FormItem>)}/>
-                               </div>
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name={`procedures.${index}.procedimientosEntradaIds`}
-                                        render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Procedimientos de Entrada</FormLabel>
-                                            <MultiSelect
-                                                value={field.value}
-                                                onChange={(newValues) => {
-                                                    const justSelectedInitiator = newValues.includes(PROCEDIMIENTO_INICIADOR) && !field.value?.includes(PROCEDIMIENTO_INICIADOR);
-                                                    if (justSelectedInitiator) {
-                                                        field.onChange([PROCEDIMIENTO_INICIADOR]);
-                                                    } else {
-                                                        field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_INICIADOR));
-                                                    }
-                                                }}
-                                                options={[
-                                                  { value: PROCEDIMIENTO_INICIADOR, label: '(Es un procedimiento iniciador)' },
-                                                  ...procedimientosDisponibles.map(p => ({ value: p.id, label: p.nombre }))
-                                                ]}
-                                                placeholder="Seleccione..."
-                                            />
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                    />
-                                  <FormField control={form.control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-                                  
-                                    <FormField
-                                        control={form.control}
-                                        name={`procedures.${index}.procedimientosSalidaIds`}
-                                        render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Procedimientos de Salida</FormLabel>
-                                            <MultiSelect
-                                                value={field.value}
-                                                onChange={(newValues) => {
-                                                    const justSelectedFinalizer = newValues.includes(PROCEDIMIENTO_FINALIZADOR) && !field.value?.includes(PROCEDIMIENTO_FINALIZADOR);
-                                                    if (justSelectedFinalizer) {
-                                                        field.onChange([PROCEDIMIENTO_FINALIZADOR]);
-                                                    } else {
-                                                        field.onChange(newValues.filter(v => v !== PROCEDIMIENTO_FINALIZADOR));
-                                                    }
-                                                }}
-                                                options={[
-                                                  { value: PROCEDIMIENTO_FINALIZADOR, label: '(Es un procedimiento finalizador)' },
-                                                  ...procedimientosDisponibles.map(p => ({ value: p.id, label: p.nombre }))
-                                                ]}
-                                                placeholder="Seleccione..."
-                                            />
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                    />
-                                  <FormField control={form.control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''}/></FormControl><FormMessage/></FormItem>)}/>
-                               </div>
-                              <ActivitiesSection 
-                                control={form.control} 
-                                procIndex={index} 
-                                allActivities={allActivities} 
-                                allPuestos={puestos}
-                                defaultPuestoId={selectedPuestoForActivities?.id}
-                              />
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
+                         <ProcedureAccordionItem
+                            key={field.id}
+                            control={form.control}
+                            index={index}
+                            remove={removeProcedure}
+                            allProcedimientos={allProcedimientos}
+                            allProcesses={allProcesses}
+                            allActivities={allActivities}
+                            allPuestos={puestos}
+                            allSistemas={sistemas}
+                            allPoliticas={politicas}
+                            defaultPuestoId={selectedPuestoForActivities?.id}
+                         />
                       </div>
-                    )})}
+                    ))}
                   </div>
                 </div>
 
