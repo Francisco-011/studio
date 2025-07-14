@@ -165,36 +165,28 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             const subordinatePuestoIds = getSubordinateHierarchy(user.puestoId);
             if(user.puestoId) subordinatePuestoIds.add(user.puestoId);
             
-            const visibleProcesses = allProcesosFromDB.filter(proc => {
-                if (excludeProcessIds.has(proc.id)) return false;
-                if (includeProcessIds.has(proc.id)) return true;
+            const visibleProcesses = allProcesosFromDB.map(proc => {
+                if (excludeProcessIds.has(proc.id)) return null;
 
-                if (!proc.procedimientoOrder || proc.procedimientoOrder.length === 0) {
-                    return false;
-                }
-
-                const hasVisibleProcedure = proc.procedimientoOrder.some(procId => {
+                const hasVisibleProcedure = proc.procedimientoOrder?.some(procId => {
                     const procedure = procedimientos.find(p => p.id === procId);
                     if (!procedure) return false;
-
-                    const classificationAllowed = allowedClassifications.includes(procedure.clasificacion);
-                    if (!classificationAllowed) return false;
-
-                    if (procedure.clasificacion === 'Público') return true;
-                    
-                    if (user.nivelAcceso === 'Departamental') {
-                        return proc.puestoId ? puestos.find(p => p.id === proc.puestoId)?.departamentoId === user.departamentoId : false;
-                    }
-
-                    if (user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') {
-                        return proc.puestoId ? subordinatePuestoIds.has(proc.puestoId) : false;
-                    }
-                    
-                    return true;
+                    return allowedClassifications.includes(procedure.clasificacion);
                 });
 
-                return hasVisibleProcedure;
-            });
+                if (includeProcessIds.has(proc.id) || hasVisibleProcedure) {
+                     const visibleProcedures = proc.procedimientoOrder?.filter(procId => {
+                        const procedure = procedimientos.find(p => p.id === procId);
+                        if (!procedure) return false;
+                        if(allowedClassifications.includes(procedure.clasificacion)) return true;
+                        return false;
+                    }) || [];
+                    
+                    return { ...proc, procedimientoOrder: visibleProcedures };
+                }
+                
+                return null;
+            }).filter((p): p is CapturedProcess => p !== null);
 
             setProcesos(visibleProcesses);
         }
