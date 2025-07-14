@@ -1,6 +1,6 @@
 # PROSCENDIA: Guía Final para Puesta en Producción
 
-¡Felicidades! Hemos construido juntos una aplicación poderosa y funcional. Este documento es tu mapa del tesoro, una guía paso a paso y sin tecnicismos para llevar PROSCENDIA del estado de prototipo a una aplicación real, segura y en línea, lista para ser usada por tu equipo.
+¡Felicidades! Hemos construido juntos una aplicación poderosa y funcional. Este documento es tu mapa del tesoro, una guía paso a paso y sin tecnicismos para llevar PROSCENDIA del prototipo a una aplicación real, segura y en línea, lista para ser usada por tu equipo.
 
 ---
 
@@ -132,7 +132,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         match /users/{userId} {
           allow read: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
           allow create: if isAuthenticated(); // Anyone can create their profile during signup
-          allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
+          allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador', 'Gerente de Proyecto']));
         }
         
         // --- PERMISSIONS ---

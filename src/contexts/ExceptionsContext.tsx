@@ -44,6 +44,13 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
   useEffect(() => {
+    // If the user is not logged in, don't try to fetch exceptions.
+    if (!user) {
+        setExceptions([]);
+        setIsLoadingExceptions(false);
+        return;
+    }
+
     const q = query(collection(db, EXCEPTIONS_COLLECTION), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const exceptionsData = snapshot.docs.map(doc => {
@@ -63,7 +70,7 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]); // Depend on user to re-fetch when they log in.
 
   const addException = useCallback(async (data: AccessExceptionCreationData) => {
     if (!user) {
