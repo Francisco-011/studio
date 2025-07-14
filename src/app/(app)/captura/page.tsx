@@ -170,10 +170,23 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defa
     );
 }
 
-const ProcedureAccordionItem = ({ control, index, remove, allProcedimientos, allProcesses, allActivities, allPuestos, allSistemas, allPoliticas, defaultPuestoId }: {
+const ProcedureAccordionItem = ({
+    control,
+    index,
+    remove,
+    watch,
+    allProcedimientos,
+    allProcesses,
+    allActivities,
+    allPuestos,
+    allSistemas,
+    allPoliticas,
+    defaultPuestoId
+}: {
     control: Control<UnifiedCaptureFormData>;
     index: number;
     remove: (index: number) => void;
+    watch: UseFormReturn<UnifiedCaptureFormData>['watch'];
     allProcedimientos: any[];
     allProcesses: any[];
     allActivities: any[];
@@ -182,7 +195,6 @@ const ProcedureAccordionItem = ({ control, index, remove, allProcedimientos, all
     allPoliticas: any[];
     defaultPuestoId?: string;
 }) => {
-    const { watch } = useFormContext<UnifiedCaptureFormData>();
     const procedureName = watch(`procedures.${index}.nombre`);
 
     const similarProcedimientoWarning = useMemo(() => {
@@ -374,7 +386,7 @@ export default function CapturaPage() {
 
   useEffect(() => {
     if (watchedProcessName) {
-      const existingProcess = allProcesses.find(p => !p.deletedAt && p.proceso.trim().toLowerCase() === watchedProcessName.trim().toLowerCase());
+      const existingProcess = allProcesses.filter(p => !p.deletedAt).find(p => p.proceso.trim().toLowerCase() === watchedProcessName.trim().toLowerCase());
       if (existingProcess) {
         setSimilarProcessWarning(`Advertencia: ya existe un proceso activo con este nombre: "${existingProcess.proceso}" en el área de "${existingProcess.area}".`);
       } else {
@@ -615,6 +627,7 @@ export default function CapturaPage() {
                             control={form.control}
                             index={index}
                             remove={removeProcedure}
+                            watch={watch}
                             allProcedimientos={allProcedimientos}
                             allProcesses={allProcesses}
                             allActivities={allActivities}
