@@ -110,21 +110,21 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
 
   const getSubordinateHierarchy = useCallback((userId: string | undefined): Set<string> => {
-    const subordinatePuestos = new Set<string>();
-    if (!userId) return subordinatePuestos;
+    const subordinatePuestoIds = new Set<string>();
+    if (!userId || !puestos.length) return subordinatePuestoIds;
 
     const directReports = puestos.filter(p => p.jefeInmediato === userId);
     const queue = [...directReports];
 
     while (queue.length > 0) {
         const currentPuesto = queue.shift();
-        if (currentPuesto && !subordinatePuestos.has(currentPuesto.id)) {
-            subordinatePuestos.add(currentPuesto.id);
+        if (currentPuesto && !subordinatePuestoIds.has(currentPuesto.id)) {
+            subordinatePuestoIds.add(currentPuesto.id);
             const reportsOfCurrent = puestos.filter(p => p.jefeInmediato === currentPuesto.id);
             queue.push(...reportsOfCurrent);
         }
     }
-    return subordinatePuestos;
+    return subordinatePuestoIds;
   }, [puestos]);
 
   useEffect(() => {
@@ -163,28 +163,32 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             const excludeProcessIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
             
             const subordinatePuestoIds = getSubordinateHierarchy(user.puestoId);
-            if(user.puestoId) subordinatePuestoIds.add(user.puestoId);
             
             const visibleProcesses = allProcesosFromDB.map(proc => {
                 if (excludeProcessIds.has(proc.id)) return null;
 
-                const hasVisibleProcedure = proc.procedimientoOrder?.some(procId => {
+                const visibleProcedures = (proc.procedimientoOrder || []).filter(procId => {
                     const procedure = procedimientos.find(p => p.id === procId);
                     if (!procedure) return false;
                     return allowedClassifications.includes(procedure.clasificacion);
                 });
+                
+                const hasVisibleContent = visibleProcedures.length > 0 || includeProcessIds.has(proc.id);
 
-                if (includeProcessIds.has(proc.id) || hasVisibleProcedure) {
-                     const visibleProcedures = proc.procedimientoOrder?.filter(procId => {
-                        const procedure = procedimientos.find(p => p.id === procId);
-                        if (!procedure) return false;
-                        if(allowedClassifications.includes(procedure.clasificacion)) return true;
-                        return false;
-                    }) || [];
-                    
+                if (hasVisibleContent) {
+                    if (user.nivelAcceso === 'Departamental' && proc.puestoId !== user.puestoId) {
+                      const procPuesto = puestos.find(p => p.id === proc.puestoId);
+                      if (procPuesto?.departamentoId !== user.departamentoId) {
+                        return null;
+                      }
+                    }
+                    if ((user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') && proc.puestoId !== user.puestoId) {
+                      if (!subordinatePuestoIds.has(proc.puestoId || '')) {
+                         return null;
+                      }
+                    }
                     return { ...proc, procedimientoOrder: visibleProcedures };
                 }
-                
                 return null;
             }).filter((p): p is CapturedProcess => p !== null);
 
@@ -345,3 +349,4 @@ export function useProcesos(): ProcesosContextType {
   }
   return context;
 }
+

@@ -94,8 +94,13 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
   const getSubordinateHierarchy = useCallback((userId: string | undefined): { subordinatePuestos: Set<string>, subordinateDeptos: Set<string> } => {
     const subordinatePuestos = new Set<string>();
     const subordinateDeptos = new Set<string>();
-    if (!userId) return { subordinatePuestos, subordinateDeptos };
+    if (!userId || !puestos.length) return { subordinatePuestos, subordinateDeptos };
 
+    const userPuesto = puestos.find(p => p.id === userId);
+    if (userPuesto?.departamentoId) {
+        subordinateDeptos.add(userPuesto.departamentoId);
+    }
+    
     const directReports = puestos.filter(p => p.jefeInmediato === userId);
     const queue = [...directReports];
 
@@ -139,8 +144,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
             } as Politica;
         });
         
-        const areaMap = new Map(departamentos.map(d => [d.id, d.areaId]));
-
         if (user.rol === 'Administrador') {
             setPoliticas(allPoliticas);
         } else {
@@ -151,9 +154,6 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
             const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
             
             const { subordinateDeptos } = getSubordinateHierarchy(user.puestoId);
-            if (user.departamentoId) {
-                subordinateDeptos.add(user.departamentoId);
-            }
             
             const filtered = allPoliticas.filter(p => {
                 if (excludeIds.has(p.id)) return false;
@@ -163,23 +163,17 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
                 
                 if (p.clasificacion === 'Público') return true;
                 
+                const deptoPolitica = departamentos.find(d => d.nombre === p.departamentoResponsable && d.areaId === areas.find(a => a.nombre === p.areaResponsable)?.id);
+
                 if (user.nivelAcceso === 'Departamental') {
-                    if (p.departamentoResponsable) {
-                         const policyDeptoId = departamentos.find(d => d.nombre === p.departamentoResponsable && areaMap.get(d.id) === user.areaId)?.id;
-                         return policyDeptoId === user.departamentoId;
-                    }
-                    return false;
+                  return deptoPolitica?.id === user.departamentoId;
                 }
                 
                 if (user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') {
-                     if (p.departamentoResponsable) {
-                        const policyDeptoId = departamentos.find(d => d.nombre === p.departamentoResponsable)?.id;
-                        return policyDeptoId ? subordinateDeptos.has(policyDeptoId) : false;
-                    }
-                    return false;
+                  return deptoPolitica ? subordinateDeptos.has(deptoPolitica.id) : false;
                 }
                 
-                return true;
+                return true; 
             });
             setPoliticas(filtered);
         }
@@ -386,3 +380,4 @@ export function usePoliticas(): PoliticasContextType {
   }
   return context;
 }
+
