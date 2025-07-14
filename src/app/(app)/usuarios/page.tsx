@@ -68,6 +68,7 @@ import { usePermissions, PERMISSION_CONFIG } from '@/contexts/PermissionsContext
 import { useProcesos } from '@/contexts/ProcesosContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { useExceptions, type AccessException, type AccessExceptionCreationData } from '@/contexts/ExceptionsContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
@@ -122,6 +123,7 @@ export default function UsuariosPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { addLogEntry } = useActivityLog();
+  const { user: currentUser } = useAuth();
   const { hasPermission, rolePermissions, setRolePermissions, isLoadingPermissions } = usePermissions();
   
   const [selectedRoleForPerms, setSelectedRoleForPerms] = useState<UserRole>('Gerente de Proyecto');
@@ -594,47 +596,24 @@ export default function UsuariosPage() {
           </DialogHeader>
           <Form {...userForm}>
             <form onSubmit={userForm.handleSubmit(handleUserSubmit)} className="space-y-4 py-4">
-              <FormField
-                control={userForm.control}
-                name="nombreCompleto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre Completo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Juan Pérez" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={userForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} disabled />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={userForm.control} name="nombreCompleto" render={({ field }) => (<FormItem><FormLabel>Nombre Completo</FormLabel><FormControl><Input placeholder="Ej: Juan Pérez" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={userForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Correo Electrónico</FormLabel><FormControl><Input type="email" {...field} disabled /></FormControl><FormMessage /></FormItem>)}/>
               <FormField
                 control={userForm.control}
                 name="rol"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Rol Funcional</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione un rol" />
-                        </SelectTrigger>
-                      </FormControl>
+                     <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        defaultValue={field.value}
+                        disabled={currentUser?.rol !== 'Administrador' && currentUser?.rol !== 'Gerente de Proyecto'}
+                      >
+                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un rol" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {userRoles.map((role) => (
-                          <SelectItem key={role} value={role}>
+                          <SelectItem key={role} value={role} disabled={currentUser?.rol === 'Gerente de Proyecto' && role === 'Administrador'}>
                             {role}
                           </SelectItem>
                         ))}
@@ -650,15 +629,16 @@ export default function UsuariosPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nivel de Acceso a Información</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione un nivel" />
-                        </SelectTrigger>
-                      </FormControl>
+                     <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        defaultValue={field.value}
+                        disabled={currentUser?.rol !== 'Administrador' && currentUser?.rol !== 'Gerente de Proyecto'}
+                      >
+                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un nivel" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {nivelesAcceso.map((nivel) => (
-                          <SelectItem key={nivel} value={nivel}>
+                           <SelectItem key={nivel} value={nivel} disabled={currentUser?.rol === 'Gerente de Proyecto' && nivel === 'Confidencial'}>
                             {nivel}
                           </SelectItem>
                         ))}
@@ -668,56 +648,19 @@ export default function UsuariosPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={userForm.control}
-                name="puestoId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Puesto Asignado</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione un puesto" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No Asignado</SelectItem>
-                        {puestos.map((puesto) => (
-                          <SelectItem key={puesto.id} value={puesto.id}>
-                            {puesto.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>Define la posición del usuario en la jerarquía.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={userForm.control} name="puestoId" render={({ field }) => (<FormItem><FormLabel>Puesto Asignado</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un puesto" /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No Asignado</SelectItem>{puestos.map((puesto) => (<SelectItem key={puesto.id} value={puesto.id}>{puesto.nombre}</SelectItem>))}</SelectContent></Select><FormDescription>Define la posición del usuario en la jerarquía.</FormDescription><FormMessage /></FormItem>)}/>
               <FormField
                 control={userForm.control}
                 name="activo"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                      <FormLabel>Estado Activo</FormLabel>
-                      <FormDescription>
-                        Indica si el usuario puede acceder al sistema.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
+                    <div className="space-y-0.5"><FormLabel>Estado Activo</FormLabel><FormDescription>Indica si el usuario puede acceder al sistema.</FormDescription></div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                   </FormItem>
                 )}
               />
               <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" onClick={() => { setIsUserDialogOpen(false); setEditingUser(null); }}>Cancelar</Button>
-                </DialogClose>
+                <DialogClose asChild><Button type="button" variant="outline" onClick={() => { setIsUserDialogOpen(false); setEditingUser(null); }}>Cancelar</Button></DialogClose>
                 <Button type="submit" disabled={!hasPermission('usuarios:edit')}>Guardar Cambios</Button>
               </DialogFooter>
             </form>
