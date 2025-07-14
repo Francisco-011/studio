@@ -264,8 +264,8 @@ export default function ActividadesPage() {
     const { id, ...activityDataFromForm } = data;
     const activityDataForStorage: ActividadCreationData = {
         ...activityDataFromForm,
-        puestoId: data.puestoId === 'none' ? undefined : data.puestoId,
-        procedimientoId: data.procedimientoId === 'none' ? undefined : data.procedimientoId,
+        puestoId: data.puestoId,
+        procedimientoId: data.procedimientoId,
     };
 
     if (editingActividad && id) {
@@ -664,7 +664,7 @@ export default function ActividadesPage() {
                                 <FormControl>
                                   <Combobox
                                     value={field.value}
-                                    onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                                    onChange={(value) => field.onChange(value)}
                                     options={[
                                       { value: 'none', label: 'Sin Procedimiento' },
                                       ...procedimientos.map(p => ({ value: p.id, label: p.nombre }))
@@ -688,7 +688,7 @@ export default function ActividadesPage() {
                                <FormControl>
                                   <Combobox
                                       value={field.value}
-                                      onChange={(value) => field.onChange(value === 'none' ? undefined : value)}
+                                      onChange={(value) => field.onChange(value)}
                                       options={[
                                           { value: 'none', label: 'Sin Puesto Específico' },
                                           ...puestos.map(p => ({ value: p.id, label: p.nombre }))

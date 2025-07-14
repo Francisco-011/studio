@@ -28,7 +28,7 @@ export type ComboboxOption = {
 interface ComboboxProps {
   options: ComboboxOption[]
   value?: string | null
-  onChange: (value: string) => void
+  onChange: (value: string | undefined) => void;
   placeholder?: string
   searchPlaceholder?: string
   emptyResultText?: string
@@ -73,7 +73,7 @@ export function Combobox({
                   key={option.value}
                   value={option.label}
                   onSelect={() => {
-                    onChange(option.value === value ? "" : option.value)
+                    onChange(option.value === value ? undefined : option.value)
                     setOpen(false)
                   }}
                 >
