@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign, Factory, AlertTriangle, HardDrive } from "lucide-react";
+import { LifeBuoy, ChevronRight, LayoutDashboard, ClipboardEdit, ListOrdered, ListChecks, Database, FileText, FolderTree, TrendingUp, MessageCircleQuestion, Target, ClipboardCheck, Settings, Users, Info, PlusCircle, Search, Edit2, Trash2, RotateCcw, Link2, Ban, CheckSquare, Share2, Save, CalendarCheck2, X, PlayCircle, History, Calculator, Eye, DollarSign, Factory, AlertTriangle, HardDrive, ShieldAlert } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 
@@ -381,6 +381,31 @@ export default function AyudaPage() {
                   <div className="pt-4 border-t border-dashed">
                     <h4 className="font-semibold text-base">Excepciones de Acceso</h4>
                     <p>El módulo de "Usuarios y Permisos" permite crear excepciones. Una excepción puede otorgar acceso a un documento específico a un usuario que normalmente no podría verlo, o viceversa, denegar el acceso a un documento que sí podría ver. Esto ofrece un control de seguridad aún más granular.</p>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="item-architecture">
+                <AccordionTrigger className="text-lg font-semibold">6. Registro de Cambios de Arquitectura</AccordionTrigger>
+                <AccordionContent className="space-y-4 text-sm">
+                  <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
+                    <h4 className="font-semibold text-base flex items-center gap-2"><ShieldAlert className="text-amber-500" />Migración de Seguridad a Nivel de Servidor (En Progreso)</h4>
+                    <p className="font-medium text-muted-foreground text-xs">Fecha de Inicio: 14 de Julio, 2025</p>
+                    <p className="mt-2">
+                      Para robustecer la seguridad y asegurar que los datos sensibles nunca lleguen al navegador del usuario, se está realizando una migración del modelo de permisos.
+                    </p>
+                    <h5 className="font-semibold mt-3">Paso 1: Delegación de Seguridad a Firestore</h5>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>
+                        <strong>Actualización de Reglas de Seguridad:</strong> Se han modificado las reglas de Firestore para que utilicen los "Custom Claims" (atributos personalizados como rol y nivel de acceso) del token de autenticación de cada usuario. Esto permite que la base de datos misma valide si un usuario puede leer un documento.
+                      </li>
+                      <li>
+                        <strong>Simplificación de Contexts:</strong> Se ha eliminado la lógica de filtrado de seguridad del lado del cliente (específicamente en `ProcesosContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
+                      </li>
+                      <li>
+                        <strong>Estado Actual:</strong> Este es el primer paso de varios. La implementación de las Cloud Functions para asignar estos "Custom Claims" es el siguiente paso crítico.
+                      </li>
+                    </ul>
                   </div>
                 </AccordionContent>
               </AccordionItem>

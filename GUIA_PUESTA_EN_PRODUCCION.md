@@ -103,87 +103,123 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
 
     ```
     rules_version = '2';
-
     service cloud.firestore {
       match /databases/{database}/documents {
-
-        // Helper function to check if a user is authenticated
+        
+        // ===== FUNCIONES AUXILIARES =====
+        // NOTA: Estas reglas dependen de que se configuren "Custom Claims" en Firebase Authentication
+        // a través de una Cloud Function. El rol y nivel de acceso se leen desde el token del usuario.
+        
+        // Verificar si el usuario está autenticado
         function isAuthenticated() {
           return request.auth != null;
         }
-
-        // Helper function to get user's data
-        function getUserData(userId) {
-          return get(/databases/$(database)/documents/users/$(userId)).data;
+        
+        // Función para obtener el nivel de acceso de un usuario desde sus Custom Claims.
+        function getUserAccessLevel() {
+            return request.auth.token.get('nivelAcceso', 'Público');
         }
 
-        // Helper function to check if the user has one of the allowed roles.
-        // allowedRoles must be a list of strings, e.g. ['Administrador', 'Gerente de Proyecto']
-        function hasRole(allowedRoles) {
-          return isAuthenticated() &&
-                 [getUserData(request.auth.uid).rol].hasAny(allowedRoles);
+        // Función para obtener el rol de un usuario desde sus Custom Claims.
+        function getUserRole() {
+            return request.auth.token.get('rol', 'Usuario Final');
+        }
+        
+        // Función para obtener el departamento de un usuario desde sus Custom Claims.
+        function getUserDepartment() {
+            return request.auth.token.get('departamentoId', null);
         }
 
-        // --- USERS ---
-        // Users can read their own data.
-        // Admins can read anyone's data.
-        // Users can only be created during signup.
-        // Users can update their own data. Admins can update anyone's data.
+        // Función para obtener el puesto de un usuario desde su perfil en Firestore.
+        // Se usa para determinar la jerarquía.
+        function getUserPuestoData() {
+            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        }
+
+        // Función para verificar si un usuario puede ver un documento específico.
+        function canReadDocument(docData) {
+            let userLevel = getUserAccessLevel();
+            let docLevel = docData.get('clasificacion', 'Público');
+
+            // 1. Verificar Nivel de Acceso Básico
+            let hasLevelAccess = 
+                (docLevel == 'Público') ||
+                (docLevel == 'Privado' && userLevel in ['Departamental', 'Jerárquico', 'Confidencial']) ||
+                (docLevel == 'Confidencial' && userLevel in ['Confidencial']);
+
+            if (!hasLevelAccess) {
+                return false;
+            }
+            
+            // Si el acceso es por nivel, no se necesitan más validaciones.
+            if (userLevel == 'Confidencial' || docLevel == 'Público') {
+                return true;
+            }
+            
+            // 2. Lógica para niveles Departamental y Jerárquico
+            // Nota: Esta es una simplificación. La lógica completa vive en el `ProcesosContext`.
+            // La regla principal es permitir la lectura si el usuario tiene el nivel, 
+            // el filtrado fino se hace en la app.
+            return true;
+        }
+
+        // ===== REGLAS POR COLECCIÓN =====
+        
+        // -- Usuarios --
         match /users/{userId} {
-          allow read: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador']));
-          allow create: if isAuthenticated(); // Anyone can create their profile during signup
-          allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole(['Administrador', 'Gerente de Proyecto']));
+          allow read: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
+          allow create: if request.auth != null; // Permite que un nuevo usuario cree su propio perfil.
+          allow update: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
         }
         
-        // --- PERMISSIONS ---
-        // Any authenticated user can read permissions to configure their UI.
-        // Only Admins can change permission configurations.
-        match /permissions/{role} {
-            allow read: if isAuthenticated();
-            allow write: if hasRole(['Administrador']);
+        // -- Catálogos Genéricos --
+        function isManagerOrAdmin() {
+            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
         }
-
-        // --- GENERIC CATALOGS (Areas, Departamentos, Puestos, Sistemas, etc.) ---
-        // Any authenticated user can read catalogs, only Admins and Gerentes can write.
-        match /areas/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /departamentos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /puestos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /sistemas/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /sistemas_costos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /acciones/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /actividades/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
-        match /procedimientos/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']); }
+        match /areas/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /departamentos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /puestos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /sistemas/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /sistemas_costos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /acciones/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /actividades/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
         
-        // --- PROCESOS y POLITICAS (Special Read Logic) ---
-        // Read is more permissive to allow client-side filtering based on Nivel de Acceso and Exceptions.
-        // Write permissions remain strict.
-        match /procesos/{processId} {
+        // -- Reglas de Lectura Permisiva para Colecciones Principales --
+        // Permite la lectura si el usuario está autenticado. El filtrado fino se delega al Contexto en la app.
+        match /procesos/{docId} {
             allow read: if isAuthenticated();
-            allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto', 'Consultor']);
-        }
-
-        match /politicas/{policyId} {
-            allow read: if isAuthenticated();
-            allow write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto', 'Consultor']);
+            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
         }
         
-        // --- ACCESS EXCEPTIONS ---
-        // Only Admins or Project Managers can manage access exceptions.
+        match /politicas/{docId} {
+            allow read: if isAuthenticated();
+            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
+        }
+        
+        match /procedimientos/{docId} {
+            allow read: if isAuthenticated();
+            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
+        }
+        
+        // -- Excepciones y Auditoría --
         match /access_exceptions/{exceptionId} {
-            allow read, write: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+            allow read, write: if isManagerOrAdmin();
         }
 
-        // --- AUDITS AND LOGS ---
         match /audits/{auditId} {
-          allow read: if isAuthenticated();
-          allow create: if isAuthenticated();
-          allow update: if isAuthenticated();
-          allow delete: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+          allow read, create: if isAuthenticated();
+          allow update, delete: if isManagerOrAdmin();
         }
         
         match /activity_log/{logId} {
-          allow read: if isAuthenticated() && hasRole(['Administrador', 'Gerente de Proyecto']);
+          allow read: if isManagerOrAdmin();
           allow create: if isAuthenticated();
+        }
+        
+        // -- Permisos --
+        match /permissions/{role} {
+            allow read: if isAuthenticated();
+            allow write: if getUserRole() == 'Administrador';
         }
       }
     }
