@@ -11,11 +11,6 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
-import { useExceptions } from './ExceptionsContext';
-import type { NivelAcceso, UserRole } from '@/app/(app)/usuarios/page';
-import { usePuestos } from './PuestosContext';
-import { useDepartamentos } from './DepartamentosContext';
-
 
 export const nivelesCompliance = ["Obligatorio", "Recomendado", "Informativo"] as const;
 export type NivelCompliance = typeof nivelesCompliance[number];
@@ -68,58 +63,14 @@ const PoliticasContext = createContext<PoliticasContextType | undefined>(undefin
 
 const POLITICAS_COLLECTION = 'politicas';
 
-const getAllowedClassifications = (level: NivelAcceso): (typeof clasificacionOptions[number])[] => {
-    switch (level) {
-        case 'Confidencial':
-        case 'Ejecutivo':
-            return ['Público', 'Privado', 'Confidencial'];
-        case 'Jerárquico':
-        case 'Departamental':
-            return ['Público', 'Privado'];
-        case 'Público':
-        default:
-            return ['Público'];
-    }
-};
-
 export function PoliticasProvider({ children }: { children: ReactNode }) {
   const [politicas, setPoliticas] = useState<Politica[]>([]);
   const [isLoadingPoliticas, setIsLoadingPoliticas] = useState(true);
   const { addLogEntry } = useActivityLog();
   const { user, loading: authLoading } = useAuth();
-  const { exceptions, isLoadingExceptions } = useExceptions();
-  const { puestos } = usePuestos();
-  const { departamentos } = useDepartamentos();
-
-  const getSubordinateHierarchy = useCallback((userId: string | undefined): { subordinatePuestos: Set<string>, subordinateDeptos: Set<string> } => {
-    const subordinatePuestos = new Set<string>();
-    const subordinateDeptos = new Set<string>();
-    if (!userId || !puestos.length) return { subordinatePuestos, subordinateDeptos };
-
-    const userPuesto = puestos.find(p => p.id === userId);
-    if (userPuesto?.departamentoId) {
-        subordinateDeptos.add(userPuesto.departamentoId);
-    }
-    
-    const directReports = puestos.filter(p => p.jefeInmediato === userId);
-    const queue = [...directReports];
-
-    while (queue.length > 0) {
-        const currentPuesto = queue.shift();
-        if (currentPuesto && !subordinatePuestos.has(currentPuesto.id)) {
-            subordinatePuestos.add(currentPuesto.id);
-            if(currentPuesto.departamentoId) {
-                subordinateDeptos.add(currentPuesto.departamentoId);
-            }
-            const reportsOfCurrent = puestos.filter(p => p.jefeInmediato === currentPuesto.id);
-            queue.push(...reportsOfCurrent);
-        }
-    }
-    return { subordinatePuestos, subordinateDeptos };
-  }, [puestos]);
 
   useEffect(() => {
-    if (authLoading || isLoadingExceptions) {
+    if (authLoading) {
       setIsLoadingPoliticas(true);
       return;
     }
@@ -130,6 +81,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
       return;
     }
     
+    // The query is now simple, as Firestore rules will handle security.
     const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -144,48 +96,16 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
             } as Politica;
         });
         
-        if (user.rol === 'Administrador') {
-            setPoliticas(allPoliticas);
-        } else {
-            const allowedClassifications = getAllowedClassifications(user.nivelAcceso);
-            const userExceptions = exceptions.filter(ex => ex.userId === user.uid && (!ex.expiresAt || new Date(ex.expiresAt) > new Date()) && ex.documentType === 'politica');
-
-            const includeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'INCLUDE').map(ex => ex.documentId));
-            const excludeIds = new Set(userExceptions.filter(ex => ex.exceptionType === 'EXCLUDE').map(ex => ex.documentId));
-            
-            const { subordinateDeptos } = getSubordinateHierarchy(user.puestoId);
-            
-            const filtered = allPoliticas.filter(p => {
-                if (excludeIds.has(p.id)) return false;
-                if (includeIds.has(p.id)) return true;
-
-                if (!allowedClassifications.includes(p.clasificacion)) return false;
-                
-                if (p.clasificacion === 'Público') return true;
-                
-                const deptoPolitica = departamentos.find(d => d.nombre === p.departamentoResponsable && d.areaId === areas.find(a => a.nombre === p.areaResponsable)?.id);
-
-                if (user.nivelAcceso === 'Departamental') {
-                  return deptoPolitica?.id === user.departamentoId;
-                }
-                
-                if (user.nivelAcceso === 'Jerárquico' || user.nivelAcceso === 'Ejecutivo') {
-                  return deptoPolitica ? subordinateDeptos.has(deptoPolitica.id) : false;
-                }
-                
-                return true; 
-            });
-            setPoliticas(filtered);
-        }
+        setPoliticas(allPoliticas);
         setIsLoadingPoliticas(false);
     }, (error) => {
         console.error("Error fetching politicas: ", error);
-        toast({ title: "Error de Red", description: "No se pudieron cargar las políticas.", variant: "destructive" });
+        toast({ title: "Error de Permisos o Red", description: "No se pudieron cargar las políticas.", variant: "destructive" });
         setIsLoadingPoliticas(false);
     });
 
     return () => unsubscribe();
-  }, [user, authLoading, exceptions, isLoadingExceptions, puestos, departamentos, getSubordinateHierarchy]);
+  }, [user, authLoading]);
 
   const addPolitica = useCallback(async (data: Omit<PoliticaCreationData, 'estado'>): Promise<string | null> => {
     try {
@@ -380,4 +300,3 @@ export function usePoliticas(): PoliticasContextType {
   }
   return context;
 }
-
