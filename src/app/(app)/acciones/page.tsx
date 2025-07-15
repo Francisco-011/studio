@@ -36,7 +36,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock, Save } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock, Save, Workflow as WorkflowIcon, Building, Users as UsersIcon, ListChecks } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
 import { Separator } from '@/components/ui/separator';
@@ -532,6 +532,8 @@ export default function AccionesPage() {
                 if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
                 if (acc.procedimientoId) return `PC: ${procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || ''}`;
                 if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === ac.actividadId)?.nombre || ''}`;
+                if (acc.puesto) return `U: ${acc.puesto}`;
+                if (acc.area) return `B: ${acc.area}`;
                 return '';
             };
             valA = getElementName(a);
@@ -581,7 +583,7 @@ export default function AccionesPage() {
       return {
         tiempo,
         costo,
-        moneda: costo !== undefined ? accion.monedaAhorro : undefined, // Assuming currency is same as estimated
+        moneda: costo !== undefined ? accion.monedaAhorro : undefined,
       };
     }
     return {
@@ -1196,11 +1198,15 @@ export default function AccionesPage() {
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
                        <TableCell className="text-xs">
                           {linkedProcess ? (
-                              <Badge variant="outline">P: {linkedProcess.proceso}</Badge>
+                              <Badge variant="outline" className="flex items-center gap-1.5"><WorkflowIcon className="h-3 w-3"/>P: {linkedProcess.proceso}</Badge>
                           ) : linkedProcedimiento ? (
-                            <Badge variant="secondary">PC: {linkedProcedimiento.nombre}</Badge>
+                            <Badge variant="secondary" className="flex items-center gap-1.5"><ListChecks className="h-3 w-3"/>PC: {linkedProcedimiento.nombre}</Badge>
                           ) : linkedActivity ? (
-                              <Badge variant="secondary">A: {linkedActivity.nombre}</Badge>
+                              <Badge variant="secondary" className="flex items-center gap-1.5"><ListChecks className="h-3 w-3"/>A: {linkedActivity.nombre}</Badge>
+                          ) : accion.puesto ? (
+                            <Badge variant="outline" className="flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/50 border-purple-300 dark:border-purple-700"><UsersIcon className="h-3 w-3"/>U: {accion.puesto}</Badge>
+                          ) : accion.area ? (
+                            <Badge variant="outline" className="flex items-center gap-1.5 bg-teal-100 dark:bg-teal-900/50 border-teal-300 dark:border-teal-700"><Building className="h-3 w-3"/>B: {accion.area}</Badge>
                           ) : (
                               '-'
                           )}
@@ -1466,3 +1472,4 @@ export default function AccionesPage() {
     </div>
   );
 }
+
