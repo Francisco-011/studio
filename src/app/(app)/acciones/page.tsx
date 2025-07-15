@@ -75,14 +75,6 @@ const accionFormSchema = z.object({
   historialDeCambios: z.array(z.any()).optional(),
   origenMejora: z.string().optional(),
 }).refine(data => {
-  if (data.ahorroEstimado !== undefined && data.ahorroEstimado > 0 && !data.monedaAhorro) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debe seleccionar una moneda si especifica un ahorro estimado.",
-  path: ["monedaAhorro"],
-}).refine(data => {
     if (data.fechaFinalizacion && data.fechaObjetivo && data.fechaFinalizacion < data.fechaObjetivo) {
         return false;
     }
@@ -90,14 +82,6 @@ const accionFormSchema = z.object({
 }, {
     message: "La fecha de finalización no puede ser anterior a la fecha objetivo.",
     path: ["fechaFinalizacion"],
-}).refine(data => {
-  if (data.ahorroTiempoEstimado !== undefined && data.ahorroTiempoEstimado > 0 && !data.unidadTiempoAhorro) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debe seleccionar una unidad de tiempo si especifica un ahorro de tiempo.",
-  path: ["unidadTiempoAhorro"],
 });
 
 type AccionFormData = z.infer<typeof accionFormSchema>;
@@ -240,6 +224,7 @@ export default function AccionesPage() {
 
   const watchedElementoType = accionForm.watch('elementoType');
   const watchedElementoId = accionForm.watch('elementoId');
+  const isQuantitativeAction = ['proceso', 'procedimiento', 'actividad'].includes(watchedElementoType || '');
   
   useEffect(() => {
     if (actionToComplete) {
@@ -957,70 +942,76 @@ export default function AccionesPage() {
                             )}
                           />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={accionForm.control}
-                            name="ahorroEstimado"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
-                                <div className="relative">
-                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" disabled={isReadOnly} /></FormControl>
-                                </div>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={accionForm.control}
-                            name="monedaAhorro"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Moneda del Ahorro</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione moneda" /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    {monedaOptions.map(moneda => (<SelectItem key={moneda} value={moneda}>{moneda}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={accionForm.control}
-                            name="ahorroTiempoEstimado"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
-                                <div className="relative">
-                                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" disabled={isReadOnly} /></FormControl>
-                                </div>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={accionForm.control}
-                            name="unidadTiempoAhorro"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Unidad de Tiempo</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
-                                  <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
+
+                        {isQuantitativeAction && (
+                          <div className="space-y-4 pt-2 border-t">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={accionForm.control}
+                                name="ahorroEstimado"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Ahorro Anual Estimado (Opcional)</FormLabel>
+                                    <div className="relative">
+                                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                      <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? ''} className="pl-9" min="0" step="any" disabled={isReadOnly} /></FormControl>
+                                    </div>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={accionForm.control}
+                                name="monedaAhorro"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Moneda del Ahorro</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroEstimado') || accionForm.watch('ahorroEstimado') === 0}>
+                                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione moneda" /></SelectTrigger></FormControl>
+                                      <SelectContent>
+                                        {monedaOptions.map(moneda => (<SelectItem key={moneda} value={moneda}>{moneda}</SelectItem>))}
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={accionForm.control}
+                                name="ahorroTiempoEstimado"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Ahorro de Tiempo Estimado (Opcional)</FormLabel>
+                                    <div className="relative">
+                                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                      <FormControl><Input type="number" placeholder="Ej: 40" {...field} value={field.value ?? ''} className="pl-9" min="0" step="1" disabled={isReadOnly} /></FormControl>
+                                    </div>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={accionForm.control}
+                                name="unidadTiempoAhorro"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Unidad de Tiempo</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly || !accionForm.watch('ahorroTiempoEstimado') || accionForm.watch('ahorroTiempoEstimado') === 0}>
+                                      <FormControl><SelectTrigger><SelectValue placeholder="Seleccione unidad" /></SelectTrigger></FormControl>
+                                      <SelectContent>
+                                        {tiempoUnidadOptions.map(unidad => (<SelectItem key={unidad} value={unidad}>{unidad}</SelectItem>))}
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         <FormField
                           control={accionForm.control}
                           name="origenMejora"
