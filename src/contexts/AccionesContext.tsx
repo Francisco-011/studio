@@ -55,7 +55,7 @@ export interface Accion {
 
 interface AccionesContextType {
   acciones: Accion[];
-  addAccion: (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => Promise<void>;
+  addAccion: (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => Promise<string | null>;
   updateAccion: (id: string, data: Partial<Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>>, historial?: CambioHistorial[]) => Promise<void>;
   deleteAccion: (id: string) => Promise<void>;
   isLoadingAcciones: boolean;
@@ -96,7 +96,7 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const addAccion = useCallback(async (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>) => {
+  const addAccion = useCallback(async (data: Omit<Accion, 'id' | 'fechaCreacion' | 'updatedAt'>): Promise<string | null> => {
     try {
         const payload: { [key: string]: any } = {
           ...data,
@@ -105,11 +105,13 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
           historialDeCambios: [],
         };
         Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
-        await addDoc(collection(db, ACCIONES_COLLECTION), payload);
+        const docRef = await addDoc(collection(db, ACCIONES_COLLECTION), payload);
         addLogEntry({ action: 'create', entityType: 'Acción de Mejora', entityName: data.nombre, details: `Se creó la acción de mejora "${data.nombre}".` });
+        return docRef.id;
     } catch(e) {
         console.error("Error adding accion:", e);
         toast({ title: "Error", description: "No se pudo agregar la acción de mejora.", variant: "destructive"});
+        return null;
     }
   }, [addLogEntry]);
 

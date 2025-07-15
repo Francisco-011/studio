@@ -55,10 +55,6 @@ const accionFormSchema = z.object({
   elementoType: z.enum(elementoAccionTypes, { errorMap: () => ({ message: "Seleccione un tipo de elemento."})}).optional(),
   elementoId: z.string().optional(),
   
-  area: z.string().optional(),
-  departamento: z.string().optional(),
-  puesto: z.string().optional(),
-
   estado: z.enum(accionEstados, { errorMap: () => ({ message: "Seleccione un estado válido."})}),
   fechaObjetivo: z.date().optional(),
   fechaFinalizacion: z.date().optional(),
@@ -71,6 +67,7 @@ const accionFormSchema = z.object({
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
+  unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   historialDeCambios: z.array(z.any()).optional(),
   origenMejora: z.string().optional(),
 }).refine(data => {
@@ -223,7 +220,6 @@ export default function AccionesPage() {
   }, [editingAccion]);
 
   const watchedElementoType = accionForm.watch('elementoType');
-  const watchedElementoId = accionForm.watch('elementoId');
   const isQuantitativeAction = ['proceso', 'procedimiento', 'actividad'].includes(watchedElementoType || '');
   
   useEffect(() => {
@@ -260,23 +256,6 @@ export default function AccionesPage() {
     }
   }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm]);
 
-  useEffect(() => {
-      if (!watchedElementoId || !watchedElementoType) return;
-      let area, depto, puesto;
-
-      if (watchedElementoType === 'proceso') {
-          const proc = capturedProcesses.find(p => p.id === watchedElementoId);
-          if (proc) { area = proc.area; depto = proc.departamento; puesto = proc.puesto; }
-      } else if (watchedElementoType === 'procedimiento') {
-          const procManual = procedimientos.find(p => p.id === watchedElementoId);
-          const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
-          if (parentProc) { area = parentProc.area; depto = parentProc.departamento; puesto = parentProc.puesto; }
-      }
-      accionForm.setValue('area', area);
-      accionForm.setValue('departamento', depto || undefined);
-      accionForm.setValue('puesto', puesto);
-  }, [watchedElementoId, watchedElementoType, accionForm, capturedProcesses, procedimientos]);
-
 
   const elementoOptions = useMemo(() => {
     switch(watchedElementoType) {
@@ -307,13 +286,8 @@ export default function AccionesPage() {
         else if (editingAccion.actividadId) { elementType = 'actividad'; elementId = editingAccion.actividadId; }
         else if (editingAccion.sistemaId) { elementType = 'sistema'; elementId = editingAccion.sistemaId; }
         else if (editingAccion.politicaId) { elementType = 'politica'; elementId = editingAccion.politicaId; }
-        else if (editingAccion.puesto) {
-            elementType = 'puesto';
-            elementId = puestos.find(p => p.nombre === editingAccion.puesto)?.id;
-        } else if (editingAccion.area) {
-            elementType = 'area';
-            elementId = areas.find(a => a.nombre === editingAccion.area)?.id;
-        }
+        else if (editingAccion.puesto) { elementType = 'puesto'; elementId = puestos.find(p => p.nombre === editingAccion.puesto)?.id;} 
+        else if (editingAccion.area) { elementType = 'area'; elementId = areas.find(a => a.nombre === editingAccion.area)?.id; }
 
         accionForm.reset({
           ...editingAccion,
@@ -330,105 +304,112 @@ export default function AccionesPage() {
     }
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
   
-  const finishCompletingAction = async (actionId: string, isQuantitative: boolean) => {
+  const finishCompletingAction = async (actionId: string, type: ElementoAccionType | undefined) => {
+    const isQuantitative = ['proceso', 'procedimiento', 'actividad'].includes(type || '');
     if (isQuantitative) {
         const actionToProcess = acciones.find(a => a.id === actionId);
         if (actionToProcess) {
             setActionToComplete(actionToProcess);
+        } else {
+             // It might not be in the state yet if it was just added.
+             // We can assume it will be available shortly or refetch, for now, a toast is good.
+             toast({title: "Acción en Proceso", description: "Preparando para registrar impacto..."});
         }
     } else {
         await updateAccion(actionId, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
         toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
     }
-    setIsAccionDialogOpen(false);
-    setEditingAccion(null);
   };
   
   async function handleAccionSubmit(data: AccionFormData) {
-    const isQuantitative = ['proceso', 'procedimiento', 'actividad'].includes(data.elementoType || '');
+    const isCreating = !editingAccion;
+    const isBeingCompleted = data.estado === 'Completada';
 
-    const specificIds = {
-        procesoId: data.elementoType === 'proceso' ? data.elementoId : undefined,
-        procedimientoId: data.elementoType === 'procedimiento' ? data.elementoId : undefined,
-        actividadId: data.elementoType === 'actividad' ? data.elementoId : undefined,
-        sistemaId: data.elementoType === 'sistema' ? data.elementoId : undefined,
-        politicaId: data.elementoType === 'politica' ? data.elementoId : undefined,
-    };
-    
-    let areaFromElement: string | undefined = undefined;
-    let puestoFromElement: string | undefined = undefined;
-    let departamentoFromElement: string | undefined = undefined;
+    // Separate organizational context from the specific element being acted upon.
+    let areaContext: string | undefined;
+    let deptoContext: string | undefined;
+    let puestoContext: string | undefined;
 
-    if (data.elementoType === 'area') {
-        areaFromElement = areas.find(a => a.id === data.elementoId)?.nombre;
-    } else if (data.elementoType === 'puesto') {
-        const puestoObj = puestos.find(p => p.id === data.elementoId);
-        if (puestoObj) {
-            puestoFromElement = puestoObj.nombre;
-            const areaObj = areas.find(a => a.id === puestoObj.areaId);
-            if (areaObj) areaFromElement = areaObj.nombre;
-            const deptoObj = departamentos.find(d => d.id === puestoObj.departamentoId);
-            if (deptoObj) departamentoFromElement = deptoObj.nombre;
-        }
-    } else if (data.elementoType === 'proceso') {
-        const proc = capturedProcesses.find(p => p.id === data.elementoId);
-        if (proc) {
-            areaFromElement = proc.area;
-            puestoFromElement = proc.puesto;
-            departamentoFromElement = proc.departamento;
-        }
-    } else if (data.elementoType === 'procedimiento') {
-        const procManual = procedimientos.find(p => p.id === data.elementoId);
-        const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
-        if (parentProc) {
-            areaFromElement = parentProc.area;
-            puestoFromElement = parentProc.puesto;
-            departamentoFromElement = parentProc.departamento;
-        }
-    }
-    
+    // Define the specific element association
     const dataToSave: Partial<Omit<Accion, 'id'|'fechaCreacion'|'updatedAt'>> = {
-        nombre: data.nombre,
-        descripcion: data.descripcion,
-        responsable: data.responsable,
-        estado: data.estado,
-        fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
-        fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
-        origenMejora: data.origenMejora,
-        area: areaFromElement,
-        departamento: departamentoFromElement,
-        puesto: puestoFromElement,
-        ...specificIds,
+      nombre: data.nombre,
+      descripcion: data.descripcion,
+      responsable: data.responsable,
+      estado: data.estado,
+      fechaObjetivo: data.fechaObjetivo?.toISOString(),
+      fechaFinalizacion: data.fechaFinalizacion?.toISOString(),
+      origenMejora: data.origenMejora,
+      // Handle quantitative fields only if applicable
+      ahorroEstimado: isQuantitativeAction ? data.ahorroEstimado : undefined,
+      monedaAhorro: isQuantitativeAction ? data.monedaAhorro : undefined,
+      ahorroTiempoEstimado: isQuantitativeAction ? data.ahorroTiempoEstimado : undefined,
+      unidadTiempoAhorro: isQuantitativeAction ? data.unidadTiempoAhorro : undefined,
+      // Clear all associations first
+      procesoId: undefined,
+      procedimientoId: undefined,
+      actividadId: undefined,
+      politicaId: undefined,
+      sistemaId: undefined,
+      area: undefined,
+      departamento: undefined,
+      puesto: undefined,
     };
     
-    if (isQuantitative) {
-      dataToSave.ahorroEstimado = data.ahorroEstimado;
-      dataToSave.monedaAhorro = data.monedaAhorro;
-      dataToSave.ahorroTiempoEstimado = data.ahorroTiempoEstimado;
-      dataToSave.unidadTiempoAhorro = data.unidadTiempoAhorro;
+    // Set the correct ID based on elementType
+    if (data.elementoType && data.elementoId) {
+        switch (data.elementoType) {
+            case 'proceso': dataToSave.procesoId = data.elementoId; break;
+            case 'procedimiento': dataToSave.procedimientoId = data.elementoId; break;
+            case 'actividad': dataToSave.actividadId = data.elementoId; break;
+            case 'politica': dataToSave.politicaId = data.elementoId; break;
+            case 'sistema': dataToSave.sistemaId = data.elementoId; break;
+            case 'puesto': puestoContext = puestos.find(p => p.id === data.elementoId)?.nombre; break;
+            case 'area': areaContext = areas.find(a => a.id === data.elementoId)?.nombre; break;
+        }
     }
+
+    // Determine organizational context from the element
+    if (dataToSave.procesoId) {
+        const proc = capturedProcesses.find(p => p.id === dataToSave.procesoId);
+        if (proc) { areaContext = proc.area; deptoContext = proc.departamento; puestoContext = proc.puesto; }
+    } else if (dataToSave.procedimientoId) {
+        const procManual = procedimientos.find(p => p.id === dataToSave.procedimientoId);
+        const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
+        if (parentProc) { areaContext = parentProc.area; deptoContext = parentProc.departamento; puestoContext = parentProc.puesto; }
+    } else if (dataToSave.actividadId) {
+        const act = actividades.find(a => a.id === dataToSave.actividadId);
+        if (act && act.procedimientoId) {
+             const procManual = procedimientos.find(p => p.id === act.procedimientoId);
+             const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
+             if (parentProc) { areaContext = parentProc.area; deptoContext = parentProc.departamento; puestoContext = parentProc.puesto; }
+        }
+    }
+    
+    // Assign context
+    dataToSave.area = areaContext;
+    dataToSave.departamento = deptoContext;
+    dataToSave.puesto = puestoContext;
 
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
-      if (data.estado === 'Completada') {
-          await finishCompletingAction(editingAccion.id, isQuantitative);
+      if (isBeingCompleted && editingAccion.estado !== 'Completada') {
+          await finishCompletingAction(editingAccion.id, data.elementoType);
       } else {
         setIsAccionDialogOpen(false);
       }
-    } else {
+    } else { // Creating new action
       const newActionId = await addAccion(dataToSave as any);
       if (newActionId) {
         toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
-        if (data.estado === 'Completada') {
-            await finishCompletingAction(newActionId, isQuantitative);
-        } else {
-            setIsAccionDialogOpen(false);
+        if (isBeingCompleted) {
+            await finishCompletingAction(newActionId, data.elementoType);
         }
       }
+      setIsAccionDialogOpen(false);
     }
     
-    if (data.estado !== 'Completada') {
+    if (!isBeingCompleted) {
       setEditingAccion(null);
       accionForm.reset();
     }
