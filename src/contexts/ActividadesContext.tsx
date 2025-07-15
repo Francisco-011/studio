@@ -37,6 +37,8 @@ export interface Actividad {
   monedaCosto?: Moneda; // currency for the cost
   frecuencia?: typeof frecuenciaOptions[number];
   ejecucionesPorPeriodo?: number; // How many times it's executed in the given frequency
+  sistemaUtilizado?: string; // New field for system used
+  procesosAsociadosIds?: string[]; // Kept for compatibility if needed
 }
 
 export type ActividadCreationData = Omit<Actividad, 'id' | 'codigo' | 'createdAt' | 'updatedAt' | 'historialDeCambios' | 'costoEstimado' | 'costoIdeal'>;
@@ -129,7 +131,7 @@ export function ActividadesProvider({ children }: { children: ReactNode }) {
     addLogEntry({ action: 'update', entityType: 'Actividad', entityName: data.nombre || originalActividad.nombre, details: `Se actualizó la actividad "${originalActividad.nombre}".` });
     
     const changes: CambioHistorial[] = [];
-    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia', 'puestoId', 'ejecucionesPorPeriodo', 'procedimientoId'];
+    const fieldsToCompare: (keyof typeof data)[] = ['nombre', 'descripcionBreve', 'tiempoEstimado', 'tiempoIdeal', 'frecuencia', 'puestoId', 'ejecucionesPorPeriodo', 'procedimientoId', 'costoEstimado', 'monedaCosto'];
     
     fieldsToCompare.forEach(key => {
         if (key in data && originalActividad[key as keyof Actividad] !== data[key]) {

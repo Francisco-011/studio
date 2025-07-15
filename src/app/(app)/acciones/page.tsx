@@ -107,9 +107,14 @@ const impactActivitySchema = z.object({
   id: z.string(),
   nombre: z.string(),
   tiempoEstimadoActual: z.number().optional(),
+  costoEstimadoActual: z.number().optional(),
   nuevoTiempoEstimado: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int().nonnegative().optional()
+  ),
+  nuevoCostoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
+    z.number().nonnegative().optional()
   ),
 });
 const impactFormSchema = z.object({
@@ -136,12 +141,6 @@ function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
   }
 }
 
-function formatTimeSavingDisplay(amount?: number, unit?: TiempoUnidad) {
-  if (amount === undefined || amount === null || !unit) return "-";
-  return `${amount} ${unit.split('/')[0]}`;
-}
-
-
 const escapeCsvCell = (cellData: string | number | undefined | null): string => {
   if (cellData === undefined || cellData === null) {
     return '';
@@ -159,7 +158,7 @@ export default function AccionesPage() {
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
   const { actividades, updateActividad: updateActividadContext, isLoadingActividades } = useActividades();
-  const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
+  const { procesos: capturedProcesses, isLoadingProcesos } = useProcesos();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -184,7 +183,6 @@ export default function AccionesPage() {
   const [isImpactDialogOpen, setIsImpactDialogOpen] = useState(false);
   const [actionToComplete, setActionToComplete] = useState<Accion | null>(null);
   const [affectedActivities, setAffectedActivities] = useState<Actividad[]>([]);
-
 
   useEffect(() => {
     setIsClient(true);
@@ -281,7 +279,9 @@ export default function AccionesPage() {
           id: act.id,
           nombre: act.nombre,
           tiempoEstimadoActual: act.tiempoEstimado,
+          costoEstimadoActual: act.costoEstimado,
           nuevoTiempoEstimado: act.tiempoEstimado,
+          nuevoCostoEstimado: act.costoEstimado,
         }))
       });
       setIsImpactDialogOpen(true);
@@ -376,7 +376,9 @@ export default function AccionesPage() {
   }, [editingAccion, isAccionDialogOpen, accionForm]);
 
   async function handleAccionSubmit(data: AccionFormData) {
-    if (data.estado === 'Completada' && editingAccion) {
+    const isQuantitativeAction = data.procesoId || data.procedimientoId || data.actividadId;
+    
+    if (data.estado === 'Completada' && editingAccion && isQuantitativeAction) {
         setActionToComplete(editingAccion);
         setIsAccionDialogOpen(false);
         return;
@@ -411,16 +413,28 @@ export default function AccionesPage() {
 
     const historialImpacto: CambioHistorial[] = [];
     let totalAhorroTiempo = 0;
+    let totalAhorroCosto = 0;
     
     for (const updatedAct of data.affectedActivities) {
-      const originalAct = affectedActivities.find(a => a.id === updatedAct.id);
-      if (originalAct && originalAct.tiempoEstimado !== updatedAct.nuevoTiempoEstimado) {
-        await updateActividadContext(updatedAct.id, { tiempoEstimado: updatedAct.nuevoTiempoEstimado });
-        const ahorro = (originalAct.tiempoEstimado || 0) - (updatedAct.nuevoTiempoEstimado || 0);
-        if (ahorro > 0) {
-          totalAhorroTiempo += ahorro;
+        const originalAct = affectedActivities.find(a => a.id === updatedAct.id);
+        if (!originalAct) continue;
+        
+        let changes: Partial<Actividad> = {};
+        if (originalAct.tiempoEstimado !== updatedAct.nuevoTiempoEstimado && updatedAct.nuevoTiempoEstimado !== undefined) {
+            changes.tiempoEstimado = updatedAct.nuevoTiempoEstimado;
+            const ahorro = (originalAct.tiempoEstimado || 0) - (updatedAct.nuevoTiempoEstimado || 0);
+            if(ahorro > 0) totalAhorroTiempo += ahorro;
         }
-      }
+
+        if (originalAct.costoEstimado !== updatedAct.nuevoCostoEstimado && updatedAct.nuevoCostoEstimado !== undefined) {
+            changes.costoEstimado = updatedAct.nuevoCostoEstimado;
+            const ahorro = (originalAct.costoEstimado || 0) - (updatedAct.nuevoCostoEstimado || 0);
+            if(ahorro > 0) totalAhorroCosto += ahorro;
+        }
+
+        if (Object.keys(changes).length > 0) {
+            await updateActividadContext(updatedAct.id, changes);
+        }
     }
     
     if (totalAhorroTiempo > 0) {
@@ -428,7 +442,16 @@ export default function AccionesPage() {
         timestamp: new Date().toISOString(),
         field: 'Ahorro de Tiempo Calculado',
         before: 'N/A',
-        after: `${totalAhorroTiempo} minutos`,
+        after: `${totalAhorroTiempo}`,
+      });
+    }
+
+    if (totalAhorroCosto > 0) {
+      historialImpacto.push({
+        timestamp: new Date().toISOString(),
+        field: 'Ahorro de Costo Calculado',
+        before: 'N/A',
+        after: `${totalAhorroCosto}`,
       });
     }
 
@@ -546,6 +569,28 @@ export default function AccionesPage() {
     return filtered;
 
   }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, procedimientos, actividades, areaFilter, puestoFilter]);
+  
+  const getSavings = (accion: Accion) => {
+    if (accion.estado === 'Completada' && accion.historialDeCambios) {
+      const ahorroTiempoReal = accion.historialDeCambios.find(h => h.field === 'Ahorro de Tiempo Calculado')?.after;
+      const ahorroCostoReal = accion.historialDeCambios.find(h => h.field === 'Ahorro de Costo Calculado')?.after;
+      
+      const tiempo = ahorroTiempoReal ? Number(ahorroTiempoReal) : undefined;
+      const costo = ahorroCostoReal ? Number(ahorroCostoReal) : undefined;
+      
+      return {
+        tiempo,
+        costo,
+        moneda: costo !== undefined ? accion.monedaAhorro : undefined, // Assuming currency is same as estimated
+      };
+    }
+    return {
+      tiempo: accion.ahorroTiempoEstimado,
+      costo: accion.ahorroEstimado,
+      moneda: accion.monedaAhorro,
+    };
+  };
+
 
   const requestSort = (key: SortableAccionKeys) => {
     let direction: SortDirection = 'ascending';
@@ -595,8 +640,8 @@ export default function AccionesPage() {
     const headers = [
       "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", 
       "Proceso Asociado", "Procedimiento Asociado", "Actividad Asociada",
-      "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Anual Estimado", "Moneda Ahorro", 
-      "Ahorro Tiempo Estimado", "Unidad Tiempo Ahorro",
+      "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Anual (Calculado/Estimado)", "Moneda Ahorro", 
+      "Ahorro Tiempo (Calculado/Estimado)", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
     ];
 
@@ -606,6 +651,8 @@ export default function AccionesPage() {
         const procName = acc.procesoId ? capturedProcesses.find(p => p.id === acc.procesoId)?.proceso : '';
         const procManualName = acc.procedimientoId ? procedimientos.find(p => p.id === acc.procedimientoId)?.nombre : '';
         const actName = acc.actividadId ? actividades.find(a => a.id === acc.actividadId)?.nombre : '';
+        const savings = getSavings(acc);
+
         return [
           escapeCsvCell(acc.id),
           escapeCsvCell(acc.nombre),
@@ -619,9 +666,9 @@ export default function AccionesPage() {
           escapeCsvCell(acc.estado),
           escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
           escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
-          escapeCsvCell(acc.ahorroEstimado),
-          escapeCsvCell(acc.monedaAhorro),
-          escapeCsvCell(acc.ahorroTiempoEstimado),
+          escapeCsvCell(savings.costo),
+          escapeCsvCell(savings.moneda),
+          escapeCsvCell(savings.tiempo),
           escapeCsvCell(acc.unidadTiempoAhorro),
           escapeCsvCell(acc.origenMejora),
           escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
@@ -1141,6 +1188,8 @@ export default function AccionesPage() {
                     const isFromAudit = accion.origenMejora?.includes('Auditoría');
                     const canBeDeleted = !isFromAudit && accion.estado === 'En Revisión';
                     const isLockedForEditing = accion.estado === 'Completada' || accion.estado === 'Cancelada';
+                    
+                    const savings = getSavings(accion);
 
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
@@ -1182,8 +1231,8 @@ export default function AccionesPage() {
                       <TableCell className="text-center">
                         {accion.fechaObjetivo && isValid(parseISO(accion.fechaObjetivo)) ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
                       </TableCell>
-                      <TableCell className="text-right">{formatCurrencyDisplay(accion.ahorroEstimado, accion.monedaAhorro)}</TableCell>
-                      <TableCell className="text-right">{formatMinutesToHours(accion.ahorroTiempoEstimado)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyDisplay(savings.costo, savings.moneda)}</TableCell>
+                      <TableCell className="text-right">{formatMinutesToHours(savings.tiempo)}</TableCell>
                        <TableCell className="text-center text-xs text-muted-foreground">
                         {isValid(new Date(accion.updatedAt)) ? format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
@@ -1305,7 +1354,7 @@ export default function AccionesPage() {
               <DialogHeader>
                 <DialogTitle>Registrar Impacto de la Mejora</DialogTitle>
                 <DialogDescription>
-                  ¡Felicidades por completar la acción! Por favor, actualice los nuevos tiempos estimados para las actividades afectadas.
+                  ¡Felicidades por completar la acción! Por favor, actualice los nuevos tiempos y/o costos para las actividades afectadas.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4 max-h-[60vh] overflow-y-auto pr-2">
@@ -1313,33 +1362,47 @@ export default function AccionesPage() {
                   <div className="space-y-4">
                     {impactForm.getValues('affectedActivities').map((field, index) => (
                       <Card key={field.id} className="p-4">
-                        <FormField
-                          control={impactForm.control}
-                          name={`affectedActivities.${index}.nuevoTiempoEstimado`}
-                          render={({ field: formField }) => (
-                            <FormItem>
-                              <FormLabel className="font-semibold">{field.nombre}</FormLabel>
-                              <div className="flex items-center gap-4">
-                                <div className="text-sm text-muted-foreground">
-                                  Tiempo Actual: {formatMinutesToHours(field.tiempoEstimadoActual) || 'N/A'}
-                                </div>
-                                <div className="relative">
-                                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      placeholder="Nuevo Tiempo (min)"
-                                      {...formField}
-                                      value={formField.value ?? ''}
-                                      className="pl-9"
-                                    />
-                                  </FormControl>
-                                </div>
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        <p className="font-semibold mb-2">{field.nombre}</p>
+                        <div className="grid grid-cols-2 gap-4">
+                           <FormField
+                            control={impactForm.control}
+                            name={`affectedActivities.${index}.nuevoTiempoEstimado`}
+                            render={({ field: formField }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">Tiempo (min)</FormLabel>
+                                    <div className="text-xs text-muted-foreground">
+                                    Actual: {formatMinutesToHours(field.tiempoEstimadoActual) || 'N/A'}
+                                    </div>
+                                    <div className="relative">
+                                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <FormControl>
+                                        <Input type="number" placeholder="Nuevo Tiempo" {...formField} value={formField.value ?? ''} className="pl-9"/>
+                                    </FormControl>
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                           />
+                           <FormField
+                            control={impactForm.control}
+                            name={`affectedActivities.${index}.nuevoCostoEstimado`}
+                            render={({ field: formField }) => (
+                                <FormItem>
+                                    <FormLabel className="text-xs">Costo / Ejecución</FormLabel>
+                                    <div className="text-xs text-muted-foreground">
+                                    Actual: {formatCurrencyDisplay(field.costoEstimadoActual, actividades.find(a => a.id === field.id)?.monedaCosto) || 'N/A'}
+                                    </div>
+                                    <div className="relative">
+                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <FormControl>
+                                        <Input type="number" placeholder="Nuevo Costo" {...formField} value={formField.value ?? ''} className="pl-9"/>
+                                    </FormControl>
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                           />
+                        </div>
                       </Card>
                     ))}
                   </div>
@@ -1403,4 +1466,3 @@ export default function AccionesPage() {
     </div>
   );
 }
-
