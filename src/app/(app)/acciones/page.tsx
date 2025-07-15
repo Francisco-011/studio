@@ -225,16 +225,19 @@ export default function AccionesPage() {
   useEffect(() => {
     if (actionToComplete) {
       let activitiesFound: Actividad[] = [];
-      if (actionToComplete.actividadId) {
-        const act = actividades.find(a => a.id === actionToComplete.actividadId);
+      const elementType = actionToComplete.procesoId ? 'proceso' : (actionToComplete.procedimientoId ? 'procedimiento' : (actionToComplete.actividadId ? 'actividad' : null));
+      const elementId = actionToComplete.procesoId || actionToComplete.procedimientoId || actionToComplete.actividadId;
+
+      if (elementType === 'actividad') {
+        const act = actividades.find(a => a.id === elementId);
         if (act) activitiesFound.push(act);
-      } else if (actionToComplete.procedimientoId) {
-        const proc = procedimientos.find(p => p.id === actionToComplete.procedimientoId);
+      } else if (elementType === 'procedimiento') {
+        const proc = procedimientos.find(p => p.id === elementId);
         if (proc && proc.activityOrder) {
           activitiesFound = proc.activityOrder.map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
         }
-      } else if (actionToComplete.procesoId) {
-        const proc = capturedProcesses.find(p => p.id === actionToComplete.procesoId);
+      } else if (elementType === 'proceso') {
+        const proc = capturedProcesses.find(p => p.id === elementId);
         if (proc && proc.procedimientoOrder) {
           const proceduresInProcess = proc.procedimientoOrder.map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p);
           const activityIds = new Set(proceduresInProcess.flatMap(p => p.activityOrder || []));
@@ -304,21 +307,21 @@ export default function AccionesPage() {
     }
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
   
-  const finishCompletingAction = async (actionId: string, type: ElementoAccionType | undefined) => {
-    const isQuantitative = ['proceso', 'procedimiento', 'actividad'].includes(type || '');
+  const finishCompletingAction = async (actionId: string) => {
+    const actionToProcess = acciones.find(a => a.id === actionId);
+    if (!actionToProcess) {
+        toast({ title: "Acción no encontrada", description: "No se pudo iniciar el proceso de completado.", variant: 'destructive' });
+        return;
+    }
+    const isQuantitative = actionToProcess.procesoId || actionToProcess.procedimientoId || actionToProcess.actividadId;
+
     if (isQuantitative) {
-        const actionToProcess = acciones.find(a => a.id === actionId);
-        if (actionToProcess) {
-            setActionToComplete(actionToProcess);
-        } else {
-             // It might not be in the state yet if it was just added.
-             // We can assume it will be available shortly or refetch, for now, a toast is good.
-             toast({title: "Acción en Proceso", description: "Preparando para registrar impacto..."});
-        }
+        setActionToComplete(actionToProcess);
     } else {
         await updateAccion(actionId, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
         toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
     }
+    setIsAccionDialogOpen(false);
   };
   
   async function handleAccionSubmit(data: AccionFormData) {
@@ -363,8 +366,8 @@ export default function AccionesPage() {
             case 'actividad': dataToSave.actividadId = data.elementoId; break;
             case 'politica': dataToSave.politicaId = data.elementoId; break;
             case 'sistema': dataToSave.sistemaId = data.elementoId; break;
-            case 'puesto': puestoContext = puestos.find(p => p.id === data.elementoId)?.nombre; break;
-            case 'area': areaContext = areas.find(a => a.id === data.elementoId)?.nombre; break;
+            case 'puesto': dataToSave.puesto = puestos.find(p => p.id === data.elementoId)?.nombre; break;
+            case 'area': dataToSave.area = areas.find(a => a.id === data.elementoId)?.nombre; break;
         }
     }
 
@@ -383,18 +386,21 @@ export default function AccionesPage() {
              const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
              if (parentProc) { areaContext = parentProc.area; deptoContext = parentProc.departamento; puestoContext = parentProc.puesto; }
         }
+    } else if (dataToSave.politicaId) {
+        const pol = politicas.find(p => p.id === dataToSave.politicaId);
+        if (pol) { areaContext = pol.areaResponsable; deptoContext = pol.departamentoResponsable; }
     }
     
     // Assign context
-    dataToSave.area = areaContext;
-    dataToSave.departamento = deptoContext;
-    dataToSave.puesto = puestoContext;
+    if (!dataToSave.area) dataToSave.area = areaContext;
+    if (!dataToSave.departamento) dataToSave.departamento = deptoContext;
+    if (!dataToSave.puesto) dataToSave.puesto = puestoContext;
 
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
       if (isBeingCompleted && editingAccion.estado !== 'Completada') {
-          await finishCompletingAction(editingAccion.id, data.elementoType);
+          await finishCompletingAction(editingAccion.id);
       } else {
         setIsAccionDialogOpen(false);
       }
@@ -403,7 +409,7 @@ export default function AccionesPage() {
       if (newActionId) {
         toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
         if (isBeingCompleted) {
-            await finishCompletingAction(newActionId, data.elementoType);
+            await finishCompletingAction(newActionId);
         }
       }
       setIsAccionDialogOpen(false);
@@ -907,7 +913,7 @@ export default function AccionesPage() {
                                 <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
                                   <SelectContent>
-                                    {accionEstados.map(estado => (<SelectItem key={estado} value={estado} disabled={isReadOnly}>{estado}</SelectItem>))}
+                                    {accionEstados.filter(estado => !editingAccion ? estado !== 'Completada' : true).map(estado => (<SelectItem key={estado} value={estado} disabled={isReadOnly}>{estado}</SelectItem>))}
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
