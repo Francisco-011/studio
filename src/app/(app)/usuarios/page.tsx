@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -6,7 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { collection, onSnapshot, doc, updateDoc, query, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -190,20 +192,41 @@ export default function UsuariosPage() {
   async function handleUserSubmit(data: UserFormData) {
     if (!editingUser || !hasPermission('usuarios:edit')) return;
     
-    const userDocRef = doc(db, "users", editingUser.id);
     try {
-        await updateDoc(userDocRef, {
-            nombreCompleto: data.nombreCompleto,
+        const functions = getFunctions();
+        const setUserRole = httpsCallable(functions, 'setUserRole');
+        await setUserRole({
+            userId: editingUser.id,
             rol: data.rol,
             nivelAcceso: data.nivelAcceso,
-            activo: data.activo,
             puestoId: data.puestoId || null,
         });
-        toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido actualizados.' });
-        addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Se actualizó el perfil del usuario "${data.nombreCompleto}".` });
-    } catch (error) {
-        console.error("Error updating user:", error);
-        toast({ title: "Error", description: "No se pudo actualizar el usuario.", variant: "destructive"});
+
+        // The Cloud Function now also updates the Firestore doc, but we can update the name client-side for immediate feedback.
+        const userDocRef = doc(db, "users", editingUser.id);
+        await updateDoc(userDocRef, {
+            nombreCompleto: data.nombreCompleto,
+            activo: data.activo, // The function doesn't handle 'activo', so we do it here.
+        });
+
+        toast({
+            title: 'Usuario Actualizado',
+            description: `Los permisos para ${data.nombreCompleto} han sido actualizados. Puede que necesite volver a iniciar sesión para ver los cambios.`,
+        });
+        addLogEntry({
+            action: 'update',
+            entityType: 'Usuario',
+            entityName: data.nombreCompleto,
+            details: `Se actualizaron los permisos y perfil del usuario "${data.nombreCompleto}".`
+        });
+
+    } catch (error: any) {
+        console.error("Error setting user role via function:", error);
+        toast({
+            title: "Error de Permisos",
+            description: error.message || "No se pudo actualizar el rol del usuario.",
+            variant: "destructive"
+        });
     }
     
     setEditingUser(null);

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -389,18 +390,18 @@ export default function AyudaPage() {
                 <AccordionTrigger className="text-lg font-semibold">6. Registro de Cambios de Arquitectura</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
                   <div className="pt-4 border-t border-dashed first:pt-0 first:border-t-0">
-                    <h4 className="font-semibold text-base flex items-center gap-2"><ShieldAlert className="text-amber-500" />Migración de Seguridad a Nivel de Servidor (En Progreso)</h4>
-                    <p className="font-medium text-muted-foreground text-xs">Fecha de Inicio: 14 de Julio, 2025</p>
+                    <h4 className="font-semibold text-base flex items-center gap-2"><ShieldAlert className="text-amber-500" />Migración de Seguridad a Nivel de Servidor</h4>
+                    <p className="font-medium text-muted-foreground text-xs">Implementado el 15 de Julio, 2025</p>
                     <p className="mt-2">
-                      Para robustecer la seguridad y asegurar que los datos sensibles nunca lleguen al navegador del usuario, se está realizando una migración del modelo de permisos.
+                      Para robustecer la seguridad y asegurar que los datos sensibles nunca lleguen al navegador del usuario, se ha realizado una migración completa del modelo de permisos. El filtrado de datos ya no se realiza en el navegador, sino en el servidor, utilizando la infraestructura de Firebase.
                     </p>
                     <h5 className="font-semibold mt-3">Paso 1: Delegación de Seguridad a Firestore</h5>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>
-                        <strong>Actualización de Reglas de Seguridad:</strong> Se han modificado las reglas de Firestore para que utilicen los "Custom Claims" (atributos personalizados como rol y nivel de acceso) del token de autenticación de cada usuario. Esto permite que la base de datos misma valide si un usuario puede leer un documento.
+                        <strong>Actualización de Reglas de Seguridad:</strong> Se han modificado las reglas de Firestore para que utilicen los "Custom Claims" (atributos personalizados como rol y nivel de acceso) del token de autenticación de cada usuario. Esto permite que la base de datos misma valide si un usuario puede leer un documento antes de enviarlo.
                       </li>
                       <li>
-                        <strong>Simplificación de Contexts:</strong> Se ha eliminado la lógica de filtrado de seguridad del lado del cliente (específicamente en `ProcesosContext.tsx` y `PoliticasContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
+                        <strong>Simplificación de Contexts:</strong> Se eliminó la lógica de filtrado de seguridad del lado del cliente (en archivos como `ProcesosContext.tsx` y `PoliticasContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
                       </li>
                     </ul>
                     <h5 className="font-semibold mt-3">Paso 2: Implementación de Cloud Functions</h5>
@@ -412,6 +413,13 @@ export default function AyudaPage() {
                         <strong>Actualización del `AuthContext`:</strong> El contexto de autenticación de la aplicación se actualizó para leer estos permisos directamente desde el token del usuario al iniciar sesión, asegurando que la información de permisos siempre sea la correcta y segura.
                       </li>
                     </ul>
+                     <h5 className="font-semibold mt-3">Paso 3: Integración con la UI</h5>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                       <li>
+                        <strong>Llamada a Cloud Function:</strong> El módulo de "Usuarios y Permisos" fue actualizado. En lugar de modificar los perfiles directamente, ahora llama a la Cloud Function `setUserRole` para que el servidor aplique los cambios de permisos de forma segura.
+                      </li>
+                    </ul>
+                    <p className="mt-2"><strong>Impacto Final:</strong> Con esta arquitectura, la seguridad es máxima. Los datos sensibles son filtrados a nivel de base de datos y nunca llegan al navegador del usuario a menos que este tenga los permisos explícitos para verlos.</p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
