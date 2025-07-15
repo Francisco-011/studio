@@ -400,10 +400,16 @@ export default function AyudaPage() {
                         <strong>Actualización de Reglas de Seguridad:</strong> Se han modificado las reglas de Firestore para que utilicen los "Custom Claims" (atributos personalizados como rol y nivel de acceso) del token de autenticación de cada usuario. Esto permite que la base de datos misma valide si un usuario puede leer un documento.
                       </li>
                       <li>
-                        <strong>Simplificación de Contexts:</strong> Se ha eliminado la lógica de filtrado de seguridad del lado del cliente (específicamente en `ProcesosContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
+                        <strong>Simplificación de Contexts:</strong> Se ha eliminado la lógica de filtrado de seguridad del lado del cliente (específicamente en `ProcesosContext.tsx` y `PoliticasContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
                       </li>
-                      <li>
-                        <strong>Estado Actual:</strong> Este es el primer paso de varios. La implementación de las Cloud Functions para asignar estos "Custom Claims" es el siguiente paso crítico.
+                    </ul>
+                    <h5 className="font-semibold mt-3">Paso 2: Implementación de Cloud Functions</h5>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                       <li>
+                        <strong>Gestión de Permisos Centralizada:</strong> Se ha creado una Cloud Function (`setUserRole`) que se ejecuta en el servidor. Es la única autorizada para "sellar" los permisos (`rol`, `nivelAcceso`, `departamentoId`, etc.) en el token de autenticación de un usuario.
+                      </li>
+                       <li>
+                        <strong>Actualización del `AuthContext`:</strong> El contexto de autenticación de la aplicación se actualizó para leer estos permisos directamente desde el token del usuario al iniciar sesión, asegurando que la información de permisos siempre sea la correcta y segura.
                       </li>
                     </ul>
                   </div>

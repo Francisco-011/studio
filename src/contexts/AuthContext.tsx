@@ -4,12 +4,10 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
-import type { Puesto } from './PuestosContext';
-import type { Departamento } from './DepartamentosContext';
 
 interface UserProfile {
   uid: string;
@@ -34,67 +32,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        let userDocSnap = await getDoc(userDocRef);
+        try {
+          // Force refresh the token to get the latest custom claims
+          const idTokenResult = await firebaseUser.getIdTokenResult(true);
+          const claims = idTokenResult.claims;
 
-        if (!userDocSnap.exists()) {
-          const newProfile = {
-            nombreCompleto: firebaseUser.displayName || firebaseUser.email || 'Usuario Nuevo',
-            email: firebaseUser.email,
-            rol: 'Usuario Final' as UserRole,
-            nivelAcceso: 'Público' as NivelAcceso,
-            activo: true,
-            createdAt: serverTimestamp(),
-          };
-          try {
-            await setDoc(userDocRef, newProfile);
-            userDocSnap = await getDoc(userDocRef);
-          } catch (error) {
-            console.error("Failed to create user profile in Firestore:", error);
-            auth.signOut();
-            setUser(null);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        if (userDocSnap.exists()) {
-          const userProfileData = userDocSnap.data();
-          
-          let nivelAcceso = userProfileData.nivelAcceso;
-          if (userProfileData.rol === 'Administrador' && !nivelAcceso) {
-            nivelAcceso = 'Confidencial';
-          } else if (!nivelAcceso) {
-            nivelAcceso = 'Público';
-          }
-          
-          let areaId, departamentoId;
-          if (userProfileData.puestoId) {
-             const puestoQuery = query(collection(db, 'puestos'), where('__name__', '==', userProfileData.puestoId));
-             const puestoSnap = await getDocs(puestoQuery);
-             if (!puestoSnap.empty) {
-                const puestoData = puestoSnap.docs[0].data() as Puesto;
-                areaId = puestoData.areaId;
-                departamentoId = puestoData.departamentoId;
-             }
-          }
-          
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            nombreCompleto: userProfileData.nombreCompleto,
-            rol: userProfileData.rol,
-            nivelAcceso: nivelAcceso,
-            puestoId: userProfileData.puestoId,
-            areaId: areaId,
-            departamentoId: departamentoId,
-          });
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-        } else {
-          auth.signOut();
-          setUser(null);
+          if (userDocSnap.exists()) {
+            const dbProfile = userDocSnap.data();
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              nombreCompleto: dbProfile.nombreCompleto || 'Usuario',
+              // Prioritize claims, fallback to DB, then to default
+              rol: (claims.rol as UserRole) || dbProfile.rol || 'Usuario Final',
+              nivelAcceso: (claims.nivelAcceso as NivelAcceso) || dbProfile.nivelAcceso || 'Público',
+              puestoId: (claims.puestoId as string) || dbProfile.puestoId,
+              departamentoId: (claims.departamentoId as string) || undefined,
+              areaId: (claims.areaId as string) || undefined,
+            });
+          } else {
+            // This case is for first-time sign-ups that haven't had a profile created yet.
+            // A separate signup flow should handle profile creation.
+            // For now, we sign them out to enforce profile existence.
+             console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}. Signing out.`);
+             auth.signOut();
+             setUser(null);
+          }
+        } catch (error) {
+           console.error("Error fetching user data or claims:", error);
+           auth.signOut();
+           setUser(null);
         }
       } else {
         setUser(null);
