@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,7 +14,7 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { useProcesos, type CapturedProcess } from '@/contexts/ProcesosContext';
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
-import { cn } from '@/lib/utils';
+import { cn, formatMinutesToHours } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose
@@ -36,9 +36,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock, Save } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
+import { Separator } from '@/components/ui/separator';
 
 
 const NO_AREA_SELECTED = "__NO_AREA_SELECTED__";
@@ -101,8 +102,23 @@ const accionFormSchema = z.object({
 
 type AccionFormData = z.infer<typeof accionFormSchema>;
 
-const ITEMS_PER_PAGE = 10;
+// Schema for the impact registration dialog
+const impactActivitySchema = z.object({
+  id: z.string(),
+  nombre: z.string(),
+  tiempoEstimadoActual: z.number().optional(),
+  nuevoTiempoEstimado: z.preprocess(
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int().nonnegative().optional()
+  ),
+});
+const impactFormSchema = z.object({
+  affectedActivities: z.array(impactActivitySchema),
+});
+type ImpactFormData = z.infer<typeof impactFormSchema>;
 
+
+const ITEMS_PER_PAGE = 10;
 type SortableAccionKeys = keyof Omit<Accion, 'historialDeCambios' | 'descripcion'> | 'elementoAsociado';
 type SortDirection = 'ascending' | 'descending';
 
@@ -110,7 +126,6 @@ interface SortConfig {
   key: SortableAccionKeys;
   direction: SortDirection;
 }
-
 
 function formatCurrencyDisplay(amount?: number, currency?: Moneda) {
   if (amount === undefined || amount === null || !currency || isNaN(amount)) return "-";
@@ -143,7 +158,7 @@ export default function AccionesPage() {
   const { areas, isLoading: isLoadingAreas } = useAreas();
   const { departamentos, isLoading: isLoadingDepartamentos } = useDepartamentos();
   const { puestos, isLoadingPuestos } = usePuestos();
-  const { actividades, isLoadingActividades } = useActividades();
+  const { actividades, updateActividad: updateActividadContext, isLoadingActividades } = useActividades();
   const { procesos: capturedProcesses, updateProceso, isLoadingProcesos } = useProcesos();
   const { procedimientos, isLoadingProcedimientos } = useProcedimientos();
   
@@ -165,6 +180,12 @@ export default function AccionesPage() {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const [isClient, setIsClient] = useState(false);
+  
+  const [isImpactDialogOpen, setIsImpactDialogOpen] = useState(false);
+  const [actionToComplete, setActionToComplete] = useState<Accion | null>(null);
+  const [affectedActivities, setAffectedActivities] = useState<Actividad[]>([]);
+
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -188,7 +209,7 @@ export default function AccionesPage() {
     
     if (fieldLower.includes('ahorrotiempo')) {
         const numValue = Number(value);
-        return isNaN(numValue) ? String(value) : formatTimeSavingDisplay(numValue, accion?.unidadTiempoAhorro);
+        return isNaN(numValue) ? String(value) : formatMinutesToHours(numValue);
     }
     
     if (fieldLower === 'procesoid') return capturedProcesses.find(p => p.id === value)?.proceso || String(value).slice(0, 8) + '...';
@@ -222,6 +243,10 @@ export default function AccionesPage() {
       historialDeCambios: [],
     },
   });
+
+  const impactForm = useForm<ImpactFormData>({
+    resolver: zodResolver(impactFormSchema),
+  });
   
   const isReadOnly = useMemo(() => {
     if (!editingAccion) return false;
@@ -230,6 +255,39 @@ export default function AccionesPage() {
 
   const watchedArea = accionForm.watch('area');
   const watchedDepartamento = accionForm.watch('departamento');
+  
+  useEffect(() => {
+    if (actionToComplete) {
+      let activitiesFound: Actividad[] = [];
+      if (actionToComplete.actividadId) {
+        const act = actividades.find(a => a.id === actionToComplete.actividadId);
+        if (act) activitiesFound.push(act);
+      } else if (actionToComplete.procedimientoId) {
+        const proc = procedimientos.find(p => p.id === actionToComplete.procedimientoId);
+        if (proc && proc.activityOrder) {
+          activitiesFound = proc.activityOrder.map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
+        }
+      } else if (actionToComplete.procesoId) {
+        const proc = capturedProcesses.find(p => p.id === actionToComplete.procesoId);
+        if (proc && proc.procedimientoOrder) {
+          const proceduresInProcess = proc.procedimientoOrder.map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p);
+          const activityIds = new Set(proceduresInProcess.flatMap(p => p.activityOrder || []));
+          activitiesFound = Array.from(activityIds).map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
+        }
+      }
+      setAffectedActivities(activitiesFound);
+      impactForm.reset({
+        affectedActivities: activitiesFound.map(act => ({
+          id: act.id,
+          nombre: act.nombre,
+          tiempoEstimadoActual: act.tiempoEstimado,
+          nuevoTiempoEstimado: act.tiempoEstimado,
+        }))
+      });
+      setIsImpactDialogOpen(true);
+    }
+  }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm]);
+
 
   const availableDepartamentos = useMemo(() => {
     if (!watchedArea || isLoadingDepartamentos || isLoadingAreas) return [];
@@ -318,6 +376,12 @@ export default function AccionesPage() {
   }, [editingAccion, isAccionDialogOpen, accionForm]);
 
   async function handleAccionSubmit(data: AccionFormData) {
+    if (data.estado === 'Completada' && editingAccion) {
+        setActionToComplete(editingAccion);
+        setIsAccionDialogOpen(false);
+        return;
+    }
+
     const dataToSave = {
         ...data,
         area: data.area || undefined,
@@ -333,13 +397,6 @@ export default function AccionesPage() {
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
-      if (data.estado === 'Completada') {
-        toast({
-          title: 'Acción Completada',
-          description: 'Recuerde ajustar manualmente los tiempos/costos de las actividades afectadas y recalcular los totales del proceso si es necesario.',
-          duration: 8000
-        });
-      }
     } else {
       await addAccion(dataToSave);
       toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
@@ -348,6 +405,40 @@ export default function AccionesPage() {
     setIsAccionDialogOpen(false);
     accionForm.reset();
   }
+  
+  const handleImpactSubmit = async (data: ImpactFormData) => {
+    if (!actionToComplete) return;
+
+    const historialImpacto: CambioHistorial[] = [];
+    let totalAhorroTiempo = 0;
+    
+    for (const updatedAct of data.affectedActivities) {
+      const originalAct = affectedActivities.find(a => a.id === updatedAct.id);
+      if (originalAct && originalAct.tiempoEstimado !== updatedAct.nuevoTiempoEstimado) {
+        await updateActividadContext(updatedAct.id, { tiempoEstimado: updatedAct.nuevoTiempoEstimado });
+        const ahorro = (originalAct.tiempoEstimado || 0) - (updatedAct.nuevoTiempoEstimado || 0);
+        if (ahorro > 0) {
+          totalAhorroTiempo += ahorro;
+        }
+      }
+    }
+    
+    if (totalAhorroTiempo > 0) {
+      historialImpacto.push({
+        timestamp: new Date().toISOString(),
+        field: 'Ahorro de Tiempo Calculado',
+        before: 'N/A',
+        after: `${totalAhorroTiempo} minutos`,
+      });
+    }
+
+    await updateAccion(actionToComplete.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() }, historialImpacto);
+
+    toast({ title: '¡Mejora Completada!', description: 'El impacto se ha registrado y la acción se marcó como completada.' });
+    setIsImpactDialogOpen(false);
+    setActionToComplete(null);
+  };
+
 
   function handleEditAccion(accion: Accion) {
     if(accion.estado === 'Completada' || accion.estado === 'Cancelada'){
@@ -1092,7 +1183,7 @@ export default function AccionesPage() {
                         {accion.fechaObjetivo && isValid(parseISO(accion.fechaObjetivo)) ? format(parseISO(accion.fechaObjetivo), 'dd/MM/yyyy', { locale: es }) : '-'}
                       </TableCell>
                       <TableCell className="text-right">{formatCurrencyDisplay(accion.ahorroEstimado, accion.monedaAhorro)}</TableCell>
-                      <TableCell className="text-right">{formatTimeSavingDisplay(accion.ahorroTiempoEstimado, accion.unidadTiempoAhorro)}</TableCell>
+                      <TableCell className="text-right">{formatMinutesToHours(accion.ahorroTiempoEstimado)}</TableCell>
                        <TableCell className="text-center text-xs text-muted-foreground">
                         {isValid(new Date(accion.updatedAt)) ? format(new Date(accion.updatedAt), 'dd/MM/yy HH:mm', { locale: es }) : '-'}
                       </TableCell>
@@ -1207,6 +1298,66 @@ export default function AccionesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+       <Dialog open={isImpactDialogOpen} onOpenChange={setIsImpactDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <Form {...impactForm}>
+            <form onSubmit={impactForm.handleSubmit(handleImpactSubmit)}>
+              <DialogHeader>
+                <DialogTitle>Registrar Impacto de la Mejora</DialogTitle>
+                <DialogDescription>
+                  ¡Felicidades por completar la acción! Por favor, actualice los nuevos tiempos estimados para las actividades afectadas.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 max-h-[60vh] overflow-y-auto pr-2">
+                {affectedActivities.length > 0 ? (
+                  <div className="space-y-4">
+                    {impactForm.getValues('affectedActivities').map((field, index) => (
+                      <Card key={field.id} className="p-4">
+                        <FormField
+                          control={impactForm.control}
+                          name={`affectedActivities.${index}.nuevoTiempoEstimado`}
+                          render={({ field: formField }) => (
+                            <FormItem>
+                              <FormLabel className="font-semibold">{field.nombre}</FormLabel>
+                              <div className="flex items-center gap-4">
+                                <div className="text-sm text-muted-foreground">
+                                  Tiempo Actual: {formatMinutesToHours(field.tiempoEstimadoActual) || 'N/A'}
+                                </div>
+                                <div className="relative">
+                                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      placeholder="Nuevo Tiempo (min)"
+                                      {...formField}
+                                      value={formField.value ?? ''}
+                                      className="pl-9"
+                                    />
+                                  </FormControl>
+                                </div>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground p-6 bg-muted/20 rounded-lg">
+                    No se encontraron actividades directamente vinculadas a esta acción para registrar impacto.
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                <Button type="submit"><Save className="mr-2 h-4 w-4"/>Guardar y Completar Acción</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -1252,3 +1403,4 @@ export default function AccionesPage() {
     </div>
   );
 }
+

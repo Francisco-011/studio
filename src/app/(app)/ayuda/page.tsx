@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React from 'react';
@@ -181,10 +180,11 @@ export default function AyudaPage() {
                        <AccordionItem value="acciones">
                           <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Target className="mr-2 h-5 w-5 text-primary"/>Acciones de Mejora</AccordionTrigger>
                           <AccordionContent className="p-4 space-y-2">
-                              <p><strong>Función:</strong> Permite crear, asignar, dar seguimiento y cuantificar el impacto de cada iniciativa de mejora, desde su concepción hasta su finalización. Convierte las ideas y hallazgos en proyectos concretos y medibles.</p>
+                              <p><strong>Función:</strong> Permite crear, asignar, dar seguimiento y cuantificar el impacto de cada iniciativa de mejora. Convierte las ideas y hallazgos en proyectos concretos y medibles.</p>
                                <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                                <DetailItem icon={PlusCircle} term="Agregar" description="Registra una nueva acción de mejora, especificando su objetivo, responsable, fechas y ahorros estimados (en costo y tiempo)."/>
-                                <DetailItem icon={History} term="Ver Historial" description="Muestra un registro de todos los cambios realizados en una acción, especialmente útil para ver las mejoras cuantificadas al completarse."/>
+                                <DetailItem icon={PlusCircle} term="Agregar" description="Registra una nueva acción de mejora, especificando su objetivo, responsable y fechas estimadas."/>
+                                <DetailItem icon={CheckSquare} term="Completar Acción" description='Al cambiar el estado de una acción a "Completada", se abrirá un diálogo para registrar el impacto real. Deberá ingresar los nuevos tiempos/costos de las actividades afectadas. El sistema calculará automáticamente el ahorro y lo registrará en el historial de la acción.'/>
+                                <DetailItem icon={History} term="Ver Historial" description="Muestra un registro de todos los cambios realizados en una acción, especialmente el ahorro real calculado al completarse."/>
                                 <DetailItem icon={FileText} term="Exportar" description="Descarga la lista de acciones filtradas a un archivo CSV."/>
                               </dl>
                           </AccordionContent>
@@ -246,8 +246,8 @@ export default function AyudaPage() {
                                             <p>Cuantifica el impacto real de las acciones de mejora que han sido marcadas como **"Completada"**.</p>
                                             <p className="mt-1"><strong>Lógica de Cálculo:</strong></p>
                                             <ol className="list-decimal pl-5 mt-1 space-y-1">
-                                                <li><strong>Prioridad 1 (Historial de Cambios):</strong> Si al completar una acción, se modificaron campos de tiempo o costo en el sistema (ej. se redujo el tiempo de una actividad), el sistema busca en el **historial de la acción** la diferencia entre el valor "Antes" y "Después". Este es el ahorro más preciso.</li>
-                                                <li><strong>Prioridad 2 (Estimación Inicial):</strong> Si no hay cambios registrados en el historial, el sistema utiliza el valor que se ingresó en los campos "Ahorro Estimado" al crear o editar la acción.</li>
+                                                <li><strong>Prioridad 1 (Impacto Calculado):</strong> Al completar una acción, el sistema solicita los nuevos tiempos/costos de las actividades afectadas. El sistema calcula la diferencia entre el valor "Antes" y "Después" para cada actividad y suma todos estos ahorros. Este es el ahorro más preciso y se guarda en el historial de la acción.</li>
+                                                <li><strong>Prioridad 2 (Estimación Inicial):</strong> Si la acción se completó sin registrar un impacto detallado (un flujo antiguo o sin actividades vinculadas), el sistema utiliza el valor que se ingresó en los campos "Ahorro Estimado" al crear la acción.</li>
                                             </ol>
                                             <p className="mt-1 text-xs text-muted-foreground">Nota: El ahorro se anualiza si el cambio fue en una métrica mensual, semanal, etc.</p>
                                         </div>
