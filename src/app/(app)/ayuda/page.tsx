@@ -315,9 +315,39 @@ export default function AyudaPage() {
                     </Accordion>
                 </AccordionContent>
               </AccordionItem>
+              
+              <AccordionItem value="item-faq">
+                <AccordionTrigger className="text-lg font-semibold">4. Preguntas Frecuentes y Aclaraciones</AccordionTrigger>
+                <AccordionContent className="space-y-6 text-sm">
+                   <Accordion type="multiple" className="w-full space-y-2">
+                        <AccordionItem value="faq-active-items">
+                            <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md">¿Los dashboards solo muestran información de elementos activos?</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-3">
+                                <p>En general, sí. Los dashboards están diseñados para reflejar la operativa actual, por lo que priorizan los elementos activos. Sin embargo, hay algunas diferencias clave:</p>
+                                <ul className="list-disc pl-5 space-y-2">
+                                    <li>
+                                        <strong>Dashboard Principal y de Procesos:</strong> Los contadores de "Procesos Mapeados" y otras métricas relacionadas **solo cuentan procesos activos**. Si un proceso se marca como inactivo, dejará de aparecer en estos cálculos.
+                                    </li>
+                                     <li>
+                                        <strong>Dashboard de Procesos (Carga de Trabajo):</strong> El análisis de carga de trabajo considera todas las actividades asignadas a los puestos, pero **excluye las actividades que han sido marcadas como inactivas** en el módulo de Actividades.
+                                    </li>
+                                    <li>
+                                        <strong>Dashboard de Mejoras y Auditoría:</strong> Estos se basan en el estado del evento en sí (la acción de mejora o la auditoría). Por ejemplo, un ahorro de una "Acción Completada" se seguirá contando aunque el proceso que la originó se inactive después. Esto permite un seguimiento histórico del impacto.
+                                    </li>
+                                     <li>
+                                        <strong>Dashboard de Políticas:</strong> Se enfoca en políticas con estado **"Aprobada"**. No incluye borradores ni políticas en revisión para sus métricas de cobertura.
+                                    </li>
+                                </ul>
+                                <p><strong>En resumen:</strong> Para los contadores operativos, solo lo activo cuenta. Para los registros históricos (mejoras, auditorías), el estado del evento es lo que importa.</p>
+                            </AccordionContent>
+                        </AccordionItem>
+                   </Accordion>
+                </AccordionContent>
+              </AccordionItem>
+
 
               <AccordionItem value="item-security">
-                <AccordionTrigger className="text-lg font-semibold">4. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold">5. Roles y Niveles de Acceso: ¿Quién ve qué?</AccordionTrigger>
                 <AccordionContent className="space-y-4 text-sm">
                   <p>PROSCENDIA utiliza un sistema de seguridad de dos capas para proteger la información: los **Niveles de Acceso** y los **Roles**. Es crucial entender cómo interactúan.</p>
                   
