@@ -222,52 +222,65 @@ export default function AccionesPage() {
   const watchedElementoType = accionForm.watch('elementoType');
   const isQuantitativeAction = ['proceso', 'procedimiento', 'actividad'].includes(watchedElementoType || '');
   
+  const finishCompletingAction = useCallback(async (actionId: string) => {
+    const actionToProcess = acciones.find(a => a.id === actionId);
+    if (!actionToProcess) {
+      toast({ title: "Acción no encontrada", description: "No se pudo iniciar el proceso de completado.", variant: 'destructive' });
+      return;
+    }
+    const elementType = actionToProcess.procesoId ? 'proceso' : (actionToProcess.procedimientoId ? 'procedimiento' : (actionToProcess.actividadId ? 'actividad' : null));
+    const isQuantitative = elementType && ['proceso', 'procedimiento', 'actividad'].includes(elementType);
+
+    if (!isQuantitative) {
+      await updateAccion(actionToProcess.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
+      toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
+      setActionToComplete(null);
+      setIsAccionDialogOpen(false); 
+      return;
+    }
+    
+    setActionToComplete(actionToProcess);
+
+  }, [acciones, updateAccion]);
+
   useEffect(() => {
     if (actionToComplete) {
-      const elementType = actionToComplete.procesoId ? 'proceso' : (actionToComplete.procedimientoId ? 'procedimiento' : (actionToComplete.actividadId ? 'actividad' : null));
-      const elementId = actionToComplete.procesoId || actionToComplete.procedimientoId || actionToComplete.actividadId;
-      
-      const isQuantitative = elementType && ['proceso', 'procedimiento', 'actividad'].includes(elementType);
+        const elementType = actionToComplete.procesoId ? 'proceso' : (actionToComplete.procedimientoId ? 'procedimiento' : (actionToComplete.actividadId ? 'actividad' : null));
+        const elementId = actionToComplete.procesoId || actionToComplete.procedimientoId || actionToComplete.actividadId;
+        
+        let activitiesFound: Actividad[] = [];
 
-      if (!isQuantitative) {
-          updateAccion(actionToComplete.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
-          toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
-          setActionToComplete(null);
-          return;
-      }
-      
-      let activitiesFound: Actividad[] = [];
-
-      if (elementType === 'actividad') {
-        const act = actividades.find(a => a.id === elementId);
-        if (act) activitiesFound.push(act);
-      } else if (elementType === 'procedimiento') {
-        const proc = procedimientos.find(p => p.id === elementId);
-        if (proc && proc.activityOrder) {
-          activitiesFound = proc.activityOrder.map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
+        if (elementType === 'actividad') {
+            const act = actividades.find(a => a.id === elementId);
+            if (act) activitiesFound.push(act);
+        } else if (elementType === 'procedimiento') {
+            const proc = procedimientos.find(p => p.id === elementId);
+            if (proc && proc.activityOrder) {
+                activitiesFound = proc.activityOrder.map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
+            }
+        } else if (elementType === 'proceso') {
+            const proc = capturedProcesses.find(p => p.id === elementId);
+            if (proc && proc.procedimientoOrder) {
+                const proceduresInProcess = proc.procedimientoOrder.map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p);
+                const activityIds = new Set(proceduresInProcess.flatMap(p => p.activityOrder || []));
+                activitiesFound = Array.from(activityIds).map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
+            }
         }
-      } else if (elementType === 'proceso') {
-        const proc = capturedProcesses.find(p => p.id === elementId);
-        if (proc && proc.procedimientoOrder) {
-          const proceduresInProcess = proc.procedimientoOrder.map(procId => procedimientos.find(p => p.id === procId)).filter((p): p is Procedimiento => !!p);
-          const activityIds = new Set(proceduresInProcess.flatMap(p => p.activityOrder || []));
-          activitiesFound = Array.from(activityIds).map(actId => actividades.find(a => a.id === actId)).filter((a): a is Actividad => !!a);
-        }
-      }
-      setAffectedActivities(activitiesFound);
-      impactForm.reset({
-        affectedActivities: activitiesFound.map(act => ({
-          id: act.id,
-          nombre: act.nombre,
-          tiempoEstimadoActual: act.tiempoEstimado,
-          costoEstimadoActual: act.costoEstimado,
-          ahorroTiempo: undefined,
-          ahorroCosto: undefined,
-        }))
-      });
-      setIsImpactDialogOpen(true);
+        
+        setAffectedActivities(activitiesFound);
+        impactForm.reset({
+            affectedActivities: activitiesFound.map(act => ({
+                id: act.id,
+                nombre: act.nombre,
+                tiempoEstimadoActual: act.tiempoEstimado,
+                costoEstimadoActual: act.costoEstimado,
+                ahorroTiempo: undefined,
+                ahorroCosto: undefined,
+            }))
+        });
+        setIsImpactDialogOpen(true);
     }
-  }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm, updateAccion]);
+  }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm]);
 
 
   const elementoOptions = useMemo(() => {
@@ -317,25 +330,10 @@ export default function AccionesPage() {
     }
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
   
-  const finishCompletingAction = async (actionId: string) => {
-    const actionToProcess = acciones.find(a => a.id === actionId);
-    if (!actionToProcess) {
-        toast({ title: "Acción no encontrada", description: "No se pudo iniciar el proceso de completado.", variant: 'destructive' });
-        return;
-    }
-    setActionToComplete(actionToProcess);
-  };
-  
   async function handleAccionSubmit(data: AccionFormData) {
     const isCreating = !editingAccion;
     const isBeingCompleted = data.estado === 'Completada';
 
-    // Separate organizational context from the specific element being acted upon.
-    let areaContext: string | undefined;
-    let deptoContext: string | undefined;
-    let puestoContext: string | undefined;
-
-    // Define the specific element association
     const dataToSave: Partial<Omit<Accion, 'id'|'fechaCreacion'|'updatedAt'>> = {
       nombre: data.nombre,
       descripcion: data.descripcion,
@@ -344,59 +342,44 @@ export default function AccionesPage() {
       fechaObjetivo: data.fechaObjetivo?.toISOString(),
       fechaFinalizacion: data.fechaFinalizacion?.toISOString(),
       origenMejora: data.origenMejora,
-      // Handle quantitative fields only if applicable
-      ahorroEstimado: isQuantitativeAction ? data.ahorroEstimado : undefined,
-      monedaAhorro: isQuantitativeAction ? data.monedaAhorro : undefined,
-      ahorroTiempoEstimado: isQuantitativeAction ? data.ahorroTiempoEstimado : undefined,
-      unidadTiempoAhorro: isQuantitativeAction ? data.unidadTiempoAhorro : undefined,
-      // Clear all associations first
-      procesoId: undefined,
-      procedimientoId: undefined,
-      actividadId: undefined,
-      politicaId: undefined,
-      sistemaId: undefined,
-      area: undefined,
-      departamento: undefined,
-      puesto: undefined,
+      procesoId: undefined, procedimientoId: undefined, actividadId: undefined,
+      politicaId: undefined, sistemaId: undefined, area: undefined, departamento: undefined, puesto: undefined,
     };
     
-    // Set the correct ID based on elementType
     if (data.elementoType && data.elementoId) {
-        switch (data.elementoType) {
-            case 'proceso': dataToSave.procesoId = data.elementoId; break;
-            case 'procedimiento': dataToSave.procedimientoId = data.elementoId; break;
-            case 'actividad': dataToSave.actividadId = data.elementoId; break;
-            case 'politica': dataToSave.politicaId = data.elementoId; break;
-            case 'sistema': dataToSave.sistemaId = data.elementoId; break;
-            case 'puesto': dataToSave.puesto = puestos.find(p => p.id === data.elementoId)?.nombre; break;
-            case 'area': dataToSave.area = areas.find(a => a.id === data.elementoId)?.nombre; break;
-        }
+      switch (data.elementoType) {
+        case 'proceso': dataToSave.procesoId = data.elementoId; break;
+        case 'procedimiento': dataToSave.procedimientoId = data.elementoId; break;
+        case 'actividad': dataToSave.actividadId = data.elementoId; break;
+        case 'politica': dataToSave.politicaId = data.elementoId; break;
+        case 'sistema': dataToSave.sistemaId = data.elementoId; break;
+        case 'puesto': dataToSave.puesto = puestos.find(p => p.id === data.elementoId)?.nombre; break;
+        case 'area': dataToSave.area = areas.find(a => a.id === data.elementoId)?.nombre; break;
+      }
     }
 
-    // Determine organizational context from the element
-    if (dataToSave.procesoId) {
-        const proc = capturedProcesses.find(p => p.id === dataToSave.procesoId);
-        if (proc) { areaContext = proc.area; deptoContext = proc.departamento; puestoContext = proc.puesto; }
+    if(dataToSave.procesoId) {
+      const proc = capturedProcesses.find(p => p.id === dataToSave.procesoId);
+      if (proc) { dataToSave.area = proc.area; dataToSave.departamento = proc.departamento; dataToSave.puesto = proc.puesto; }
     } else if (dataToSave.procedimientoId) {
-        const procManual = procedimientos.find(p => p.id === dataToSave.procedimientoId);
-        const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
-        if (parentProc) { areaContext = parentProc.area; deptoContext = parentProc.departamento; puestoContext = parentProc.puesto; }
+      const procManual = procedimientos.find(p => p.id === dataToSave.procedimientoId);
+      const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
+      if (parentProc) { dataToSave.area = parentProc.area; dataToSave.departamento = parentProc.departamento; dataToSave.puesto = parentProc.puesto; }
     } else if (dataToSave.actividadId) {
-        const act = actividades.find(a => a.id === dataToSave.actividadId);
-        if (act && act.procedimientoId) {
-             const procManual = procedimientos.find(p => p.id === act.procedimientoId);
-             const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
-             if (parentProc) { areaContext = parentProc.area; deptoContext = parentProc.departamento; puestoContext = parentProc.puesto; }
-        }
-    } else if (dataToSave.politicaId) {
-        const pol = politicas.find(p => p.id === dataToSave.politicaId);
-        if (pol) { areaContext = pol.areaResponsable; deptoContext = pol.departamentoResponsable; }
+      const act = actividades.find(a => a.id === dataToSave.actividadId);
+      if (act && act.procedimientoId) {
+         const procManual = procedimientos.find(p => p.id === act.procedimientoId);
+         const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
+         if (parentProc) { dataToSave.area = parentProc.area; dataToSave.departamento = parentProc.departamento; dataToSave.puesto = parentProc.puesto; }
+      }
     }
-    
-    // Assign context
-    if (!dataToSave.area) dataToSave.area = areaContext;
-    if (!dataToSave.departamento) dataToSave.departamento = deptoContext;
-    if (!dataToSave.puesto) dataToSave.puesto = puestoContext;
+
+    if (isQuantitativeAction) {
+        dataToSave.ahorroEstimado = data.ahorroEstimado;
+        dataToSave.monedaAhorro = data.monedaAhorro;
+        dataToSave.ahorroTiempoEstimado = data.ahorroTiempoEstimado;
+        dataToSave.unidadTiempoAhorro = data.unidadTiempoAhorro;
+    }
 
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
@@ -406,7 +389,7 @@ export default function AccionesPage() {
       } else {
         setIsAccionDialogOpen(false);
       }
-    } else { // Creating new action
+    } else {
       const newActionId = await addAccion(dataToSave as any);
       if (newActionId) {
         toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
@@ -441,13 +424,18 @@ export default function AccionesPage() {
         const ahorroCosto = updatedAct.ahorroCosto || 0;
 
         let changes: Partial<Actividad> = {};
+        let tiempoAntes = originalAct.tiempoEstimado || 0;
+        let costoAntes = originalAct.costoEstimado || 0;
+
         if (ahorroTiempo > 0) {
-            changes.tiempoEstimado = (originalAct.tiempoEstimado || 0) - ahorroTiempo;
+            changes.tiempoEstimado = tiempoAntes - ahorroTiempo;
             totalAhorroTiempo += ahorroTiempo;
+            historialImpacto.push({ timestamp: new Date().toISOString(), field: `Tiempo de Actividad: ${originalAct.nombre}`, before: tiempoAntes, after: changes.tiempoEstimado });
         }
         if (ahorroCosto > 0) {
-            changes.costoEstimado = (originalAct.costoEstimado || 0) - ahorroCosto;
+            changes.costoEstimado = costoAntes - ahorroCosto;
             totalAhorroCosto += ahorroCosto;
+            historialImpacto.push({ timestamp: new Date().toISOString(), field: `Costo de Actividad: ${originalAct.nombre}`, before: costoAntes, after: changes.costoEstimado });
         }
 
         if (Object.keys(changes).length > 0) {
@@ -456,21 +444,11 @@ export default function AccionesPage() {
     }
     
     if (totalAhorroTiempo > 0) {
-      historialImpacto.push({
-        timestamp: new Date().toISOString(),
-        field: 'Ahorro de Tiempo Calculado',
-        before: 'N/A',
-        after: `${totalAhorroTiempo}`,
-      });
+      historialImpacto.push({ timestamp: new Date().toISOString(), field: 'Ahorro de Tiempo Total', before: 'N/A', after: `${totalAhorroTiempo}` });
     }
 
     if (totalAhorroCosto > 0) {
-      historialImpacto.push({
-        timestamp: new Date().toISOString(),
-        field: 'Ahorro de Costo Calculado',
-        before: 'N/A',
-        after: `${totalAhorroCosto}`,
-      });
+      historialImpacto.push({ timestamp: new Date().toISOString(), field: 'Ahorro de Costo Total', before: 'N/A', after: `${totalAhorroCosto}` });
     }
 
     await updateAccion(actionToComplete.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() }, historialImpacto);
@@ -600,8 +578,8 @@ export default function AccionesPage() {
   
   const getSavings = (accion: Accion) => {
     if (accion.estado === 'Completada') {
-      const ahorroTiempoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Tiempo Calculado')?.after;
-      const ahorroCostoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Costo Calculado')?.after;
+      const ahorroTiempoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Tiempo Total')?.after;
+      const ahorroCostoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Costo Total')?.after;
       
       const tiempo = ahorroTiempoReal ? Number(ahorroTiempoReal) : accion.ahorroTiempoEstimado;
       const costo = ahorroCostoReal ? Number(ahorroCostoReal) : accion.ahorroEstimado;
@@ -1316,7 +1294,7 @@ export default function AccionesPage() {
                                 <FormItem>
                                     <FormLabel className="text-xs">Ahorro en Costo / Ejecución</FormLabel>
                                     <div className="text-xs text-muted-foreground">
-                                    Actual: {formatCurrencyDisplay(field.costoEstimadoActual, actividades.find(a => a.id === field.id)?.monedaCosto) || 'N/A'}
+                                    Actual: {formatCurrencyDisplay(field.costoEstimadoActual, actividades.find(a => a.id === field.id)?.monedaCosto)}
                                     </div>
                                     <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
