@@ -38,7 +38,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
-import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock, Save, Workflow as WorkflowIcon, Building, Users as UsersIcon, ListChecks, Laptop, FileText as PoliticaIcon } from "lucide-react";
+import { Target, Search, PlusCircle, Edit2, Trash2, AlertTriangle, CalendarIcon, DollarSign, Loader2, FileText as FileTextIcon, Clock, History, CheckSquare, ChevronsUpDown, ArrowUp, ArrowDown, Eye, XCircle, Lock, Save, Workflow as WorkflowIcon, Building as BuildingIcon, Users as UsersIcon, ListChecks, Laptop, FileText as PoliticaIcon } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from '@/components/ui/combobox';
 import { Separator } from '@/components/ui/separator';
@@ -71,7 +71,6 @@ const accionFormSchema = z.object({
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
     z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
-  unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   historialDeCambios: z.array(z.any()).optional(),
   origenMejora: z.string().optional(),
 }).refine(data => {
@@ -330,25 +329,24 @@ export default function AccionesPage() {
       }
     }
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
-
+  
+  const finishCompletingAction = async (actionId: string, isQuantitative: boolean) => {
+    if (isQuantitative) {
+        const actionToProcess = acciones.find(a => a.id === actionId);
+        if (actionToProcess) {
+            setActionToComplete(actionToProcess);
+        }
+    } else {
+        await updateAccion(actionId, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
+        toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
+    }
+    setIsAccionDialogOpen(false);
+    setEditingAccion(null);
+  };
+  
   async function handleAccionSubmit(data: AccionFormData) {
     const isQuantitative = ['proceso', 'procedimiento', 'actividad'].includes(data.elementoType || '');
-    
-    if (data.estado === 'Completada' && editingAccion) {
-        if (isQuantitative) {
-          setActionToComplete(editingAccion);
-          setIsAccionDialogOpen(false); // Close this form, open impact form
-          return;
-        } else {
-          // Qualitative actions: complete directly without impact form
-          await updateAccion(editingAccion.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
-          toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
-          setIsAccionDialogOpen(false);
-          setEditingAccion(null);
-          return;
-        }
-    }
-    
+
     const specificIds = {
         procesoId: data.elementoType === 'proceso' ? data.elementoId : undefined,
         procedimientoId: data.elementoType === 'procedimiento' ? data.elementoId : undefined,
@@ -356,10 +354,10 @@ export default function AccionesPage() {
         sistemaId: data.elementoType === 'sistema' ? data.elementoId : undefined,
         politicaId: data.elementoType === 'politica' ? data.elementoId : undefined,
     };
-
-    let areaFromElement: string | undefined = data.area;
-    let puestoFromElement: string | undefined = data.puesto;
-    let departamentoFromElement: string | undefined = data.departamento;
+    
+    let areaFromElement: string | undefined = undefined;
+    let puestoFromElement: string | undefined = undefined;
+    let departamentoFromElement: string | undefined = undefined;
 
     if (data.elementoType === 'area') {
         areaFromElement = areas.find(a => a.id === data.elementoId)?.nombre;
@@ -368,9 +366,24 @@ export default function AccionesPage() {
         if (puestoObj) {
             puestoFromElement = puestoObj.nombre;
             const areaObj = areas.find(a => a.id === puestoObj.areaId);
-            if (areaObj) {
-                areaFromElement = areaObj.nombre;
-            }
+            if (areaObj) areaFromElement = areaObj.nombre;
+            const deptoObj = departamentos.find(d => d.id === puestoObj.departamentoId);
+            if (deptoObj) departamentoFromElement = deptoObj.nombre;
+        }
+    } else if (data.elementoType === 'proceso') {
+        const proc = capturedProcesses.find(p => p.id === data.elementoId);
+        if (proc) {
+            areaFromElement = proc.area;
+            puestoFromElement = proc.puesto;
+            departamentoFromElement = proc.departamento;
+        }
+    } else if (data.elementoType === 'procedimiento') {
+        const procManual = procedimientos.find(p => p.id === data.elementoId);
+        const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
+        if (parentProc) {
+            areaFromElement = parentProc.area;
+            puestoFromElement = parentProc.puesto;
+            departamentoFromElement = parentProc.departamento;
         }
     }
     
@@ -398,15 +411,29 @@ export default function AccionesPage() {
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
+      if (data.estado === 'Completada') {
+          await finishCompletingAction(editingAccion.id, isQuantitative);
+      } else {
+        setIsAccionDialogOpen(false);
+      }
     } else {
-      await addAccion(dataToSave as any);
-      toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
+      const newActionId = await addAccion(dataToSave as any);
+      if (newActionId) {
+        toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
+        if (data.estado === 'Completada') {
+            await finishCompletingAction(newActionId, isQuantitative);
+        } else {
+            setIsAccionDialogOpen(false);
+        }
+      }
     }
-    setEditingAccion(null);
-    setIsAccionDialogOpen(false);
-    accionForm.reset();
+    
+    if (data.estado !== 'Completada') {
+      setEditingAccion(null);
+      accionForm.reset();
+    }
   }
-  
+
   const handleImpactSubmit = async (data: ImpactFormData) => {
     if (!actionToComplete) return;
 
@@ -782,7 +809,7 @@ export default function AccionesPage() {
               </div>
               <div className="flex items-end gap-2">
                 <Button onClick={handleExport} variant="outline" className="w-full">
-                    <FileText className="mr-2 h-4 w-4" /> Exportar
+                    <FileTextIcon className="mr-2 h-4 w-4" /> Exportar
                 </Button>
                 <Dialog open={isAccionDialogOpen} onOpenChange={(isOpen) => {
                   setIsAccionDialogOpen(isOpen);
