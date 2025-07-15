@@ -102,7 +102,6 @@ const accionFormSchema = z.object({
 
 type AccionFormData = z.infer<typeof accionFormSchema>;
 
-// Schema for the impact registration dialog
 const impactActivitySchema = z.object({
   id: z.string(),
   nombre: z.string(),
@@ -317,42 +316,28 @@ export default function AccionesPage() {
   const watchedProcesoId = accionForm.watch('procesoId');
   const watchedProcedimientoId = accionForm.watch('procedimientoId');
   const watchedActividadId = accionForm.watch('actividadId');
+  const watchedGenericArea = accionForm.watch('area');
 
   useEffect(() => {
-    if (watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) {
-        accionForm.setValue('procedimientoId', undefined);
-        accionForm.setValue('actividadId', undefined);
-        const process = capturedProcesses.find(p => p.id === watchedProcesoId);
-        if (process) {
-            accionForm.setValue('area', process.area);
-            accionForm.setValue('departamento', process.departamento);
-            accionForm.setValue('puesto', process.puesto);
-        }
+    const process = capturedProcesses.find(p => p.id === watchedProcesoId);
+    if (process) {
+        accionForm.setValue('area', process.area);
+        accionForm.setValue('departamento', process.departamento || undefined);
+        accionForm.setValue('puesto', process.puesto);
     }
   }, [watchedProcesoId, accionForm, capturedProcesses]);
   
   useEffect(() => {
-    if (watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) {
-      accionForm.setValue('procesoId', undefined);
-      accionForm.setValue('actividadId', undefined);
-      const procedure = procedimientos.find(p => p.id === watchedProcedimientoId);
-      if (procedure) {
-        const parentProcess = capturedProcesses.find(p => p.id === procedure.procesoId);
-        if (parentProcess) {
-          accionForm.setValue('area', parentProcess.area);
-          accionForm.setValue('departamento', parentProcess.departamento);
-          accionForm.setValue('puesto', parentProcess.puesto);
-        }
+    const procedure = procedimientos.find(p => p.id === watchedProcedimientoId);
+    if (procedure) {
+      const parentProcess = capturedProcesses.find(p => p.id === procedure.procesoId);
+      if (parentProcess) {
+        accionForm.setValue('area', parentProcess.area);
+        accionForm.setValue('departamento', parentProcess.departamento || undefined);
+        accionForm.setValue('puesto', parentProcess.puesto);
       }
     }
   }, [watchedProcedimientoId, accionForm, procedimientos, capturedProcesses]);
-
-  useEffect(() => {
-     if (watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED) {
-        accionForm.setValue('procesoId', undefined);
-        accionForm.setValue('procedimientoId', undefined);
-     }
-  }, [watchedActividadId, accionForm]);
 
 
   useEffect(() => {
@@ -509,7 +494,7 @@ export default function AccionesPage() {
   }
   
   const sortedAndFilteredAcciones = useMemo(() => {
-    setCurrentPage(1); // Reset page on filter change
+    setCurrentPage(1); 
     let filtered = acciones.filter(accion => {
       const matchesSearchTerm = 
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -673,8 +658,8 @@ export default function AccionesPage() {
           escapeCsvCell(savings.tiempo),
           escapeCsvCell(acc.unidadTiempoAhorro),
           escapeCsvCell(acc.origenMejora),
-          escapeCsvCell(isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
-          escapeCsvCell(isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
+          escapeCsvCell(acc.fechaCreacion && isValid(parseISO(acc.fechaCreacion)) ? format(parseISO(acc.fechaCreacion), 'yyyy-MM-dd HH:mm:ss') : ''),
+          escapeCsvCell(acc.updatedAt && isValid(new Date(acc.updatedAt)) ? format(new Date(acc.updatedAt), 'yyyy-MM-dd HH:mm:ss') : '')
         ].join(',');
       })
     ];
@@ -840,7 +825,7 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione un proceso"
                                   searchPlaceholder="Buscar proceso..."
-                                  disabled={isReadOnly || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!watchedProcedimientoId || !!watchedActividadId || !!watchedGenericArea}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -861,7 +846,7 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione un procedimiento"
                                   searchPlaceholder="Buscar procedimiento..."
-                                  disabled={isReadOnly || !!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedActividadId && watchedActividadId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!watchedProcesoId || !!watchedActividadId || !!watchedGenericArea}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -882,7 +867,7 @@ export default function AccionesPage() {
                                   onChange={field.onChange}
                                   placeholder="Seleccione una actividad"
                                   searchPlaceholder="Buscar actividad..."
-                                  disabled={isReadOnly || !!(watchedProcesoId && watchedProcesoId !== NO_ELEMENTO_SELECTED) || !!(watchedProcedimientoId && watchedProcedimientoId !== NO_ELEMENTO_SELECTED)}
+                                  disabled={isReadOnly || !!watchedProcesoId || !!watchedProcedimientoId || !!watchedGenericArea}
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -890,7 +875,7 @@ export default function AccionesPage() {
                           />
                         </div>
                         <FormDescription className="text-xs text-center !mt-2 pt-1">
-                          Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
+                            Opcional: La acción puede vincularse a un solo elemento (proceso, procedimiento o actividad).
                         </FormDescription>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -943,7 +928,7 @@ export default function AccionesPage() {
                                       accionForm.setValue('puesto', undefined);
                                   }}
                                   value={field.value || NO_AREA_SELECTED}
-                                  disabled={isLoadingAreas || isReadOnly}
+                                  disabled={isReadOnly || isLoadingAreas || !!watchedProcesoId || !!watchedProcedimientoId}
                                 >
                                   <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un área" /></SelectTrigger></FormControl>
                                   <SelectContent>
@@ -967,7 +952,7 @@ export default function AccionesPage() {
                                             accionForm.setValue('puesto', undefined);
                                         }}
                                         value={field.value || NO_DEPARTAMENTO_SELECTED}
-                                        disabled={isLoadingDepartamentos || isReadOnly || !watchedArea}
+                                        disabled={isReadOnly || isLoadingDepartamentos || !watchedArea || !!watchedProcesoId || !!watchedProcedimientoId}
                                     >
                                         <FormControl><SelectTrigger><SelectValue placeholder={!watchedArea ? "Seleccione un área" : "Seleccione un depto"} /></SelectTrigger></FormControl>
                                         <SelectContent>
@@ -988,7 +973,7 @@ export default function AccionesPage() {
                                 <Select
                                   onValueChange={(value) => field.onChange(value === NO_PUESTO_SELECTED ? undefined : value)}
                                   value={field.value || NO_PUESTO_SELECTED}
-                                  disabled={isLoadingPuestos || isReadOnly || !watchedArea}
+                                  disabled={isReadOnly || isLoadingPuestos || !watchedArea || !!watchedProcesoId || !!watchedProcedimientoId}
                                 >
                                   <FormControl><SelectTrigger><SelectValue placeholder={!watchedArea ? "Seleccione un área" : "Seleccione un puesto"} /></SelectTrigger></FormControl>
                                   <SelectContent>
@@ -1472,4 +1457,3 @@ export default function AccionesPage() {
     </div>
   );
 }
-
