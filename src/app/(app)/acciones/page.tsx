@@ -59,13 +59,13 @@ const accionFormSchema = z.object({
   fechaObjetivo: z.date().optional(),
   fechaFinalizacion: z.date().optional(),
   ahorroEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative("El ahorro debe ser un número positivo o cero.").optional()
+    (val) => (val === "" || val === null || val === undefined ? undefined : String(val)),
+    z.coerce.number().nonnegative("El ahorro debe ser un número positivo o cero.").optional()
   ),
   monedaAhorro: z.enum(monedaOptions).optional(),
   ahorroTiempoEstimado: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
+    (val) => (val === "" || val === null || val === undefined ? undefined : String(val)),
+    z.coerce.number().int("El tiempo debe ser un número entero.").nonnegative("El tiempo debe ser positivo o cero.").optional()
   ),
   unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   historialDeCambios: z.array(z.any()).optional(),
@@ -224,9 +224,19 @@ export default function AccionesPage() {
   
   useEffect(() => {
     if (actionToComplete) {
-      let activitiesFound: Actividad[] = [];
       const elementType = actionToComplete.procesoId ? 'proceso' : (actionToComplete.procedimientoId ? 'procedimiento' : (actionToComplete.actividadId ? 'actividad' : null));
       const elementId = actionToComplete.procesoId || actionToComplete.procedimientoId || actionToComplete.actividadId;
+      
+      const isQuantitative = elementType && ['proceso', 'procedimiento', 'actividad'].includes(elementType);
+
+      if (!isQuantitative) {
+          updateAccion(actionToComplete.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
+          toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
+          setActionToComplete(null);
+          return;
+      }
+      
+      let activitiesFound: Actividad[] = [];
 
       if (elementType === 'actividad') {
         const act = actividades.find(a => a.id === elementId);
@@ -257,7 +267,7 @@ export default function AccionesPage() {
       });
       setIsImpactDialogOpen(true);
     }
-  }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm]);
+  }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm, updateAccion]);
 
 
   const elementoOptions = useMemo(() => {
@@ -313,15 +323,7 @@ export default function AccionesPage() {
         toast({ title: "Acción no encontrada", description: "No se pudo iniciar el proceso de completado.", variant: 'destructive' });
         return;
     }
-    const isQuantitative = actionToProcess.procesoId || actionToProcess.procedimientoId || actionToProcess.actividadId;
-
-    if (isQuantitative) {
-        setActionToComplete(actionToProcess);
-    } else {
-        await updateAccion(actionId, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
-        toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
-    }
-    setIsAccionDialogOpen(false);
+    setActionToComplete(actionToProcess);
   };
   
   async function handleAccionSubmit(data: AccionFormData) {
@@ -410,9 +412,12 @@ export default function AccionesPage() {
         toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
         if (isBeingCompleted) {
             await finishCompletingAction(newActionId);
+        } else {
+          setIsAccionDialogOpen(false);
         }
+      } else {
+        setIsAccionDialogOpen(false);
       }
-      setIsAccionDialogOpen(false);
     }
     
     if (!isBeingCompleted) {
@@ -473,6 +478,7 @@ export default function AccionesPage() {
     toast({ title: '¡Mejora Completada!', description: 'El impacto se ha registrado y la acción se marcó como completada.' });
     setIsImpactDialogOpen(false);
     setActionToComplete(null);
+    setIsAccionDialogOpen(false);
   };
 
 
