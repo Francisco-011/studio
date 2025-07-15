@@ -15,7 +15,7 @@ Se decidió migrar a un modelo de seguridad "server-side" (lado del servidor), u
 ### Fases de Implementación:
 
 #### **Paso 1: Delegación de Seguridad a Firestore**
-*   **Acción:** Se actualizaron las `firestore.rules` (disponibles en `GUIA_PUESTA_EN_PRODUCCION.md`) para que utilicen los "Custom Claims" (atributos personalizados como `rol` y `nivelAcceso`) del token de autenticación de cada usuario. La base de datos ahora valida los permisos antes de enviar cualquier dato.
+*   **Acción:** Se actualizaron las `firestore.rules` (disponibles en `GUIA_PUESTA_EN_PRODUCCION.md`) para que utilicen los "Custom Claims" (atributos personalizados como `rol` y `nivelAcceso`) del token de autenticación de cada usuario. Se introdujo una función `canAccessDocument` que centraliza la lógica de permisos y se aplica a las reglas de lectura de las colecciones principales (`procesos`, `politicas`, etc.). Esto asegura que la propia base de datos valida los permisos antes de enviar cualquier dato.
 *   **Impacto:** Se simplificó el `ProcesosContext`, eliminando la lógica de filtrado del lado del cliente y confiando en que Firestore solo enviará los datos a los que el usuario tiene permiso.
 
 #### **Paso 2: Preparación de Contexts y Simplificación**

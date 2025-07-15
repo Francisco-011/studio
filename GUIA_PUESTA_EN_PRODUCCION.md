@@ -137,7 +137,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         }
 
         // Función para verificar si un usuario puede ver un documento específico.
-        function canReadDocument(docData) {
+        function canAccessDocument(docData) {
             let userLevel = getUserAccessLevel();
             let docLevel = docData.get('clasificacion', 'Público');
 
@@ -184,20 +184,20 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         match /acciones/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
         match /actividades/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
         
-        // -- Reglas de Lectura Permisiva para Colecciones Principales --
-        // Permite la lectura si el usuario está autenticado. El filtrado fino se delega al Contexto en la app.
+        // -- Reglas de Lectura Seguras para Colecciones Principales --
+        // Permite la lectura si el usuario está autenticado y pasa la validación de nivel de acceso.
         match /procesos/{docId} {
-            allow read: if isAuthenticated();
+            allow read: if isAuthenticated() && canAccessDocument(resource.data);
             allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
         }
         
         match /politicas/{docId} {
-            allow read: if isAuthenticated();
+            allow read: if isAuthenticated() && canAccessDocument(resource.data);
             allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
         }
         
         match /procedimientos/{docId} {
-            allow read: if isAuthenticated();
+            allow read: if isAuthenticated() && canAccessDocument(resource.data);
             allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
         }
         
