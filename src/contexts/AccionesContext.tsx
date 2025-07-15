@@ -45,8 +45,8 @@ export interface Accion {
   departamento?: string;
   puesto?: string;
   procesoId?: string;
-  actividadId?: string;
   procedimientoId?: string;
+  actividadId?: string;
   sistemaId?: string;
   politicaId?: string;
   updatedAt: number; // timestamp

@@ -52,18 +52,9 @@ const accionFormSchema = z.object({
   descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
   responsable: z.string().min(1, 'El responsable es requerido.'),
   
-  // New fields for element selection
   elementoType: z.enum(elementoAccionTypes, { errorMap: () => ({ message: "Seleccione un tipo de elemento."})}).optional(),
   elementoId: z.string().optional(),
   
-  // Original specific IDs (will be set programmatically)
-  procesoId: z.string().optional(),
-  procedimientoId: z.string().optional(),
-  actividadId: z.string().optional(),
-  sistemaId: z.string().optional(),
-  politicaId: z.string().optional(),
-
-  // Original generic hierarchy
   area: z.string().optional(),
   departamento: z.string().optional(),
   puesto: z.string().optional(),
@@ -285,24 +276,20 @@ export default function AccionesPage() {
   }, [actionToComplete, actividades, procedimientos, capturedProcesses, impactForm]);
 
   useEffect(() => {
-      if (!watchedElementoId) return;
+      if (!watchedElementoId || !watchedElementoType) return;
+      let area, depto, puesto;
 
       if (watchedElementoType === 'proceso') {
           const proc = capturedProcesses.find(p => p.id === watchedElementoId);
-          if (proc) {
-              accionForm.setValue('area', proc.area);
-              accionForm.setValue('departamento', proc.departamento || undefined);
-              accionForm.setValue('puesto', proc.puesto);
-          }
+          if (proc) { area = proc.area; depto = proc.departamento; puesto = proc.puesto; }
       } else if (watchedElementoType === 'procedimiento') {
           const procManual = procedimientos.find(p => p.id === watchedElementoId);
           const parentProc = capturedProcesses.find(p => p.id === procManual?.procesoId);
-          if (parentProc) {
-              accionForm.setValue('area', parentProc.area);
-              accionForm.setValue('departamento', parentProc.departamento || undefined);
-              accionForm.setValue('puesto', parentProc.puesto);
-          }
+          if (parentProc) { area = parentProc.area; depto = parentProc.departamento; puesto = parentProc.puesto; }
       }
+      accionForm.setValue('area', area);
+      accionForm.setValue('departamento', depto || undefined);
+      accionForm.setValue('puesto', puesto);
   }, [watchedElementoId, watchedElementoType, accionForm, capturedProcesses, procedimientos]);
 
 
@@ -333,14 +320,15 @@ export default function AccionesPage() {
         if (editingAccion.procesoId) { elementType = 'proceso'; elementId = editingAccion.procesoId; }
         else if (editingAccion.procedimientoId) { elementType = 'procedimiento'; elementId = editingAccion.procedimientoId; }
         else if (editingAccion.actividadId) { elementType = 'actividad'; elementId = editingAccion.actividadId; }
+        else if (editingAccion.sistemaId) { elementType = 'sistema'; elementId = editingAccion.sistemaId; }
+        else if (editingAccion.politicaId) { elementType = 'politica'; elementId = editingAccion.politicaId; }
         else if (editingAccion.puesto) {
             elementType = 'puesto';
             elementId = puestos.find(p => p.nombre === editingAccion.puesto)?.id;
         } else if (editingAccion.area) {
             elementType = 'area';
             elementId = areas.find(a => a.nombre === editingAccion.area)?.id;
-        } else if (editingAccion.sistemaId) { elementType = 'sistema'; elementId = editingAccion.sistemaId; }
-        else if (editingAccion.politicaId) { elementType = 'politica'; elementId = editingAccion.politicaId; }
+        }
 
         accionForm.reset({
           ...editingAccion,
@@ -350,18 +338,29 @@ export default function AccionesPage() {
           fechaFinalizacion: editingAccion.fechaFinalizacion ? parseISO(editingAccion.fechaFinalizacion) : undefined,
         });
       } else {
-        accionForm.reset();
+        accionForm.reset({
+            nombre: '', descripcion: '', responsable: '', estado: 'Pendiente'
+        });
       }
     }
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
 
   async function handleAccionSubmit(data: AccionFormData) {
-    const isQuantitativeAction = data.procesoId || data.procedimientoId || data.actividadId;
+    const isQuantitativeAction = ['proceso', 'procedimiento', 'actividad'].includes(data.elementoType || '');
     
-    if (data.estado === 'Completada' && editingAccion && isQuantitativeAction) {
-        setActionToComplete(editingAccion);
-        setIsAccionDialogOpen(false);
-        return;
+    if (data.estado === 'Completada' && editingAccion) {
+        if (isQuantitativeAction) {
+          setActionToComplete(editingAccion);
+          setIsAccionDialogOpen(false);
+          return;
+        } else {
+          // Complete qualitative actions directly
+          await updateAccion(editingAccion.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
+          toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
+          setIsAccionDialogOpen(false);
+          setEditingAccion(null);
+          return;
+        }
     }
     
     const specificIds = {
@@ -376,23 +375,29 @@ export default function AccionesPage() {
     if (data.elementoType === 'area') area = areas.find(a => a.id === data.elementoId)?.nombre;
     if (data.elementoType === 'puesto') puesto = puestos.find(p => p.id === data.elementoId)?.nombre;
 
-    const dataToSave: Omit<Accion, 'id'|'fechaCreacion'|'updatedAt'> = {
-        ...data,
-        ...specificIds,
+    const dataToSave: Partial<Omit<Accion, 'id'|'fechaCreacion'|'updatedAt'>> = {
+        nombre: data.nombre,
+        descripcion: data.descripcion,
+        responsable: data.responsable,
+        estado: data.estado,
+        fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
+        fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
+        ahorroEstimado: data.ahorroEstimado,
+        monedaAhorro: data.monedaAhorro,
+        ahorroTiempoEstimado: data.ahorroTiempoEstimado,
+        unidadTiempoAhorro: data.unidadTiempoAhorro,
+        origenMejora: data.origenMejora,
         area: area || undefined,
         departamento: departamento || undefined,
         puesto: puesto || undefined,
-        fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
-        fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
+        ...specificIds,
     };
-    delete (dataToSave as any).elementoType;
-    delete (dataToSave as any).elementoId;
 
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
       toast({ title: 'Acción Actualizada', description: 'La acción de mejora ha sido actualizada.' });
     } else {
-      await addAccion(dataToSave);
+      await addAccion(dataToSave as any);
       toast({ title: 'Acción Agregada', description: 'La nueva acción de mejora ha sido registrada.' });
     }
     setEditingAccion(null);
@@ -523,7 +528,7 @@ export default function AccionesPage() {
             const getElementName = (acc: Accion) => {
                 if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
                 if (acc.procedimientoId) return `PC: ${procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || ''}`;
-                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === ac.actividadId)?.nombre || ''}`;
+                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === acc.actividadId)?.nombre || ''}`;
                 if (acc.puesto) return `U: ${acc.puesto}`;
                 if (acc.area) return `B: ${acc.area}`;
                 return '';
@@ -565,12 +570,12 @@ export default function AccionesPage() {
   }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, procedimientos, actividades, areaFilter, puestoFilter]);
   
   const getSavings = (accion: Accion) => {
-    if (accion.estado === 'Completada' && accion.historialDeCambios) {
-      const ahorroTiempoReal = accion.historialDeCambios.find(h => h.field === 'Ahorro de Tiempo Calculado')?.after;
-      const ahorroCostoReal = accion.historialDeCambios.find(h => h.field === 'Ahorro de Costo Calculado')?.after;
+    if (accion.estado === 'Completada') {
+      const ahorroTiempoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Tiempo Calculado')?.after;
+      const ahorroCostoReal = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Costo Calculado')?.after;
       
-      const tiempo = ahorroTiempoReal ? Number(ahorroTiempoReal) : undefined;
-      const costo = ahorroCostoReal ? Number(ahorroCostoReal) : undefined;
+      const tiempo = ahorroTiempoReal ? Number(ahorroTiempoReal) : accion.ahorroTiempoEstimado;
+      const costo = ahorroCostoReal ? Number(ahorroCostoReal) : accion.ahorroEstimado;
       
       return {
         tiempo,
