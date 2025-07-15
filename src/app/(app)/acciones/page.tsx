@@ -108,7 +108,7 @@ type ImpactFormData = z.infer<typeof impactFormSchema>;
 
 
 const ITEMS_PER_PAGE = 10;
-type SortableAccionKeys = keyof Omit<Accion, 'historialDeCambios' | 'descripcion'> | 'elementoAsociado';
+type SortableAccionKeys = keyof Omit<Accion, 'historialDeCambios' | 'descripcion'> | 'elementoType' | 'elementoName';
 type SortDirection = 'ascending' | 'descending';
 
 interface SortConfig {
@@ -332,15 +332,15 @@ export default function AccionesPage() {
   }, [editingAccion, isAccionDialogOpen, accionForm, puestos, areas]);
 
   async function handleAccionSubmit(data: AccionFormData) {
-    const isQuantitativeAction = ['proceso', 'procedimiento', 'actividad'].includes(data.elementoType || '');
+    const isQuantitative = ['proceso', 'procedimiento', 'actividad'].includes(data.elementoType || '');
     
     if (data.estado === 'Completada' && editingAccion) {
-        if (isQuantitativeAction) {
+        if (isQuantitative) {
           setActionToComplete(editingAccion);
-          setIsAccionDialogOpen(false);
+          setIsAccionDialogOpen(false); // Close this form, open impact form
           return;
         } else {
-          // Complete qualitative actions directly
+          // Qualitative actions: complete directly without impact form
           await updateAccion(editingAccion.id, { estado: 'Completada', fechaFinalizacion: new Date().toISOString() });
           toast({ title: '¡Mejora Completada!', description: 'La acción cualitativa se marcó como completada.' });
           setIsAccionDialogOpen(false);
@@ -356,11 +356,24 @@ export default function AccionesPage() {
         sistemaId: data.elementoType === 'sistema' ? data.elementoId : undefined,
         politicaId: data.elementoType === 'politica' ? data.elementoId : undefined,
     };
-    
-    let area = data.area, puesto = data.puesto, departamento = data.departamento;
-    if (data.elementoType === 'area') area = areas.find(a => a.id === data.elementoId)?.nombre;
-    if (data.elementoType === 'puesto') puesto = puestos.find(p => p.id === data.elementoId)?.nombre;
 
+    let areaFromElement: string | undefined = data.area;
+    let puestoFromElement: string | undefined = data.puesto;
+    let departamentoFromElement: string | undefined = data.departamento;
+
+    if (data.elementoType === 'area') {
+        areaFromElement = areas.find(a => a.id === data.elementoId)?.nombre;
+    } else if (data.elementoType === 'puesto') {
+        const puestoObj = puestos.find(p => p.id === data.elementoId);
+        if (puestoObj) {
+            puestoFromElement = puestoObj.nombre;
+            const areaObj = areas.find(a => a.id === puestoObj.areaId);
+            if (areaObj) {
+                areaFromElement = areaObj.nombre;
+            }
+        }
+    }
+    
     const dataToSave: Partial<Omit<Accion, 'id'|'fechaCreacion'|'updatedAt'>> = {
         nombre: data.nombre,
         descripcion: data.descripcion,
@@ -368,16 +381,19 @@ export default function AccionesPage() {
         estado: data.estado,
         fechaObjetivo: data.fechaObjetivo ? data.fechaObjetivo.toISOString() : undefined,
         fechaFinalizacion: data.fechaFinalizacion ? data.fechaFinalizacion.toISOString() : undefined,
-        ahorroEstimado: data.ahorroEstimado,
-        monedaAhorro: data.monedaAhorro,
-        ahorroTiempoEstimado: data.ahorroTiempoEstimado,
-        unidadTiempoAhorro: data.unidadTiempoAhorro,
         origenMejora: data.origenMejora,
-        area: area || undefined,
-        departamento: departamento || undefined,
-        puesto: puesto || undefined,
+        area: areaFromElement,
+        departamento: departamentoFromElement,
+        puesto: puestoFromElement,
         ...specificIds,
     };
+    
+    if (isQuantitative) {
+      dataToSave.ahorroEstimado = data.ahorroEstimado;
+      dataToSave.monedaAhorro = data.monedaAhorro;
+      dataToSave.ahorroTiempoEstimado = data.ahorroTiempoEstimado;
+      dataToSave.unidadTiempoAhorro = data.unidadTiempoAhorro;
+    }
 
     if (editingAccion) {
       await updateAccion(editingAccion.id, dataToSave);
@@ -491,13 +507,26 @@ export default function AccionesPage() {
     setIsConfirmDeleteDialogOpen(false);
   }
   
+  const getElementInfo = useCallback((acc: Accion) => {
+    if (acc.procesoId) return { type: 'Proceso', name: capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || '' };
+    if (acc.procedimientoId) return { type: 'Procedimiento', name: procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || '' };
+    if (acc.actividadId) return { type: 'Actividad', name: actividades.find(a => a.id === acc.actividadId)?.nombre || '' };
+    if (acc.politicaId) return { type: 'Política', name: politicas.find(p => p.id === acc.politicaId)?.titulo || '' };
+    if (acc.sistemaId) return { type: 'Sistema', name: sistemas.find(s => s.id === acc.sistemaId)?.nombre || '' };
+    if (acc.puesto) return { type: 'Puesto', name: acc.puesto };
+    if (acc.area) return { type: 'Área', name: acc.area };
+    return { type: 'N/A', name: '-' };
+  }, [capturedProcesses, procedimientos, actividades, politicas, sistemas]);
+  
   const sortedAndFilteredAcciones = useMemo(() => {
     setCurrentPage(1); 
     let filtered = acciones.filter(accion => {
+      const { name: elementName } = getElementInfo(accion);
       const matchesSearchTerm = 
         accion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
         accion.responsable.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        elementName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (accion.origenMejora && accion.origenMejora.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === 'all' || accion.estado === statusFilter;
       const matchesArea = areaFilter === 'all' || accion.area === areaFilter;
@@ -510,17 +539,11 @@ export default function AccionesPage() {
         let valA: any;
         let valB: any;
 
-        if (sortConfig.key === 'elementoAsociado') {
-            const getElementName = (acc: Accion) => {
-                if (acc.procesoId) return `P: ${capturedProcesses.find(p => p.id === acc.procesoId)?.proceso || ''}`;
-                if (acc.procedimientoId) return `PC: ${procedimientos.find(pc => pc.id === acc.procedimientoId)?.nombre || ''}`;
-                if (acc.actividadId) return `A: ${actividades.find(ac => ac.id === acc.actividadId)?.nombre || ''}`;
-                if (acc.puesto) return `U: ${acc.puesto}`;
-                if (acc.area) return `B: ${acc.area}`;
-                return '';
-            };
-            valA = getElementName(a);
-            valB = getElementName(b);
+        if (sortConfig.key === 'elementoType' || sortConfig.key === 'elementoName') {
+            const infoA = getElementInfo(a);
+            const infoB = getElementInfo(b);
+            valA = sortConfig.key === 'elementoType' ? infoA.type : infoA.name;
+            valB = sortConfig.key === 'elementoType' ? infoB.type : infoB.name;
         } else {
             valA = a[sortConfig.key as keyof Accion];
             valB = b[sortConfig.key as keyof Accion];
@@ -553,7 +576,7 @@ export default function AccionesPage() {
     }
     return filtered;
 
-  }, [acciones, searchTerm, statusFilter, sortConfig, capturedProcesses, procedimientos, actividades, areaFilter, puestoFilter]);
+  }, [acciones, searchTerm, statusFilter, sortConfig, getElementInfo, areaFilter, puestoFilter]);
   
   const getSavings = (accion: Accion) => {
     if (accion.estado === 'Completada') {
@@ -624,7 +647,7 @@ export default function AccionesPage() {
 
     const headers = [
       "ID", "Nombre de la Acción", "Descripción", "Responsable", "Área", "Puesto", 
-      "Proceso Asociado", "Procedimiento Asociado", "Actividad Asociada", "Sistema Asociado", "Política Asociada",
+      "Tipo de Elemento", "Nombre del Elemento",
       "Estado", "Fecha Objetivo", "Fecha Finalización", "Ahorro Anual (Calculado/Estimado)", "Moneda Ahorro", 
       "Ahorro Tiempo (Calculado/Estimado)", "Unidad Tiempo Ahorro",
       "Origen Mejora", "Fecha Creación", "Última Modificación"
@@ -633,12 +656,7 @@ export default function AccionesPage() {
     const csvRows = [
       headers.join(','),
       ...sortedAndFilteredAcciones.map(acc => {
-        const procName = acc.procesoId ? capturedProcesses.find(p => p.id === acc.procesoId)?.proceso : '';
-        const procManualName = acc.procedimientoId ? procedimientos.find(p => p.id === acc.procedimientoId)?.nombre : '';
-        const actName = acc.actividadId ? actividades.find(a => a.id === acc.actividadId)?.nombre : '';
-        const sistemaName = acc.sistemaId ? sistemas.find(s => s.id === acc.sistemaId)?.nombre : '';
-        const politicaName = acc.politicaId ? politicas.find(p => p.id === acc.politicaId)?.titulo : '';
-
+        const { type, name } = getElementInfo(acc);
         const savings = getSavings(acc);
 
         return [
@@ -648,11 +666,8 @@ export default function AccionesPage() {
           escapeCsvCell(acc.responsable),
           escapeCsvCell(acc.area),
           escapeCsvCell(acc.puesto),
-          escapeCsvCell(procName),
-          escapeCsvCell(procManualName),
-          escapeCsvCell(actName),
-          escapeCsvCell(sistemaName),
-          escapeCsvCell(politicaName),
+          escapeCsvCell(type),
+          escapeCsvCell(name),
           escapeCsvCell(acc.estado),
           escapeCsvCell(acc.fechaObjetivo && isValid(parseISO(acc.fechaObjetivo)) ? format(parseISO(acc.fechaObjetivo), 'yyyy-MM-dd') : ''),
           escapeCsvCell(acc.fechaFinalizacion && isValid(parseISO(acc.fechaFinalizacion)) ? format(parseISO(acc.fechaFinalizacion), 'yyyy-MM-dd') : ''),
@@ -1048,8 +1063,11 @@ export default function AccionesPage() {
                     <TableHead className="min-w-[250px] cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('nombre')}>
                       <div className="flex items-center">Nombre de la Acción {getSortIcon('nombre')}</div>
                     </TableHead>
-                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('elementoAsociado')}>
-                      <div className="flex items-center">Elemento Asociado {getSortIcon('elementoAsociado')}</div>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('elementoType')}>
+                      <div className="flex items-center">Tipo Elemento {getSortIcon('elementoType')}</div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('elementoName')}>
+                      <div className="flex items-center">Nombre Elemento {getSortIcon('elementoName')}</div>
                     </TableHead>
                     <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => requestSort('responsable')}>
                       <div className="flex items-center">Responsable {getSortIcon('responsable')}</div>
@@ -1074,12 +1092,7 @@ export default function AccionesPage() {
                 </TableHeader>
                 <TableBody>
                   {paginatedAcciones.map((accion, index) => {
-                    const linkedProcess = accion.procesoId ? capturedProcesses.find(p => p.id === accion.procesoId) : null;
-                    const linkedProcedimiento = accion.procedimientoId ? procedimientos.find(p => p.id === accion.procedimientoId) : null;
-                    const linkedActivity = accion.actividadId ? actividades.find(a => a.id === accion.actividadId) : null;
-                    const linkedSistema = accion.sistemaId ? sistemas.find(s => s.id === accion.sistemaId) : null;
-                    const linkedPolitica = accion.politicaId ? politicas.find(p => p.id === accion.politicaId) : null;
-
+                    const { type: elementType, name: elementName } = getElementInfo(accion);
                     const isOverdue = 
                         isClient &&
                         (accion.estado === 'Pendiente' || accion.estado === 'En Progreso') && 
@@ -1096,25 +1109,8 @@ export default function AccionesPage() {
                     return (
                     <TableRow key={`${accion.id}-${index}`}>
                       <TableCell className="font-medium">{accion.nombre}</TableCell>
-                       <TableCell className="text-xs">
-                          {linkedProcess ? (
-                              <Badge variant="outline" className="flex items-center gap-1.5"><WorkflowIcon className="h-3 w-3"/>P: {linkedProcess.proceso}</Badge>
-                          ) : linkedProcedimiento ? (
-                            <Badge variant="secondary" className="flex items-center gap-1.5"><ListChecks className="h-3 w-3"/>PC: {linkedProcedimiento.nombre}</Badge>
-                          ) : linkedActivity ? (
-                              <Badge variant="secondary" className="flex items-center gap-1.5"><ListChecks className="h-3 w-3"/>A: {linkedActivity.nombre}</Badge>
-                          ) : linkedSistema ? (
-                              <Badge variant="outline" className="flex items-center gap-1.5 bg-sky-100 dark:bg-sky-900/50 border-sky-300 dark:border-sky-700"><Laptop className="h-3 w-3"/>S: {linkedSistema.nombre}</Badge>
-                          ) : linkedPolitica ? (
-                              <Badge variant="outline" className="flex items-center gap-1.5 bg-orange-100 dark:bg-orange-900/50 border-orange-300 dark:border-orange-700"><PoliticaIcon className="h-3 w-3"/>PO: {linkedPolitica.titulo}</Badge>
-                          ) : accion.puesto ? (
-                            <Badge variant="outline" className="flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/50 border-purple-300 dark:border-purple-700"><UsersIcon className="h-3 w-3"/>U: {accion.puesto}</Badge>
-                          ) : accion.area ? (
-                            <Badge variant="outline" className="flex items-center gap-1.5 bg-teal-100 dark:bg-teal-900/50 border-teal-300 dark:border-teal-700"><Building className="h-3 w-3"/>B: {accion.area}</Badge>
-                          ) : (
-                              '-'
-                          )}
-                      </TableCell>
+                       <TableCell className="text-xs">{elementType}</TableCell>
+                       <TableCell className="text-xs">{elementName}</TableCell>
                       <TableCell>{accion.responsable}</TableCell>
                       <TableCell className="text-center">
                         {isOverdue ? (
