@@ -401,22 +401,25 @@ export default function AyudaPage() {
                         <strong>Actualización de Reglas de Seguridad:</strong> Se han modificado las reglas de Firestore para que utilicen los "Custom Claims" (atributos personalizados como rol y nivel de acceso) del token de autenticación de cada usuario. Esto permite que la base de datos misma valide si un usuario puede leer un documento antes de enviarlo.
                       </li>
                       <li>
-                        <strong>Simplificación de Contexts:</strong> Se eliminó la lógica de filtrado de seguridad del lado del cliente (en archivos como `ProcesosContext.tsx` y `PoliticasContext.tsx`). La aplicación ahora confía en que Firestore solo enviará los datos a los que el usuario tiene permiso.
+                        <strong>Simplificación de Contexts:</strong> Se eliminó la lógica de filtrado de seguridad del lado del cliente (en archivos como `ProcesosContext.tsx`) para confiar en que Firestore solo enviará los datos a los que el usuario tiene permiso.
                       </li>
                     </ul>
-                    <h5 className="font-semibold mt-3">Paso 2: Implementación de Cloud Functions</h5>
+                    <h5 className="font-semibold mt-3">Paso 2: Preparación de Contextos y Simplificación</h5>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>
+                        <strong>Réplica del Patrón:</strong> La misma simplificación aplicada a `ProcesosContext` se extendió a otros contextos como `PoliticasContext` y `ExceptionsContext`, eliminando el filtrado en el cliente y preparando la aplicación para un modelo de seguridad centralizado.
+                      </li>
+                      <li>
+                        <strong>Actualización de AuthContext:</strong> Se modificó el `AuthContext` para que, al iniciar sesión, comience a leer los Custom Claims directamente desde el token de autenticación del usuario, preparando a toda la aplicación para consumir los permisos de forma segura.
+                      </li>
+                    </ul>
+                     <h5 className="font-semibold mt-3">Paso 3: Implementación de Cloud Functions</h5>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                        <li>
                         <strong>Gestión de Permisos Centralizada:</strong> Se ha creado una Cloud Function (`setUserRole`) que se ejecuta en el servidor. Es la única autorizada para "sellar" los permisos (`rol`, `nivelAcceso`, `departamentoId`, etc.) en el token de autenticación de un usuario.
                       </li>
                        <li>
-                        <strong>Actualización del `AuthContext`:</strong> El contexto de autenticación de la aplicación se actualizó para leer estos permisos directamente desde el token del usuario al iniciar sesión, asegurando que la información de permisos siempre sea la correcta y segura.
-                      </li>
-                    </ul>
-                     <h5 className="font-semibold mt-3">Paso 3: Integración con la UI</h5>
-                    <ul className="list-disc pl-5 space-y-1 mt-2">
-                       <li>
-                        <strong>Llamada a Cloud Function:</strong> El módulo de "Usuarios y Permisos" fue actualizado. En lugar de modificar los perfiles directamente, ahora llama a la Cloud Function `setUserRole` para que el servidor aplique los cambios de permisos de forma segura.
+                        <strong>Integración con la UI:</strong> El módulo de "Usuarios y Permisos" fue actualizado. En lugar de modificar los perfiles directamente, ahora llama a la Cloud Function `setUserRole` para que el servidor aplique los cambios de permisos de forma segura.
                       </li>
                     </ul>
                     <p className="mt-2"><strong>Impacto Final:</strong> Con esta arquitectura, la seguridad es máxima. Los datos sensibles son filtrados a nivel de base de datos y nunca llegan al navegador del usuario a menos que este tenga los permisos explícitos para verlos.</p>
@@ -436,3 +439,4 @@ export default function AyudaPage() {
     </div>
   );
 }
+
