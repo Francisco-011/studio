@@ -32,9 +32,9 @@ export interface Actividad {
   // New time and cost fields
   tiempoEstimado?: number; // in minutes
   tiempoIdeal?: number; // in minutes
-  costoEstimado?: number; // calculated field, maybe not stored
-  costoIdeal?: number; // calculated field, maybe not stored
-  monedaCosto?: Moneda; // currency for the cost
+  costoEstimado?: number; 
+  costoIdeal?: number; 
+  monedaCosto?: Moneda; 
   frecuencia?: typeof frecuenciaOptions[number];
   ejecucionesPorPeriodo?: number; // How many times it's executed in the given frequency
   sistemaUtilizado?: string; // New field for system used

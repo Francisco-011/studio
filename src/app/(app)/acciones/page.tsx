@@ -91,15 +91,16 @@ const impactActivitySchema = z.object({
   nombre: z.string(),
   tiempoEstimadoActual: z.number().optional(),
   costoEstimadoActual: z.number().optional(),
-  nuevoTiempoEstimado: z.preprocess(
+  ahorroTiempo: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
-    z.number().int().nonnegative().optional()
+    z.number().int().nonnegative("El ahorro debe ser positivo.").optional()
   ),
-  nuevoCostoEstimado: z.preprocess(
+  ahorroCosto: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val))),
-    z.number().nonnegative().optional()
+    z.number().nonnegative("El ahorro debe ser positivo.").optional()
   ),
 });
+
 const impactFormSchema = z.object({
   affectedActivities: z.array(impactActivitySchema),
 });
@@ -252,8 +253,8 @@ export default function AccionesPage() {
           nombre: act.nombre,
           tiempoEstimadoActual: act.tiempoEstimado,
           costoEstimadoActual: act.costoEstimado,
-          nuevoTiempoEstimado: act.tiempoEstimado,
-          nuevoCostoEstimado: act.costoEstimado,
+          ahorroTiempo: undefined,
+          ahorroCosto: undefined,
         }))
       });
       setIsImpactDialogOpen(true);
@@ -401,17 +402,17 @@ export default function AccionesPage() {
         const originalAct = affectedActivities.find(a => a.id === updatedAct.id);
         if (!originalAct) continue;
         
-        let changes: Partial<Actividad> = {};
-        if (originalAct.tiempoEstimado !== updatedAct.nuevoTiempoEstimado && updatedAct.nuevoTiempoEstimado !== undefined) {
-            changes.tiempoEstimado = updatedAct.nuevoTiempoEstimado;
-            const ahorro = (originalAct.tiempoEstimado || 0) - (updatedAct.nuevoTiempoEstimado || 0);
-            if(ahorro > 0) totalAhorroTiempo += ahorro;
-        }
+        const ahorroTiempo = updatedAct.ahorroTiempo || 0;
+        const ahorroCosto = updatedAct.ahorroCosto || 0;
 
-        if (originalAct.costoEstimado !== updatedAct.nuevoCostoEstimado && updatedAct.nuevoCostoEstimado !== undefined) {
-            changes.costoEstimado = updatedAct.nuevoCostoEstimado;
-            const ahorro = (originalAct.costoEstimado || 0) - (updatedAct.nuevoCostoEstimado || 0);
-            if(ahorro > 0) totalAhorroCosto += ahorro;
+        let changes: Partial<Actividad> = {};
+        if (ahorroTiempo > 0) {
+            changes.tiempoEstimado = (originalAct.tiempoEstimado || 0) - ahorroTiempo;
+            totalAhorroTiempo += ahorroTiempo;
+        }
+        if (ahorroCosto > 0) {
+            changes.costoEstimado = (originalAct.costoEstimado || 0) - ahorroCosto;
+            totalAhorroCosto += ahorroCosto;
         }
 
         if (Object.keys(changes).length > 0) {
@@ -1263,7 +1264,7 @@ export default function AccionesPage() {
               <DialogHeader>
                 <DialogTitle>Registrar Impacto de la Mejora</DialogTitle>
                 <DialogDescription>
-                  ¡Felicidades por completar la acción! Por favor, actualice los nuevos tiempos y/o costos para las actividades afectadas.
+                  ¡Felicidades por completar la acción! Por favor, ingrese el **ahorro** obtenido en tiempo y/o costo para las actividades afectadas.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4 max-h-[60vh] overflow-y-auto pr-2">
@@ -1275,17 +1276,17 @@ export default function AccionesPage() {
                         <div className="grid grid-cols-2 gap-4">
                            <FormField
                             control={impactForm.control}
-                            name={`affectedActivities.${index}.nuevoTiempoEstimado`}
+                            name={`affectedActivities.${index}.ahorroTiempo`}
                             render={({ field: formField }) => (
                                 <FormItem>
-                                    <FormLabel className="text-xs">Tiempo (min)</FormLabel>
+                                    <FormLabel className="text-xs">Ahorro de Tiempo (min)</FormLabel>
                                     <div className="text-xs text-muted-foreground">
                                     Actual: {formatMinutesToHours(field.tiempoEstimadoActual) || 'N/A'}
                                     </div>
                                     <div className="relative">
                                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <FormControl>
-                                        <Input type="number" placeholder="Nuevo Tiempo" {...formField} value={formField.value ?? ''} className="pl-9"/>
+                                        <Input type="number" placeholder="Ej: 5" {...formField} value={formField.value ?? ''} className="pl-9"/>
                                     </FormControl>
                                     </div>
                                     <FormMessage />
@@ -1294,17 +1295,17 @@ export default function AccionesPage() {
                            />
                            <FormField
                             control={impactForm.control}
-                            name={`affectedActivities.${index}.nuevoCostoEstimado`}
+                            name={`affectedActivities.${index}.ahorroCosto`}
                             render={({ field: formField }) => (
                                 <FormItem>
-                                    <FormLabel className="text-xs">Costo / Ejecución</FormLabel>
+                                    <FormLabel className="text-xs">Ahorro en Costo / Ejecución</FormLabel>
                                     <div className="text-xs text-muted-foreground">
                                     Actual: {formatCurrencyDisplay(field.costoEstimadoActual, actividades.find(a => a.id === field.id)?.monedaCosto) || 'N/A'}
                                     </div>
                                     <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <FormControl>
-                                        <Input type="number" placeholder="Nuevo Costo" {...formField} value={formField.value ?? ''} className="pl-9"/>
+                                        <Input type="number" placeholder="Ej: 10.50" {...formField} value={formField.value ?? ''} className="pl-9"/>
                                     </FormControl>
                                     </div>
                                     <FormMessage />
