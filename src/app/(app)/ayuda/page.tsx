@@ -180,13 +180,19 @@ export default function AyudaPage() {
                        <AccordionItem value="acciones">
                           <AccordionTrigger className="text-base font-medium bg-muted/50 px-4 rounded-md"><Target className="mr-2 h-5 w-5 text-primary"/>Acciones de Mejora</AccordionTrigger>
                           <AccordionContent className="p-4 space-y-2">
-                              <p><strong>Función:</strong> Permite crear, asignar, dar seguimiento y cuantificar el impacto de cada iniciativa de mejora. Convierte las ideas y hallazgos en proyectos concretos y medibles.</p>
-                               <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                                <DetailItem icon={PlusCircle} term="Agregar" description="Registra una nueva acción de mejora, especificando su objetivo, responsable y fechas estimadas."/>
-                                <DetailItem icon={CheckSquare} term="Completar Acción" description='Al cambiar el estado de una acción a "Completada", se abrirá un diálogo para registrar el impacto real. Deberá ingresar los nuevos tiempos/costos de las actividades afectadas. El sistema calculará automáticamente el ahorro y lo registrará en el historial de la acción.'/>
-                                <DetailItem icon={History} term="Ver Historial" description="Muestra un registro de todos los cambios realizados en una acción, especialmente el ahorro real calculado al completarse."/>
-                                <DetailItem icon={FileText} term="Exportar" description="Descarga la lista de acciones filtradas a un archivo CSV."/>
-                              </dl>
+                            <p><strong>Función:</strong> Permite crear, asignar y dar seguimiento a cada iniciativa de mejora. Es la herramienta para convertir los hallazgos en proyectos concretos y medibles.</p>
+                            <h5 className="font-semibold pt-2">Flujo de Trabajo:</h5>
+                            <ol className="list-decimal pl-5 space-y-2">
+                                <li><strong>Crear Acción:</strong> Al agregar una nueva acción, primero se selecciona el "Tipo de Elemento" (ej: Proceso, Política, Sistema). Luego, se elige el elemento específico. El formulario es inteligente: si la acción es para una política, los campos de ahorro en tiempo/costo se ocultarán, ya que no aplican.</li>
+                                <li><strong>Seguimiento:</strong> Se gestiona el estado de la acción (Pendiente, En Progreso, En Revisión).</li>
+                                <li><strong>Completar Acción:</strong>
+                                    <ul className="list-disc pl-5 mt-1">
+                                        <li><strong>Mejoras Cuantitativas (Proceso, Procedimiento, Actividad):</strong> Al cambiar el estado a "Completada", el sistema presentará un diálogo para que registres el **ahorro** obtenido en tiempo y/o costo. Ejemplo: Si una actividad duraba 10 minutos y la mejora la redujo en 3, deberás ingresar "3" en el campo de ahorro de tiempo.</li>
+                                        <li><strong>Mejoras Cualitativas (Política, Sistema, Puesto, Área):</strong> Se marcan como completadas directamente, sin el diálogo de impacto.</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Ver Impacto:</strong> El ahorro real calculado se registra en el historial de la acción, accesible desde la tabla principal.</li>
+                            </ol>
                           </AccordionContent>
                       </AccordionItem>
 

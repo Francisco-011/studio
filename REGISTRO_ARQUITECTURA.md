@@ -46,13 +46,12 @@ Se decidió integrar el registro del impacto de una mejora directamente en el fl
 ### Fases de Implementación:
 *   **Paso 1: Interceptación del Flujo de Completado:** En el módulo de "Acciones", se modificó la lógica para que al cambiar el estado de una acción a "Completada", en lugar de guardar directamente, se active un nuevo flujo de trabajo.
 *   **Paso 2: Identificación de Actividades Afectadas:** El sistema ahora identifica automáticamente todas las actividades que están jerárquicamente relacionadas con la acción (a través de su vínculo con un proceso, procedimiento o actividad específica).
-*   **Paso 3: Creación de Diálogo de Registro de Impacto:** Se implementó un nuevo diálogo modal que se presenta al usuario. Este diálogo lista las actividades afectadas y muestra sus valores actuales de tiempo y/o costo, junto con campos para ingresar los **nuevos valores** resultantes de la mejora.
+*   **Paso 3: Creación de Diálogo de Registro de Impacto:** Se implementó un nuevo diálogo modal que se presenta al usuario. Este diálogo lista las actividades afectadas y muestra sus valores actuales de tiempo y/o costo, junto con campos para ingresar el **ahorro** obtenido (no el nuevo valor final).
 *   **Paso 4: Actualización Atómica y Cuantificación Automática:** Al guardar desde este nuevo diálogo, el sistema:
-    1.  Calcula la diferencia (el ahorro) entre el valor antiguo y el nuevo para cada actividad modificada.
-    2.  Suma todos estos ahorros individuales para obtener un **impacto total y real** de la mejora.
-    3.  Registra este ahorro total en el historial (`historialDeCambios`) de la acción completada.
-    4.  Actualiza los documentos de las actividades afectadas en la base de datos con sus nuevos valores.
-    5.  Finalmente, marca la acción como "Completada".
+    1.  Calcula el ahorro total sumando los ahorros individuales ingresados.
+    2.  Registra este ahorro total en el historial (`historialDeCambios`) de la acción completada para trazabilidad.
+    3.  Actualiza los documentos de las actividades afectadas en la base de datos con sus nuevos valores (valor antiguo - ahorro).
+    4.  Finalmente, marca la acción como "Completada".
 
 ### Resultado Final:
 El ciclo de mejora continua ahora está completamente cerrado. Los ahorros que se muestran en los dashboards ya no son estimaciones, sino **datos calculados y precisos** basados en el impacto real registrado en las operaciones. Esto aumenta drásticamente la integridad de los datos del sistema y el valor de las métricas de eficiencia.
