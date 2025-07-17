@@ -105,16 +105,16 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
     rules_version = '2';
     service cloud.firestore {
       match /databases/{database}/documents {
-        
+
         // ===== FUNCIONES AUXILIARES =====
         // NOTA: Estas reglas dependen de que se configuren "Custom Claims" en Firebase Authentication
         // a través de una Cloud Function. El rol y nivel de acceso se leen desde el token del usuario.
-        
+
         // Verificar si el usuario está autenticado
         function isAuthenticated() {
           return request.auth != null;
         }
-        
+
         // Función para obtener el nivel de acceso de un usuario desde sus Custom Claims.
         function getUserAccessLevel() {
             return request.auth.token.get('nivelAcceso', 'Público');
@@ -124,7 +124,7 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         function getUserRole() {
             return request.auth.token.get('rol', 'Usuario Final');
         }
-        
+
         // Función para obtener el departamento de un usuario desde sus Custom Claims.
         function getUserDepartment() {
             return request.auth.token.get('departamentoId', null);
@@ -163,6 +163,11 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
             return true;
         }
 
+        // Función para verificar roles de gestión
+        function isManagerOrAdmin() {
+            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
+        }
+
         // ===== REGLAS POR COLECCIÓN =====
         
         // -- Usuarios --
@@ -173,9 +178,6 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         }
         
         // -- Catálogos Genéricos --
-        function isManagerOrAdmin() {
-            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
-        }
         match /areas/{docId} { 
             allow read: if isAuthenticated(); 
             allow write: if isManagerOrAdmin(); 
