@@ -120,12 +120,8 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
             return request.auth.token.get('rol', 'Usuario Final');
         }
         
-        function getUserDepartment() {
-            return request.auth.token.get('departamentoId', null);
-        }
-        
-        function getUserPuestoData() {
-            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        function isManagerOrAdmin() {
+            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
         }
 
         function canAccessDocument(docData) {
@@ -142,14 +138,10 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
             );
         }
 
-        function isManagerOrAdmin() {
-            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
-        }
-
         // ===== REGLAS POR COLECCIÓN =====
         
         match /users/{userId} {
-          allow read: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
+          allow read: if isAuthenticated() && (request.auth.uid == userId || isManagerOrAdmin());
           allow create: if request.auth != null;
           allow update: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
         }
