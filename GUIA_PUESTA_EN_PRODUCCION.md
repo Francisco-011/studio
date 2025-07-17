@@ -107,77 +107,53 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
       match /databases/{database}/documents {
 
         // ===== FUNCIONES AUXILIARES =====
-        // NOTA: Estas reglas dependen de que se configuren "Custom Claims" en Firebase Authentication
-        // a través de una Cloud Function. El rol y nivel de acceso se leen desde el token del usuario.
-
-        // Verificar si el usuario está autenticado
+        
         function isAuthenticated() {
           return request.auth != null;
         }
 
-        // Función para obtener el nivel de acceso de un usuario desde sus Custom Claims.
         function getUserAccessLevel() {
             return request.auth.token.get('nivelAcceso', 'Público');
         }
 
-        // Función para obtener el rol de un usuario desde sus Custom Claims.
         function getUserRole() {
             return request.auth.token.get('rol', 'Usuario Final');
         }
-
-        // Función para obtener el departamento de un usuario desde sus Custom Claims.
+        
         function getUserDepartment() {
             return request.auth.token.get('departamentoId', null);
         }
-
-        // Función para obtener el puesto de un usuario desde su perfil en Firestore.
-        // Se usa para determinar la jerarquía.
+        
         function getUserPuestoData() {
             return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
         }
 
-        // Función para verificar si un usuario puede ver un documento específico.
         function canAccessDocument(docData) {
-            let userLevel = getUserAccessLevel();
-            let docLevel = docData.get('clasificacion', 'Público');
-
-            // 1. Verificar Nivel de Acceso Básico
-            let hasLevelAccess = 
-                (docLevel == 'Público') ||
-                (docLevel == 'Privado' && userLevel in ['Departamental', 'Jerárquico', 'Confidencial']) ||
-                (docLevel == 'Confidencial' && userLevel in ['Confidencial']);
-
-            if (!hasLevelAccess) {
-                return false;
-            }
-            
-            // Si el acceso es por nivel, no se necesitan más validaciones.
-            if (userLevel == 'Confidencial' || docLevel == 'Público') {
-                return true;
-            }
-            
-            // 2. Lógica para niveles Departamental y Jerárquico
-            // Nota: Esta es una simplificación. La lógica completa vive en el `ProcesosContext`.
-            // La regla principal es permitir la lectura si el usuario tiene el nivel, 
-            // el filtrado fino se hace en la app.
-            return true;
+            return (
+                (docData.get('clasificacion', 'Público') == 'Público') ||
+                (
+                    docData.get('clasificacion', 'Público') == 'Privado' && 
+                    getUserAccessLevel() in ['Departamental', 'Jerárquico', 'Confidencial']
+                ) ||
+                (
+                    docData.get('clasificacion', 'Público') == 'Confidencial' && 
+                    getUserAccessLevel() in ['Confidencial']
+                )
+            );
         }
 
-        // Función para verificar roles de gestión
         function isManagerOrAdmin() {
             return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
         }
 
         // ===== REGLAS POR COLECCIÓN =====
         
-        // -- Usuarios --
         match /users/{userId} {
           allow read: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
-          allow create: if request.auth != null; // Permite que un nuevo usuario cree su propio perfil.
+          allow create: if request.auth != null;
           allow update: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
         }
         
-        // -- Catálogos Genéricos --
         match /areas/{docId} { 
             allow read: if isAuthenticated(); 
             allow write: if isManagerOrAdmin(); 
@@ -207,8 +183,6 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
             allow write: if isManagerOrAdmin(); 
         }
         
-        // -- Reglas de Lectura Seguras para Colecciones Principales --
-        // Permite la lectura si el usuario está autenticado y pasa la validación de nivel de acceso.
         match /procesos/{docId} {
             allow read: if isAuthenticated() && canAccessDocument(resource.data);
             allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
@@ -224,7 +198,6 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
             allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
         }
         
-        // -- Excepciones y Auditoría --
         match /access_exceptions/{exceptionId} {
             allow read, write: if isManagerOrAdmin();
         }
@@ -239,7 +212,6 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
           allow create: if isAuthenticated();
         }
         
-        // -- Permisos --
         match /permissions/{role} {
             allow read: if isAuthenticated();
             allow write: if getUserRole() == 'Administrador';
