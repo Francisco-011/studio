@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef, useMemo, useEffect, type ReactNode } from 'react';
+import React, { useState, useRef, useMemo, useEffect, type ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray, type Control, type UseFormReturn, type FieldErrors } from "react-hook-form";
@@ -70,7 +70,7 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
 
-function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defaultPuestoId }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[], defaultPuestoId?: string }) {
+const ActivitiesSection = React.memo(function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defaultPuestoId }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[], defaultPuestoId?: string }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
         name: `procedures.${procIndex}.activities`,
@@ -166,7 +166,7 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defa
             </Button>
         </div>
     );
-}
+});
 
 const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
     control,
@@ -350,7 +350,7 @@ export default function CapturaPage() {
     },
   });
 
-  const { watch, setValue } = form;
+  const { watch, setValue, control } = form;
   const watchedAreaName = watch('area');
   const watchedDepartamentoName = watch('departamento');
   const watchedProcessName = watch('proceso');
@@ -395,20 +395,39 @@ export default function CapturaPage() {
     }
   }, [watchedProcessName, allProcesses]);
   
-  const handleDragProcedureStart = (index: number) => { dragProcedureItem.current = index; };
-  const handleDragProcedureEnter = (index: number) => { dragOverProcedureItem.current = index; };
-  const handleDropProcedure = () => {
-    if (dragProcedureItem.current !== null && dragOverProcedureItem.current !== null) {
-      moveProcedure(dragProcedureItem.current, dragOverProcedureItem.current);
-      dragProcedureItem.current = null;
-      dragOverProcedureItem.current = null;
-    }
-  };
-  
-  const { fields: procedureFields, append: appendProcedure, remove: removeProcedure, move: moveProcedure } = useFieldArray({
+  const { fields: procedureFields, append, move } = useFieldArray({
       control: form.control,
       name: "procedures",
   });
+  
+  const handleDragProcedureStart = (index: number) => { dragProcedureItem.current = index; };
+  const handleDragProcedureEnter = (index: number) => { dragOverProcedureItem.current = index; };
+  
+  const handleDropProcedure = useCallback(() => {
+    if (dragProcedureItem.current !== null && dragOverProcedureItem.current !== null) {
+      move(dragProcedureItem.current, dragOverProcedureItem.current);
+      dragProcedureItem.current = null;
+      dragOverProcedureItem.current = null;
+    }
+  }, [move]);
+  
+  const appendProcedure = useCallback(() => {
+    append({ nombre: '', activities: [] } as any)
+  }, [append]);
+
+  const removeProcedure = useCallback((index: number) => {
+    const { remove } = useFieldArray({ control, name: 'procedures' });
+    remove(index);
+  }, [control]);
+  
+  const removeProcedureCallback = useCallback((index: number) => {
+     // We need to get the "remove" function from the hook inside the component
+     // that uses it, but we can call it from here. This is a bit of a workaround
+     // for react-hook-form's hook-based nature.
+     const { remove: r } = useFieldArray({ control, name: 'procedures' });
+     r(index);
+  }, [control]);
+
 
   const handleContinue = () => {
       form.trigger(['proceso', 'area', 'puesto', 'descripcion']).then(isValid => {
@@ -607,7 +626,7 @@ export default function CapturaPage() {
                 <div className="p-4 border rounded-lg space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold flex items-center gap-2"><ListOrdered className="h-5 w-5 text-green-600"/>2. Procedimientos</h3>
-                    <Button type="button" variant="outline" onClick={() => appendProcedure({ nombre: '', activities: [] } as any)}><PlusCircle className="mr-2 h-4 w-4"/>Agregar Procedimiento</Button>
+                    <Button type="button" variant="outline" onClick={appendProcedure}><PlusCircle className="mr-2 h-4 w-4"/>Agregar Procedimiento</Button>
                   </div>
                   
                   <div className="space-y-3">
@@ -624,7 +643,7 @@ export default function CapturaPage() {
                             key={field.id}
                             control={form.control}
                             index={index}
-                            remove={removeProcedure}
+                            remove={removeProcedureCallback}
                             watch={watch}
                             allProcedimientos={allProcedimientos}
                             allProcesses={allProcesses}
@@ -654,3 +673,5 @@ export default function CapturaPage() {
     </div>
   );
 }
+
+    
