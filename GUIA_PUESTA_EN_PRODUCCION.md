@@ -125,17 +125,9 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         }
 
         function canAccessDocument(docData) {
-            return (
-                (docData.get('clasificacion', 'Público') == 'Público') ||
-                (
-                    docData.get('clasificacion', 'Público') == 'Privado' && 
-                    getUserAccessLevel() in ['Departamental', 'Jerárquico', 'Confidencial']
-                ) ||
-                (
-                    docData.get('clasificacion', 'Público') == 'Confidencial' && 
-                    getUserAccessLevel() in ['Confidencial']
-                )
-            );
+            return docData.clasificacion == 'Público' ||
+              (docData.clasificacion == 'Privado' && getUserAccessLevel() in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial']) ||
+              (docData.clasificacion == 'Confidencial' && getUserAccessLevel() in ['Confidencial', 'Ejecutivo']);
         }
 
         // ===== REGLAS POR COLECCIÓN =====
