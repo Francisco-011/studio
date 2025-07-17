@@ -22,7 +22,7 @@ import { useAreas } from "@/contexts/AreasContext";
 import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos, type Puesto } from "@/contexts/PuestosContext";
 import { useProcesos, capturaFormSchema, clasificacionOptions, frecuenciaOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
-import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
+import { useSistemasCostos } from "@/contexts/SistemasCostosContext";
 import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
@@ -183,7 +183,7 @@ const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
 }: {
     control: Control<UnifiedCaptureFormData>;
     index: number;
-    remove: () => void;
+    remove: (index: number) => void;
     watch: UseFormReturn<UnifiedCaptureFormData>['watch'];
     allProcedimientos: any[];
     allProcesses: any[];
@@ -231,9 +231,9 @@ const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
                             role="button"
                             tabIndex={0}
                             aria-label="Eliminar procedimiento"
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(); } }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(index); } }}
                             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-0")}
-                            onClick={(e) => { e.stopPropagation(); remove(); }}
+                            onClick={(e) => { e.stopPropagation(); remove(index); }}
                         >
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </div>
@@ -633,7 +633,7 @@ export default function CapturaPage() {
                             key={field.id}
                             control={form.control}
                             index={index}
-                            remove={useCallback(() => remove(index), [remove, index])}
+                            remove={removeProcedureCallback}
                             watch={watch}
                             allProcedimientos={allProcedimientos}
                             allProcesses={allProcesses}
