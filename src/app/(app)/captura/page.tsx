@@ -319,6 +319,7 @@ const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
     );
 });
 
+
 export default function CapturaPage() {
   const router = useRouter();
   const { areas } = useAreas();
