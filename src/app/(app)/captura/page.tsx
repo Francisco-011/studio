@@ -69,7 +69,6 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
-
 const ActivitiesSection = React.memo(function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defaultPuestoId }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[], defaultPuestoId?: string }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
@@ -395,7 +394,7 @@ export default function CapturaPage() {
     }
   }, [watchedProcessName, allProcesses]);
   
-  const { fields: procedureFields, append, move } = useFieldArray({
+  const { fields: procedureFields, append, move, remove } = useFieldArray({
       control: form.control,
       name: "procedures",
   });
@@ -415,19 +414,9 @@ export default function CapturaPage() {
     append({ nombre: '', activities: [] } as any)
   }, [append]);
 
-  const removeProcedure = useCallback((index: number) => {
-    const { remove } = useFieldArray({ control, name: 'procedures' });
-    remove(index);
-  }, [control]);
-  
   const removeProcedureCallback = useCallback((index: number) => {
-     // We need to get the "remove" function from the hook inside the component
-     // that uses it, but we can call it from here. This is a bit of a workaround
-     // for react-hook-form's hook-based nature.
-     const { remove: r } = useFieldArray({ control, name: 'procedures' });
-     r(index);
-  }, [control]);
-
+     remove(index);
+  }, [remove]);
 
   const handleContinue = () => {
       form.trigger(['proceso', 'area', 'puesto', 'descripcion']).then(isValid => {
@@ -673,5 +662,3 @@ export default function CapturaPage() {
     </div>
   );
 }
-
-    
