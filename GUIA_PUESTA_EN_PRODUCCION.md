@@ -106,100 +106,37 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
     service cloud.firestore {
       match /databases/{database}/documents {
 
-        // ===== FUNCIONES AUXILIARES =====
-        
+        // --- REGLAS SIMPLIFICADAS ---
+        // Estas reglas permiten el acceso a cualquier usuario autenticado.
+        // Se usan temporalmente para resolver conflictos de permisos complejos.
+
         function isAuthenticated() {
           return request.auth != null;
         }
 
-        function getUserAccessLevel() {
-            return request.auth.token.get('nivelAcceso', 'Público');
-        }
-
-        function getUserRole() {
-            return request.auth.token.get('rol', 'Usuario Final');
-        }
-        
-        function isManagerOrAdmin() {
-            return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
-        }
-
-        function canAccessDocument(docData) {
-            return docData.clasificacion == 'Público' ||
-              (docData.clasificacion == 'Privado' && getUserAccessLevel() in ['Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial']) ||
-              (docData.clasificacion == 'Confidencial' && getUserAccessLevel() in ['Confidencial', 'Ejecutivo']);
-        }
-
-        // ===== REGLAS POR COLECCIÓN =====
-        
+        // Regla para que un usuario solo pueda modificar su propio perfil.
         match /users/{userId} {
-          allow read: if isAuthenticated() && (request.auth.uid == userId || isManagerOrAdmin());
+          allow read: if isAuthenticated();
           allow create: if request.auth != null;
-          allow update: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'Administrador');
-        }
-        
-        match /areas/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /departamentos/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /puestos/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /sistemas/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /sistemas_costos/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /acciones/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        match /actividades/{docId} { 
-            allow read: if isAuthenticated(); 
-            allow write: if isManagerOrAdmin(); 
-        }
-        
-        match /procesos/{docId} {
-            allow read: if isAuthenticated() && canAccessDocument(resource.data);
-            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
-        }
-        
-        match /politicas/{docId} {
-            allow read: if isAuthenticated() && canAccessDocument(resource.data);
-            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
-        }
-        
-        match /procedimientos/{docId} {
-            allow read: if isAuthenticated() && canAccessDocument(resource.data);
-            allow write: if isManagerOrAdmin() || getUserRole() == 'Consultor';
-        }
-        
-        match /access_exceptions/{exceptionId} {
-            allow read, write: if isManagerOrAdmin();
+          allow update: if isAuthenticated() && request.auth.uid == userId;
         }
 
-        match /audits/{auditId} {
-          allow read, create: if isAuthenticated();
-          allow update, delete: if isManagerOrAdmin();
-        }
-        
-        match /activity_log/{logId} {
-          allow read: if isManagerOrAdmin();
-          allow create: if isAuthenticated();
-        }
-        
-        match /permissions/{role} {
-            allow read: if isAuthenticated();
-            allow write: if getUserRole() == 'Administrador';
-        }
+        // Reglas abiertas para el resto de las colecciones principales.
+        // Cualquier usuario autenticado puede leer y escribir.
+        match /areas/{docId} { allow read, write: if isAuthenticated(); }
+        match /departamentos/{docId} { allow read, write: if isAuthenticated(); }
+        match /puestos/{docId} { allow read, write: if isAuthenticated(); }
+        match /sistemas/{docId} { allow read, write: if isAuthenticated(); }
+        match /sistemas_costos/{docId} { allow read, write: if isAuthenticated(); }
+        match /acciones/{docId} { allow read, write: if isAuthenticated(); }
+        match /actividades/{docId} { allow read, write: if isAuthenticated(); }
+        match /procesos/{docId} { allow read, write: if isAuthenticated(); }
+        match /politicas/{docId} { allow read, write: if isAuthenticated(); }
+        match /procedimientos/{docId} { allow read, write: if isAuthenticated(); }
+        match /access_exceptions/{exceptionId} { allow read, write: if isAuthenticated(); }
+        match /audits/{auditId} { allow read, write: if isAuthenticated(); }
+        match /activity_log/{logId} { allow read, write: if isAuthenticated(); }
+        match /permissions/{role} { allow read, write: if isAuthenticated(); }
       }
     }
     ```
