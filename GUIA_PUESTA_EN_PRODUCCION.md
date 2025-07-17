@@ -176,13 +176,34 @@ Ahora le diremos a nuestro "guardia de seguridad" quién puede hacer qué cosa.
         function isManagerOrAdmin() {
             return getUserRole() in ['Administrador', 'Gerente de Proyecto'];
         }
-        match /areas/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /departamentos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /puestos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /sistemas/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /sistemas_costos/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /acciones/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
-        match /actividades/{docId} { allow read: if isAuthenticated(); allow write: if isManagerOrAdmin(); }
+        match /areas/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /departamentos/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /puestos/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /sistemas/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /sistemas_costos/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /acciones/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
+        match /actividades/{docId} { 
+            allow read: if isAuthenticated(); 
+            allow write: if isManagerOrAdmin(); 
+        }
         
         // -- Reglas de Lectura Seguras para Colecciones Principales --
         // Permite la lectura si el usuario está autenticado y pasa la validación de nivel de acceso.
