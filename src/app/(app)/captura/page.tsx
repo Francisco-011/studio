@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFieldArray, type Control, type UseFormReturn } from "react-hook-form";
+import { useForm, useFieldArray, type Control, type UseFormReturn, type FieldErrors } from "react-hook-form";
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
@@ -23,7 +23,7 @@ import { useDepartamentos } from "@/contexts/DepartamentosContext";
 import { usePuestos, type Puesto } from "@/contexts/PuestosContext";
 import { useProcesos, capturaFormSchema, clasificacionOptions, frecuenciaOptions, auditFrequencyOptions } from '@/contexts/ProcesosContext';
 import { useSistemasCostos } from '@/contexts/SistemasCostosContext';
-import { useProcedimientos } from '@/contexts/ProcedimientosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
 import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { cn } from '@/lib/utils';
@@ -168,7 +168,7 @@ function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defa
     );
 }
 
-const ProcedureAccordionItem = ({
+const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
     control,
     index,
     remove,
@@ -192,7 +192,7 @@ const ProcedureAccordionItem = ({
     allSistemas: any[];
     allPoliticas: any[];
     defaultPuestoId?: string;
-}) => {
+}) {
     const procedureName = watch(`procedures.${index}.nombre`);
 
     const similarProcedimientoWarning = useMemo(() => {
@@ -240,7 +240,7 @@ const ProcedureAccordionItem = ({
                     </div>
                 </AccordionTrigger>
                 <AccordionContent className="p-4 border-t space-y-4">
-                     <FormField control={control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={control} name={`procedures.${index}.descripcion`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} /></FormControl><FormMessage/></FormItem>)} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField control={control} name={`procedures.${index}.clasificacion`} render={({ field }) => (<FormItem><FormLabel>Clasificación</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{clasificacionOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <FormField control={control} name={`procedures.${index}.auditFrequencyInDays`} render={({ field }) => (<FormItem><FormLabel>Frecuencia de Auditoría</FormLabel><Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value?.toString()}><FormControl><SelectTrigger><CalendarCheck2 className="mr-2 h-4 w-4" /><SelectValue placeholder="Opcional: Seleccione..." /></SelectTrigger></FormControl><SelectContent>{auditFrequencyOptions.map(opt => (<SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -276,7 +276,7 @@ const ProcedureAccordionItem = ({
                                 </FormItem>
                             )}
                         />
-                        <FormField control={control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={control} name={`procedures.${index}.informacionRecibe`} render={({ field }) => (<FormItem><FormLabel>Información que Recibe</FormLabel><FormControl><Textarea placeholder="Ej: Factura del proveedor..." {...field} value={field.value ?? ''} /></FormControl><FormMessage/></FormItem>)} />
 
                         <FormField
                             control={control}
@@ -304,7 +304,7 @@ const ProcedureAccordionItem = ({
                                 </FormItem>
                             )}
                         />
-                        <FormField control={control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={control} name={`procedures.${index}.informacionEntrega`} render={({ field }) => (<FormItem><FormLabel>Información que Entrega</FormLabel><FormControl><Textarea placeholder="Ej: Pago programado, Factura registrada en sistema..." {...field} value={field.value ?? ''} /></FormControl><FormMessage/></FormItem>)} />
                     </div>
                     <ActivitiesSection
                         control={control}
@@ -317,7 +317,7 @@ const ProcedureAccordionItem = ({
             </AccordionItem>
         </Accordion>
     );
-};
+});
 
 export default function CapturaPage() {
   const router = useRouter();
