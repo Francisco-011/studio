@@ -69,6 +69,7 @@ const unifiedCaptureSchema = capturaFormSchema.extend({
 
 type UnifiedCaptureFormData = z.infer<typeof unifiedCaptureSchema>;
 
+
 const ActivitiesSection = React.memo(function ActivitiesSection({ control, procIndex, allActivities, allPuestos, defaultPuestoId }: { control: Control<UnifiedCaptureFormData>, procIndex: number, allActivities: Actividad[], allPuestos: Puesto[], defaultPuestoId?: string }) {
     const { fields, append, remove, move } = useFieldArray({
         control,
@@ -182,7 +183,7 @@ const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
 }: {
     control: Control<UnifiedCaptureFormData>;
     index: number;
-    remove: (index: number) => void;
+    remove: () => void;
     watch: UseFormReturn<UnifiedCaptureFormData>['watch'];
     allProcedimientos: any[];
     allProcesses: any[];
@@ -230,9 +231,9 @@ const ProcedureAccordionItem = React.memo(function ProcedureAccordionItem({
                             role="button"
                             tabIndex={0}
                             aria-label="Eliminar procedimiento"
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(index); } }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); remove(); } }}
                             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "mt-0")}
-                            onClick={(e) => { e.stopPropagation(); remove(index); }}
+                            onClick={(e) => { e.stopPropagation(); remove(); }}
                         >
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </div>
@@ -632,7 +633,7 @@ export default function CapturaPage() {
                             key={field.id}
                             control={form.control}
                             index={index}
-                            remove={removeProcedureCallback}
+                            remove={useCallback(() => remove(index), [remove, index])}
                             watch={watch}
                             allProcedimientos={allProcedimientos}
                             allProcesses={allProcesses}
