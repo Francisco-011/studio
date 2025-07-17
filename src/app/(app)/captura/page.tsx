@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardEdit, Save, PlusCircle, Trash2, Workflow, ListOrdered, ListChecks, GripVertical, AlertTriangle, Loader2, CalendarCheck2, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAreas } from "@/contexts/AreasContext";
@@ -29,7 +28,6 @@ import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
 import { usePoliticas } from '@/contexts/PoliticasContext';
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Checkbox } from '@/components/ui/checkbox';
 
 
 const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
@@ -320,7 +318,6 @@ const ProcedureAccordionItem = ({
         </Accordion>
     );
 };
-
 
 export default function CapturaPage() {
   const router = useRouter();
