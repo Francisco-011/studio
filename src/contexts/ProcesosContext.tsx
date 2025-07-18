@@ -154,8 +154,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
             activo: true,
             historialDeCambios: [],
         };
-    } catch(e) {
-        console.error("Error adding proceso:", e);
+    } catch(e: any) {
+        console.error("Error adding proceso:", e.message);
         toast({ title: "Error", description: "No se pudo agregar el proceso.", variant: "destructive"});
         return null;
     }
@@ -196,8 +196,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         if (changes.length > 0) {
            addLogEntry({ action: 'update', entityType: 'Proceso', entityName: data.proceso || originalProceso.proceso, details: `Se actualizó el proceso "${originalProceso.proceso}".` });
         }
-    } catch (e) {
-        console.error("Error updating proceso: ", e);
+    } catch (e: any) {
+        console.error("Error updating proceso: ", e.message);
         toast({ title: "Error", description: "No se pudo actualizar el proceso.", variant: "destructive"});
     }
   }, [procesos, addLogEntry]);
@@ -210,8 +210,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
           await updateDoc(procesoDocRef, { deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), activo: false });
           addLogEntry({ action: 'delete', entityType: 'Proceso', entityName: procesoToDelete.proceso, details: `Proceso "${procesoToDelete.proceso}" movido a la papelera.` });
-      } catch (e) {
-          console.error("Error deleting proceso: ", e);
+      } catch (e: any) {
+          console.error("Error deleting proceso: ", e.message);
           toast({ title: "Error", description: "No se pudo eliminar el proceso.", variant: "destructive" });
       }
   }, [procesos, addLogEntry]);
@@ -224,8 +224,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
           const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
           await updateDoc(procesoDocRef, { deletedAt: null, activo: true, updatedAt: serverTimestamp() });
           addLogEntry({ action: 'restore', entityType: 'Proceso', entityName: procesoToRestore.proceso, details: `Se restauró el proceso "${procesoToRestore.proceso}".` });
-      } catch (e) {
-          console.error("Error restoring proceso: ", e);
+      } catch (e: any) {
+          console.error("Error restoring proceso: ", e.message);
           toast({ title: "Error", description: "No se pudo restaurar el proceso.", variant: "destructive" });
       }
   }, [procesos, addLogEntry]);
@@ -256,8 +256,8 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
         const procesoDocRef = doc(db, PROCESOS_COLLECTION, id);
         await updateDoc(procesoDocRef, { activo: newStatus, updatedAt: serverTimestamp() });
         addLogEntry({ action: 'status_change', entityType: 'Proceso', entityName: procesoToToggle.proceso, details: `El estado del proceso "${procesoToToggle.proceso}" cambió a ${newStatus ? 'Activo' : 'Inactivo'}.` });
-    } catch (e) {
-        console.error("Error toggling proceso status: ", e);
+    } catch (e: any) {
+        console.error("Error toggling proceso status: ", e.message);
         toast({ title: "Error", description: "No se pudo cambiar el estado del proceso.", variant: "destructive" });
     }
   }, [procesos, addLogEntry, procedimientos]);
