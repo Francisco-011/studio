@@ -48,8 +48,8 @@ export function ActivityLogProvider({ children }: { children: ReactNode }) {
         });
         setLogEntries(logsData);
         setIsLoadingLog(false);
-    }, (error) => {
-        console.error("Failed to load activity log from Firestore", error);
+    }, (error: any) => {
+        console.error("Failed to load activity log from Firestore", error.message);
         setIsLoadingLog(false);
     });
 
@@ -62,8 +62,8 @@ export function ActivityLogProvider({ children }: { children: ReactNode }) {
       timestamp: serverTimestamp(),
       user: log.user || 'Sistema',
     };
-    addDoc(collection(db, LOG_COLLECTION), newEntry).catch(error => {
-      console.error("Failed to save activity log to Firestore", error);
+    addDoc(collection(db, LOG_COLLECTION), newEntry).catch((error: any) => {
+      console.error("Failed to save activity log to Firestore", error.message);
     });
   }, []);
 
