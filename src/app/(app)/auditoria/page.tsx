@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -506,7 +505,7 @@ export default function AuditoriaPage() {
       
       const updatedAudit = { ...auditContext, findings: updatedFindings };
       setCurrentAuditSession(updatedAudit);
-      updateAudit(currentAuditContext.id, { findings: updatedFindings });
+      updateAudit(currentAuditSession.id, { findings: updatedFindings });
       
       toast({ title: "Plan de Acción Creado", description: "Se ha registrado la acción en el módulo de 'Acciones de Mejora'."});
     } catch (e: any) {
@@ -1296,7 +1295,7 @@ export default function AuditoriaPage() {
             <Form {...findingForm}><form onSubmit={findingForm.handleSubmit(handleFindingSubmit)} className="space-y-4 py-4">
                 <FormField control={findingForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Hallazgo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..."/></SelectTrigger></FormControl><SelectContent>{findingTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)}/>
                 <FormField control={findingForm.control} name="description" render={({ field }) => (<FormItem><FormLabel>Descripción Detallada</FormLabel><FormControl><Textarea {...field} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
-                {(watchedFindingType === 'No Conforme' || watchedFindingType === 'Oportunidad de Mejora') && (
+                {(watchedFindingType === 'No Conforme' || watchedFindingType === 'Oportunidad de Mejora')) && (
                   <FormField control={findingForm.control} name="proposedAction" render={({ field }) => (<FormItem><FormLabel>Plan de Acción Propuesto</FormLabel><FormControl><Textarea {...field} value={field.value ?? ''} rows={4}/></FormControl><FormMessage/></FormItem>)}/>
                 )}
                 <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose><Button type="submit">Guardar Hallazgo</Button></DialogFooter>
@@ -1609,7 +1608,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables (Vía Procesos)</CardHeader></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables (Vía Procesos)</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1713,6 +1712,8 @@ const ProcedureDetailView = ({ procedure, activities, index, parentProcess, pues
         </AccordionItem>
     );
 }
+
+    
 
     
 
