@@ -124,7 +124,7 @@ export default function CargaMasivaPage() {
                         const nombre = row.nombre?.trim();
                         if (!nombre) {
                             result.failed++;
-                            result.errors.push(`Fila inválida, falta el nombre: ${JSON.stringify(row)}`);
+                            result.errors.push(`Fila ${data.indexOf(row) + 1}: falta el nombre del área`);
                             continue;
                         }
                         if (areas.some(a => a.nombre.toLowerCase() === nombre.toLowerCase())) {
@@ -140,7 +140,7 @@ export default function CargaMasivaPage() {
                         const nombre = row.nombre?.trim();
                         if (!nombre || !row.nivelOrganizacional) {
                             result.failed++;
-                            result.errors.push(`Fila inválida, faltan datos requeridos (nombre, nivelOrganizacional): ${JSON.stringify(row)}`);
+                            result.errors.push(`Fila ${data.indexOf(row) + 1}: faltan datos requeridos (nombre, nivelOrganizacional)`);
                             continue;
                         }
                         const area = areas.find(a => a.nombre === row.areaNombre);
