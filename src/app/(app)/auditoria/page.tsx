@@ -362,7 +362,7 @@ export default function AuditoriaPage() {
         }
     }
     return null;
-  }, [currentAuditSession, activityDisplayFilter, procesosMap, procedimientosMap, actividadesMap, puestosMap, puestoNameToPuestoMap, departamentosMap, sistemasMap, politicasMap, allProcesses, costosSistemas]);
+  }, [currentAuditSession, activityDisplayFilter, procesosMap, procedimientosMap, actividadesMap, puestosMap, puestoNameToPuestoMap, departamentosMap, areasMap, sistemasMap, politicasMap, allProcesses, costosSistemas]);
 
   useEffect(() => {
     if (isFindingDialogOpen) {
@@ -506,11 +506,11 @@ export default function AuditoriaPage() {
       
       const updatedAudit = { ...auditContext, findings: updatedFindings };
       setCurrentAuditSession(updatedAudit);
-      updateAudit(auditContext.id, { findings: updatedFindings });
+      updateAudit(currentAuditContext.id, { findings: updatedFindings });
       
       toast({ title: "Plan de Acción Creado", description: "Se ha registrado la acción en el módulo de 'Acciones de Mejora'."});
-    } catch (e) {
-      console.error("Error creating action plan: ", e);
+    } catch (e: any) {
+      console.error("Error creating action plan: ", e.message);
       toast({ title: "Error", description: "No se pudo crear el plan de acción.", variant: "destructive" });
     }
   };
@@ -533,8 +533,8 @@ export default function AuditoriaPage() {
         setCurrentAuditSession(null);
         toast({ title: "Auditoría Finalizada", description: "La auditoría ha sido guardada." });
 
-    } catch (error) {
-        console.error("Error finalizing audit:", error);
+    } catch (error: any) {
+        console.error("Error finalizing audit:", error.message);
         toast({ title: "Error al Finalizar", description: "No se pudo actualizar la fecha de auditoría del elemento.", variant: "destructive" });
     }
   };
@@ -654,8 +654,8 @@ export default function AuditoriaPage() {
       });
       setCurrentAuditSession(null);
       toast({ title: "Auditoría Cancelada", description: "La sesión de auditoría ha sido cancelada." });
-    } catch (error) {
-      console.error("Error canceling audit:", error);
+    } catch (error: any) {
+      console.error("Error canceling audit:", error.message);
       toast({ title: "Error", description: "No se pudo cancelar la auditoría.", variant: "destructive" });
     } finally {
       setIsConfirmCancelAuditOpen(false);
@@ -849,8 +849,8 @@ export default function AuditoriaPage() {
             alerts.push({ id: proc.id, type: 'proceso', name: proc.proceso, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
           }
         }
-      } catch (error) {
-        console.error(`Failed to process audit alert for process ${proc?.id}:`, error);
+      } catch (error: any) {
+        console.error(`Failed to process audit alert for process ${proc?.id}:`, error.message);
       }
     });
   
@@ -866,8 +866,8 @@ export default function AuditoriaPage() {
             alerts.push({ id: puesto.id, type: 'puesto', name: puesto.nombre, lastAudited: puesto.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
           }
         }
-      } catch (error) {
-        console.error(`Failed to process audit alert for puesto ${puesto?.id}:`, error);
+      } catch (error: any) {
+        console.error(`Failed to process audit alert for puesto ${puesto?.id}:`, error.message);
       }
     });
   
@@ -883,8 +883,8 @@ export default function AuditoriaPage() {
             alerts.push({ id: proc.id, type: 'procedimiento', name: proc.nombre, lastAudited: proc.lastAuditedAt, daysOverdue: differenceInDays(now, nextDueDate) });
           }
         }
-      } catch (error) {
-        console.error(`Failed to process audit alert for procedimiento ${proc?.id}:`, error);
+      } catch (error: any) {
+        console.error(`Failed to process audit alert for procedimiento ${proc?.id}:`, error.message);
       }
     });
     
@@ -1609,7 +1609,7 @@ const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProces
                 </Accordion>
             </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables (Vía Procesos)</CardTitle></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Políticas Aplicables (Vía Procesos)</CardHeader></CardHeader><CardContent>{relatedPolicies.length > 0 ? <ul className="list-disc pl-5 text-sm space-y-1">{relatedPolicies.map(p => <li key={p.id}>{p.titulo}</li>)}</ul> : <div className="text-sm text-muted-foreground">No hay políticas asociadas.</div>}</CardContent></Card>
     </div>
 );
 
@@ -1713,5 +1713,7 @@ const ProcedureDetailView = ({ procedure, activities, index, parentProcess, pues
         </AccordionItem>
     );
 }
+
+    
 
     
