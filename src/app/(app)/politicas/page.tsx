@@ -42,8 +42,8 @@ const NO_DEPARTAMENTO_SELECTED = "__NO_DEPARTAMENTO__";
 
 const politicaFormSchema = z.object({
   id: z.string().optional(),
-  titulo: z.string().min(3, 'El título es requerido (mínimo 3 caracteres).'),
-  descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
+  titulo: z.string().min(3, 'El título es requerido (mínimo 3 caracteres).').max(100, 'El título no puede exceder 100 caracteres.'),
+  descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).').max(5000, 'La descripción no puede exceder 5000 caracteres.'),
   areaResponsable: z.string({ required_error: 'El área responsable es requerida.'}),
   departamentoResponsable: z.string().optional(),
   clasificacion: z.enum(clasificacionOptions),

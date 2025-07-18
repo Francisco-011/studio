@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { useAuth } from './AuthContext';
@@ -52,7 +52,7 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
         return;
     }
 
-    const q = query(collection(db, EXCEPTIONS_COLLECTION), orderBy("createdAt", "desc"));
+    const q = query(collection(db, EXCEPTIONS_COLLECTION), orderBy("createdAt", "desc"), limit(500));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const exceptionsData = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -89,8 +89,8 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
       await addDoc(collection(db, EXCEPTIONS_COLLECTION), payload);
       toast({ title: "Excepción Creada", description: "La regla de excepción ha sido registrada." });
       addLogEntry({ action: 'create', entityType: 'Excepción de Acceso', entityName: `${data.exceptionType}: ${data.documentType} ${data.documentId}`, details: `Se creó una excepción para el usuario ID ${data.userId}.` });
-    } catch (e) {
-      console.error("Error adding exception:", e);
+    } catch (e: any) {
+      console.error("Error adding exception:", e.message);
       toast({ title: "Error", description: "No se pudo crear la excepción.", variant: "destructive" });
     }
   }, [user, addLogEntry]);
@@ -102,8 +102,8 @@ export function ExceptionsProvider({ children }: { children: ReactNode }) {
       await deleteDoc(doc(db, EXCEPTIONS_COLLECTION, id));
       toast({ title: "Excepción Eliminada", variant: "destructive" });
       addLogEntry({ action: 'delete', entityType: 'Excepción de Acceso', entityName: `${exceptionToDelete.exceptionType}: ${exceptionToDelete.documentType} ${exceptionToDelete.documentId}`, details: `Se eliminó una excepción para el usuario ID ${exceptionToDelete.userId}.` });
-    } catch (e) {
-      console.error("Error deleting exception:", e);
+    } catch (e: any) {
+      console.error("Error deleting exception:", e.message);
       toast({ title: "Error", description: "No se pudo eliminar la excepción.", variant: "destructive" });
     }
   }, [exceptions, addLogEntry]);

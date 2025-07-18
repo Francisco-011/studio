@@ -35,7 +35,10 @@ import type { UserRole, NivelAcceso } from '../(app)/usuarios/page';
 const signupFormSchema = z.object({
   nombreCompleto: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
   email: z.string().email('Por favor, ingrese un correo válido.'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.'),
+  password: z.string()
+  .min(8, 'La contraseña debe tener al menos 8 caracteres.')
+  .max(128, 'La contraseña no puede exceder 128 caracteres.')
+  .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'La contraseña debe contener al menos: una minúscula, una mayúscula y un número.'),
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;

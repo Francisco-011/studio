@@ -64,15 +64,15 @@ import { runSeed } from '@/app/actions/seed';
 
 
 // Schemas
-const areaFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre del área es requerido.') });
+const areaFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre del área es requerido.').max(50, 'El nombre no puede exceder 50 caracteres.')});
 type AreaFormData = z.infer<typeof areaFormSchema>;
 
-const departamentoFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre es requerido.'), areaId: z.string({ required_error: 'Debe seleccionar un área.' }) });
+const departamentoFormSchema = z.object({ id: z.string().optional(), nombre: z.string().min(1, 'El nombre es requerido.').max(50, 'El nombre no puede exceder 50 caracteres.'), areaId: z.string({ required_error: 'Debe seleccionar un área.' }) });
 type DepartamentoFormData = z.infer<typeof departamentoFormSchema>;
 
 const puestoFormSchema = z.object({
   id: z.string().optional(),
-  nombre: z.string().min(1, "El nombre es requerido."),
+  nombre: z.string().min(1, "El nombre es requerido.").max(50, 'El nombre no puede exceder 50 caracteres.'),
   areaId: z.string({ required_error: 'El área es requerida.' }),
   departamentoId: z.string().optional(),
   jefeInmediato: z.string().optional(),

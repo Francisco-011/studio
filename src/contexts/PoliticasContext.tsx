@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayUnion, arrayRemove, limit } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial } from './ActividadesContext';
 import { useAuth } from './AuthContext';
@@ -82,7 +82,7 @@ export function PoliticasProvider({ children }: { children: ReactNode }) {
     }
     
     // The query is now simple, as Firestore rules will handle security.
-    const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"));
+    const q = query(collection(db, POLITICAS_COLLECTION), orderBy("codigo", "asc"), limit(500));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allPoliticas = snapshot.docs.map(doc => {

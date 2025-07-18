@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, getDocs, where, limit } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { z } from 'zod';
@@ -104,7 +104,7 @@ export function ProcesosProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const q = query(collection(db, PROCESOS_COLLECTION));
+    const q = query(collection(db, PROCESOS_COLLECTION), limit(500));
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allProcesosFromDB = snapshot.docs.map(doc => {
             const data = doc.data();
