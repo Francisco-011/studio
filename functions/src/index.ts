@@ -32,11 +32,28 @@ exports.setUserRole = onCall(async (request) => {
     
     logger.info(`Llamada realizada por UID: ${callingUid}`, { structuredData: true });
 
-    // 1. Validar datos de entrada
-    if (!userId || !rol || !nivelAcceso) {
-        logger.error("Datos de entrada inválidos.", { data: request.data });
-        throw new HttpsError("invalid-argument", "La función debe ser llamada con 'userId', 'rol' y 'nivelAcceso'.");
-    }
+// 1. Validar datos de entrada
+if (!userId || !rol || !nivelAcceso) {
+    logger.error("Datos de entrada inválidos.", { data: request.data });
+    throw new HttpsError("invalid-argument", "La función debe ser llamada con 'userId', 'rol' y 'nivelAcceso'.");
+}
+
+// 1.1 Validar formato UID
+if (typeof userId !== 'string' || userId.length < 10) {
+    throw new HttpsError('invalid-argument', 'userId inválido');
+}
+
+// 1.2 Validar valores permitidos
+const rolesPermitidos = ['Administrador', 'Gerente de Proyecto', 'Consultor', 'Usuario Final'];
+const nivelesPermitidos = ['Público', 'Departamental', 'Jerárquico', 'Ejecutivo', 'Confidencial'];
+
+if (!rolesPermitidos.includes(rol)) {
+    throw new HttpsError('invalid-argument', `Rol no válido: ${rol}`);
+}
+
+if (!nivelesPermitidos.includes(nivelAcceso)) {
+    throw new HttpsError('invalid-argument', `Nivel de acceso no válido: ${nivelAcceso}`);
+}
 
     // 2. Lógica de permisos - TEMPORAL: permitir primera ejecución
     const isSelfUpdate = callingUid === userId;
@@ -121,7 +138,7 @@ exports.setUserRole = onCall(async (request) => {
             message: `Permisos actualizados para el usuario ${userId}.`,
         };
     } catch (error) {
-        logger.error("Error catastrófico en el bloque try/catch de setUserRole:", { error });
+        logger.error("Error catastrófico en el bloque try/catch de setUserRole:", { errorMessage: error.message });
         throw new HttpsError("internal", "Ocurrió un error inesperado al intentar asignar los permisos. Revise los logs de la función para más detalles.");
     }
 });
