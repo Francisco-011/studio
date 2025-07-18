@@ -167,7 +167,7 @@ export default function CargaMasivaPage() {
                         const nombre = row.nombre?.trim();
                         if (!nombre || !row.scope) {
                             result.failed++;
-                            result.errors.push(`Fila inválida, faltan datos requeridos (nombre, scope): ${JSON.stringify(row)}`);
+                            result.errors.push(`Fila ${data.indexOf(row) + 1}: faltan datos requeridos (nombre, scope)`);
                             continue;
                         }
 
@@ -197,7 +197,7 @@ export default function CargaMasivaPage() {
                         const nombre = row.nombre?.trim();
                         if (!nombre) {
                             result.failed++;
-                            result.errors.push(`Fila inválida, falta nombre: ${JSON.stringify(row)}`);
+                            result.errors.push(`Fila ${data.indexOf(row) + 1}: falta nombre de la actividad`);
                             continue;
                         }
 
@@ -222,7 +222,7 @@ export default function CargaMasivaPage() {
                          const nombreProceso = row.proceso?.trim();
                          if (!nombreProceso || !row.area || !row.puesto || !row.descripcion || !row.frecuencia) {
                              result.failed++;
-                             result.errors.push(`Fila de proceso inválida, faltan datos requeridos: ${JSON.stringify(row)}`);
+                             result.errors.push(`Fila ${data.indexOf(row) + 1}: faltan datos requeridos del proceso`);
                              continue;
                          }
 

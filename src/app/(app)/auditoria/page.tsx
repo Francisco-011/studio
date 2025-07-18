@@ -1718,3 +1718,6 @@ const ProcedureDetailView = ({ procedure, activities, index, parentProcess, pues
     
 
     
+
+
+
