@@ -1574,7 +1574,7 @@ const ProcessAuditDetails = ({ process, procedimientos, relatedPolicies, puestos
     </div>
 );
 
-const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies, puestosMap, politicasMap, procedimientosMap }: { puesto: Puesto, departamento: Departamento, jefeInmediato: Puesto, relatedProcesses: any[], relatedPolicies: Politica[], puestosMap: Map<string, Puesto>, politicasMap: Map<string, Politica>, procedimientosMap: Map<string, Procedimiento> }) => (
+const PuestoAuditDetails = ({ puesto, departamento, jefeInmediato, relatedProcesses, relatedPolicies, puestosMap, politicasMap, procedimientosMap }: { puesto: Puesto; departamento: Departamento | null; jefeInmediato: Puesto | null; relatedProcesses: any[]; relatedPolicies: Politica[]; puestosMap: Map<string, Puesto>; politicasMap: Map<string, Politica>; procedimientosMap: Map<string, Procedimiento>; }) => (
    <div className="space-y-4">
         <Card>
             <CardHeader><CardTitle className="text-base">Información del Puesto</CardTitle></CardHeader>
@@ -1623,8 +1623,8 @@ const PolicyAuditDetails = ({ policy, linkedProcesses }: { policy: Politica, lin
                 <DetailDisplay title="Nivel de Cumplimiento" value={policy.nivelCompliance} />
                 <DetailDisplay title="Área Responsable" value={policy.areaResponsable} />
                 <DetailDisplay title="Departamento Responsable" value={policy.departamentoResponsable} />
-                <DetailDisplay title="Fecha de Vigencia" value={format(parseISO(policy.fechaVigencia), "PPP", { locale: es })} />
-                <DetailDisplay title="Próxima Revisión" value={format(parseISO(policy.fechaRevision), "PPP", { locale: es })} />
+                <DetailDisplay title="Fecha de Vigencia" value={policy.fechaVigencia ? format(parseISO(policy.fechaVigencia), "PPP", { locale: es }) : 'N/A'} />
+                <DetailDisplay title="Próxima Revisión" value={policy.fechaRevision ? format(parseISO(policy.fechaRevision), "PPP", { locale: es }) : 'N/A'} />
                 <div className="md:col-span-2"><DetailDisplay title="Descripción" value={policy.descripcion} isTextarea /></div>
             </CardContent>
         </Card>
