@@ -672,14 +672,14 @@ export default function AuditoriaPage() {
   };
 
   const processMetrics = (audits: Audit[]) => {
-      const completedAudits = audits.filter(a => a.status === 'Completada');
-      return {
-          auditoriasCompletadasCount: completedAudits.length,
-          hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'No Conforme').length, 0),
-          hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'Oportunidad de Mejora').length, 0),
-      };
-  }
-
+    const completedAudits = audits.filter(a => a.status === 'Completada');
+    return {
+      auditoriasCompletadasCount: completedAudits.length,
+      hallazgosNoConformesCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'No Conforme').length, 0),
+      hallazgosOportunidadCount: completedAudits.reduce((sum, audit) => sum + (audit.findings || []).filter(f => f.type === 'Oportunidad de Mejora').length, 0),
+    };
+  };
+  
   const filteredAndSortedAudits = useMemo(() => {
     setAuditCurrentPage(1);
     let filtered = pastAudits.filter(audit => {
@@ -1016,277 +1016,277 @@ export default function AuditoriaPage() {
   };
 
 
-  if (isLoadingAllData) {
+    if (isLoadingAllData) {
+        return (
+        <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
+            <Loader2 className="h-16 w-16 text-primary animate-spin" />
+            <div className="ml-4 text-lg text-muted-foreground">Cargando datos de auditoría...</div>
+        </div>
+        );
+    }
+    
     return (
-      <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-16 w-16 text-primary animate-spin" />
-        <div className="ml-4 text-lg text-muted-foreground">Cargando datos de auditoría...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto py-8">
-      {currentAuditSession ? (
-        <AuditSessionView
-          allProcedimientos={allProcedimientos} 
-          auditSession={currentAuditSession}
-          onGoBack={() => {
-              const previousTab = activeTab;
-              setCurrentAuditSession(null);
-              setTimeout(() => setActiveTab(previousTab), 0);
-          }}
-          onFinalize={handleFinalizeAudit}
-          onCancel={() => promptCancelAudit(currentAuditSession)}
-          onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
-          onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
-          onDeleteFinding={promptDeleteFinding}
-          onCreateActionPlan={handleCreateActionPlan}
-          auditTargetDetails={auditTargetDetails}
-          activityDisplayFilter={activityDisplayFilter}
-          setActivityDisplayFilter={setActivityDisplayFilter}
-          puestosMap={puestosMap}
-          procedimientosMap={procedimientosMap}
-          politicasMap={politicasMap}
-        />
-      ) : (
-        <Card className="shadow-lg">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <div className="flex items-center gap-2 mb-1">
-                <ClipboardCheck className="h-6 w-6 text-primary" />
-                <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
-              </div>
-               <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
-                  <DialogTrigger asChild>
-                      <Button><PlayCircle className="mr-2 h-4 w-4"/>Iniciar Nueva Auditoría</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Iniciar Nueva Auditoría</DialogTitle>
-                      <DialogDescription>Seleccione qué desea auditar y quién es el auditor.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div>
-                          <Label htmlFor="auditor-name">Nombre del Auditor</Label>
-                          <Input id="auditor-name" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} />
-                      </div>
-                      <div>
-                          <Label>Tipo de Auditoría</Label>
-                          <Select value={newAuditType} onValueChange={(value: AuditType) => { setNewAuditType(value); setNewAuditTargetId(''); }}>
-                          <SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="proceso">Proceso</SelectItem>
-                              <SelectItem value="puesto">Puesto</SelectItem>
-                              <SelectItem value="sistema">Sistema</SelectItem>
-                              <SelectItem value="politica">Política</SelectItem>
-                              <SelectItem value="procedimiento">Procedimiento</SelectItem>
-                          </SelectContent>
-                          </Select>
-                      </div>
-                      <div>
-                          <Label>Objetivo Específico</Label>
-                           <Select value={newAuditTargetId} onValueChange={setNewAuditTargetId} disabled={!newAuditType}>
-                                <SelectTrigger><SelectValue placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."} /></SelectTrigger>
-                                <SelectContent>
-                                    {auditTargetOptions.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-                                </SelectContent>
-                           </Select>
-                      </div>
-                       {newAuditType === 'puesto' && (
-                          <div>
-                            <Label>Procesos a Auditar (Opcional)</Label>
-                             <MultiSelect
-                                value={newAuditProcessIds}
-                                onChange={setNewAuditProcessIds}
-                                options={procesosDelPuestoOptions}
-                                placeholder="Todos los procesos del puesto"
-                              />
-                            <div className="text-sm text-muted-foreground mt-1">
-                                Si no selecciona procesos, se auditarán todos los del puesto.
+        <div className="container mx-auto py-8">
+        {currentAuditSession ? (
+            <AuditSessionView
+            allProcedimientos={allProcedimientos} 
+            auditSession={currentAuditSession}
+            onGoBack={() => {
+                const previousTab = activeTab;
+                setCurrentAuditSession(null);
+                setTimeout(() => setActiveTab(previousTab), 0);
+            }}
+            onFinalize={handleFinalizeAudit}
+            onCancel={() => promptCancelAudit(currentAuditSession)}
+            onAddFinding={() => { setEditingFinding(null); setIsFindingDialogOpen(true); }}
+            onEditFinding={(f) => { setEditingFinding(f); setIsFindingDialogOpen(true); }}
+            onDeleteFinding={promptDeleteFinding}
+            onCreateActionPlan={handleCreateActionPlan}
+            auditTargetDetails={auditTargetDetails}
+            activityDisplayFilter={activityDisplayFilter}
+            setActivityDisplayFilter={setActivityDisplayFilter}
+            puestosMap={puestosMap}
+            procedimientosMap={procedimientosMap}
+            politicasMap={politicasMap}
+            />
+        ) : (
+            <Card className="shadow-lg">
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <div className="flex items-center gap-2 mb-1">
+                    <ClipboardCheck className="h-6 w-6 text-primary" />
+                    <CardTitle className="text-2xl font-headline">Auditoría y Cumplimiento</CardTitle>
+                </div>
+                <Dialog open={isStartAuditDialogOpen} onOpenChange={setIsStartAuditDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button><PlayCircle className="mr-2 h-4 w-4"/>Iniciar Nueva Auditoría</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                        <DialogTitle>Iniciar Nueva Auditoría</DialogTitle>
+                        <DialogDescription>Seleccione qué desea auditar y quién es el auditor.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                        <div>
+                            <Label htmlFor="auditor-name">Nombre del Auditor</Label>
+                            <Input id="auditor-name" value={newAuditorName} onChange={e => setNewAuditorName(e.target.value)} />
+                        </div>
+                        <div>
+                            <Label>Tipo de Auditoría</Label>
+                            <Select value={newAuditType} onValueChange={(value: AuditType) => { setNewAuditType(value); setNewAuditTargetId(''); }}>
+                            <SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="proceso">Proceso</SelectItem>
+                                <SelectItem value="puesto">Puesto</SelectItem>
+                                <SelectItem value="sistema">Sistema</SelectItem>
+                                <SelectItem value="politica">Política</SelectItem>
+                                <SelectItem value="procedimiento">Procedimiento</SelectItem>
+                            </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Objetivo Específico</Label>
+                            <Select value={newAuditTargetId} onValueChange={setNewAuditTargetId} disabled={!newAuditType}>
+                                    <SelectTrigger><SelectValue placeholder={!newAuditType ? "Seleccione un tipo primero" : "Seleccione un objetivo..."} /></SelectTrigger>
+                                    <SelectContent>
+                                        {auditTargetOptions.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+                                    </SelectContent>
+                            </Select>
+                        </div>
+                        {newAuditType === 'puesto' && (
+                            <div>
+                                <Label>Procesos a Auditar (Opcional)</Label>
+                                <MultiSelect
+                                    value={newAuditProcessIds}
+                                    onChange={setNewAuditProcessIds}
+                                    options={procesosDelPuestoOptions}
+                                    placeholder="Todos los procesos del puesto"
+                                    />
+                                <div className="text-sm text-muted-foreground mt-1">
+                                    Si no selecciona procesos, se auditarán todos los del puesto.
+                                </div>
                             </div>
-                          </div>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                      <Button onClick={handleStartNewAudit} disabled={!newAuditType || !newAuditTargetId}>Iniciar Auditoría</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-            </div>
-             <CardDescription className="text-muted-foreground mt-2">
-                Inicie nuevas auditorías, consulte el historial y monitoree el registro de actividad del sistema.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="alertas" value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="alertas">Alertas de Auditoría ({auditAlerts.length})</TabsTrigger>
-                <TabsTrigger value="historial">Historial de Auditorías</TabsTrigger>
-                <TabsTrigger value="log"><History className="mr-2 h-4 w-4"/>Registro de Actividad</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="alertas" className="mt-4">
-                 <Card>
+                        )}
+                        </div>
+                        <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                        <Button onClick={handleStartNewAudit} disabled={!newAuditType || !newAuditTargetId}>Iniciar Auditoría</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                    </Dialog>
+                </div>
+                <CardDescription className="text-muted-foreground mt-2">
+                    Inicie nuevas auditorías, consulte el historial y monitoree el registro de actividad del sistema.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="alertas" value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)}>
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="alertas">Alertas de Auditoría ({auditAlerts.length})</TabsTrigger>
+                    <TabsTrigger value="historial">Historial de Auditorías</TabsTrigger>
+                    <TabsTrigger value="log"><History className="mr-2 h-4 w-4"/>Registro de Actividad</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="alertas" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Alertas de Auditoría Programada</CardTitle>
+                            <CardDescription>Esta tabla muestra los procesos, puestos y procedimientos que requieren una auditoría basada en la frecuencia programada.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <Input placeholder="Buscar por nombre..." value={auditAlertSearchTerm} onChange={e => setAuditAlertSearchTerm(e.target.value)} />
+                            <Select value={auditAlertTypeFilter} onValueChange={(v) => setAuditAlertTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
+                            <Select value={auditAlertDaysFilter} onValueChange={(v) => setAuditAlertDaysFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Cualquier Atraso</SelectItem><SelectItem value="30">Más de 30 días</SelectItem><SelectItem value="90">Más de 90 días</SelectItem><SelectItem value="180">Más de 180 días</SelectItem></SelectContent></Select>
+                        </div>
+                        <div className="rounded-md border">
+                            <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="cursor-pointer" onClick={() => requestAuditAlertSort('name')}>Objetivo a Auditar {getAuditAlertSortIcon('name')}</TableHead>
+                                    <TableHead>Última Auditoría</TableHead>
+                                    <TableHead className="text-right cursor-pointer" onClick={() => requestAuditAlertSort('daysOverdue')}>Días de Atraso {getAuditAlertSortIcon('daysOverdue')}</TableHead>
+                                    <TableHead className="text-right">Acción</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedAuditAlerts.length > 0 ? paginatedAuditAlerts.map(alert => (
+                                    <TableRow key={alert.id}>
+                                        <TableCell>
+                                        <p className="font-medium">{alert.name}</p>
+                                        <p className="text-xs text-muted-foreground capitalize">{alert.type}</p>
+                                        </TableCell>
+                                        <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy', {locale: es}) : 'Nunca auditado'}</TableCell>
+                                        <TableCell className="text-right"><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
+                                        <TableCell className="text-right"><Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type as any, alert.id)}><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría</Button></TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow><TableCell colSpan={4} className="text-center">No hay alertas de auditoría.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                            </Table>
+                        </div>
+                        <div className="flex items-center justify-between space-x-2 py-4">
+                            <div className="text-sm text-muted-foreground">Página {auditAlertCurrentPage} de {totalAuditAlertPages}</div>
+                            <div className="space-x-2">
+                            <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.max(1, p - 1))} disabled={auditAlertCurrentPage === 1}>Anterior</Button>
+                            <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.min(totalAuditAlertPages, p + 1))} disabled={auditAlertCurrentPage >= totalAuditAlertPages}>Siguiente</Button>
+                            </div>
+                        </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="historial" className="mt-4">
+                    <Card>
                     <CardHeader>
-                        <CardTitle>Alertas de Auditoría Programada</CardTitle>
-                        <CardDescription>Esta tabla muestra los procesos, puestos y procedimientos que requieren una auditoría basada en la frecuencia programada.</CardDescription>
+                        <div className="flex justify-between items-center"><CardTitle>Historial de Auditorías</CardTitle><Button variant="outline" onClick={handleAuditExport} disabled={filteredAndSortedAudits.length === 0}><FileText className="mr-2 h-4 w-4"/>Exportar</Button></div>
+                        <CardDescription>Auditorías realizadas anteriormente.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <Input placeholder="Buscar por nombre..." value={auditAlertSearchTerm} onChange={e => setAuditAlertSearchTerm(e.target.value)} />
-                        <Select value={auditAlertTypeFilter} onValueChange={(v) => setAuditAlertTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
-                        <Select value={auditAlertDaysFilter} onValueChange={(v) => setAuditAlertDaysFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Cualquier Atraso</SelectItem><SelectItem value="30">Más de 30 días</SelectItem><SelectItem value="90">Más de 90 días</SelectItem><SelectItem value="180">Más de 180 días</SelectItem></SelectContent></Select>
-                      </div>
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                                <TableHead className="cursor-pointer" onClick={() => requestAuditAlertSort('name')}>Objetivo a Auditar {getAuditAlertSortIcon('name')}</TableHead>
-                                <TableHead>Última Auditoría</TableHead>
-                                <TableHead className="text-right cursor-pointer" onClick={() => requestAuditAlertSort('daysOverdue')}>Días de Atraso {getAuditAlertSortIcon('daysOverdue')}</TableHead>
-                                <TableHead className="text-right">Acción</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {paginatedAuditAlerts.length > 0 ? paginatedAuditAlerts.map(alert => (
-                                <TableRow key={alert.id}>
-                                    <TableCell>
-                                      <p className="font-medium">{alert.name}</p>
-                                      <p className="text-xs text-muted-foreground capitalize">{alert.type}</p>
-                                    </TableCell>
-                                    <TableCell>{alert.lastAudited ? format(parseISO(alert.lastAudited), 'dd/MM/yyyy', {locale: es}) : 'Nunca auditado'}</TableCell>
-                                    <TableCell className="text-right"><Badge variant="destructive">{alert.daysOverdue > 9000 ? 'N/A' : `${alert.daysOverdue} días`}</Badge></TableCell>
-                                    <TableCell className="text-right"><Button size="sm" onClick={() => handleStartAuditFromAlert(alert.type as any, alert.id)}><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Auditoría</Button></TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow><TableCell colSpan={4} className="text-center">No hay alertas de auditoría.</TableCell></TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <div className="flex items-center justify-between space-x-2 py-4">
-                        <div className="text-sm text-muted-foreground">Página {auditAlertCurrentPage} de {totalAuditAlertPages}</div>
-                        <div className="space-x-2">
-                           <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.max(1, p - 1))} disabled={auditAlertCurrentPage === 1}>Anterior</Button>
-                           <Button variant="outline" size="sm" onClick={() => setAuditAlertCurrentPage(p => Math.min(totalAuditAlertPages, p + 1))} disabled={auditAlertCurrentPage >= totalAuditAlertPages}>Siguiente</Button>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <Input placeholder="Buscar por objetivo o auditor..." value={auditSearchTerm} onChange={e => setAuditSearchTerm(e.target.value)} />
+                            <Select value={auditTypeFilter} onValueChange={v => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
+                            <Select value={auditStatusFilter} onValueChange={v => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                            <Select value={pendingActionsFilter} onValueChange={v => setPendingActionsFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="with_pending">Con Acciones Pendientes</SelectItem><SelectItem value="no_pending">Sin Acciones Pendientes</SelectItem></SelectContent></Select>
                         </div>
-                      </div>
-                    </CardContent>
-                 </Card>
-              </TabsContent>
-
-              <TabsContent value="historial" className="mt-4">
-                <Card>
-                  <CardHeader>
-                      <div className="flex justify-between items-center"><CardTitle>Historial de Auditorías</CardTitle><Button variant="outline" onClick={handleAuditExport} disabled={filteredAndSortedAudits.length === 0}><FileText className="mr-2 h-4 w-4"/>Exportar</Button></div>
-                      <CardDescription>Auditorías realizadas anteriormente.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                        <Input placeholder="Buscar por objetivo o auditor..." value={auditSearchTerm} onChange={e => setAuditSearchTerm(e.target.value)} />
-                        <Select value={auditTypeFilter} onValueChange={v => setAuditTypeFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Tipos</SelectItem>{auditTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent></Select>
-                        <Select value={auditStatusFilter} onValueChange={v => setAuditStatusFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todos los Estados</SelectItem>{auditStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
-                        <Select value={pendingActionsFilter} onValueChange={v => setPendingActionsFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem><SelectItem value="with_pending">Con Acciones Pendientes</SelectItem><SelectItem value="no_pending">Sin Acciones Pendientes</SelectItem></SelectContent></Select>
-                     </div>
-                     <div className="rounded-md border">
-                        <Table><TableHeader><TableRow>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('codigo')}>Código {getAuditSortIcon('codigo')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditorName')}>Auditor {getAuditSortIcon('auditorName')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestAuditSort('status')}>Estado {getAuditSortIcon('status')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('numFindings')}>Hallazgos {getAuditSortIcon('numFindings')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('pendingActions')}>Acciones Pend. {getAuditSortIcon('pendingActions')}</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow></TableHeader><TableBody>
-                        {paginatedAudits.length > 0 ? paginatedAudits.map(audit => {
-                            const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
-                            return (
-                            <TableRow key={audit.id}>
-                                <TableCell className="font-mono text-xs">{audit.codigo}</TableCell>
-                                <TableCell>
-                                  <p className="font-medium">{audit.targetName}</p>
-                                  <p className="text-xs text-muted-foreground capitalize">{audit.auditType}</p>
-                                </TableCell>
-                                <TableCell>{audit.auditorName}</TableCell>
-                                <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
-                                <TableCell>
-                                  <Badge className={cn("text-white border-transparent", {
-                                      "bg-green-600 hover:bg-green-700": audit.status === "Completada",
-                                      "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
-                                      "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
-                                  })}>
-                                      {audit.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">{audit.findings?.length || 0}</TableCell>
-                                <TableCell className="text-center">{pendingActions > 0 ? <Badge variant="destructive">{pendingActions}</Badge> : <Badge variant="secondary">0</Badge>}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => handleEditAudit(audit)}>
-                                      {audit.status === 'En Progreso' ? <Edit className="mr-2 h-4 w-4"/> : <Eye className="mr-2 h-4 w-4"/>}
-                                      Ver / Editar
-                                    </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
-                                </TableCell>
-                            </TableRow>
-                        )}) : <TableRow><TableCell colSpan={8} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
-                        </TableBody></Table>
-                    </div>
-                     <div className="flex items-center justify-between space-x-2 py-4">
-                        <div className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages}</div>
-                        <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.max(1, p-1))} disabled={auditCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p=>Math.min(totalAuditPages, p+1))} disabled={auditCurrentPage >= totalAuditPages}>Siguiente</Button></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="log" className="mt-4">
-                 <Card>
-                  <CardHeader><CardTitle>Registro de Actividad del Sistema</CardTitle></CardHeader>
-                   <CardContent>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <Input placeholder="Buscar por usuario, entidad o detalle..." value={logSearchTerm} onChange={e=>setLogSearchTerm(e.target.value)} />
-                        <Select value={logEntityTypeFilter} onValueChange={setLogEntityTypeFilter}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logEntityTypeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
-                        <Select value={logActionFilter} onValueChange={v => setLogActionFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logActionOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
-                     </div>
-                      <div className="rounded-md border">
-                        <Table><TableHeader><TableRow>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha y Hora {getLogSortIcon('timestamp')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('user')}>Usuario {getLogSortIcon('user')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Tipo Entidad {getLogSortIcon('entityType')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityName')}>Nombre Entidad {getLogSortIcon('entityName')}</TableHead>
-                            <TableHead className="cursor-pointer" onClick={()=>requestLogSort('action')}>Acción {getLogSortIcon('action')}</TableHead>
-                            <TableHead>Detalles</TableHead>
-                        </TableRow></TableHeader><TableBody>
-                        {paginatedLogs.length > 0 ? paginatedLogs.map(log => (
-                            <TableRow key={log.id}>
-                                <TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yy HH:mm')}</TableCell>
-                                <TableCell>{log.user}</TableCell>
-                                <TableCell>{log.entityType}</TableCell>
-                                <TableCell>{log.entityName}</TableCell>
-                                <TableCell>
-                                    <Badge className={cn("text-white border-transparent", actionBadgeClasses[log.action] || 'bg-gray-500')}>
-                                      {actionTranslations[log.action] || log.action}
+                        <div className="rounded-md border">
+                            <Table><TableHeader><TableRow>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditSort('codigo')}>Código {getAuditSortIcon('codigo')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditSort('targetName')}>Objetivo Auditado {getAuditSortIcon('targetName')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditorName')}>Auditor {getAuditSortIcon('auditorName')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditSort('auditDate')}>Fecha {getAuditSortIcon('auditDate')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestAuditSort('status')}>Estado {getAuditSortIcon('status')}</TableHead>
+                                <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('numFindings')}>Hallazgos {getAuditSortIcon('numFindings')}</TableHead>
+                                <TableHead className="text-center cursor-pointer" onClick={() => requestAuditSort('pendingActions')}>Acciones Pend. {getAuditSortIcon('pendingActions')}</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow></TableHeader><TableBody>
+                            {paginatedAudits.length > 0 ? paginatedAudits.map(audit => {
+                                const pendingActions = (audit.findings || []).filter(f => (f.type === 'No Conforme' || f.type === 'Oportunidad de Mejora') && !f.isActionCreated).length;
+                                return (
+                                <TableRow key={audit.id}>
+                                    <TableCell className="font-mono text-xs">{audit.codigo}</TableCell>
+                                    <TableCell>
+                                    <p className="font-medium">{audit.targetName}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{audit.auditType}</p>
+                                    </TableCell>
+                                    <TableCell>{audit.auditorName}</TableCell>
+                                    <TableCell>{format(parseISO(audit.auditDate), 'dd/MM/yyyy')}</TableCell>
+                                    <TableCell>
+                                    <Badge className={cn("text-white border-transparent", {
+                                        "bg-green-600 hover:bg-green-700": audit.status === "Completada",
+                                        "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
+                                        "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
+                                    })}>
+                                        {audit.status}
                                     </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs">{log.details}</TableCell>
-                            </TableRow>
-                        )) : <TableRow><TableCell colSpan={6} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
-                        </TableBody></Table>
-                     </div>
-                      <div className="flex items-center justify-between space-x-2 py-4">
-                        <div className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages}</div>
-                        <div className="space-x-2"><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.max(1, p-1))} disabled={logCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.min(totalLogPages, p+1))} disabled={logCurrentPage >= totalLogPages}>Siguiente</Button></div>
-                     </div>
-                  </CardContent>
-                 </Card>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
+                                    </TableCell>
+                                    <TableCell className="text-center">{audit.findings?.length || 0}</TableCell>
+                                    <TableCell className="text-center">{pendingActions > 0 ? <Badge variant="destructive">{pendingActions}</Badge> : <Badge variant="secondary">0</Badge>}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" onClick={() => handleEditAudit(audit)}>
+                                        {audit.status === 'En Progreso' ? <Edit className="mr-2 h-4 w-4"/> : <Eye className="mr-2 h-4 w-4"/>}
+                                        Ver / Editar
+                                        </Button>
+                                        <Button variant="ghost" size="icon" onClick={() => promptDeleteAudit(audit)} disabled={audit.status !== 'En Progreso'} className="text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                    </TableCell>
+                                </TableRow>
+                            )}) : <TableRow><TableCell colSpan={8} className="text-center">No hay auditorías registradas.</TableCell></TableRow>}
+                            </TableBody></Table>
+                        </div>
+                        <div className="flex items-center justify-between space-x-2 py-4">
+                            <div className="text-sm text-muted-foreground">Página {auditCurrentPage} de {totalAuditPages}</div>
+                            <div className="space-x-2"><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p => Math.max(1, p-1))} disabled={auditCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setAuditCurrentPage(p=>Math.min(totalAuditPages, p+1))} disabled={auditCurrentPage >= totalAuditPages}>Siguiente</Button></div>
+                        </div>
+                    </CardContent>
+                    </Card>
+                </TabsContent>
+                
+                <TabsContent value="log" className="mt-4">
+                    <Card>
+                    <CardHeader><CardTitle>Registro de Actividad del Sistema</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <Input placeholder="Buscar por usuario, entidad o detalle..." value={logSearchTerm} onChange={e=>setLogSearchTerm(e.target.value)} />
+                            <Select value={logEntityTypeFilter} onValueChange={setLogEntityTypeFilter}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logEntityTypeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
+                            <Select value={logActionFilter} onValueChange={v => setLogActionFilter(v as any)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{logActionOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
+                        </div>
+                        <div className="rounded-md border">
+                            <Table><TableHeader><TableRow>
+                                <TableHead className="cursor-pointer" onClick={()=>requestLogSort('timestamp')}>Fecha y Hora {getLogSortIcon('timestamp')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={()=>requestLogSort('user')}>Usuario {getLogSortIcon('user')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityType')}>Tipo Entidad {getLogSortIcon('entityType')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={()=>requestLogSort('entityName')}>Nombre Entidad {getLogSortIcon('entityName')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={()=>requestLogSort('action')}>Acción {getLogSortIcon('action')}</TableHead>
+                                <TableHead>Detalles</TableHead>
+                            </TableRow></TableHeader><TableBody>
+                            {paginatedLogs.length > 0 ? paginatedLogs.map(log => (
+                                <TableRow key={log.id}>
+                                    <TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yy HH:mm')}</TableCell>
+                                    <TableCell>{log.user}</TableCell>
+                                    <TableCell>{log.entityType}</TableCell>
+                                    <TableCell>{log.entityName}</TableCell>
+                                    <TableCell>
+                                        <Badge className={cn("text-white border-transparent", actionBadgeClasses[log.action] || 'bg-gray-500')}>
+                                        {actionTranslations[log.action] || log.action}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs">{log.details}</TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center">No hay registros de actividad.</TableCell></TableRow>}
+                            </TableBody></Table>
+                        </div>
+                        <div className="flex items-center justify-between space-x-2 py-4">
+                            <div className="text-sm text-muted-foreground">Página {logCurrentPage} de {totalLogPages}</div>
+                            <div className="space-x-2"><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.max(1, p-1))} disabled={logCurrentPage===1}>Anterior</Button><Button variant="outline" size="sm" onClick={()=>setLogCurrentPage(p=>Math.min(totalLogPages, p+1))} disabled={logCurrentPage >= totalLogPages}>Siguiente</Button></div>
+                        </div>
+                    </CardContent>
+                    </Card>
+                </TabsContent>
+                </Tabs>
+            </CardContent>
+            </Card>
+        )}
 
       {/* Dialogs */}
       <Dialog open={isFindingDialogOpen} onOpenChange={setIsFindingDialogOpen}>
