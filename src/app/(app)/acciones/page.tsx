@@ -48,9 +48,9 @@ type ElementoAccionType = typeof elementoAccionTypes[number];
 
 const accionFormSchema = z.object({
   id: z.string().optional(),
-  nombre: z.string().min(3, 'El nombre de la acción es requerido (mínimo 3 caracteres).'),
-  descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).'),
-  responsable: z.string().min(1, 'El responsable es requerido.'),
+  nombre: z.string().min(3, 'El nombre de la acción es requerido (mínimo 3 caracteres).').max(150, 'El nombre no puede exceder 150 caracteres.'),
+  descripcion: z.string().min(10, 'La descripción es requerida (mínimo 10 caracteres).').max(3000, 'La descripción no puede exceder 3000 caracteres.'),
+  responsable: z.string().min(1, 'El responsable es requerido.').max(100, 'El responsable no puede exceder 100 caracteres.'),
   
   elementoType: z.enum(elementoAccionTypes, { errorMap: () => ({ message: "Seleccione un tipo de elemento."})}).optional(),
   elementoId: z.string().optional(),
@@ -69,7 +69,7 @@ const accionFormSchema = z.object({
   ),
   unidadTiempoAhorro: z.enum(tiempoUnidadOptions).optional(),
   historialDeCambios: z.array(z.any()).optional(),
-  origenMejora: z.string().optional(),
+  origenMejora: z.string().optional().refine(val => !val || val.length <= 500, { message: 'No puede exceder 500 caracteres.' }),
 }).refine(data => {
     if (data.fechaFinalizacion && data.fechaObjetivo && data.fechaFinalizacion < data.fechaObjetivo) {
         return false;

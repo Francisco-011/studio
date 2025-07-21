@@ -95,7 +95,7 @@ type SistemaFormData = z.infer<typeof sistemaFormSchema>;
 const costoSistemaFormSchema = z.object({
     id: z.string().optional(),
     sistemaId: z.string(),
-    descripcion: z.string().min(1, "La descripción es requerida."),
+    descripcion: z.string().min(1, "La descripción es requerida.").max(500, 'La descripción no puede exceder 500 caracteres.'),
     montoUso: z.preprocess(
       (val) => (val === undefined || val === null || String(val).trim() === '' ? undefined : parseFloat(String(val))),
       z.number({ invalid_type_error: "Debe ser un número." }).nonnegative("Debe ser positivo.").optional()

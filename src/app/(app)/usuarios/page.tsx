@@ -109,7 +109,7 @@ const exceptionFormSchema = z.object({
     documentId: z.string({ required_error: 'Debe seleccionar un documento.' }),
     exceptionType: z.enum(['INCLUDE', 'EXCLUDE'], { required_error: 'Debe seleccionar un tipo de excepción.' }),
     expiresAt: z.date().optional(),
-    justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).'),
+    justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).').max(1000, 'La justificación no puede exceder 1000 caracteres.'),
 });
 type ExceptionFormData = z.infer<typeof exceptionFormSchema>;
 
