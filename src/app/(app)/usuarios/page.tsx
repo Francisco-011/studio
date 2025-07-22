@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -77,6 +76,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ClaimsHealthDashboard } from '@/components/ClaimsHealthDashboard';
 
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
@@ -101,6 +101,7 @@ export interface User {
   nivelAcceso: NivelAcceso;
   activo: boolean;
   puestoId?: string;
+  claimsVersion?: number;
 }
 
 const userFormSchema = z.object({
@@ -219,49 +220,42 @@ export default function UsuariosPage() {
   }, [editingUser, isUserDialogOpen, userForm]);
 
   // 🔐 FUNCIÓN DE VALIDACIÓN DE SEGURIDAD
-  async function validateSecurityChanges(data: UserFormData, editingUser: User): Promise<boolean> {
-    if (!editingUser) return false;
+  function validateSecurityChanges(data: UserFormData, editingUser: User): boolean {
+    if (!editingUser || !currentUser) return false;
     
-    // Contar administradores actuales
     const adminCount = users.filter(u => u.rol === 'Administrador' && u.activo).length;
     const isLastAdmin = editingUser.rol === 'Administrador' && 
                         data.rol !== 'Administrador' && 
                         adminCount <= 1;
 
-    // Detectar cambios críticos
     const isCriticalChange = (editingUser.rol === 'Administrador' && data.rol !== 'Administrador') ||
                             (editingUser.rol !== 'Administrador' && data.rol === 'Administrador');
 
-    // Detectar auto-modificación
     const isSelfModification = editingUser.id === currentUser?.id;
 
-    setSecurityValidation({
-      isLastAdmin,
-      isCriticalChange,
-      isSelfModification,
-      currentUserRole: editingUser.rol,
-      targetUserRole: data.rol
-    });
-
-    // Bloquear si es el último admin siendo degradado
     if (isLastAdmin) {
       toast({
         title: "⛔ Operación Bloqueada",
         description: "No se puede degradar el último administrador del sistema. Debe crear otro administrador primero.",
         variant: "destructive",
       });
-      return false;
+      return false; // Bloquea la operación
     }
 
-    // Si no es cambio crítico, proceder normalmente
-    if (!isCriticalChange && !isSelfModification) {
-      return true;
+    if (isCriticalChange || isSelfModification) {
+        setSecurityValidation({
+          isLastAdmin,
+          isCriticalChange,
+          isSelfModification,
+          currentUserRole: editingUser.rol,
+          targetUserRole: data.rol
+        });
+        setPendingUserUpdate(data);
+        setIsSecurityDialogOpen(true);
+        return false; // Espera confirmación
     }
 
-    // Si es cambio crítico o auto-modificación, mostrar diálogo de seguridad
-    setPendingUserUpdate(data);
-    setIsSecurityDialogOpen(true);
-    return false;
+    return true; // Procede directamente
   }
 
   // 🔐 FUNCIÓN DE VALIDACIÓN DE CONTRASEÑA
@@ -278,11 +272,17 @@ export default function UsuariosPage() {
     setIsValidatingPassword(true);
     
     try {
-      // Validar contraseña usando Firebase Auth
-      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      // Reautenticar para validar la contraseña
+      const { ReauthenticateWithCredential, EmailAuthProvider } = await import('firebase/auth');
       const { auth } = await import('@/lib/firebase');
       
-      await signInWithEmailAndPassword(auth, currentUser.email, passwordConfirmation);
+      const credential = EmailAuthProvider.credential(currentUser.email, passwordConfirmation);
+      if (auth.currentUser) {
+          await ReauthenticateWithCredential(auth.currentUser, credential);
+      } else {
+          throw new Error("No hay usuario actual para reautenticar");
+      }
+      
       setIsValidatingPassword(false);
       return true;
     } catch (error: any) {
@@ -300,16 +300,13 @@ export default function UsuariosPage() {
   async function proceedWithSecureChange() {
     if (!pendingUserUpdate || !editingUser) return;
 
-    // Si es cambio crítico, validar contraseña
     if (securityValidation.isCriticalChange) {
       const passwordValid = await validatePasswordForCriticalChange();
       if (!passwordValid) return;
     }
 
-    // Proceder con el cambio
     await executeUserUpdate(pendingUserUpdate);
     
-    // Limpiar estados
     setIsSecurityDialogOpen(false);
     setPendingUserUpdate(null);
     setPasswordConfirmation('');
@@ -322,25 +319,30 @@ export default function UsuariosPage() {
     try {
       const functions = getFunctions();
       const setUserRole = httpsCallable(functions, 'setUserRole');
-      await setUserRole({
+      const result = await setUserRole({
         userId: editingUser.id,
         rol: data.rol,
         nivelAcceso: data.nivelAcceso,
         puestoId: data.puestoId || null,
       });
 
+      const { claimsVersion } = (result.data as any);
+
       // Actualizar nombre y estado en Firestore
       const userDocRef = doc(db, "users", editingUser.id);
       await updateDoc(userDocRef, {
         nombreCompleto: data.nombreCompleto,
         activo: data.activo,
+        puestoId: data.puestoId || null,
+        rol: data.rol,
+        nivelAcceso: data.nivelAcceso,
+        claimsVersion: claimsVersion,
       });
 
-      // Mensaje específico según el tipo de cambio
       let successMessage = `Los permisos para ${data.nombreCompleto} han sido actualizados.`;
       
       if (securityValidation.isSelfModification) {
-        successMessage += " ⚠️ Ha modificado sus propios permisos. Puede necesitar reiniciar sesión.";
+        successMessage += " ⚠️ Ha modificado sus propios permisos. El cambio se aplicará en su próximo inicio de sesión.";
       }
       
       if (securityValidation.isCriticalChange) {
@@ -352,16 +354,7 @@ export default function UsuariosPage() {
         description: successMessage,
       });
 
-      // Log detallado
-      addLogEntry({
-        action: 'update',
-        entityType: 'Usuario',
-        entityName: data.nombreCompleto,
-        details: `Se actualizaron los permisos del usuario "${data.nombreCompleto}". ` +
-                 `Cambio: ${securityValidation.currentUserRole} → ${securityValidation.targetUserRole}. ` +
-                 `${securityValidation.isCriticalChange ? '[CAMBIO CRÍTICO]' : ''} ` +
-                 `${securityValidation.isSelfModification ? '[AUTO-MODIFICACIÓN]' : ''}`
-      });
+      addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Permisos de "${data.nombreCompleto}" actualizados a Rol: ${data.rol}, Nivel: ${data.nivelAcceso}.` });
 
     } catch (error: any) {
       console.error("Error setting user role via function:", error.message);
@@ -380,14 +373,11 @@ export default function UsuariosPage() {
   async function handleUserSubmit(data: UserFormData) {
     if (!editingUser || !hasPermission('usuarios:edit')) return;
     
-    // Ejecutar validaciones de seguridad
-    const canProceedDirectly = await validateSecurityChanges(data, editingUser);
+    const canProceedDirectly = validateSecurityChanges(data, editingUser);
     
     if (canProceedDirectly) {
-      // No requiere validaciones adicionales, proceder directamente
       await executeUserUpdate(data);
     }
-    // Si no puede proceder directamente, se mostrará el diálogo de seguridad
   }
 
   function handleEditUser(user: User) {
@@ -512,11 +502,16 @@ export default function UsuariosPage() {
                 <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
               )}
                {hasPermission('excepciones:view') && (
-                <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones de Acceso</TabsTrigger>
+                <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones</TabsTrigger>
               )}
             </TabsList>
             
             <TabsContent value="users" className="mt-4">
+              {currentUser?.rol === 'Administrador' && (
+                  <div className="mb-6">
+                      <ClaimsHealthDashboard />
+                  </div>
+              )}
               <div className="mb-6 space-y-4 md:flex md:items-end md:justify-between md:space-y-0 md:space-x-4">
                 <div className="relative flex-1 md:flex-grow">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -582,7 +577,7 @@ export default function UsuariosPage() {
                             {user.nombreCompleto}
                             {user.rol === 'Administrador' && (
                               <Badge variant="destructive" className="ml-2 text-xs">
-                                ADMIN ({users.filter(u => u.rol === 'Administrador' && u.activo).length})
+                                ADMIN
                               </Badge>
                             )}
                           </TableCell>
