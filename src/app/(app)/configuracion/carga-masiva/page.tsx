@@ -62,19 +62,19 @@ export default function CargaMasivaPage() {
                            <AlertTriangle className="h-6 w-6" />
                         </div>
                         <div>
-                           <CardTitle className="text-2xl font-headline text-destructive">Zona de Peligro: Limpiar Base de Datos</CardTitle>
+                           <CardTitle className="text-2xl font-headline text-destructive">Zona de Peligro: Limpiar Datos Operativos</CardTitle>
                            <CardDescription className="text-destructive/80">
-                                Esta acción es irreversible y eliminará TODOS los datos de TODAS las colecciones.
+                                Esta acción es irreversible y eliminará TODOS los datos de la aplicación EXCEPTO los usuarios y sus permisos.
                            </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-sm">
-                        Utilice esta herramienta únicamente si desea reiniciar completamente el sistema a un estado vacío. Se borrarán permanentemente procesos, usuarios, políticas, configuraciones y cualquier otra información que haya sido registrada.
+                        Utilice esta herramienta únicamente si desea reiniciar completamente los datos del sistema a un estado vacío. Se borrarán permanentemente procesos, políticas, acciones, auditorías y cualquier otra información operativa.
                     </p>
                     <p className="text-sm font-semibold">
-                        Esta acción no se puede deshacer. Proceda con extrema precaución.
+                        Las cuentas de usuario, sus roles y los permisos configurados NO serán eliminados.
                     </p>
                     
                      <AlertDialog>
@@ -87,7 +87,7 @@ export default function CargaMasivaPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta acción eliminará permanentemente todos los datos, incluyendo usuarios, procesos y configuraciones. 
+                                    Esta acción eliminará permanentemente todos los datos operativos. Los usuarios no se verán afectados. 
                                     Para confirmar, escriba <strong className="text-foreground">{CONFIRMATION_PHRASE}</strong> en el campo de abajo.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
@@ -104,7 +104,7 @@ export default function CargaMasivaPage() {
                                     className="bg-destructive hover:bg-destructive/90"
                                 >
                                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                    Sí, limpiar todos los datos
+                                    Sí, limpiar todos los datos operativos
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

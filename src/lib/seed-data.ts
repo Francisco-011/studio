@@ -8,11 +8,11 @@ import type { UserRole } from '@/app/(app)/usuarios/page';
 const collectionsToClear = [
   'acciones', 'actividades', 'areas', 'departamentos', 'politicas',
   'procedimientos', 'procesos', 'puestos', 'sistemas', 'sistemas_costos',
-  'access_exceptions', 'activity_log', 'audits', 'permissions', 'users', 'sync_events', 'counters'
+  'access_exceptions', 'activity_log', 'audits', 'counters'
 ];
 
 async function clearCollections() {
-  console.log('Iniciando limpieza de todas las colecciones...');
+  console.log('Iniciando limpieza de colecciones operativas...');
   const batch = writeBatch(db);
 
   for (const collectionName of collectionsToClear) {
@@ -31,10 +31,10 @@ async function clearCollections() {
   }
   
   await batch.commit();
-  console.log('Todas las colecciones han sido limpiadas.');
+  console.log('Las colecciones operativas han sido limpiadas.');
 }
 
-export async function seedDatabase() {
+export async function runSeed() {
   // Esta función ahora solo limpia la base de datos y no carga datos nuevos.
   await clearCollections();
   console.log('La base de datos ha sido limpiada exitosamente.');
