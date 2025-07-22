@@ -1,4 +1,5 @@
 
+
 /**
  * @fileoverview Cloud Functions para gestionar la autenticación y permisos de usuarios.
  * - setUserRole: Asigna Custom Claims (rol, nivelAcceso, etc.) a un usuario.
@@ -9,6 +10,8 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { initializeApp, App } from "firebase-admin/app";
+import { onDocumentWrite } from "firebase-functions/v2/firestore";
+import { logger } from "firebase-functions";
 
 // Inicializar Firebase Admin SDK
 let adminApp: App;
@@ -24,66 +27,129 @@ const db = getFirestore();
  * Solo los administradores pueden ejecutar esta función.
  */
 exports.setUserRole = onCall(async (request) => {
-  // 1. Validar que quien llama es un Administrador
-  if (request.auth?.token?.rol !== "Administrador") {
-    throw new HttpsError(
-      "permission-denied",
-      "Solo los Administradores pueden ejecutar esta acción."
-    );
-  }
-
-  // 2. Validar los datos de entrada
-  const { userId, rol, nivelAcceso, puestoId } = request.data;
-  if (!userId || !rol || !nivelAcceso) {
-    throw new HttpsError(
-      "invalid-argument",
-      "La función debe ser llamada con 'userId', 'rol' y 'nivelAcceso'."
-    );
-  }
-
-  try {
-    // 3. Obtener el departamento y área del puesto para sellarlos en el token
-    let departamentoId: string | undefined;
-    let areaId: string | undefined;
-
-    if (puestoId) {
-      const puestoDoc = await db.collection("puestos").doc(puestoId).get();
-      if (puestoDoc.exists) {
-        const puestoData = puestoDoc.data();
-        departamentoId = puestoData?.departamentoId;
-        areaId = puestoData?.areaId;
-      }
+    logger.info("🔧 setUserRole v4 - Sincronización mejorada", { data: request.data });
+    
+    const callingUid = request.auth?.uid;
+    const { userId, rol, nivelAcceso, puestoId } = request.data;
+    
+    // 1. Validar datos de entrada
+    if (!userId || !rol || !nivelAcceso) {
+        logger.error("❌ Datos de entrada inválidos", { data: request.data });
+        throw new HttpsError("invalid-argument", "La función debe ser llamada con 'userId', 'rol' y 'nivelAcceso'.");
     }
 
-    // 4. Asignar los Custom Claims al usuario
-    await getAuth().setCustomUserClaims(userId, {
-      rol,
-      nivelAcceso,
-      departamentoId: departamentoId || null,
-      areaId: areaId || null,
-      puestoId: puestoId || null,
-      lastClaimUpdate: new Date().toISOString(),
-    });
+    // 2. Lógica de autorización SIMPLIFICADA y ROBUSTA
+    let isAuthorized = false;
+    const isSelfUpdate = callingUid === userId;
 
-    // 5. Opcional: Actualizar también el perfil en Firestore para consistencia
-    const userDocRef = db.collection("users").doc(userId);
-    await userDocRef.update({
-      rol,
-      nivelAcceso,
-      puestoId: puestoId || null,
-    });
+    logger.info("🔍 Verificando autorización", { callingUid, targetUserId: userId, isSelfUpdate });
 
-    return {
-      success: true,
-      message: `Permisos actualizados para el usuario ${userId}.`,
-    };
-  } catch (error) {
-    console.error("Error al asignar Custom Claims:", error);
-    throw new HttpsError(
-      "internal",
-      "Ocurrió un error al intentar asignar los permisos."
-    );
-  }
+    try {
+        // Caso 1: Usuario con token de Administrador
+        if (request.auth?.token?.rol === "Administrador") {
+            isAuthorized = true;
+            logger.info("✅ Autorizado por token de Administrador");
+        }
+        // Caso 2: Auto-actualización para usuarios que son Administradores en DB
+        else if (isSelfUpdate) {
+            const userDoc = await db.collection("users").doc(callingUid!).get();
+            if (userDoc.exists && userDoc.data()?.rol === "Administrador") {
+                isAuthorized = true;
+                logger.info("✅ Autorizado por auto-actualización de Administrador");
+            } else {
+                logger.warn("❌ Auto-actualización rechazada - No es Administrador en DB");
+            }
+        }
+        // Caso 3: Configuración inicial - usuario sin claims previos pero es Admin en DB
+        else if (!request.auth?.token?.rol) {
+            // Para casos de configuración inicial donde el token aún no tiene claims
+            const userDoc = await db.collection("users").doc(userId).get();
+            if (userDoc.exists && userDoc.data()?.rol === "Administrador" && callingUid === userId) {
+                isAuthorized = true;
+                logger.info("✅ Autorizado por configuración inicial de Administrador");
+            }
+        }
+
+        if (!isAuthorized) {
+            logger.error("❌ Permiso denegado", { 
+                callingUid, 
+                targetUserId: userId,
+                tokenRol: request.auth?.token?.rol 
+            });
+            throw new HttpsError("permission-denied", "No tiene permisos para ejecutar esta acción.");
+        }
+
+        // 3. Obtener datos del puesto para sellar en el token
+        let departamentoId: string | undefined;
+        let areaId: string | undefined;
+
+        if (puestoId) {
+            logger.info(`🔍 Buscando datos del puesto: ${puestoId}`);
+            const puestoDoc = await db.collection("puestos").doc(puestoId).get();
+            if (puestoDoc.exists && puestoDoc.data()) {
+                const puestoData = puestoDoc.data()!;
+                departamentoId = puestoData.departamentoId;
+                areaId = puestoData.areaId;
+                logger.info("✅ Datos del puesto obtenidos", { departamentoId, areaId });
+            } else {
+                logger.warn(`⚠️ Puesto ${puestoId} no encontrado o sin datos`);
+            }
+        }
+
+        // 4. Preparar Claims con timestamp de sincronización
+        const claimsToSet = {
+            rol,
+            nivelAcceso,
+            departamentoId: departamentoId || null,
+            areaId: areaId || null,
+            puestoId: puestoId || null,
+            lastClaimUpdate: new Date().toISOString(),
+            claimsVersion: Date.now(), // Para detectar actualizaciones
+        };
+
+        logger.info("🔄 Asignando Custom Claims", { userId, claims: claimsToSet });
+
+        // 5. Asignar Claims atómicamente
+        await getAuth().setCustomUserClaims(userId, claimsToSet);
+        logger.info("✅ Custom Claims asignados exitosamente");
+
+        // 6. Actualizar Firestore para consistencia
+        const userDocRef = db.collection("users").doc(userId);
+        await userDocRef.update({
+            rol,
+            nivelAcceso,
+            puestoId: puestoId || null,
+            lastSyncAt: new Date().toISOString(),
+            claimsVersion: claimsToSet.claimsVersion,
+        });
+        logger.info("✅ Perfil en Firestore sincronizado");
+
+        // 7. Registrar evento de sincronización
+        await db.collection('sync_events').add({
+            type: 'custom_claims_update',
+            userId,
+            claims: claimsToSet,
+            updatedBy: callingUid,
+            timestamp: new Date().toISOString(),
+        });
+
+        return {
+            success: true,
+            message: `Permisos actualizados para el usuario ${userId}`,
+            claimsVersion: claimsToSet.claimsVersion,
+            requiresRefresh: true, // Indica al cliente que debe refrescar
+        };
+
+    } catch (error) {
+        logger.error("❌ Error en setUserRole", { error, userId, callingUid });
+        
+        // Detectar errores específicos de autorización
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        
+        throw new HttpsError("internal", "Error inesperado al actualizar permisos. Revise los logs.");
+    }
 });
 
 
