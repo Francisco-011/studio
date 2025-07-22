@@ -2,13 +2,13 @@
 'use server';
 
 import { db } from './firebase';
-import { collection, writeBatch, getDocs, doc, serverTimestamp, query, deleteDoc, arrayUnion } from 'firebase/firestore';
-import type { UserRole } from '@/app/(app)/usuarios/page';
+import { collection, writeBatch, getDocs, doc, query } from 'firebase/firestore';
 
 const collectionsToClear = [
   'acciones', 'actividades', 'areas', 'departamentos', 'politicas',
   'procedimientos', 'procesos', 'puestos', 'sistemas', 'sistemas_costos',
   'access_exceptions', 'activity_log', 'audits', 'counters'
+  // 'users' and 'permissions' are intentionally excluded
 ];
 
 async function clearCollections() {
@@ -34,7 +34,7 @@ async function clearCollections() {
   console.log('Las colecciones operativas han sido limpiadas.');
 }
 
-export async function runSeed() {
+export async function seedDatabase() {
   // Esta función ahora solo limpia la base de datos y no carga datos nuevos.
   await clearCollections();
   console.log('La base de datos ha sido limpiada exitosamente.');

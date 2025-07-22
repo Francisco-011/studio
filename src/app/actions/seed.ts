@@ -1,3 +1,4 @@
+
 'use server';
 
 import { seedDatabase } from '@/lib/seed-data';
@@ -8,9 +9,9 @@ export async function runSeed() {
     await seedDatabase();
     // Revalidate all paths to reflect new data
     revalidatePath('/', 'layout');
-    return { success: true, message: 'Base de datos poblada con datos de prueba exitosamente.' };
+    return { success: true, message: 'La base de datos ha sido limpiada exitosamente.' };
   } catch (error: any) {
     console.error("Error seeding database:", error);
-    return { success: false, message: `Error al poblar la base de datos: ${error.message}` };
+    return { success: false, message: `Error al limpiar la base de datos: ${error.message}` };
   }
 }
