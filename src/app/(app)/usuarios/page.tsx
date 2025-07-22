@@ -331,14 +331,20 @@ export default function UsuariosPage() {
 
       // Actualizar nombre y estado en Firestore
       const userDocRef = doc(db, "users", editingUser.id);
-      await updateDoc(userDocRef, {
+      
+      const updatePayload: any = {
         nombreCompleto: data.nombreCompleto,
         activo: data.activo,
         puestoId: data.puestoId || null,
         rol: data.rol,
         nivelAcceso: data.nivelAcceso,
-        claimsVersion: claimsVersion,
-      });
+      };
+
+      if (claimsVersion !== undefined) {
+        updatePayload.claimsVersion = claimsVersion;
+      }
+
+      await updateDoc(userDocRef, updatePayload);
 
       let successMessage = `Los permisos para ${data.nombreCompleto} han sido actualizados.`;
       
@@ -858,16 +864,16 @@ export default function UsuariosPage() {
               <Shield className="h-6 w-6 text-amber-600" />
               Confirmación de Seguridad Requerida
             </AlertDialogTitle>
-            <div className="text-sm text-muted-foreground pt-2">
+            <div className="text-sm text-muted-foreground pt-2 space-y-4">
                 {securityValidation.isCriticalChange && (
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4 rounded">
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
                     <div className="flex items-start">
                         <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-3 flex-shrink-0" />
                         <div>
-                        <h4 className="font-semibold text-amber-800 mb-1">
+                        <div className="font-semibold text-amber-800 mb-1">
                             Cambio Crítico de Permisos Detectado
-                        </h4>
-                        <p className="text-amber-700">
+                        </div>
+                        <p className="text-sm text-amber-700">
                             Está realizando un cambio que afecta los permisos de administrador del sistema.
                         </p>
                         </div>
@@ -875,14 +881,14 @@ export default function UsuariosPage() {
                     </div>
                 )}
                 {securityValidation.isSelfModification && (
-                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 rounded">
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
                     <div className="flex items-start">
                         <AlertTriangle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
                         <div>
-                        <h4 className="font-semibold text-blue-800 mb-1">
+                        <div className="font-semibold text-blue-800 mb-1">
                             Auto-Modificación de Permisos
-                        </h4>
-                        <p className="text-blue-700">
+                        </div>
+                        <p className="text-sm text-blue-700">
                             Está modificando sus propios permisos. Esto puede afectar su acceso al sistema.
                         </p>
                         </div>
@@ -1008,3 +1014,4 @@ export default function UsuariosPage() {
     </div>
   );
 }
+
