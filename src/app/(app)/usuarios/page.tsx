@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
@@ -849,8 +850,7 @@ export default function UsuariosPage() {
           </Form>
         </DialogContent>
       </Dialog>
-
-      {/* 🔐 DIÁLOGO DE SEGURIDAD PARA CAMBIOS CRÍTICOS */}
+      
       <AlertDialog open={isSecurityDialogOpen} onOpenChange={setIsSecurityDialogOpen}>
         <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
@@ -858,89 +858,90 @@ export default function UsuariosPage() {
               <Shield className="h-6 w-6 text-amber-600" />
               Confirmación de Seguridad Requerida
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-base">
-              {securityValidation.isCriticalChange && (
-                <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4">
-                  <div className="flex items-start">
-                    <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 mr-3 flex-shrink-0" />
-                    <div>
-                      <h4 className="text-sm font-semibold text-amber-800 mb-1">
-                        Cambio Crítico de Permisos Detectado
-                      </h4>
-                      <p className="text-sm text-amber-700">
-                        Está realizando un cambio que afecta los permisos de administrador del sistema.
-                      </p>
+            <div className="text-sm text-muted-foreground pt-2">
+                {securityValidation.isCriticalChange && (
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4 rounded">
+                    <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-3 flex-shrink-0" />
+                        <div>
+                        <h4 className="font-semibold text-amber-800 mb-1">
+                            Cambio Crítico de Permisos Detectado
+                        </h4>
+                        <p className="text-amber-700">
+                            Está realizando un cambio que afecta los permisos de administrador del sistema.
+                        </p>
+                        </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {securityValidation.isSelfModification && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
-                  <div className="flex items-start">
-                    <AlertTriangle className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-                    <div>
-                      <h4 className="text-sm font-semibold text-blue-800 mb-1">
-                        Auto-Modificación de Permisos
-                      </h4>
-                      <p className="text-sm text-blue-700">
-                        Está modificando sus propios permisos. Esto puede afectar su acceso al sistema.
-                      </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                )}
+                {securityValidation.isSelfModification && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 rounded">
+                    <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                        <div>
+                        <h4 className="font-semibold text-blue-800 mb-1">
+                            Auto-Modificación de Permisos
+                        </h4>
+                        <p className="text-blue-700">
+                            Está modificando sus propios permisos. Esto puede afectar su acceso al sistema.
+                        </p>
+                        </div>
+                    </div>
+                    </div>
+                )}
+            </div>
+          </AlertDialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
                 <h4 className="text-sm font-semibold mb-2">Resumen del Cambio:</h4>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Usuario:</span>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Usuario:</span>
                     <span className="font-medium">{editingUser?.nombreCompleto}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Cambio de rol:</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{securityValidation.currentUserRole}</Badge>
-                      <span>→</span>
-                      <Badge variant={securityValidation.targetUserRole === 'Administrador' ? 'default' : 'secondary'}>
-                        {securityValidation.targetUserRole}
-                      </Badge>
-                    </div>
-                  </div>
-                  {securityValidation.isSelfModification && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Tipo:</span>
-                      <Badge variant="outline" className="text-blue-600 border-blue-300">
-                        Auto-modificación
-                      </Badge>
-                    </div>
-                  )}
                 </div>
-              </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Cambio de rol:</span>
+                    <div className="flex items-center gap-2">
+                    <Badge variant="outline">{securityValidation.currentUserRole}</Badge>
+                    <span>→</span>
+                    <Badge variant={securityValidation.targetUserRole === 'Administrador' ? 'default' : 'secondary'}>
+                        {securityValidation.targetUserRole}
+                    </Badge>
+                    </div>
+                </div>
+                {securityValidation.isSelfModification && (
+                    <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Tipo:</span>
+                    <Badge variant="outline" className="text-blue-600 border-blue-300">
+                        Auto-modificación
+                    </Badge>
+                    </div>
+                )}
+                </div>
+            </div>
 
-              {securityValidation.isCriticalChange && (
+            {securityValidation.isCriticalChange && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
+                <div className="flex items-center gap-2 text-sm font-semibold">
                     <Key className="h-4 w-4" />
                     Confirme su identidad ingresando su contraseña actual:
-                  </div>
-                  <Input
+                </div>
+                <Input
                     type="password"
                     placeholder="Ingrese su contraseña actual"
                     value={passwordConfirmation}
                     onChange={(e) => setPasswordConfirmation(e.target.value)}
                     className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
+                />
+                <p className="text-xs text-muted-foreground">
                     Su contraseña se usa únicamente para validar su identidad. No se almacena.
-                  </p>
+                </p>
                 </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+            )}
+          </div>
           
-          <AlertDialogFooter className="gap-2">
+          <AlertDialogFooter className="gap-2 pt-4">
             <AlertDialogCancel 
               onClick={() => {
                 setIsSecurityDialogOpen(false);
