@@ -243,7 +243,7 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
     try {
         // Buscar usuarios con problemas de sincronización
         const usersSnapshot = await db.collection("users").get();
-        const problematicUsers = [];
+        const problematicUsers: ProblematicUser[] = [];
         const promises = [];
 
         for (const userDoc of usersSnapshot.docs) {
@@ -262,9 +262,9 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
                                 uid: userDoc.id,
                                 email: authUser.email,
                                 dbRole: userData.rol,
-                                tokenRole: tokenClaims.rol,
-                                dbVersion: userData.claimsVersion,
-                                tokenVersion: tokenClaims.claimsVersion,
+                                tokenRole: tokenClaims.rol || null,
+                                dbVersion: userData.claimsVersion || null,
+                                tokenVersion: tokenClaims.claimsVersion || null,
                             });
                         }
                     }).catch(error => {
@@ -602,3 +602,14 @@ exports.triggerRecalcFromProcedure = onDocumentWrite("procedimientos/{docId}", a
     }
   }
 });
+
+interface ProblematicUser {
+    uid: string;
+    email: string | undefined;
+    dbRole: string;
+    tokenRole: string | null;
+    dbVersion: number | null;
+    tokenVersion: number | null;
+}
+
+    

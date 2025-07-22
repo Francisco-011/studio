@@ -1,3 +1,4 @@
+
 "use strict";
 /**
  * @fileoverview Cloud Functions para gestionar la autenticación, permisos y seguridad financiera.
@@ -231,9 +232,9 @@ exports.diagnoseClaimsHealth = (0, https_1.onCall)(async (request) => {
                             uid: userDoc.id,
                             email: authUser.email,
                             dbRole: userData.rol,
-                            tokenRole: tokenClaims.rol,
-                            dbVersion: userData.claimsVersion,
-                            tokenVersion: tokenClaims.claimsVersion,
+                            tokenRole: tokenClaims.rol || null,
+                            dbVersion: userData.claimsVersion || null,
+                            tokenVersion: tokenClaims.claimsVersion || null,
                         });
                     }
                 }).catch(error => {
@@ -521,3 +522,5 @@ exports.triggerRecalcFromProcedure = (0, firestore_1.onDocumentWrite)("procedimi
     }
 });
 //# sourceMappingURL=index.js.map
+
+    
