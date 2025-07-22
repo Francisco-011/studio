@@ -33,8 +33,8 @@ export const capturaFormSchema = z.object({
   area: z.string({ required_error: "El área es requerida."}).min(1, "El área es requerida."),
   departamento: z.string().optional(),
   puesto: z.string({ required_error: "El puesto es requerido."}).min(1, "El puesto es requerido."),
-  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres."),
-  descripcion: z.string().min(1, "La descripción del proceso es requerida."),
+  proceso: z.string().min(3, "El nombre del proceso es requerido y debe tener al menos 3 caracteres.").max(100, 'El nombre no puede exceder 100 caracteres.'),
+  descripcion: z.string().min(1, "La descripción del proceso es requerida.").max(2000, 'La descripción no puede exceder 2000 caracteres.'),
   procedimientoOrder: z.array(z.string()).optional().default([]),
   auditFrequencyInDays: z.preprocess(
     (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),

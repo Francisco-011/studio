@@ -57,12 +57,27 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { toast } from '@/hooks/use-toast';
-import { Users, Search, Edit2, ShieldCheck, Save, Loader2, ShieldQuestion, PlusCircle, Trash2, CalendarIcon, AlertTriangle } from "lucide-react";
+import { 
+  Users, 
+  Search, 
+  Edit2, 
+  ShieldCheck, 
+  Save, 
+  Loader2, 
+  ShieldQuestion, 
+  PlusCircle, 
+  Trash2, 
+  CalendarIcon, 
+  AlertTriangle,
+  Shield,
+  Key
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ClaimsHealthDashboard } from '@/components/ClaimsHealthDashboard';
 
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
@@ -87,6 +102,7 @@ export interface User {
   nivelAcceso: NivelAcceso;
   activo: boolean;
   puestoId?: string;
+  claimsVersion?: number;
 }
 
 const userFormSchema = z.object({
@@ -109,7 +125,7 @@ const exceptionFormSchema = z.object({
     documentId: z.string({ required_error: 'Debe seleccionar un documento.' }),
     exceptionType: z.enum(['INCLUDE', 'EXCLUDE'], { required_error: 'Debe seleccionar un tipo de excepción.' }),
     expiresAt: z.date().optional(),
-    justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).'),
+    justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).').max(1000, 'La justificación no puede exceder 1000 caracteres.'),
 });
 type ExceptionFormData = z.infer<typeof exceptionFormSchema>;
 
@@ -140,6 +156,19 @@ export default function UsuariosPage() {
   const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
   const [exceptionToDelete, setExceptionToDelete] = useState<AccessException | null>(null);
   const [isConfirmDeleteExceptionOpen, setIsConfirmDeleteExceptionOpen] = useState(false);
+
+  // 🔐 NUEVOS ESTADOS PARA VALIDACIÓN DE SEGURIDAD
+  const [isSecurityDialogOpen, setIsSecurityDialogOpen] = useState(false);
+  const [pendingUserUpdate, setPendingUserUpdate] = useState<UserFormData | null>(null);
+  const [securityValidation, setSecurityValidation] = useState({
+    isLastAdmin: false,
+    isCriticalChange: false,
+    isSelfModification: false,
+    currentUserRole: '',
+    targetUserRole: ''
+  });
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [isValidatingPassword, setIsValidatingPassword] = useState(false);
 
   useEffect(() => {
     setIsLoadingUsers(true);
@@ -185,55 +214,177 @@ export default function UsuariosPage() {
     exceptionForm.reset({ ...exceptionForm.getValues(), documentId: undefined });
   }, [watchedDocType, exceptionForm]);
 
-
   useEffect(() => {
     if (isUserDialogOpen && editingUser) {
       userForm.reset(editingUser);
     }
   }, [editingUser, isUserDialogOpen, userForm]);
 
-  async function handleUserSubmit(data: UserFormData) {
+  // 🔐 FUNCIÓN DE VALIDACIÓN DE SEGURIDAD
+  function validateSecurityChanges(data: UserFormData, editingUser: User): boolean {
+    if (!editingUser || !currentUser) return false;
+    
+    const adminCount = users.filter(u => u.rol === 'Administrador' && u.activo).length;
+    const isLastAdmin = editingUser.rol === 'Administrador' && 
+                        data.rol !== 'Administrador' && 
+                        adminCount <= 1;
+
+    const isCriticalChange = (editingUser.rol === 'Administrador' && data.rol !== 'Administrador') ||
+                            (editingUser.rol !== 'Administrador' && data.rol === 'Administrador');
+
+    const isSelfModification = editingUser.id === currentUser?.id;
+
+    if (isLastAdmin) {
+      toast({
+        title: "⛔ Operación Bloqueada",
+        description: "No se puede degradar el último administrador del sistema. Debe crear otro administrador primero.",
+        variant: "destructive",
+      });
+      return false; // Bloquea la operación
+    }
+
+    if (isCriticalChange || isSelfModification) {
+        setSecurityValidation({
+          isLastAdmin,
+          isCriticalChange,
+          isSelfModification,
+          currentUserRole: editingUser.rol,
+          targetUserRole: data.rol
+        });
+        setPendingUserUpdate(data);
+        setIsSecurityDialogOpen(true);
+        return false; // Espera confirmación
+    }
+
+    return true; // Procede directamente
+  }
+
+  // 🔐 FUNCIÓN DE VALIDACIÓN DE CONTRASEÑA
+  async function validatePasswordForCriticalChange(): Promise<boolean> {
+    if (!passwordConfirmation || !currentUser?.email) {
+      toast({
+        title: "⚠️ Contraseña Requerida",
+        description: "Debe ingresar su contraseña actual para confirmar este cambio crítico.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    setIsValidatingPassword(true);
+    
+    try {
+      // Reautenticar para validar la contraseña
+      const { ReauthenticateWithCredential, EmailAuthProvider } = await import('firebase/auth');
+      const { auth } = await import('@/lib/firebase');
+      
+      const credential = EmailAuthProvider.credential(currentUser.email, passwordConfirmation);
+      if (auth.currentUser) {
+          await ReauthenticateWithCredential(auth.currentUser, credential);
+      } else {
+          throw new Error("No hay usuario actual para reautenticar");
+      }
+      
+      setIsValidatingPassword(false);
+      return true;
+    } catch (error: any) {
+      setIsValidatingPassword(false);
+      toast({
+        title: "❌ Contraseña Incorrecta",
+        description: "La contraseña ingresada no es correcta. No se realizaron cambios.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  }
+
+  // 🔐 FUNCIÓN PARA PROCEDER CON CAMBIO DESPUÉS DE VALIDACIONES
+  async function proceedWithSecureChange() {
+    if (!pendingUserUpdate || !editingUser) return;
+
+    if (securityValidation.isCriticalChange) {
+      const passwordValid = await validatePasswordForCriticalChange();
+      if (!passwordValid) return;
+    }
+
+    await executeUserUpdate(pendingUserUpdate);
+    
+    setIsSecurityDialogOpen(false);
+    setPendingUserUpdate(null);
+    setPasswordConfirmation('');
+  }
+
+  // 🔐 FUNCIÓN EJECUTORA
+  async function executeUserUpdate(data: UserFormData) {
     if (!editingUser || !hasPermission('usuarios:edit')) return;
     
     try {
-        const functions = getFunctions();
-        const setUserRole = httpsCallable(functions, 'setUserRole');
-        await setUserRole({
-            userId: editingUser.id,
-            rol: data.rol,
-            nivelAcceso: data.nivelAcceso,
-            puestoId: data.puestoId || null,
-        });
+      const functions = getFunctions();
+      const setUserRole = httpsCallable(functions, 'setUserRole');
+      const result = await setUserRole({
+        userId: editingUser.id,
+        rol: data.rol,
+        nivelAcceso: data.nivelAcceso,
+        puestoId: data.puestoId || null,
+      });
 
-        // The Cloud Function now also updates the Firestore doc, but we can update the name client-side for immediate feedback.
-        const userDocRef = doc(db, "users", editingUser.id);
-        await updateDoc(userDocRef, {
-            nombreCompleto: data.nombreCompleto,
-            activo: data.activo, // The function doesn't handle 'activo', so we do it here.
-        });
+      const { claimsVersion } = (result.data as any);
 
-        toast({
-            title: 'Usuario Actualizado',
-            description: `Los permisos para ${data.nombreCompleto} han sido actualizados. Puede que necesite volver a iniciar sesión para ver los cambios.`,
-        });
-        addLogEntry({
-            action: 'update',
-            entityType: 'Usuario',
-            entityName: data.nombreCompleto,
-            details: `Se actualizaron los permisos y perfil del usuario "${data.nombreCompleto}".`
-        });
+      // Actualizar nombre y estado en Firestore
+      const userDocRef = doc(db, "users", editingUser.id);
+      
+      const updatePayload: any = {
+        nombreCompleto: data.nombreCompleto,
+        activo: data.activo,
+        puestoId: data.puestoId || null,
+        rol: data.rol,
+        nivelAcceso: data.nivelAcceso,
+      };
+
+      if (claimsVersion !== undefined) {
+        updatePayload.claimsVersion = claimsVersion;
+      }
+
+      await updateDoc(userDocRef, updatePayload);
+
+      let successMessage = `Los permisos para ${data.nombreCompleto} han sido actualizados.`;
+      
+      if (securityValidation.isSelfModification) {
+        successMessage += " ⚠️ Ha modificado sus propios permisos. El cambio se aplicará en su próximo inicio de sesión.";
+      }
+      
+      if (securityValidation.isCriticalChange) {
+        successMessage += " 🔐 Cambio crítico de seguridad registrado.";
+      }
+
+      toast({
+        title: '✅ Usuario Actualizado',
+        description: successMessage,
+      });
+
+      addLogEntry({ action: 'update', entityType: 'Usuario', entityName: data.nombreCompleto, details: `Permisos de "${data.nombreCompleto}" actualizados a Rol: ${data.rol}, Nivel: ${data.nivelAcceso}.` });
 
     } catch (error: any) {
-        console.error("Error setting user role via function:", error);
-        toast({
-            title: "Error de Permisos",
-            description: error.message || "No se pudo actualizar el rol del usuario.",
-            variant: "destructive"
-        });
+      console.error("Error setting user role via function:", error.message);
+      toast({
+        title: "❌ Error de Permisos",
+        description: error.message || "No se pudo actualizar el rol del usuario.",
+        variant: "destructive"
+      });
     }
     
     setEditingUser(null);
     setIsUserDialogOpen(false);
+  }
+
+  // 🔐 FUNCIÓN handleUserSubmit MODIFICADA CON VALIDACIONES DE SEGURIDAD
+  async function handleUserSubmit(data: UserFormData) {
+    if (!editingUser || !hasPermission('usuarios:edit')) return;
+    
+    const canProceedDirectly = validateSecurityChanges(data, editingUser);
+    
+    if (canProceedDirectly) {
+      await executeUserUpdate(data);
+    }
   }
 
   function handleEditUser(user: User) {
@@ -358,11 +509,16 @@ export default function UsuariosPage() {
                 <TabsTrigger value="permissions"><ShieldCheck className="mr-2 h-4 w-4"/>Roles y Permisos</TabsTrigger>
               )}
                {hasPermission('excepciones:view') && (
-                <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones de Acceso</TabsTrigger>
+                <TabsTrigger value="exceptions"><ShieldQuestion className="mr-2 h-4 w-4"/>Excepciones</TabsTrigger>
               )}
             </TabsList>
             
             <TabsContent value="users" className="mt-4">
+              {currentUser?.rol === 'Administrador' && (
+                  <div className="mb-6">
+                      <ClaimsHealthDashboard />
+                  </div>
+              )}
               <div className="mb-6 space-y-4 md:flex md:items-end md:justify-between md:space-y-0 md:space-x-4">
                 <div className="relative flex-1 md:flex-grow">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -424,7 +580,14 @@ export default function UsuariosPage() {
                     <TableBody>
                       {paginatedUsers.map((user) => (
                         <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.nombreCompleto}</TableCell>
+                          <TableCell className="font-medium">
+                            {user.nombreCompleto}
+                            {user.rol === 'Administrador' && (
+                              <Badge variant="destructive" className="ml-2 text-xs">
+                                ADMIN
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{puestos.find(p => p.id === user.puestoId)?.nombre || 'No asignado'}</TableCell>
                           <TableCell><Badge variant="outline">{user.rol}</Badge></TableCell>
@@ -693,6 +856,128 @@ export default function UsuariosPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={isSecurityDialogOpen} onOpenChange={setIsSecurityDialogOpen}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-xl">
+              <Shield className="h-6 w-6 text-amber-600" />
+              Confirmación de Seguridad Requerida
+            </AlertDialogTitle>
+            <div className="text-sm text-muted-foreground pt-2 space-y-4">
+                {securityValidation.isCriticalChange && (
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
+                    <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-3 flex-shrink-0" />
+                        <div>
+                        <div className="font-semibold text-amber-800 mb-1">
+                            Cambio Crítico de Permisos Detectado
+                        </div>
+                        <p className="text-sm text-amber-700">
+                            Está realizando un cambio que afecta los permisos de administrador del sistema.
+                        </p>
+                        </div>
+                    </div>
+                    </div>
+                )}
+                {securityValidation.isSelfModification && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                    <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                        <div>
+                        <div className="font-semibold text-blue-800 mb-1">
+                            Auto-Modificación de Permisos
+                        </div>
+                        <p className="text-sm text-blue-700">
+                            Está modificando sus propios permisos. Esto puede afectar su acceso al sistema.
+                        </p>
+                        </div>
+                    </div>
+                    </div>
+                )}
+            </div>
+          </AlertDialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <h4 className="text-sm font-semibold mb-2">Resumen del Cambio:</h4>
+                <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Usuario:</span>
+                    <span className="font-medium">{editingUser?.nombreCompleto}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Cambio de rol:</span>
+                    <div className="flex items-center gap-2">
+                    <Badge variant="outline">{securityValidation.currentUserRole}</Badge>
+                    <span>→</span>
+                    <Badge variant={securityValidation.targetUserRole === 'Administrador' ? 'default' : 'secondary'}>
+                        {securityValidation.targetUserRole}
+                    </Badge>
+                    </div>
+                </div>
+                {securityValidation.isSelfModification && (
+                    <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Tipo:</span>
+                    <Badge variant="outline" className="text-blue-600 border-blue-300">
+                        Auto-modificación
+                    </Badge>
+                    </div>
+                )}
+                </div>
+            </div>
+
+            {securityValidation.isCriticalChange && (
+                <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Key className="h-4 w-4" />
+                    Confirme su identidad ingresando su contraseña actual:
+                </div>
+                <Input
+                    type="password"
+                    placeholder="Ingrese su contraseña actual"
+                    value={passwordConfirmation}
+                    onChange={(e) => setPasswordConfirmation(e.target.value)}
+                    className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                    Su contraseña se usa únicamente para validar su identidad. No se almacena.
+                </p>
+                </div>
+            )}
+          </div>
+          
+          <AlertDialogFooter className="gap-2 pt-4">
+            <AlertDialogCancel 
+              onClick={() => {
+                setIsSecurityDialogOpen(false);
+                setPendingUserUpdate(null);
+                setPasswordConfirmation('');
+              }}
+            >
+              Cancelar Cambios
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={proceedWithSecureChange}
+              disabled={isValidatingPassword || (securityValidation.isCriticalChange && !passwordConfirmation)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isValidatingPassword ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Validando...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Confirmar Cambio
+                </div>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isExceptionDialogOpen} onOpenChange={setIsExceptionDialogOpen}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -729,3 +1014,4 @@ export default function UsuariosPage() {
     </div>
   );
 }
+

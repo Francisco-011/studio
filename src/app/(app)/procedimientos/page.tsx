@@ -39,15 +39,15 @@ import { MultiSelect } from '@/components/ui/multi-select';
 
 const procedimientoFormSchema = z.object({
   id: z.string().optional(),
-  nombre: z.string().min(3, 'El nombre es requerido (mínimo 3 caracteres).'),
-  descripcion: z.string().optional(),
+  nombre: z.string().min(3, 'El nombre es requerido (mínimo 3 caracteres).').max(100, 'El nombre no puede exceder 100 caracteres.'),
+  descripcion: z.string().optional().refine(val => !val || val.length <= 2000, { message: 'La descripción no puede exceder 2000 caracteres.' }),
   procesoId: z.string({ required_error: 'Debe seleccionar un proceso padre.' }),
   sistemasUtilizados: z.array(z.string()).optional().default([]),
   clasificacion: z.enum(clasificacionOptions).default('Privado'),
   activityOrder: z.array(z.string()).optional().default([]), 
-  informacionRecibe: z.string().optional(),
+  informacionRecibe: z.string().optional().refine(val => !val || val.length <= 1000, { message: 'No puede exceder 1000 caracteres.' }),
   procedimientosEntradaIds: z.array(z.string()).optional().default([]),
-  informacionEntrega: z.string().optional(),
+  informacionEntrega: z.string().optional().refine(val => !val || val.length <= 1000, { message: 'No puede exceder 1000 caracteres.' }),
   procedimientosSalidaIds: z.array(z.string()).optional().default([]),
   auditFrequencyInDays: z.preprocess(
     (val) => (String(val).trim() === '' || val === 'none' ? undefined : parseInt(String(val), 10)),
