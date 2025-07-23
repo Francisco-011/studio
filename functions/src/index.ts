@@ -9,10 +9,10 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentWrite } from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { initializeApp, App } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { initializeApp } from "firebase-admin/app";
 import { logger } from "firebase-functions";
 
 // Inicializar Firebase Admin SDK de forma segura
@@ -353,7 +353,7 @@ const getMonthlyMultiplier = (frequency?: string): number => {
  * SEGURIDAD: Los campos tiempoEstimado y costoEstimado se calculan automáticamente
  * en el servidor para prevenir manipulación desde el cliente
  */
-exports.recalculateProcedure = onDocumentWrite("procedimientos/{docId}", async (event) => {
+exports.recalculateProcedure = onDocumentWritten("procedimientos/{docId}", async (event) => {
   const docId = event.params.docId;
   const after = event.data?.after;
   
@@ -363,7 +363,7 @@ exports.recalculateProcedure = onDocumentWrite("procedimientos/{docId}", async (
   }
 
   const procedureData = after.data();
-  const activityOrder = procedureData.activityOrder || [];
+  const activityOrder = procedureData?.activityOrder || [];
   
   if (activityOrder.length === 0) {
     logger.info(`Procedimiento ${docId} sin actividades, estableciendo valores en 0.`);
@@ -445,7 +445,7 @@ exports.recalculateProcedure = onDocumentWrite("procedimientos/{docId}", async (
  * SEGURIDAD: Los campos tiempoEstimado y costoEstimado se calculan automáticamente
  * en el servidor para prevenir manipulación desde el cliente
  */
-exports.recalculateProcess = onDocumentWrite("procesos/{docId}", async (event) => {
+exports.recalculateProcess = onDocumentWritten("procesos/{docId}", async (event) => {
   const docId = event.params.docId;
   const after = event.data?.after;
   
@@ -455,7 +455,7 @@ exports.recalculateProcess = onDocumentWrite("procesos/{docId}", async (event) =
   }
 
   const processData = after.data();
-  const procedimientoOrder = processData.procedimientoOrder || [];
+  const procedimientoOrder = processData?.procedimientoOrder || [];
   
   if (procedimientoOrder.length === 0) {
     logger.info(`Proceso ${docId} sin procedimientos, estableciendo valores en 0.`);
@@ -508,7 +508,7 @@ exports.recalculateProcess = onDocumentWrite("procesos/{docId}", async (event) =
  * Trigger para recalcular procedimientos cuando se actualiza una actividad
  * SEGURIDAD: Cualquier cambio en actividades dispara recálculos automáticos
  */
-exports.triggerRecalcFromActivity = onDocumentWrite("actividades/{docId}", async (event) => {
+exports.triggerRecalcFromActivity = onDocumentWritten("actividades/{docId}", async (event) => {
   const docId = event.params.docId;
   const before = event.data?.before;
   const after = event.data?.after;
@@ -564,7 +564,7 @@ exports.triggerRecalcFromActivity = onDocumentWrite("actividades/{docId}", async
  * Trigger para recalcular procesos cuando se actualiza un procedimiento
  * SEGURIDAD: Propaga cambios financieros automáticamente hacia arriba en la jerarquía
  */
-exports.triggerRecalcFromProcedure = onDocumentWrite("procedimientos/{docId}", async (event) => {
+exports.recalculateProcedure = onDocumentWritten("procedimientos/{docId}", async (event: any) => {
   const docId = event.params.docId;
   const before = event.data?.before;
   const after = event.data?.after;
