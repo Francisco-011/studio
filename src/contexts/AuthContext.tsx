@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribe();
         clearInterval(interval);
     };
-  }, [fetchAndSetUserProfile]);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, isSyncing, lastSyncStatus, manualSync }}>
