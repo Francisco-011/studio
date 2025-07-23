@@ -1,4 +1,3 @@
-
 "use strict";
 /**
  * @fileoverview Cloud Functions para gestionar la autenticación, permisos y seguridad financiera.
@@ -313,7 +312,7 @@ const getMonthlyMultiplier = (frequency) => {
  * SEGURIDAD: Los campos tiempoEstimado y costoEstimado se calculan automáticamente
  * en el servidor para prevenir manipulación desde el cliente
  */
-exports.recalculateProcedure = (0, firestore_1.onDocumentWrite)("procedimientos/{docId}", async (event) => {
+exports.recalculateProcedure = (0, firestore_1.onDocumentWritten)("procedimientos/{docId}", async (event) => {
     var _a;
     const docId = event.params.docId;
     const after = (_a = event.data) === null || _a === void 0 ? void 0 : _a.after;
@@ -322,7 +321,7 @@ exports.recalculateProcedure = (0, firestore_1.onDocumentWrite)("procedimientos/
         return;
     }
     const procedureData = after.data();
-    const activityOrder = procedureData.activityOrder || [];
+    const activityOrder = (procedureData === null || procedureData === void 0 ? void 0 : procedureData.activityOrder) || [];
     if (activityOrder.length === 0) {
         firebase_functions_1.logger.info(`Procedimiento ${docId} sin actividades, estableciendo valores en 0.`);
         await after.ref.update({
@@ -389,7 +388,7 @@ exports.recalculateProcedure = (0, firestore_1.onDocumentWrite)("procedimientos/
  * SEGURIDAD: Los campos tiempoEstimado y costoEstimado se calculan automáticamente
  * en el servidor para prevenir manipulación desde el cliente
  */
-exports.recalculateProcess = (0, firestore_1.onDocumentWrite)("procesos/{docId}", async (event) => {
+exports.recalculateProcess = (0, firestore_1.onDocumentWritten)("procesos/{docId}", async (event) => {
     var _a;
     const docId = event.params.docId;
     const after = (_a = event.data) === null || _a === void 0 ? void 0 : _a.after;
@@ -398,7 +397,7 @@ exports.recalculateProcess = (0, firestore_1.onDocumentWrite)("procesos/{docId}"
         return;
     }
     const processData = after.data();
-    const procedimientoOrder = processData.procedimientoOrder || [];
+    const procedimientoOrder = (processData === null || processData === void 0 ? void 0 : processData.procedimientoOrder) || [];
     if (procedimientoOrder.length === 0) {
         firebase_functions_1.logger.info(`Proceso ${docId} sin procedimientos, estableciendo valores en 0.`);
         await after.ref.update({
@@ -442,7 +441,7 @@ exports.recalculateProcess = (0, firestore_1.onDocumentWrite)("procesos/{docId}"
  * Trigger para recalcular procedimientos cuando se actualiza una actividad
  * SEGURIDAD: Cualquier cambio en actividades dispara recálculos automáticos
  */
-exports.triggerRecalcFromActivity = (0, firestore_1.onDocumentWrite)("actividades/{docId}", async (event) => {
+exports.triggerRecalcFromActivity = (0, firestore_1.onDocumentWritten)("actividades/{docId}", async (event) => {
     var _a, _b;
     const docId = event.params.docId;
     const before = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before;
@@ -489,7 +488,7 @@ exports.triggerRecalcFromActivity = (0, firestore_1.onDocumentWrite)("actividade
  * Trigger para recalcular procesos cuando se actualiza un procedimiento
  * SEGURIDAD: Propaga cambios financieros automáticamente hacia arriba en la jerarquía
  */
-exports.triggerRecalcFromProcedure = (0, firestore_1.onDocumentWrite)("procedimientos/{docId}", async (event) => {
+exports.recalculateProcedure = (0, firestore_1.onDocumentWritten)("procedimientos/{docId}", async (event) => {
     var _a, _b;
     const docId = event.params.docId;
     const before = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before;
@@ -522,5 +521,3 @@ exports.triggerRecalcFromProcedure = (0, firestore_1.onDocumentWrite)("procedimi
     }
 });
 //# sourceMappingURL=index.js.map
-
-    

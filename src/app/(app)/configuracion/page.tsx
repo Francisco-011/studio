@@ -133,95 +133,6 @@ interface SortConfig<T> {
 type SortableDeptoKeys = 'nombre' | 'areaNombre';
 type SortablePuestoKeys = 'nombre' | 'areaNombre' | 'deptoNombre' | 'nivelOrganizacional' | 'numeroPersonas' | 'costoHora';
 
-function SeedDataCard() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-
-  if (process.env.NODE_ENV !== 'development') {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Datos de Prueba</CardTitle>
-          <CardDescription>
-            Esta función solo está disponible en el entorno de desarrollo.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  const handleSeed = async () => {
-    setIsConfirmOpen(false);
-    setIsLoading(true);
-    toast({
-      title: 'Iniciando carga de datos',
-      description: 'Este proceso puede tardar unos segundos...',
-    });
-
-    const result = await runSeed();
-
-    if (result.success) {
-      toast({
-        title: 'Carga Completa',
-        description: result.message,
-      });
-    } else {
-      toast({
-        title: 'Error en la Carga',
-        description: result.message,
-        variant: 'destructive',
-      });
-    }
-    setIsLoading(false);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Cargar Datos de Prueba</CardTitle>
-        <CardDescription>
-          Esta acción eliminará todos los datos existentes en las colecciones
-          de la base de datos de **desarrollo** y los reemplazará con un
-          conjunto de datos de prueba predefinidos.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isLoading}>
-              {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="mr-2 h-4 w-4" />
-              )}
-              Cargar Datos de Prueba
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta acción es irreversible y borrará permanentemente todos
-                los datos de las colecciones principales (procesos, áreas,
-                puestos, etc.) de su base de datos de desarrollo actual.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleSeed}
-                className={buttonVariants({ variant: 'destructive' })}
-              >
-                Sí, borrar y cargar datos
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardContent>
-    </Card>
-  );
-}
-
 
 export default function ConfiguracionPage() {
   const { areas, addArea, updateArea, deleteArea, isLoading: isLoadingAreas } = useAreas();
@@ -416,7 +327,6 @@ export default function ConfiguracionPage() {
     { value: 'departamentos', label: 'Departamentos', icon: <Building2 className="h-5 w-5 mr-2" /> },
     { value: 'puestos', label: 'Puestos', icon: <Users className="h-5 w-5 mr-2" /> },
     { value: 'sistemas', label: 'Sistemas y Costos', icon: <Laptop className="h-5 w-5 mr-2" /> },
-    { value: 'datos_prueba', label: 'Datos de Prueba', icon: <Database className="h-5 w-5 mr-2" /> },
   ];
 
   const calculateTotalAnnualCost = (sistemaId: string) => {
@@ -475,7 +385,7 @@ export default function ConfiguracionPage() {
             Centraliza la gestión de las listas maestras y parámetros fundamentales que el sistema utiliza en toda su operativa.
           </p>
           <Tabs defaultValue="areas" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
               {configSections.map(section => (
                 <TabsTrigger key={section.value} value={section.value} className="flex items-center justify-center text-xs sm:text-sm">
                   {section.icon}
@@ -657,10 +567,6 @@ export default function ConfiguracionPage() {
                         </Accordion>) : 
                         <PlaceholderContent title="No hay sistemas" description="Comience agregando un nuevo sistema." icon={<Laptop className="h-12 w-12 text-muted-foreground" />} />}
                   </CardContent></Card>
-            </TabsContent>
-            
-            <TabsContent value="datos_prueba">
-              <SeedDataCard />
             </TabsContent>
           </Tabs>
         </CardContent>
