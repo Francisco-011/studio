@@ -584,5 +584,3 @@ interface ProblematicUser {
     dbVersion: number | null;
     tokenVersion: number | null;
 }
-
-    
