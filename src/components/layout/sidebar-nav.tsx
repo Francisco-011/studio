@@ -72,7 +72,7 @@ const navItems: NavItem[] = [
     { href: '/procesos-y-flujos-registrados', label: 'Procesos Registrados', icon: Database, permission: 'procesosRegistrados:view' },
     { href: '/politicas', label: 'Políticas', icon: FileText, permission: 'politicas:view' },
     { href: '/analisis/panel-jerarquico', label: 'Panel Jerárquico', icon: FolderTree, matchPrefix: true, permission: 'panelJerarquico:view' },
-    { href: '/mejoras', label: 'Análisis de Mejoras', icon: TrendingUp, permission: 'analisis_ia:view' },
+    { href: '/analisis', label: 'Análisis de Mejoras', icon: TrendingUp, permission: 'analisis_ia:view' },
     { href: '/consulta-ia', label: 'Consulta IA', icon: MessageCircleQuestion, permission: 'consulta_ia:view' },
     { href: '/acciones', label: 'Acciones', icon: Target, permission: 'acciones:view' },
     { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck, permission: 'auditoria:view_history' },
