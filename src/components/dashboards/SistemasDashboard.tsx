@@ -26,6 +26,8 @@ import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 
 // Helper function to format currency
 function formatDashboardCurrency(amount: number, currency: string) {
@@ -284,32 +286,41 @@ export default function SistemasDashboardPage() {
                     <CardContent>
                         {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
                         systemUsageData.length > 0 ? (
-                            <div className="max-h-[500px] overflow-y-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Sistema</TableHead>
-                                            <TableHead className="text-right">Costo Anual Est.</TableHead>
-                                            <TableHead className="text-center">Procesos Vinculados</TableHead>
-                                            <TableHead className="text-center">Actividades Vinculadas</TableHead>
-                                            <TableHead className="text-center">Ejecuciones / Mes</TableHead>
-                                            <TableHead className="text-right">Índice Costo/Uso</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {systemUsageData.map(sys => (
-                                            <TableRow key={sys.sistema.id}>
-                                                <TableCell className="font-medium">{sys.sistema.nombre}</TableCell>
-                                                <TableCell className="text-right">{formatDashboardCurrency(sys.totalAnnualCost, sys.currency)}</TableCell>
-                                                <TableCell className="text-center"><Badge variant="outline">{sys.processes.size}</Badge></TableCell>
-                                                <TableCell className="text-center"><Badge variant="outline">{sys.activities.size}</Badge></TableCell>
-                                                <TableCell className="text-center"><Badge variant="secondary">{Math.round(sys.totalExecutions)}</Badge></TableCell>
-                                                <TableCell className="text-right font-mono">{sys.usageIndex.toFixed(2)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            <Accordion type="multiple" className="w-full">
+                                {systemUsageData.map((sys) => (
+                                    <AccordionItem value={sys.sistema.id} key={sys.sistema.id} className="border-b">
+                                        <AccordionTrigger className="hover:no-underline">
+                                            <div className="flex justify-between items-center w-full pr-4">
+                                                <span className="font-medium">{sys.sistema.nombre}</span>
+                                                <div className="flex gap-4">
+                                                    <div className="text-right">
+                                                        <div className="font-semibold">{formatDashboardCurrency(sys.totalAnnualCost, sys.currency)}</div>
+                                                        <div className="text-xs text-muted-foreground">Costo Anual</div>
+                                                    </div>
+                                                     <div className="text-right">
+                                                        <div className="font-semibold">{sys.processes.size}</div>
+                                                        <div className="text-xs text-muted-foreground">Procesos</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="p-4 bg-muted/50 rounded-md">
+                                                <h4 className="font-semibold mb-2">Detalle de Costos</h4>
+                                                {costosSistemas.filter(c => c.sistemaId === sys.sistema.id).length > 0 ? (
+                                                    <ul className="list-disc pl-5 text-sm space-y-1">
+                                                        {costosSistemas.filter(c => c.sistemaId === sys.sistema.id).map(costo => (
+                                                            <li key={costo.id}>
+                                                                {costo.descripcion}: {formatDashboardCurrency((costo.montoUso || 0) + ((costo.costoPorLicencia || 0) * (costo.numeroLicencias || 0)), costo.moneda || 'MXN')} ({costo.frecuencia})
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : <p className="text-xs text-muted-foreground">Sin costos detallados.</p>}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
                         ) : (
                              <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
                                 <p className="text-muted-foreground">No hay datos de sistemas para los filtros seleccionados.</p>
@@ -321,3 +332,4 @@ export default function SistemasDashboardPage() {
         </div>
     );
 }
+

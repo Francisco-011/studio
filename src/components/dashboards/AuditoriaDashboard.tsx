@@ -256,6 +256,13 @@ export default function AuditoriaDashboardPage() {
 
   const isLoadingAll = isLoadingAudits || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
 
+  const recentAudits = useMemo(() => {
+    return allAudits
+      .filter(a => a.status === 'Completada')
+      .sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime())
+      .slice(0, 5);
+  }, [allAudits]);
+
   return (
      <div className="container mx-auto py-8">
        <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -280,7 +287,7 @@ export default function AuditoriaDashboardPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Análisis de Auditorías</CardTitle>
@@ -347,6 +354,45 @@ export default function AuditoriaDashboardPage() {
           }
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+            <CardTitle>Auditorías Recientes</CardTitle>
+            <CardDescription>Últimas 5 auditorías completadas en el sistema.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Objetivo Auditado</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-center">Hallazgos</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoadingAll ? (
+                        <TableRow><TableCell colSpan={5} className="text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                    ) : recentAudits.length > 0 ? (
+                        recentAudits.map(audit => (
+                            <TableRow key={audit.id}>
+                                <TableCell className="font-mono">{audit.codigo}</TableCell>
+                                <TableCell>{audit.targetName}</TableCell>
+                                <TableCell><Badge variant="secondary" className="capitalize">{audit.auditType}</Badge></TableCell>
+                                <TableCell>{format(parseISO(audit.auditDate), 'dd MMM yyyy', { locale: es })}</TableCell>
+                                <TableCell className="text-center">
+                                    <Badge>{audit.findings.length}</Badge>
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    ) : (
+                        <TableRow><TableCell colSpan={5} className="text-center">No hay auditorías completadas.</TableCell></TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+

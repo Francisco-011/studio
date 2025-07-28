@@ -127,48 +127,24 @@ export default function MejorasDashboardPage() {
     let totalMinutesSaved = 0;
 
     completedActions.forEach(accion => {
-      const historyCostSavings = accion.historialDeCambios?.reduce((acc, cambio) => {
-        if (cambio.field.toLowerCase().includes('costo')) {
-          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-          return acc + (ahorro > 0 ? ahorro : 0);
-        }
-        return acc;
-      }, 0) || 0;
-
-      let costoRealizado = 0;
-      if (historyCostSavings > 0) {
-        costoRealizado = historyCostSavings;
-      } else if (accion.ahorroEstimado && accion.ahorroEstimado > 0) {
-        costoRealizado = accion.ahorroEstimado;
-      }
+      const historyCostSavings = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Costo Total')?.after || 0;
+      let costoRealizado = Number(historyCostSavings) || accion.ahorroEstimado || 0;
 
       if (costoRealizado > 0) {
         const moneda = accion.monedaAhorro || 'MXN';
         ahorroCostosMap.set(moneda, (ahorroCostosMap.get(moneda) || 0) + costoRealizado);
       }
-
-      const historyTimeSavings = accion.historialDeCambios?.reduce((acc, cambio) => {
-        if (cambio.field.toLowerCase().includes('tiempo')) {
-          const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-          return acc + (ahorro > 0 ? ahorro : 0);
-        }
-        return acc;
-      }, 0) || 0;
-
-      let tiempoRealizado = 0;
-       if (historyTimeSavings > 0) {
-        tiempoRealizado = historyTimeSavings;
-      } else if (accion.ahorroTiempoEstimado && accion.ahorroTiempoEstimado > 0) {
-        tiempoRealizado = accion.ahorroTiempoEstimado;
-      }
+      
+      const historyTimeSavings = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Tiempo Total')?.after || 0;
+      let tiempoRealizado = Number(historyTimeSavings) || accion.ahorroTiempoEstimado || 0;
       totalMinutesSaved += tiempoRealizado;
     });
 
     const ahorroCostosRealizado = Array.from(ahorroCostosMap.entries())
       .map(([currency, total]) => formatDashboardCurrency(total, currency))
-      .join(', ') || 'N/A';
+      .join(', ') || formatDashboardCurrency(0, "MXN");
 
-    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : 'N/A';
+    const ahorroTiempoRealizado = totalMinutesSaved > 0 ? formatMinutesToHours(totalMinutesSaved) : '0 min';
     
     return {
       accionesCompletadasCount: completedActions.length,
@@ -218,32 +194,12 @@ export default function MejorasDashboardPage() {
 
         if (metricType === 'costo') {
             unidad = accion.monedaAhorro;
-            const historySavings = accion.historialDeCambios?.reduce((acc, cambio) => {
-                 if (cambio.field.toLowerCase().includes('costo')) {
-                    const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-                    return acc + (ahorro > 0 ? ahorro : 0);
-                }
-                return acc;
-            }, 0) || 0;
-            if (historySavings > 0) {
-                ahorroRealizado = historySavings;
-            } else if (accion.ahorroEstimado && accion.ahorroEstimado > 0) {
-                ahorroRealizado = accion.ahorroEstimado;
-            }
+            const historySavings = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Costo Total')?.after || 0;
+            ahorroRealizado = Number(historySavings) || accion.ahorroEstimado || 0;
         } else { // tiempo
             unidad = accion.unidadTiempoAhorro;
-            const historySavings = accion.historialDeCambios?.reduce((acc, cambio) => {
-                 if (cambio.field.toLowerCase().includes('tiempo')) {
-                    const ahorro = (Number(cambio.before) || 0) - (Number(cambio.after) || 0);
-                    return acc + (ahorro > 0 ? ahorro : 0);
-                }
-                return acc;
-            }, 0) || 0;
-             if (historySavings > 0) {
-                ahorroRealizado = historySavings;
-            } else if (accion.ahorroTiempoEstimado && accion.ahorroTiempoEstimado > 0) {
-                ahorroRealizado = accion.ahorroTiempoEstimado;
-            }
+            const historySavings = accion.historialDeCambios?.find(h => h.field === 'Ahorro de Tiempo Total')?.after || 0;
+            ahorroRealizado = Number(historySavings) || accion.ahorroTiempoEstimado || 0;
         }
         return {ahorro: ahorroRealizado, unidad};
     }
@@ -286,6 +242,47 @@ export default function MejorasDashboardPage() {
 
   }, [ahorrosChartType, ahorrosMetricType, filteredAcciones]);
 
+  const validatedImprovements = useMemo(() => {
+    return filteredAcciones
+      .filter(a => a.estado === 'Completada' && a.historialDeCambios && a.historialDeCambios.length > 0)
+      .flatMap(a => {
+          const improvements: ValidatedImprovement[] = [];
+          const costSaving = a.historialDeCambios?.find(c => c.field === 'Ahorro de Costo Total');
+          const timeSaving = a.historialDeCambios?.find(c => c.field === 'Ahorro de Tiempo Total');
+          
+          const proc = allCapturedProcesses.find(p => p.id === a.procesoId);
+
+          if (costSaving && Number(costSaving.after) > 0) {
+              improvements.push({
+                  id: `${a.id}-cost`,
+                  accionNombre: a.nombre,
+                  procesoNombre: proc?.proceso || 'N/A',
+                  area: a.area || 'N/A',
+                  puesto: a.puesto || 'N/A',
+                  metrica: 'Costo',
+                  antes: 'N/A',
+                  despues: 'N/A',
+                  ahorro: Number(costSaving.after),
+                  moneda: a.monedaAhorro,
+              });
+          }
+           if (timeSaving && Number(timeSaving.after) > 0) {
+              improvements.push({
+                  id: `${a.id}-time`,
+                  accionNombre: a.nombre,
+                  procesoNombre: proc?.proceso || 'N/A',
+                  area: a.area || 'N/A',
+                  puesto: a.puesto || 'N/A',
+                  metrica: 'Tiempo',
+                  antes: 'N/A',
+                  despues: 'N/A',
+                  ahorro: Number(timeSaving.after),
+                  moneda: a.unidadTiempoAhorro,
+              });
+          }
+          return improvements;
+      })
+  }, [filteredAcciones, allCapturedProcesses]);
 
   return (
     <div className="container mx-auto py-8">
@@ -384,6 +381,50 @@ export default function MejorasDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>Mejoras Validadas y Cuantificadas</CardTitle>
+          <CardDescription>Detalle de los ahorros de costos y tiempo generados por las acciones de mejora completadas en el periodo seleccionado.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Acción de Mejora</TableHead>
+                <TableHead>Proceso Involucrado</TableHead>
+                <TableHead>Área</TableHead>
+                <TableHead>Métrica Mejorada</TableHead>
+                <TableHead className="text-right">Ahorro Realizado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {validatedImprovements.length > 0 ? (
+                validatedImprovements.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.accionNombre}</TableCell>
+                    <TableCell>{item.procesoNombre}</TableCell>
+                    <TableCell>{item.area}</TableCell>
+                    <TableCell>{item.metrica}</TableCell>
+                    <TableCell className="text-right">
+                      {item.metrica === 'Costo' 
+                        ? formatDashboardCurrency(item.ahorro, item.moneda || 'MXN') 
+                        : formatMinutesToHours(item.ahorro)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    No hay mejoras cuantificadas en el periodo seleccionado.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+

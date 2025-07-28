@@ -340,6 +340,108 @@ export default function ProcesosDashboardPage() {
     return { chartData: coloredData, chartConfig: config, chartDescription: description };
 
   }, [chartDataType, filteredProcesses, isLoadingAll, globalActividades, allCapturedProcesses]);
+  
+  const workloadData = useMemo(() => {
+    return puestos
+      .map(puesto => {
+        const activitiesForPuesto = globalActividades.filter(act => act.puestoId === puesto.id && act.activa);
+        const monthlyCost = activitiesForPuesto.reduce((sum, act) => {
+          if (!act.tiempoEstimado || !puesto.costoHora) return sum;
+          const costPerMinute = puesto.costoHora / 60;
+          const activityCost = act.tiempoEstimado * costPerMinute;
+          const multiplier = getMonthlyMultiplier(act.frecuencia);
+          return sum + (activityCost * multiplier);
+        }, 0);
+        
+        const estimatedSalary = (puesto.costoHora || 0) * 173.2; // Avg. work hours in a month
+        const loadPercentage = estimatedSalary > 0 ? (monthlyCost / estimatedSalary) * 100 : 0;
+
+        return {
+          puestoName: puesto.nombre,
+          monthlyCost: monthlyCost,
+          moneda: puesto.monedaCosto,
+          loadPercentage: loadPercentage,
+          area: areas.find(a => a.id === puesto.areaId)?.nombre || 'N/A',
+        };
+      })
+      .filter(data => data.monthlyCost > 0)
+      .sort((a, b) => b.monthlyCost - a.monthlyCost);
+  }, [puestos, globalActividades, areas]);
+
+  const topCostlyProcedures = useMemo(() => {
+    return procedimientos
+      .filter(p => p.costoEstimado && p.costoEstimado > 0)
+      .sort((a, b) => (b.costoEstimado || 0) - (a.costoEstimado || 0))
+      .slice(0, 5)
+      .map(p => ({
+          ...p,
+          procesoPadre: allCapturedProcesses.find(proc => proc.id === p.procesoId)?.proceso || 'N/A'
+      }));
+  }, [procedimientos, allCapturedProcesses]);
+
+  const handleGenerateSummary = async () => {
+    if (!selectedEntityType || !selectedEntityName) {
+      toast({ title: 'Selección requerida', description: 'Por favor seleccione un tipo y una entidad para analizar.' });
+      return;
+    }
+    
+    setIsGeneratingSummary(true);
+    setGeneratedSummary('');
+
+    try {
+      let processDataString = '';
+      if (selectedEntityType === 'puesto') {
+        const puesto = puestos.find(p => p.nombre === selectedEntityName);
+        if (puesto) {
+          processDataString = allCapturedProcesses
+            .filter(proc => proc.puesto === puesto.nombre)
+            .map(p => `Proceso: ${p.proceso}\nObjetivo: ${p.descripcion}\n`)
+            .join('\n---\n');
+        }
+      } else if (selectedEntityType === 'area') {
+         processDataString = `El área de ${selectedEntityName} contiene los siguientes departamentos:\n`;
+         const area = areas.find(a => a.nombre === selectedEntityName);
+         if(area) {
+           const deptsInArea = departamentos.filter(d => d.areaId === area.id);
+           deptsInArea.forEach(dept => {
+             processDataString += `\nDepartamento: ${dept.nombre}\n`;
+             const puestosInDept = puestos.filter(p => p.departamentoId === dept.id);
+             puestosInDept.forEach(puesto => {
+                processDataString += allCapturedProcesses.filter(proc => proc.puesto === puesto.nombre).map(p => ` - Proceso: ${p.proceso}`).join('\n');
+             });
+           });
+         }
+      } else if (selectedEntityType === 'departamento') {
+          processDataString = `El departamento de ${selectedEntityName} incluye los siguientes puestos:\n`;
+          const depto = departamentos.find(d => d.nombre === selectedEntityName);
+          if (depto) {
+              const puestosInDept = puestos.filter(p => p.departamentoId === depto.id);
+              puestosInDept.forEach(puesto => {
+                  processDataString += `\nPuesto: ${puesto.nombre}\n`;
+                  processDataString += allCapturedProcesses.filter(proc => proc.puesto === puesto.nombre).map(p => ` - Proceso: ${p.proceso}`).join('\n');
+              });
+          }
+      }
+
+      if (!processDataString) {
+          throw new Error("No se encontraron datos de proceso para la entidad seleccionada.");
+      }
+
+      const result: SummarizeEntityOutput = await summarizeEntity({
+        entityType: selectedEntityType,
+        entityName: selectedEntityName,
+        processData: processDataString,
+      });
+
+      setGeneratedSummary(result.summary);
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      toast({ title: 'Error de IA', description: 'No se pudo generar el resumen.', variant: 'destructive'});
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -361,9 +463,8 @@ export default function ProcesosDashboardPage() {
           <CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.procesosSinActividadesCount, isLoadingAll, isComparing && comparisonMetrics ? getComparisonText(dashboardMetrics.procesosSinActividadesCount, comparisonMetrics.procesosSinActividadesCount) : undefined)}</div><p className="text-xs text-muted-foreground">Procesos sin procedimientos/actividades</p></CardContent>
         </Card>
       </div>
-
-       <div className="grid grid-cols-1 gap-6 mb-8">
-        <div className="lg:col-span-2 flex flex-col gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+        <div className="lg:col-span-3 flex flex-col gap-6">
             <Card className="shadow-lg">
                 <CardHeader>
                     <div className="flex justify-between items-center">
@@ -396,8 +497,58 @@ export default function ProcesosDashboardPage() {
                      ) : <p className="text-muted-foreground text-sm h-[200px] flex items-center">No hay datos para graficar.</p>}
                 </CardContent>
             </Card>
+            <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle>Análisis de Entidad por IA</CardTitle>
+                  <CardDescription>Seleccione una entidad para que la IA genere un resumen de sus funciones y procesos asociados.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                    <Select onValueChange={(value) => setSelectedEntityType(value as any)}><SelectTrigger><SelectValue placeholder="Seleccione Tipo"/></SelectTrigger><SelectContent><SelectItem value="area">Área</SelectItem><SelectItem value="departamento">Departamento</SelectItem><SelectItem value="puesto">Puesto</SelectItem></SelectContent></Select>
+                    <Select onValueChange={setSelectedEntityName} value={selectedEntityName} disabled={!selectedEntityType || selectedEntityType==='none'}><SelectTrigger><SelectValue placeholder="Seleccione Entidad"/></SelectTrigger><SelectContent>{entityList.map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent></Select>
+                    <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || !selectedEntityName}><Brain className="mr-2 h-4 w-4"/>{isGeneratingSummary ? "Analizando..." : "Generar Resumen"}</Button>
+                  </div>
+                  {isGeneratingSummary && <div className="flex justify-center"><Loader2 className="h-6 w-6 animate-spin"/></div>}
+                  {generatedSummary && <Textarea readOnly value={generatedSummary} className="h-32 bg-muted"/>}
+                </CardContent>
+            </Card>
         </div>
-       </div>
+        <div className="lg:col-span-2">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle>Análisis de Carga de Trabajo</CardTitle>
+                    <CardDescription>Costo operativo mensual y porcentaje de carga de trabajo documentado por puesto.</CardDescription>
+                </CardHeader>
+                <CardContent className="max-h-[600px] overflow-y-auto">
+                    {isLoadingAll ? <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> :
+                     workloadData.length > 0 ? (
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Puesto</TableHead><TableHead>Costo Operativo/Mes</TableHead><TableHead className="text-right">% Carga vs Sueldo</TableHead></TableRow></TableHeader>
+                            <TableBody>{workloadData.map(d => (
+                                <TableRow key={d.puestoName}><TableCell>{d.puestoName}</TableCell><TableCell>{formatDashboardCurrency(d.monthlyCost, d.moneda || 'MXN')}</TableCell><TableCell className="text-right"><Badge variant={d.loadPercentage > 75 ? "default" : (d.loadPercentage > 25 ? "secondary" : "outline")}>{d.loadPercentage.toFixed(1)}%</Badge></TableCell></TableRow>
+                            ))}</TableBody>
+                        </Table>
+                     ) : <p className="text-muted-foreground text-sm">No hay datos de carga de trabajo.</p>}
+                </CardContent>
+            </Card>
+        </div>
+      </div>
+      <div className="grid grid-cols-1">
+        <Card className="shadow-lg">
+            <CardHeader>
+                <CardTitle>Top 5 Procedimientos Más Costosos (Mensual)</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader><TableRow><TableHead>Procedimiento</TableHead><TableHead>Proceso Padre</TableHead><TableHead className="text-right">Costo Estimado</TableHead></TableRow></TableHeader>
+                    <TableBody>{topCostlyProcedures.length > 0 ? topCostlyProcedures.map(p => (
+                        <TableRow key={p.id}><TableCell>{p.nombre}</TableCell><TableCell>{p.procesoPadre}</TableCell><TableCell className="text-right">{formatDashboardCurrency(p.costoEstimado!, p.monedaCosto || 'MXN')}</TableCell></TableRow>
+                    )) : <TableRow><TableCell colSpan={3} className="text-center">No hay procedimientos con costos calculados.</TableCell></TableRow>}</TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
+
