@@ -57,7 +57,8 @@ exports.setUserRole = onCall(async (request) => {
 
     try {
         // 3. LÓGICA DE AUTORIZACIÓN SEGURA Y CENTRALIZADA
-        const callerClaims = request.auth?.token;
+        const callerAuth = await getAuth().getUser(callingUid);
+        const callerClaims = callerAuth.customClaims;
         if (callerClaims?.rol !== "Administrador") {
             logger.warn("❌ Intento no autorizado para cambiar roles.", {
                 callingUid,
