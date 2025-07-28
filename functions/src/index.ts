@@ -319,32 +319,45 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
 
     try {
         const usersSnapshot = await db.collection("users").get();
-        const problematicUsers: ProblematicUser[] = [];
-        
-        const promises = usersSnapshot.docs.map(userDoc => 
-            getAuth().getUser(userDoc.id).then(authUser => {
+        const promises = usersSnapshot.docs.map(async (userDoc) => {
+            try {
+                const authUser = await getAuth().getUser(userDoc.id);
                 const userData = userDoc.data();
                 const tokenClaims = authUser.customClaims || {};
-                const hasProblems = !tokenClaims.rol || 
-                                    tokenClaims.rol !== userData.rol || 
+
+                const hasProblems = !tokenClaims.rol ||
+                                    tokenClaims.rol !== userData.rol ||
                                     tokenClaims.claimsVersion !== userData.claimsVersion;
-                
+
                 if (hasProblems) {
-                    problematicUsers.push({
+                    return {
                         uid: userDoc.id,
                         email: authUser.email,
                         dbRole: userData.rol,
                         tokenRole: tokenClaims.rol || null,
                         dbVersion: userData.claimsVersion || null,
                         tokenVersion: tokenClaims.claimsVersion || null,
-                    });
+                    };
                 }
-            }).catch(error => {
+                return null;
+            } catch (error: any) {
                 logger.warn(`No se pudo verificar el usuario ${userDoc.id}:`, error.message);
-            })
-        );
-        
-        await Promise.all(promises);
+                if (error.code === 'auth/user-not-found') {
+                    return {
+                        uid: userDoc.id,
+                        email: userDoc.data().email,
+                        dbRole: userDoc.data().rol,
+                        tokenRole: 'USER_DELETED_FROM_AUTH',
+                        dbVersion: userDoc.data().claimsVersion || null,
+                        tokenVersion: null
+                    }
+                }
+                return null;
+            }
+        });
+
+        const results = await Promise.all(promises);
+        const problematicUsers = results.filter((user): user is ProblematicUser => user !== null);
 
         return {
             success: true,
@@ -584,5 +597,3 @@ interface ProblematicUser {
     dbVersion: number | null;
     tokenVersion: number | null;
 }
-
-    
