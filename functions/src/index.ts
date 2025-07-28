@@ -57,8 +57,7 @@ exports.setUserRole = onCall(async (request) => {
 
     try {
         // 3. LÓGICA DE AUTORIZACIÓN SEGURA Y CENTRALIZADA
-        const callerAuth = await getAuth().getUser(callingUid);
-        const callerClaims = callerAuth.customClaims;
+        const callerClaims = request.auth?.token;
         if (callerClaims?.rol !== "Administrador") {
             logger.warn("❌ Intento no autorizado para cambiar roles.", {
                 callingUid,
@@ -372,6 +371,7 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
         throw new HttpsError("internal", "Error al diagnosticar estado de claims.");
     }
 });
+
 
 /**
  * Función auxiliar para que un admin verifique el estado de seguridad del sistema.
