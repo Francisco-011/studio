@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ResumenDashboardPage from '@/components/dashboards/ResumenDashboard';
 import ProcesosDashboardPage from '@/components/dashboards/ProcesosDashboard';
@@ -9,13 +9,22 @@ import MejorasDashboardPage from '@/components/dashboards/MejorasDashboard';
 import SistemasDashboardPage from '@/components/dashboards/SistemasDashboard';
 import PoliticasDashboardPage from '@/components/dashboards/PoliticasDashboard';
 import AuditoriaDashboardPage from '@/components/dashboards/AuditoriaDashboard';
+import { useCallback } from 'react';
 
 export default function DashboardPageContainer() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const view = searchParams.get('view') || 'resumen';
 
+  const handleTabChange = useCallback((value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('view', value);
+    router.push(`${pathname}?${params.toString()}`);
+  }, [searchParams, pathname, router]);
+
   return (
-    <Tabs value={view} className="w-full">
+    <Tabs value={view} onValueChange={handleTabChange} className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 h-auto">
         <TabsTrigger value="resumen" className="h-12">Resumen Ejecutivo</TabsTrigger>
         <TabsTrigger value="procesos" className="h-12">Procesos y Eficiencia</TabsTrigger>
