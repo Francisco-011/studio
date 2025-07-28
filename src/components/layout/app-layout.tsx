@@ -108,9 +108,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1 px-4 pt-2 pb-4 sm:px-6 sm:py-0 md:gap-8">
           {children}
         </main>
-        <footer className="px-4 py-2 text-center text-xs text-muted-foreground">
-          PROSCENDIA v1.0 - Desarrollado por Francisco Rivera Almazán para STUFFACTORY | © 2025
-        </footer>
       </SidebarInset>
     </>
   );

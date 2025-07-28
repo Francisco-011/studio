@@ -56,15 +56,7 @@ const navItems: NavItem[] = [
         icon: LayoutDashboard, 
         matchPrefix: true,
         href: '/dashboard',
-        subItemPermissions: ['dashboard:view_resumen', 'dashboard:view_procesos', 'dashboard:view_mejoras', 'dashboard:view_sistemas', 'dashboard:view_auditoria', 'dashboard:view_politicas'],
-        subItems: [
-            { href: '/dashboard', label: 'Resumen Ejecutivo', permission: 'dashboard:view_resumen' },
-            { href: '/dashboard/procesos', label: 'Procesos y Eficiencia', permission: 'dashboard:view_procesos' },
-            { href: '/dashboard/mejoras', label: 'Impacto y Mejoras', permission: 'dashboard:view_mejoras' },
-            { href: '/dashboard/sistemas', label: 'Sistemas y Costos', permission: 'dashboard:view_sistemas' },
-            { href: '/dashboard/politicas', label: 'Políticas y Cumplimiento', permission: 'dashboard:view_politicas'},
-            { href: '/dashboard/auditoria', label: 'Auditoría', permission: 'dashboard:view_auditoria' },
-        ]
+        permission: 'dashboard:view_resumen',
     },
     { href: '/captura', label: 'Captura', icon: ClipboardEdit, permission: 'captura:create_process' },
     { href: '/procedimientos', label: 'Procedimientos', icon: ListOrdered, permission: 'procedimientos:view' },
@@ -165,6 +157,12 @@ export function SidebarNav() {
         if (item.permission && !hasPermission(item.permission)) {
             return null;
         }
+        
+        let href = item.href;
+        if(item.label === 'Dashboard' && hasPermission('dashboard:view_resumen')) {
+            href = '/dashboard?view=resumen'
+        }
+
         return (
           <SidebarMenuItem key={item.href || item.label}>
             <SidebarMenuButton
@@ -173,7 +171,7 @@ export function SidebarNav() {
               className={cn('w-full justify-start', pathname === item.href ? 'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90' : '')}
               tooltip={{ children: item.label, side: "right", align: "center" }}
             >
-              <Link href={item.href!}>
+              <Link href={href!}>
                 <item.icon className="h-5 w-5" />
                 <span className="flex-grow group-data-[collapsible=icon]:hidden">{item.label}</span>
                 {item.badge && <Badge variant="secondary" className="group-data-[collapsible=icon]:hidden">{item.badge}</Badge>}

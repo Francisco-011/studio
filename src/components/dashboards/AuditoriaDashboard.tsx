@@ -1,26 +1,67 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardCheck, AlertTriangle, TrendingUp, Loader2, FileText, CalendarRange } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { format, parseISO, isValid, differenceInDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DateRange } from "react-day-picker";
-import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { useRouter } from 'next/navigation';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { toast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+
+import { Label } from '@/components/ui/label';
+
+import { toast } from "@/hooks/use-toast";
 import { useAreas } from '@/contexts/AreasContext';
-import { useDepartamentos } from '@/contexts/DepartamentosContext';
-import { usePuestos } from '@/contexts/PuestosContext';
-import { useProcesos } from '@/contexts/ProcesosContext';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAudits, type Audit, type AuditFinding } from '@/contexts/AuditsContext';
+import { useDepartamentos, type Departamento } from '@/contexts/DepartamentosContext';
+import { usePuestos, type Puesto } from '@/contexts/PuestosContext';
+import { useActividades, type Actividad } from '@/contexts/ActividadesContext';
+import { useAcciones } from '@/contexts/AccionesContext';
+import { useSistemasCostos, type Sistema, type SistemaCosto } from '@/contexts/SistemasCostosContext';
+
+import { useProcesos, type CapturedProcess, auditFrequencyOptions } from '@/contexts/ProcesosContext';
+import { useProcedimientos, type Procedimiento } from '@/contexts/ProcedimientosContext';
+import { usePoliticas, type Politica } from '@/contexts/PoliticasContext';
+import { useAudits, type Audit, type AuditFinding, type AuditCreationData } from '@/contexts/AuditsContext';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { cn, formatMinutesToHours } from '@/lib/utils';
+import { CheckCircle, Workflow as WorkflowIcon } from 'lucide-react';
+import { MultiSelect } from "@/components/ui/multi-select";
+
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare } from "lucide-react";
+import { Checkbox } from '@/components/ui/checkbox';
+import { DateRange } from "react-day-picker";
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+
+
+const findingTypes = ["Conforme", "No Conforme", "Oportunidad de Mejora"] as const;
+type FindingType = typeof findingTypes[number];
+
+const auditStatuses = ["En Progreso", "Completada", "Cancelada"] as const;
+type AuditStatus = typeof auditStatuses[number];
+const auditTypes = ["proceso", "puesto", "sistema", "politica", "procedimiento"] as const;
+type AuditType = typeof auditTypes[number];
+
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -46,19 +87,6 @@ const getComparisonText = (current: number, previous: number): string => {
     return "Sin cambios vs periodo anterior";
 }
 
-const escapeCsvCell = (cellData: string | number | undefined | null): string => {
-  if (cellData === undefined || cellData === null) {
-    return '';
-  }
-  const stringValue = String(cellData);
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
-};
-
-type ChartType = 'evolucion' | 'distribucion';
-
 export default function AuditoriaDashboardPage() {
   const { audits: allAudits, isLoadingAudits } = useAudits();
   const { procesos: allCapturedProcesses, isLoadingProcesos } = useProcesos();
@@ -74,14 +102,14 @@ export default function AuditoriaDashboardPage() {
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('all');
   const [selectedPuesto, setSelectedPuesto] = useState<string>('all');
-  const [chartType, setChartType] = useState<ChartType>('evolucion');
+  const [chartType, setChartType] = useState<'evolucion' | 'distribucion'>('evolucion');
 
   const filterAuditsByCriteria = (auditsToFilter: Audit[], range?: DateRange) => {
     let filtered = auditsToFilter;
     
     if (range?.from) {
       const from = startOfDay(range.from);
-      const to = range.to ? endOfDay(range.to) : endOfDay(new Date());
+      const to = range.to ? endOfDay(range.to) : new Date();
       filtered = filtered.filter(audit => {
           const auditDate = parseISO(audit.auditDate);
           return isValid(auditDate) && auditDate >= from && auditDate <= to;
@@ -228,74 +256,12 @@ export default function AuditoriaDashboardPage() {
 
   const isLoadingAll = isLoadingAudits || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
 
-  const handleExport = () => {
-    if (filteredAudits.length === 0) {
-      toast({ title: "Nada que exportar", description: "No hay auditorías en el rango de fechas seleccionado.", variant: "default" });
-      return;
-    }
-    const headers = ["ID", "Fecha", "Tipo", "Objetivo", "Estado", "Hallazgos No Conformes", "Oportunidades de Mejora"];
-    const csvRows = [headers.join(',')];
-    filteredAudits.forEach(audit => {
-      const row = [
-        escapeCsvCell(audit.id),
-        escapeCsvCell(format(parseISO(audit.auditDate), 'yyyy-MM-dd')),
-        escapeCsvCell(audit.auditType),
-        escapeCsvCell(audit.targetName),
-        escapeCsvCell(audit.status),
-        escapeCsvCell(audit.findings.filter(f => f.type === 'No Conforme').length),
-        escapeCsvCell(audit.findings.filter(f => f.type === 'Oportunidad de Mejora').length)
-      ];
-      csvRows.push(row.join(','));
-    });
-
-    const csvString = csvRows.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `auditorias_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-  };
-
   return (
      <div className="container mx-auto py-8">
        <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Auditoría</h1>
           <p className="text-muted-foreground">Monitoree el estado de las auditorías y el cumplimiento general de los procesos.</p>
-        </div>
-        <div className="flex gap-2 flex-wrap justify-end">
-            <DateRangePicker date={dateRange} setDate={setDateRange} />
-             <Button variant="outline" onClick={() => setIsComparing(!isComparing)} disabled={!dateRange}>
-                 <CalendarRange className="mr-2 h-4 w-4" />
-                 {isComparing ? "Cancelar Comparación" : "Comparar"}
-            </Button>
-        </div>
-      </div>
-        {isComparing && (
-            <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center bg-muted/50 p-3 rounded-lg border">
-                <p className="text-sm font-medium">Comparar con:</p>
-                <DateRangePicker date={comparisonDateRange} setDate={setComparisonDateRange} />
-            </div>
-        )}
-
-      <div className="mb-6 flex flex-col sm:flex-row gap-2 items-center bg-muted/50 p-3 rounded-lg border">
-        <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
-          <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
-            <SelectTrigger><SelectValue placeholder="Todas las Áreas"/></SelectTrigger>
-            <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
-            <SelectTrigger><SelectValue placeholder={selectedArea === 'all' ? 'Seleccione área primero' : 'Todos los Deptos.'} /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
-            <SelectTrigger><SelectValue placeholder="Todos los Puestos" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -318,7 +284,7 @@ export default function AuditoriaDashboardPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Análisis de Auditorías</CardTitle>
-            <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
+            <Select value={chartType} onValueChange={(v) => setChartType(v as 'evolucion' | 'distribucion')}>
               <SelectTrigger className="w-[250px]">
                 <SelectValue />
               </SelectTrigger>
@@ -381,54 +347,6 @@ export default function AuditoriaDashboardPage() {
           }
         </CardContent>
       </Card>
-
-       <Card className="mt-8">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Auditorías Recientes</CardTitle>
-              <CardDescription>Lista de auditorías que cumplen con los filtros seleccionados.</CardDescription>
-            </div>
-            <Button variant="outline" onClick={handleExport} disabled={filteredAudits.length === 0}>
-                <FileText className="mr-2 h-4 w-4" /> Exportar CSV
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="max-h-[400px] overflow-y-auto">
-             <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Objetivo</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Estado</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {filteredAudits.length > 0 ? filteredAudits.map(audit => (
-                        <TableRow key={audit.id}>
-                            <TableCell>{format(parseISO(audit.auditDate), 'dd MMM yyyy', {locale: es})}</TableCell>
-                            <TableCell>{audit.targetName}</TableCell>
-                            <TableCell>{audit.auditType}</TableCell>
-                            <TableCell>
-                                <Badge className={cn("text-white border-transparent", {
-                                    "bg-green-600 hover:bg-green-700": audit.status === "Completada",
-                                    "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
-                                    "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
-                                })}>
-                                    {audit.status}
-                                </Badge>
-                            </TableCell>
-                        </TableRow>
-                    )) : (
-                        <TableRow><TableCell colSpan={4} className="text-center">No hay auditorías para mostrar.</TableCell></TableRow>
-                    )}
-                </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-       </Card>
     </div>
   );
 }
