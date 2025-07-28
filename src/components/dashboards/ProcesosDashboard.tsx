@@ -237,6 +237,8 @@ export default function ProcesosDashboardPage() {
       if (!isComparing) return null;
       return processMetrics(comparisonProcesses);
   }, [comparisonProcesses, isComparing, globalActividades, isLoadingData, isLoadingActividades]);
+  
+  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos;
 
   const { chartData, chartConfig, chartDescription } = useMemo(() => {
     if (isLoadingAll) {
@@ -338,8 +340,6 @@ export default function ProcesosDashboardPage() {
     return { chartData: coloredData, chartConfig: config, chartDescription: description };
 
   }, [chartDataType, filteredProcesses, isLoadingAll, globalActividades, allCapturedProcesses]);
-  
-  const isLoadingAll = isLoadingData || isLoadingActividades || isLoadingAreas || isLoadingPuestos || isLoadingProcedimientos;
 
   return (
     <div className="container mx-auto py-8">
