@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, type ReactNode } from 'react';
-import { format, parseISO, isValid, differenceInDays, addDays } from 'date-fns';
+import { format, parseISO, isValid, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 
@@ -62,6 +62,9 @@ type AuditStatus = typeof auditStatuses[number];
 const auditTypes = ["proceso", "puesto", "sistema", "politica", "procedimiento"] as const;
 type AuditType = typeof auditTypes[number];
 
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const endOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+
 
 const renderMetric = (value: number | string, loading: boolean, comparisonValue?: string) => {
   if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
@@ -86,6 +89,18 @@ const getComparisonText = (current: number, previous: number): string => {
     if (diff < 0) return `${diff.toFixed(0)}% vs periodo anterior`;
     return "Sin cambios vs periodo anterior";
 }
+
+const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+  if (cellData === undefined || cellData === null) {
+    return '';
+  }
+  const stringValue = String(cellData);
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
 
 export default function AuditoriaDashboardPage() {
   const { audits: allAudits, isLoadingAudits } = useAudits();
@@ -255,13 +270,42 @@ export default function AuditoriaDashboardPage() {
 
 
   const isLoadingAll = isLoadingAudits || isLoadingAreas || isLoadingPuestos || isLoadingDepartamentos || isLoadingProcesos;
-
+  
   const recentAudits = useMemo(() => {
     return allAudits
-      .filter(a => a.status === 'Completada')
       .sort((a,b) => parseISO(b.auditDate).getTime() - parseISO(a.auditDate).getTime())
-      .slice(0, 5);
+      .slice(0, 10);
   }, [allAudits]);
+
+  const handleExport = () => {
+    if (filteredAudits.length === 0) {
+      toast({ title: "Nada que exportar", description: "No hay auditorías que coincidan con los filtros actuales.", variant: "default" });
+      return;
+    }
+
+    const headers = ["Fecha", "Objetivo", "Tipo", "Estado"];
+    
+    const csvRows = [
+      headers.join(','),
+      ...filteredAudits.map(audit => [
+        escapeCsvCell(format(parseISO(audit.auditDate), 'dd MMM yyyy', { locale: es })),
+        escapeCsvCell(audit.targetName),
+        escapeCsvCell(audit.auditType),
+        escapeCsvCell(audit.status)
+      ].join(','))
+    ];
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `auditorias_recientes_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
 
   return (
      <div className="container mx-auto py-8">
@@ -356,37 +400,46 @@ export default function AuditoriaDashboardPage() {
       </Card>
       <Card>
         <CardHeader>
-            <CardTitle>Auditorías Recientes</CardTitle>
-            <CardDescription>Últimas 5 auditorías completadas en el sistema.</CardDescription>
+            <div className='flex justify-between items-center'>
+              <div>
+                <CardTitle>Auditorías Recientes</CardTitle>
+                <CardDescription>Lista de auditorías que cumplen con los filtros seleccionados.</CardDescription>
+              </div>
+              <Button onClick={handleExport} variant="outline"><FileText className="mr-2 h-4 w-4"/>Exportar CSV</Button>
+            </div>
         </CardHeader>
         <CardContent>
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Objetivo Auditado</TableHead>
-                        <TableHead>Tipo</TableHead>
                         <TableHead>Fecha</TableHead>
-                        <TableHead className="text-center">Hallazgos</TableHead>
+                        <TableHead>Objetivo</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Estado</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoadingAll ? (
-                        <TableRow><TableCell colSpan={5} className="text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
-                    ) : recentAudits.length > 0 ? (
-                        recentAudits.map(audit => (
+                        <TableRow><TableCell colSpan={4} className="text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                    ) : filteredAudits.length > 0 ? (
+                        filteredAudits.slice(0, 10).map(audit => (
                             <TableRow key={audit.id}>
-                                <TableCell className="font-mono">{audit.codigo}</TableCell>
+                                <TableCell>{format(parseISO(audit.auditDate), 'dd MMM yyyy', { locale: es })}</TableCell>
                                 <TableCell>{audit.targetName}</TableCell>
                                 <TableCell><Badge variant="secondary" className="capitalize">{audit.auditType}</Badge></TableCell>
-                                <TableCell>{format(parseISO(audit.auditDate), 'dd MMM yyyy', { locale: es })}</TableCell>
-                                <TableCell className="text-center">
-                                    <Badge>{audit.findings.length}</Badge>
+                                <TableCell>
+                                  <Badge className={cn("text-white border-transparent", {
+                                      "bg-green-600 hover:bg-green-700": audit.status === "Completada",
+                                      "bg-red-600 hover:bg-red-700": audit.status === "Cancelada",
+                                      "bg-orange-500 hover:bg-orange-600": audit.status === "En Progreso",
+                                  })}>
+                                      {audit.status}
+                                  </Badge>
                                 </TableCell>
                             </TableRow>
                         ))
                     ) : (
-                        <TableRow><TableCell colSpan={5} className="text-center">No hay auditorías completadas.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={4} className="text-center">No hay auditorías que coincidan con los filtros.</TableCell></TableRow>
                     )}
                 </TableBody>
             </Table>
@@ -395,4 +448,3 @@ export default function AuditoriaDashboardPage() {
     </div>
   );
 }
-
