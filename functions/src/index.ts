@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Cloud Functions para gestionar la autenticación, permisos y seguridad financiera.
  * Versión refactorizada con mejoras de seguridad y corrección de errores.
@@ -5,7 +6,7 @@
  * - setUserRole: (Segura) Asigna Custom Claims a un usuario, solo ejecutable por administradores.
  * - initializeFirstAdmin: (Segura) Configura el primer administrador del sistema usando una clave secreta.
  * - syncUserClaims: Sincroniza automáticamente Custom Claims del usuario que la llama si están desactualizados.
- * - diagnoseClaimsHealth: Diagnóstico del sistema para que los administradores verifiquen la salud de los claims.
+ * - diagnoseClaimsHealth: Diagnóstico del sistema para los administradores verifiquen la salud de los claims.
  * - getSystemSecurityStatus: (Nueva) Obtiene un resumen del estado de seguridad del sistema para administradores.
  * * FUNCIONES DE CÁLCULOS FINANCIEROS (TRIGGERS):
  * - recalculateProcedure: Recalcula tiempo y costo de un procedimiento basado en sus actividades.
