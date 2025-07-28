@@ -274,12 +274,12 @@ export default function UsuariosPage() {
     
     try {
       // Reautenticar para validar la contraseña
-      const { ReauthenticateWithCredential, EmailAuthProvider } = await import('firebase/auth');
+      const { reauthenticateWithCredential, EmailAuthProvider } = await import('firebase/auth');
       const { auth } = await import('@/lib/firebase');
       
       const credential = EmailAuthProvider.credential(currentUser.email, passwordConfirmation);
       if (auth.currentUser) {
-          await ReauthenticateWithCredential(auth.currentUser, credential);
+          await reauthenticateWithCredential(auth.currentUser, credential);
       } else {
           throw new Error("No hay usuario actual para reautenticar");
       }
@@ -1014,4 +1014,3 @@ export default function UsuariosPage() {
     </div>
   );
 }
-
