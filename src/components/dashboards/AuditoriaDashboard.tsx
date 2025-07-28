@@ -46,7 +46,7 @@ import { cn, formatMinutesToHours } from '@/lib/utils';
 import { CheckCircle, Workflow as WorkflowIcon } from 'lucide-react';
 import { MultiSelect } from "@/components/ui/multi-select";
 
-import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, FileText, Send, AlertTriangle, Loader2, History, Edit, ArrowRight, Save, XCircle, User, ChevronDown, Laptop, Search, ArrowUp, ArrowDown, ChevronsUpDown, Eye, Info, PlayCircle, Workflow, CheckSquare, TrendingUp } from "lucide-react";
 import { Checkbox } from '@/components/ui/checkbox';
 import { DateRange } from "react-day-picker";
 import { DateRangePicker } from '@/components/ui/date-range-picker';
