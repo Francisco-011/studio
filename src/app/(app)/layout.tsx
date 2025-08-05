@@ -8,7 +8,6 @@ import { useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { AppProviders } from '@/contexts/AppProviders';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -34,8 +33,6 @@ export default function AuthenticatedAppLayout({
   }
 
   return (
-    <AppProviders>
-      <AppLayout>{children}</AppLayout>
-    </AppProviders>
+    <AppLayout>{children}</AppLayout>
   );
 }
