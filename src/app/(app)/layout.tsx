@@ -9,8 +9,6 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { AppProviders } from '@/contexts/AppProviders';
-import { PermissionsProvider } from '@/contexts/PermissionsContext';
-import { ExceptionsProvider } from '@/contexts/ExceptionsContext';
 
 export default function AuthenticatedAppLayout({
   children,
@@ -36,12 +34,8 @@ export default function AuthenticatedAppLayout({
   }
 
   return (
-    <PermissionsProvider>
-        <ExceptionsProvider>
-          <AppProviders>
-            <AppLayout>{children}</AppLayout>
-          </AppProviders>
-        </ExceptionsProvider>
-    </PermissionsProvider>
+    <AppProviders>
+      <AppLayout>{children}</AppLayout>
+    </AppProviders>
   );
 }
