@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Cloud Functions para gestionar la autenticación, permisos y seguridad financiera.
  * Versión refactorizada con mejoras de seguridad y corrección de errores.
@@ -5,7 +6,7 @@
  * - setUserRole: (Segura) Asigna Custom Claims a un usuario, solo ejecutable por administradores.
  * - initializeFirstAdmin: (Segura) Configura el primer administrador del sistema usando una clave secreta.
  * - syncUserClaims: Sincroniza automáticamente Custom Claims del usuario que la llama si están desactualizados.
- * - diagnoseClaimsHealth: Diagnóstico del sistema para que los administradores verifiquen la salud de los claims.
+ * - diagnoseClaimsHealth: Diagnóstico del sistema para los administradores verifiquen la salud de los claims.
  * - getSystemSecurityStatus: (Nueva) Obtiene un resumen del estado de seguridad del sistema para administradores.
  * * FUNCIONES DE CÁLCULOS FINANCIEROS (TRIGGERS):
  * - recalculateProcedure: Recalcula tiempo y costo de un procedimiento basado en sus actividades.
@@ -319,32 +320,45 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
 
     try {
         const usersSnapshot = await db.collection("users").get();
-        const problematicUsers: ProblematicUser[] = [];
-        
-        const promises = usersSnapshot.docs.map(userDoc => 
-            getAuth().getUser(userDoc.id).then(authUser => {
+        const promises = usersSnapshot.docs.map(async (userDoc) => {
+            try {
+                const authUser = await getAuth().getUser(userDoc.id);
                 const userData = userDoc.data();
                 const tokenClaims = authUser.customClaims || {};
-                const hasProblems = !tokenClaims.rol || 
-                                    tokenClaims.rol !== userData.rol || 
+
+                const hasProblems = !tokenClaims.rol ||
+                                    tokenClaims.rol !== userData.rol ||
                                     tokenClaims.claimsVersion !== userData.claimsVersion;
-                
+
                 if (hasProblems) {
-                    problematicUsers.push({
+                    return {
                         uid: userDoc.id,
                         email: authUser.email,
                         dbRole: userData.rol,
                         tokenRole: tokenClaims.rol || null,
                         dbVersion: userData.claimsVersion || null,
                         tokenVersion: tokenClaims.claimsVersion || null,
-                    });
+                    };
                 }
-            }).catch(error => {
+                return null;
+            } catch (error: any) {
                 logger.warn(`No se pudo verificar el usuario ${userDoc.id}:`, error.message);
-            })
-        );
-        
-        await Promise.all(promises);
+                if (error.code === 'auth/user-not-found') {
+                    return {
+                        uid: userDoc.id,
+                        email: userDoc.data().email,
+                        dbRole: userDoc.data().rol,
+                        tokenRole: 'USER_DELETED_FROM_AUTH',
+                        dbVersion: userDoc.data().claimsVersion || null,
+                        tokenVersion: null
+                    }
+                }
+                return null;
+            }
+        });
+
+        const results = await Promise.all(promises);
+        const problematicUsers = results.filter((user): user is ProblematicUser => user !== null);
 
         return {
             success: true,
@@ -357,6 +371,7 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
         throw new HttpsError("internal", "Error al diagnosticar estado de claims.");
     }
 });
+
 
 /**
  * Función auxiliar para que un admin verifique el estado de seguridad del sistema.

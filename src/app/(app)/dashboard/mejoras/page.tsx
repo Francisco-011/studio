@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -239,7 +240,7 @@ export default function MejorasDashboardPage() {
       }, 0) || 0;
 
       let tiempoRealizado = 0;
-      if (historyTimeSavings > 0) {
+       if (historyTimeSavings > 0) {
         tiempoRealizado = historyTimeSavings;
       } else if (accion.ahorroTiempoEstimado && accion.ahorroTiempoEstimado > 0) {
         tiempoRealizado = accion.ahorroTiempoEstimado;
@@ -355,12 +356,12 @@ export default function MejorasDashboardPage() {
       filteredAcciones
           .filter(a => a.estado === 'Completada' && a.historialDeCambios && a.historialDeCambios.length > 0)
           .forEach(accion => {
-              accion.historialDeCambios?.forEach(cambio => {
+              accion.historialDeCambios?.forEach((cambio, index) => {
                   if (cambio.field.includes('Tiempo') || cambio.field.includes('Costo')) {
                       const procesoAfectado = allCapturedProcesses.find(p => p.id === accion.procesoId);
                       if (procesoAfectado) {
                           mejoras.push({
-                              id: `${accion.id}-${cambio.field}`,
+                              id: `${accion.id}-${cambio.field}-${index}`,
                               accionNombre: accion.nombre,
                               procesoNombre: procesoAfectado.proceso,
                               area: procesoAfectado.area || 'N/A',
