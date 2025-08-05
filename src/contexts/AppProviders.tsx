@@ -12,9 +12,11 @@ import { ProcesosProvider } from '@/contexts/ProcesosContext';
 import { ProcedimientosProvider } from '@/contexts/ProcedimientosContext';
 import { AccionesProvider } from '@/contexts/AccionesContext';
 import { AuditsProvider } from '@/contexts/AuditsContext';
+import { ActivityLogProvider } from './ActivityLogContext';
 
 export function AppProviders({ children }: { children: ReactNode }) {
     return (
+      <ActivityLogProvider>
         <AreasProvider>
             <DepartamentosProvider>
                 <PuestosProvider>
@@ -36,5 +38,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
                 </PuestosProvider>
             </DepartamentosProvider>
         </AreasProvider>
+      </ActivityLogProvider>
     );
 }
