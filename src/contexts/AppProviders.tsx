@@ -1,9 +1,7 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
-import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
-import { ExceptionsProvider } from '@/contexts/ExceptionsContext';
-import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { AreasProvider } from '@/contexts/AreasContext';
 import { DepartamentosProvider } from '@/contexts/DepartamentosContext';
 import { PuestosProvider } from '@/contexts/PuestosContext';
@@ -17,32 +15,26 @@ import { AuditsProvider } from '@/contexts/AuditsContext';
 
 export function AppProviders({ children }: { children: ReactNode }) {
     return (
-        <ActivityLogProvider>
-            <ExceptionsProvider>
-                <PermissionsProvider>
-                    <AreasProvider>
-                        <DepartamentosProvider>
-                            <PuestosProvider>
-                                <SistemasCostosProvider>
-                                    <PoliticasProvider>
-                                        <ActividadesProvider>
-                                            <ProcedimientosProvider>
-                                                <ProcesosProvider>
-                                                    <AccionesProvider>
-                                                        <AuditsProvider>
-                                                            {children}
-                                                        </AuditsProvider>
-                                                    </AccionesProvider>
-                                                </ProcesosProvider>
-                                            </ProcedimientosProvider>
-                                        </ActividadesProvider>
-                                    </PoliticasProvider>
-                                </SistemasCostosProvider>
-                            </PuestosProvider>
-                        </DepartamentosProvider>
-                    </AreasProvider>
-                </PermissionsProvider>
-            </ExceptionsProvider>
-        </ActivityLogProvider>
+        <AreasProvider>
+            <DepartamentosProvider>
+                <PuestosProvider>
+                    <SistemasCostosProvider>
+                        <PoliticasProvider>
+                            <ActividadesProvider>
+                                <ProcedimientosProvider>
+                                    <ProcesosProvider>
+                                        <AccionesProvider>
+                                            <AuditsProvider>
+                                                {children}
+                                            </AuditsProvider>
+                                        </AccionesProvider>
+                                    </ProcesosProvider>
+                                </ProcedimientosProvider>
+                            </ActividadesProvider>
+                        </PoliticasProvider>
+                    </SistemasCostosProvider>
+                </PuestosProvider>
+            </DepartamentosProvider>
+        </AreasProvider>
     );
 }
