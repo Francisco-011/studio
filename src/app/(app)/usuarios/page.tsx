@@ -1,14 +1,33 @@
 
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, ShieldCheck, ShieldQuestion } from "lucide-react";
 
+import { db } from '@/lib/firebase';
+import { toast } from '@/hooks/use-toast';
+
+import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { usePuestos } from '@/contexts/PuestosContext';
+import { useActivityLog } from '@/contexts/ActivityLogContext';
+import { useExceptions, type AccessException } from '@/contexts/ExceptionsContext';
+import { useProcesos } from '@/contexts/ProcesosContext';
+import { usePoliticas } from '@/contexts/PoliticasContext';
+
 import UserManagementTab from '@/components/user-management/UserManagementTab';
 import PermissionsTab from '@/components/user-management/PermissionsTab';
 import ExceptionsTab from '@/components/user-management/ExceptionsTab';
+
+import type { User, UserRole, UserFormData, ExceptionFormData, AccessExceptionCreationData } from '@/types/users';
+import { userFormSchema, exceptionFormSchema } from '@/types/users';
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([]);

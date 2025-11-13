@@ -4,7 +4,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -27,33 +26,8 @@ import { usePuestos } from '@/contexts/PuestosContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useAuth } from '@/contexts/AuthContext';
 
-const userRoles = ["Administrador", "Gerente de Proyecto", "Consultor", "Usuario Final"] as const;
-type UserRole = typeof userRoles[number];
-
-const nivelesAcceso = ["Público", "Departamental", "Jerárquico", "Ejecutivo", "Confidencial"] as const;
-type NivelAcceso = typeof nivelesAcceso[number];
-
-interface User {
-  id: string;
-  nombreCompleto: string;
-  email: string;
-  rol: UserRole;
-  nivelAcceso: NivelAcceso;
-  activo: boolean;
-  puestoId?: string;
-  claimsVersion?: number;
-}
-
-const userFormSchema = z.object({
-  id: z.string().optional(),
-  nombreCompleto: z.string().min(3, 'El nombre completo debe tener al menos 3 caracteres.').max(60, 'El nombre no puede exceder 60 caracteres.').regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El nombre solo puede contener letras y espacios.'),
-  email: z.string().email('Ingrese un correo electrónico válido.'),
-  rol: z.enum(userRoles, { errorMap: () => ({ message: "Seleccione un rol válido." }) }),
-  nivelAcceso: z.enum(nivelesAcceso, { errorMap: () => ({ message: "Seleccione un nivel de acceso." }) }),
-  puestoId: z.string().optional(),
-  activo: z.boolean().default(true),
-});
-type UserFormData = z.infer<typeof userFormSchema>;
+import type { User, UserRole, UserFormData, NivelAcceso } from '@/types/users';
+import { userRoles, nivelesAcceso, userFormSchema } from '@/types/users';
 
 const ITEMS_PER_PAGE = 10;
 

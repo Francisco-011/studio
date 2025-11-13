@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { format, parseISO } from 'date-fns';
 
 
@@ -71,7 +71,13 @@ export function AccionesProvider({ children }: { children: ReactNode }) {
   const { addLogEntry } = useActivityLog();
 
   useEffect(() => {
-    const q = query(collection(db, ACCIONES_COLLECTION), orderBy("fechaCreacion", "desc"));
+    // Limit query to prevent loading too many documents at once
+    const MAX_ACCIONES = 1000;
+    const q = query(
+      collection(db, ACCIONES_COLLECTION),
+      orderBy("fechaCreacion", "desc"),
+      limit(MAX_ACCIONES)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const actionsData = snapshot.docs.map(doc => {
             const data = doc.data();
