@@ -4,7 +4,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -27,15 +26,8 @@ import { useExceptions, type AccessException } from '@/contexts/ExceptionsContex
 import { onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-const exceptionFormSchema = z.object({
-  userId: z.string({ required_error: 'Debe seleccionar un usuario.' }),
-  documentType: z.enum(['politica', 'proceso'], { required_error: 'Debe seleccionar un tipo de documento.' }),
-  documentId: z.string({ required_error: 'Debe seleccionar un documento.' }),
-  exceptionType: z.enum(['INCLUDE', 'EXCLUDE'], { required_error: 'Debe seleccionar un tipo de excepción.' }),
-  expiresAt: z.date().optional(),
-  justification: z.string().min(10, 'La justificación es requerida (mínimo 10 caracteres).').max(1000, 'La justificación no puede exceder 1000 caracteres.'),
-});
-type ExceptionFormData = z.infer<typeof exceptionFormSchema>;
+import type { ExceptionFormData } from '@/types/users';
+import { exceptionFormSchema } from '@/types/users';
 
 interface UserForSelect {
   id: string;

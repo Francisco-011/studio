@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import type { UserRole, NivelAcceso } from '@/app/(app)/usuarios/page';
+import type { UserRole, NivelAcceso } from '@/types/users';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { toast } from '@/hooks/use-toast';
 
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const manualSync = useCallback(async () => {
     if (!auth.currentUser || isSyncing) return;
-    
+
     setIsSyncing(true);
     setLastSyncStatus('unknown'); // Set to unknown while syncing
     toast({ title: "Sincronizando Permisos...", description: "Verificando y corrigiendo sus permisos. Esto puede tardar un momento." });
@@ -98,18 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { wasSynced, message } = result.data as { wasSynced: boolean; message: string };
 
         if (wasSynced) {
-            // NUEVO: Forzar renovación del token
+            // Force token refresh
             await auth.currentUser.getIdToken(true);
-            
+
             toast({ title: "¡Sincronización Completa!", description: message });
-            
-            // NUEVO: Recargar la página después de 1.5 segundos
-            setTimeout(() => window.location.reload(), 1500);
+
+            // Refresh user profile instead of reloading the entire page
+            await fetchAndSetUserProfile(auth.currentUser, true);
         } else {
             toast({ title: "Permisos Verificados", description: message });
+            // Still refresh the profile to ensure everything is in sync
+            await fetchAndSetUserProfile(auth.currentUser, true);
         }
-        // Force a full refresh of user profile and token after sync
-        await fetchAndSetUserProfile(auth.currentUser, true);
 
     } catch (error: any) {
         console.error("Error during manual sync:", error);
@@ -121,7 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }, [isSyncing, fetchAndSetUserProfile]);
 
   useEffect(() => {
+    let mounted = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (!mounted) return;
+
       setLoading(true);
       if (firebaseUser) {
         await fetchAndSetUserProfile(firebaseUser);
@@ -131,19 +135,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-    
-    // Periodic check
+
+    // Periodic check every 5 minutes
+    const FIVE_MINUTES = 5 * 60 * 1000;
     const interval = setInterval(() => {
-        if (auth.currentUser) {
+        if (mounted && auth.currentUser) {
             fetchAndSetUserProfile(auth.currentUser);
         }
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, FIVE_MINUTES);
 
+    // Cleanup function to prevent memory leaks
     return () => {
+        mounted = false;
         unsubscribe();
         clearInterval(interval);
     };
-  }, []);
+  }, [fetchAndSetUserProfile]);
 
   return (
     <AuthContext.Provider value={{ user, loading, isSyncing, lastSyncStatus, manualSync }}>

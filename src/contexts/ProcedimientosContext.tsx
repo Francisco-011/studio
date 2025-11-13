@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { toast } from '@/hooks/use-toast';
 import { useActivityLog } from './ActivityLogContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayRemove } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Timestamp, writeBatch, arrayRemove, limit } from 'firebase/firestore';
 import { clasificacionOptions } from './ProcesosContext';
 import type { CambioHistorial, Actividad } from './ActividadesContext';
 import type { Moneda } from './AccionesContext';
@@ -60,7 +60,12 @@ export function ProcedimientosProvider({ children }: { children: ReactNode }) {
   const { actividades } = useActividades();
 
   useEffect(() => {
-    const q = query(collection(db, PROCEDIMIENTOS_COLLECTION));
+    // Limit query to prevent loading too many documents at once
+    const MAX_PROCEDIMIENTOS = 1000;
+    const q = query(
+      collection(db, PROCEDIMIENTOS_COLLECTION),
+      limit(MAX_PROCEDIMIENTOS)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map(doc => {
             const docData = doc.data();
