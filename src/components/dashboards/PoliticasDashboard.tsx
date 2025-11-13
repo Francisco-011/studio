@@ -117,11 +117,6 @@ export default function PoliticasDashboardPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Políticas y Cumplimiento</h1>
-        <p className="text-muted-foreground">Análisis sobre la cobertura, estado y distribución de las políticas de la organización.</p>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total de Políticas Aprobadas</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader>

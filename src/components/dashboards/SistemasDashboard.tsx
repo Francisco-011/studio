@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, HardDrive, AlertTriangle, TrendingUp, FileText, Activity as ActivityIcon } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell } from 'recharts';
 import {
   Table,
   TableBody,
@@ -26,6 +26,8 @@ import { useAreas } from '@/contexts/AreasContext';
 import { useDepartamentos } from '@/contexts/DepartamentosContext';
 import { usePuestos } from '@/contexts/PuestosContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 
 // Helper function to format currency
 function formatDashboardCurrency(amount: number, currency: string) {
@@ -118,7 +120,7 @@ export default function SistemasDashboardPage() {
         
         const filteredProcesoIds = new Set(filteredProcesos.map(p => p.id));
         
-        const filteredProcedimientos = procedimientos.filter(p => filteredProcesoIds.has(p.procesoId));
+        const filteredProcedimientos = procedimientos.filter(p => p.procesoId && filteredProcesoIds.has(p.procesoId));
         const filteredProcedimientoIds = new Set(filteredProcedimientos.map(p => p.id));
         
         const filteredActividades = actividades.filter(a => a.procedimientoId && filteredProcedimientoIds.has(a.procedimientoId));
@@ -263,29 +265,6 @@ export default function SistemasDashboardPage() {
     
     return (
         <div className="container mx-auto py-8">
-            <div className="mb-6">
-                <h1 className="text-3xl font-headline font-bold text-primary mb-2">Dashboard: Costo y Uso de Sistemas</h1>
-                <p className="text-muted-foreground">Analice la relación entre el costo de los sistemas y su uso real en los procesos y actividades de la organización.</p>
-            </div>
-
-            <div className="mb-6 flex flex-col sm:flex-row gap-2 items-center bg-muted/50 p-3 rounded-lg border">
-                <p className="text-sm font-medium shrink-0">Filtros de Entidad:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
-                    <Select value={selectedArea} onValueChange={v => {setSelectedArea(v); setSelectedDepartamento('all'); setSelectedPuesto('all');}}>
-                        <SelectTrigger><SelectValue placeholder="Todas las Áreas"/></SelectTrigger>
-                        <SelectContent><SelectItem value="all">Todas las Áreas</SelectItem>{areas.map(a => <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Select value={selectedDepartamento} onValueChange={v => {setSelectedDepartamento(v); setSelectedPuesto('all');}} disabled={selectedArea === 'all' || isLoadingDepartamentos}>
-                        <SelectTrigger><SelectValue placeholder={selectedArea === 'all' ? 'Seleccione área primero' : 'Todos los Deptos.'} /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">Todos los Deptos.</SelectItem>{availableDepartamentos.map(d => <SelectItem key={d.id} value={d.nombre}>{d.nombre}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Select value={selectedPuesto} onValueChange={setSelectedPuesto} disabled={isLoadingPuestos}>
-                        <SelectTrigger><SelectValue placeholder="Todos los Puestos" /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">Todos los Puestos</SelectItem>{availablePuestos.map(p => <SelectItem key={p.id} value={p.nombre}>{p.nombre}</SelectItem>)}</SelectContent>
-                    </Select>
-                </div>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <Card className="shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Sistemas Registrados</CardTitle><HardDrive className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.totalSystems, isLoadingAll)}</div></CardContent></Card>
                 <Card className="shadow-md"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Costo Anual Total</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{renderMetric(dashboardMetrics.totalAnnualCost, isLoadingAll)}</div></CardContent></Card>
@@ -307,32 +286,41 @@ export default function SistemasDashboardPage() {
                     <CardContent>
                         {isLoadingAll ? <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin"/></div> :
                         systemUsageData.length > 0 ? (
-                            <div className="max-h-[500px] overflow-y-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Sistema</TableHead>
-                                            <TableHead className="text-right">Costo Anual Est.</TableHead>
-                                            <TableHead className="text-center">Procesos Vinculados</TableHead>
-                                            <TableHead className="text-center">Actividades Vinculadas</TableHead>
-                                            <TableHead className="text-center">Ejecuciones / Mes</TableHead>
-                                            <TableHead className="text-right">Índice Costo/Uso</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {systemUsageData.map(sys => (
-                                            <TableRow key={sys.sistema.id}>
-                                                <TableCell className="font-medium">{sys.sistema.nombre}</TableCell>
-                                                <TableCell className="text-right">{formatDashboardCurrency(sys.totalAnnualCost, sys.currency)}</TableCell>
-                                                <TableCell className="text-center"><Badge variant="outline">{sys.processes.size}</Badge></TableCell>
-                                                <TableCell className="text-center"><Badge variant="outline">{sys.activities.size}</Badge></TableCell>
-                                                <TableCell className="text-center"><Badge variant="secondary">{Math.round(sys.totalExecutions)}</Badge></TableCell>
-                                                <TableCell className="text-right font-mono">{sys.usageIndex.toFixed(2)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            <Accordion type="multiple" className="w-full">
+                                {systemUsageData.map((sys) => (
+                                    <AccordionItem value={sys.sistema.id} key={sys.sistema.id} className="border-b">
+                                        <AccordionTrigger className="hover:no-underline">
+                                            <div className="flex justify-between items-center w-full pr-4">
+                                                <span className="font-medium">{sys.sistema.nombre}</span>
+                                                <div className="flex gap-4">
+                                                    <div className="text-right">
+                                                        <div className="font-semibold">{formatDashboardCurrency(sys.totalAnnualCost, sys.currency)}</div>
+                                                        <div className="text-xs text-muted-foreground">Costo Anual</div>
+                                                    </div>
+                                                     <div className="text-right">
+                                                        <div className="font-semibold">{sys.processes.size}</div>
+                                                        <div className="text-xs text-muted-foreground">Procesos</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="p-4 bg-muted/50 rounded-md">
+                                                <h4 className="font-semibold mb-2">Detalle de Costos</h4>
+                                                {costosSistemas.filter(c => c.sistemaId === sys.sistema.id).length > 0 ? (
+                                                    <ul className="list-disc pl-5 text-sm space-y-1">
+                                                        {costosSistemas.filter(c => c.sistemaId === sys.sistema.id).map(costo => (
+                                                            <li key={costo.id}>
+                                                                {costo.descripcion}: {formatDashboardCurrency((costo.montoUso || 0) + ((costo.costoPorLicencia || 0) * (costo.numeroLicencias || 0)), costo.moneda || 'MXN')} ({costo.frecuencia})
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : <p className="text-xs text-muted-foreground">Sin costos detallados.</p>}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
                         ) : (
                              <div className="flex items-center justify-center h-full bg-muted/30 rounded-lg min-h-[250px]">
                                 <p className="text-muted-foreground">No hay datos de sistemas para los filtros seleccionados.</p>
@@ -344,3 +332,4 @@ export default function SistemasDashboardPage() {
         </div>
     );
 }
+

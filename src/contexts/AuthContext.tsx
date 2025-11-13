@@ -98,7 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { wasSynced, message } = result.data as { wasSynced: boolean; message: string };
 
         if (wasSynced) {
+            // NUEVO: Forzar renovación del token
+            await auth.currentUser.getIdToken(true);
+            
             toast({ title: "¡Sincronización Completa!", description: message });
+            
+            // NUEVO: Recargar la página después de 1.5 segundos
+            setTimeout(() => window.location.reload(), 1500);
         } else {
             toast({ title: "Permisos Verificados", description: message });
         }
@@ -112,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
         setIsSyncing(false);
     }
-  }, [isSyncing, fetchAndSetUserProfile]);
+}, [isSyncing, fetchAndSetUserProfile]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
