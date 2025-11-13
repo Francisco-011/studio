@@ -55,7 +55,6 @@ exports.setUserRole = onCall(async (request) => {
         throw new HttpsError("invalid-argument", "La función debe ser llamada con 'userId', 'rol' y 'nivelAcceso'.");
     }
 
-<<<<<<< HEAD
     try {
         // 3. LÓGICA DE AUTORIZACIÓN SEGURA Y CENTRALIZADA
         const callerClaims = request.auth?.token;
@@ -64,24 +63,6 @@ exports.setUserRole = onCall(async (request) => {
                 callingUid,
                 currentRole: callerClaims?.rol || "ninguno",
                 attemptedTarget: userId
-=======
-    // 2. Lógica de autorización SIMPLIFICADA y ROBUSTA
-    let isAuthorized = false;
-    
-    logger.info("🔍 Verificando autorización", { callingUid, targetUserId: userId });
-
-    try {
-        if (request.auth?.token?.rol === "Administrador") {
-            isAuthorized = true;
-            logger.info("✅ Autorizado por token de Administrador");
-        }
-
-        if (!isAuthorized) {
-            logger.error("❌ Permiso denegado", { 
-                callingUid, 
-                targetUserId: userId,
-                tokenRol: request.auth?.token?.rol 
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
             });
             // Registrar intento fallido para auditoría
             await db.collection("security_events").add({
@@ -133,11 +114,7 @@ exports.setUserRole = onCall(async (request) => {
             }
         }
 
-<<<<<<< HEAD
         // 6. Preparar los claims
-=======
-        // 4. Preparar Claims con timestamp de sincronización
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
         const claimsVersion = Date.now();
         const claimsToSet = {
             rol,
@@ -146,11 +123,7 @@ exports.setUserRole = onCall(async (request) => {
             areaId: areaId || null,
             puestoId: puestoId || null,
             lastClaimUpdate: new Date().toISOString(),
-<<<<<<< HEAD
             claimsVersion,
-=======
-            claimsVersion, 
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
         };
 
         // 7. Asignar Claims y actualizar Firestore
@@ -164,11 +137,8 @@ exports.setUserRole = onCall(async (request) => {
             puestoId: puestoId || null,
             lastSyncAt: new Date().toISOString(),
             claimsVersion,
-<<<<<<< HEAD
             lastModifiedBy: callingUid, // Rastrear quién hizo el cambio
             lastModifiedAt: Timestamp.now() // Rastrear cuándo se hizo
-=======
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
         });
         logger.info("✅ Perfil en Firestore sincronizado.");
 
@@ -190,12 +160,7 @@ exports.setUserRole = onCall(async (request) => {
         };
 
     } catch (error) {
-<<<<<<< HEAD
         logger.error("❌ Error fatal en setUserRole", { error, userId, callingUid });
-=======
-        logger.error("❌ Error en setUserRole", { error, userId, callingUid });
-        
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
         if (error instanceof HttpsError) {
             throw error;
         }
@@ -301,16 +266,11 @@ exports.syncUserClaims = onCall(async (request) => {
     }
 
     try {
-<<<<<<< HEAD
-=======
-        // 1. Obtener estado actual del usuario desde la DB (fuente de verdad)
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
         const userDoc = await db.collection("users").doc(callingUid).get();
         if (!userDoc.exists) {
             throw new HttpsError("not-found", "Perfil de usuario no encontrado en la base de datos.");
         }
         const userData = userDoc.data()!;
-<<<<<<< HEAD
         const authUser = await getAuth().getUser(callingUid);
         const tokenClaims = authUser.customClaims || {};
 
@@ -319,31 +279,6 @@ exports.syncUserClaims = onCall(async (request) => {
 
         if (dbVersion !== tokenVersion || !tokenClaims.rol) {
             logger.info("🔄 Desincronización detectada, corrigiendo...", { dbVersion, tokenVersion });
-=======
-
-        // 2. Obtener los claims actuales del token de autenticación
-        const authUser = await getAuth().getUser(callingUid);
-        const tokenClaims = authUser.customClaims || {};
-
-        // 3. Comparar la versión de los claims para detectar desincronización
-        const dbVersion = userData.claimsVersion;
-        const tokenVersion = tokenClaims.claimsVersion;
-
-        const needsSync = dbVersion !== tokenVersion ||
-                          !tokenClaims.rol || // Sync if role is missing
-                          tokenClaims.rol !== userData.rol ||
-                          tokenClaims.nivelAcceso !== userData.nivelAcceso;
-        
-        logger.info("🔍 Comparando versiones de permisos", { 
-            dbVersion, 
-            tokenVersion, 
-            needsSync 
-        });
-
-        // 4. Si hay desincronización, corregir los claims
-        if (needsSync) {
-            logger.info("🔄 Desincronización detectada, corrigiendo permisos...");
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
             
             // Re-aplica los claims desde la base de datos como fuente de verdad
             const claimsVersion = Date.now();
@@ -358,7 +293,6 @@ exports.syncUserClaims = onCall(async (request) => {
             };
 
             await getAuth().setCustomUserClaims(callingUid, correctedClaims);
-<<<<<<< HEAD
             await userDoc.ref.update({ claimsVersion, lastSyncAt: new Date().toISOString() });
 
             logger.info("✅ Claims sincronizados automáticamente para el usuario.", { uid: callingUid });
@@ -371,36 +305,6 @@ exports.syncUserClaims = onCall(async (request) => {
     } catch (error) {
         logger.error("❌ Error en syncUserClaims", { error, callingUid });
         throw new HttpsError("internal", "Error al sincronizar tus permisos.");
-=======
-            
-            // Actualizar la versión en Firestore para que coincida
-            await userDoc.ref.update({ 
-                claimsVersion, 
-                lastSyncAt: new Date().toISOString() 
-            });
-
-            logger.info("✅ Permisos sincronizados automáticamente.");
-            
-            return {
-                success: true,
-                wasSynced: true,
-                message: "¡Listo! Tus permisos han sido sincronizados correctamente.",
-                newClaimsVersion: correctedClaims.claimsVersion,
-            };
-        }
-
-        logger.info("✅ Los permisos ya están sincronizados.");
-        return {
-            success: true,
-            wasSynced: false,
-            message: "Tus permisos ya están actualizados.",
-            claimsVersion: tokenVersion,
-        };
-
-    } catch (error) {
-        logger.error("❌ Error en syncUserClaims", { error, callingUid });
-        throw new HttpsError("internal", "Ocurrió un error al sincronizar tus permisos.");
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
     }
 });
 
@@ -470,7 +374,6 @@ exports.diagnoseClaimsHealth = onCall(async (request) => {
 /**
  * Función auxiliar para que un admin verifique el estado de seguridad del sistema.
  */
-<<<<<<< HEAD
 exports.getSystemSecurityStatus = onCall(async (request) => {
     if (request.auth?.token?.rol !== "Administrador") {
         throw new HttpsError("permission-denied", "Solo los administradores pueden ejecutar esta acción.");
@@ -489,41 +392,6 @@ exports.getSystemSecurityStatus = onCall(async (request) => {
     } catch (error) {
         logger.error("Error getting security status", { error });
         throw new HttpsError("internal", "Error al obtener estado de seguridad.");
-=======
-exports.setupFirstAdmin = onCall(async (request) => {
-  const { email } = request.data;
-  if (!email) {
-      throw new HttpsError('invalid-argument', 'El correo electrónico es requerido.');
-  }
-
-  try {
-    const userRecord = await getAuth().getUserByEmail(email);
-    
-    // Asignar los claims de Administrador
-    const claimsVersion = Date.now();
-    await getAuth().setCustomUserClaims(userRecord.uid, {
-      rol: 'Administrador',
-      nivelAcceso: 'Confidencial', // El nivel más alto
-      isFirstAdmin: true,
-      lastClaimUpdate: new Date().toISOString(),
-      claimsVersion,
-    });
-
-    // Actualizar también el documento en Firestore para consistencia
-    const userDocRef = db.collection('users').doc(userRecord.uid);
-    await userDocRef.update({
-        rol: 'Administrador',
-        nivelAcceso: 'Confidencial',
-        claimsVersion,
-        lastSyncAt: new Date().toISOString(),
-    });
-
-    return { success: true, message: `El usuario ${email} ha sido configurado como Administrador.` };
-  } catch (error: any) {
-    console.error("Error configurando el primer administrador:", error);
-    if (error.code === 'auth/user-not-found') {
-        throw new HttpsError('not-found', `No se encontró un usuario con el correo ${email}.`);
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
     }
 });
 
@@ -699,31 +567,10 @@ exports.triggerRecalcFromActivity = onDocumentWritten("actividades/{docId}", asy
 /**
  * (NOMBRE CORREGIDO) Dispara el recálculo de procesos cuando un procedimiento relevante cambia.
  */
-<<<<<<< HEAD
 exports.triggerRecalcFromProcedure = onDocumentWritten("procedimientos/{docId}", async (event) => {
     const docId = event.params.docId;
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
-=======
-exports.triggerRecalcFromProcedure = onDocumentWritten("procedimientos/{docId}", async (event: any) => {
-  const docId = event.params.docId;
-  const before = event.data?.before;
-  const after = event.data?.after;
-  
-  // Solo proceder si hubo cambios en campos financieros
-  const beforeData = before?.data();
-  const afterData = after?.data();
-  
-  const financialFields = ['tiempoEstimado', 'costoEstimado', 'monedaCosto', 'activo'];
-  const hasFinancialChanges = financialFields.some(field => 
-    beforeData?.[field] !== afterData?.[field]
-  );
-  
-  if (!hasFinancialChanges) {
-    logger.info(`Procedimiento ${docId} actualizado sin cambios financieros.`);
-    return;
-  }
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
 
     const financialFields = ['tiempoEstimado', 'costoEstimado', 'monedaCosto', 'activo'];
     const hasFinancialChanges = !event.data?.before.exists || !event.data?.after.exists || financialFields.some(field => beforeData?.[field] !== afterData?.[field]);
@@ -741,11 +588,7 @@ exports.triggerRecalcFromProcedure = onDocumentWritten("procedimientos/{docId}",
     }
 });
 
-<<<<<<< HEAD
 // Interfaz para el diagnóstico
-=======
-
->>>>>>> f17325d8 (ok, puedes hacer los cambio pero sigue el erro 404, esto empezó a sucede)
 interface ProblematicUser {
     uid: string;
     email: string | undefined;
